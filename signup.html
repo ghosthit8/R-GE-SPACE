@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rage Space — Sign Up</title>
+  <style>
+    :root { --green:#39ff14; --red:#ff0033; --bg:#000; }
+    body {
+      margin:0; background:var(--bg); color:var(--green);
+      font-family: Arial, sans-serif; text-align:center;
+      padding:40px 20px;
+    }
+    h1 {
+      font-size:2.5rem; margin-bottom:20px;
+      text-shadow:0 0 8px var(--red);
+    }
+    .anarchy { color:var(--red); text-shadow:0 0 8px var(--green); }
+    input {
+      padding:10px; font-size:1.1rem; border-radius:8px;
+      border:1px solid var(--green); background:#111; color:var(--green);
+      width:220px; text-align:center;
+    }
+    .btn {
+      display:inline-block; background:var(--green); color:#000;
+      padding:12px 24px; margin-top:20px; border-radius:8px;
+      text-decoration:none; font-size:1.1rem; cursor:pointer; border:none;
+    }
+    .btn:hover { background:var(--red); color:#fff; }
+    .back { display:block; margin-top:30px; }
+    #welcome { margin-top:20px; font-size:1.2rem; color:var(--red); }
+  </style>
+</head>
+<body>
+  <h1>R<span class="anarchy">Ⓐ</span>GE SPACE — SIGN UP</h1>
+
+  <p>Choose a username:</p>
+  <input type="text" id="username" placeholder="Your name">
+  <br>
+  <button class="btn" onclick="saveName()">Submit</button>
+
+  <div id="welcome"></div>
+
+  <a class="btn back" href="index.html">⬅ Back</a>
+
+  <script>
+    function saveName() {
+      const input = document.getElementById("username");
+      const name = input.value.trim();
+      if(name){
+        localStorage.setItem("rageName", name);
+        document.getElementById("welcome").innerText = 
+          "Welcome, " + name + "! You're signed in.";
+        input.value = "";
+      } else {
+        alert("Please type a name first!");
+      }
+    }
+
+    // auto-show stored username if exists
+    window.onload = () => {
+      const saved = localStorage.getItem("rageName");
+      if(saved){
+        document.getElementById("welcome").innerText = 
+          "Welcome back, " + saved + "!";
+      }
+    };
+  </script>
+</body>
+</html>
