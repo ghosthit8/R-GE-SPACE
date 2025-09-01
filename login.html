@@ -1,24 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Login</title>
-<style>
-  :root { --green:#39ff14; --red:#ff0033; --bg:#000; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--green); font-family: system-ui, Arial, sans-serif; }
-  .wrap { max-width: 480px; margin: 32px auto; padding: 16px; }
-  h1 { text-align:center; letter-spacing:2px; text-shadow:0 0 8px var(--red); }
-  .card { border:1px solid var(--green); border-radius:16px; padding:16px; margin:16px 0; }
-  input, button { width:100%; padding:10px; margin:8px 0; border-radius:10px; border:1px solid var(--green); background:#010101; color:var(--green); }
-  button { cursor:pointer; }
-  .muted { opacity:.85; font-size:.95rem; }
-  .error { color:#ff6b6b; margin-top:6px; min-height:1.25rem; }
-  a.link, .back-btn { color:var(--green); text-decoration:none; border:1px solid var(--green); padding:8px 14px; border-radius:8px; display:inline-block; }
-  a.link:hover, .back-btn:hover { box-shadow:0 0 8px var(--green); }
-  .row { display:flex; gap:8px; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Rage Space — Login</title>
+  <link rel="stylesheet" href="style.css?v=2" />
 </head>
 <body>
   <main class="wrap">
@@ -29,120 +15,155 @@
       <h3>Sign in</h3>
       <input id="identifier" type="text" placeholder="username or email" />
       <input id="password" type="password" placeholder="password" />
-      <div class="row">
-        <button id="signin">Sign in</button>
-        <button id="forgot">Forgot password?</button>
+      <div class="topbar" style="justify-content:flex-start; gap:8px">
+        <button id="signin" class="btn primary">Sign in</button>
+        <button id="forgot" class="btn">Forgot password?</button>
       </div>
       <div id="status" class="muted">Not logged in.</div>
       <div id="err" class="error"></div>
       <p class="muted">Need an account? <a class="link" href="./signup.html">Go to Sign up</a></p>
     </section>
 
-    <!-- Hidden until coming back from recovery link -->
     <section class="card" id="reset-card" style="display:none">
       <h3>Set a new password</h3>
       <input id="newpass" type="password" placeholder="new password" />
       <input id="newpass2" type="password" placeholder="confirm new password" />
-      <button id="setpass">Update password</button>
+      <button id="setpass" class="btn primary">Update password</button>
       <div id="reset-status" class="muted"></div>
       <div id="reset-err" class="error"></div>
     </section>
   </main>
 
   <script type="module">
-    const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm")
-      .catch((e) => { document.getElementById("err").textContent = "Couldn't load Supabase."; throw e; });
+  const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm")
+    .catch((e) => { document.getElementById("err").textContent = "Couldn't load Supabase."; throw e; });
 
-    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+  const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+  const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-    const el = (id) => document.getElementById(id);
-    const status = el("status"), err = el("err"), btn = el("signin");
-    const looksLikeEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-    const showErr = (m="") => { err.textContent = m; if (m) console.error(m); };
-    const showStatus = (m="") => { status.textContent = m; };
+  const el = (id) => document.getElementById(id);
+  const status = el("status");
+  const err = el("err");
+  const btn = el("signin");
 
-    async function resolveEmail(identifier){
-      if (looksLikeEmail(identifier)) return identifier;
-      try {
-        const { data, error } = await supabase.from("usernames").select("email").eq("username", identifier).maybeSingle();
-        if (error) { showErr(error.message || "Lookup failed."); return null; }
-        if (!data) { showErr("No account found for that username. (Or use your email.)"); return null; }
-        return data.email;
-      } catch (e) { showErr("Lookup error. See console."); console.error(e); return null; }
-    }
+  const looksLikeEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  const showErr = (m="") => { err.textContent = m; if (m) console.error(m); };
+  const showStatus = (m="") => { status.textContent = m; };
 
-    async function handleSignin(){
-      showErr("");
-      const id = el("identifier").value.trim();
-      const password = el("password").value;
-      if (!id || !password) return showErr("Enter your username/email and password.");
-      btn.disabled = true; showStatus("Signing in…");
-      try {
-        const email = await resolveEmail(id);
-        if (!email) return;
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) return showErr(error.message || "Sign-in failed.");
-        showStatus("Logged in. Redirecting…");
-        setTimeout(() => location.href = "./index.html", 800);
-      } catch (e) {
-        showErr("Unexpected error. See console."); console.error(e);
-      } finally { btn.disabled = false; }
-    }
+  // Promise helper with timeout
+  function withTimeout(promise, ms, label="operation") {
+    return Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out`)), ms))
+    ]);
+  }
 
-    // Forgot password → send reset email
-    async function handleForgot(){
-      showErr("");
-      const id = el("identifier").value.trim();
-      if (!id) return showErr("Enter your username or email first.");
-      const email = await resolveEmail(id);
-      if (!email) return;
-      try {
-        // After clicking the email link, Supabase will return to login.html with #type=recovery
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: location.origin + "/login.html"
-        });
-        if (error) return showErr(error.message || "Could not send reset email.");
-        showStatus("Reset email sent. Check your inbox.");
-      } catch (e) {
-        showErr("Reset error. See console."); console.error(e);
+  // Username -> email (safe if table missing/RLS)
+  async function resolveEmail(identifier){
+    if (looksLikeEmail(identifier)) return identifier;
+    try {
+      const { data, error } = await withTimeout(
+        supabase.from("usernames").select("email").eq("username", identifier).maybeSingle(),
+        10000,
+        "username lookup"
+      );
+      if (error) {
+        // Common causes: table doesn't exist, RLS blocks anon/select
+        console.warn("Username lookup error:", error);
+        showErr("Username lookup failed. Try your email instead.");
+        return null;
       }
-    }
-
-    // If already logged in, bounce home
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) location.href = "./index.html";
-    });
-
-    // If arriving from the reset email link, show new-password form
-    (function detectRecovery(){
-      const hash = new URLSearchParams(location.hash.slice(1));
-      if (hash.get("type") === "recovery") {
-        el("signin-card").style.display = "none";
-        el("reset-card").style.display = "block";
+      if (!data) {
+        showErr("No account for that username. Try your email.");
+        return null;
       }
-    })();
-
-    // Update password after recovery
-    async function handleSetPassword(){
-      const np = el("newpass").value, np2 = el("newpass2").value;
-      const rerr = el("reset-err"), rstat = el("reset-status");
-      rerr.textContent = ""; rstat.textContent = "";
-      if (!np || np.length < 6) { rerr.textContent = "Password must be at least 6 characters."; return; }
-      if (np !== np2) { rerr.textContent = "Passwords do not match."; return; }
-      try {
-        const { error } = await supabase.auth.updateUser({ password: np });
-        if (error) { rerr.textContent = error.message || "Could not update password."; return; }
-        rstat.textContent = "Password updated. Redirecting…";
-        setTimeout(() => location.href = "./index.html", 1000);
-      } catch (e) { rerr.textContent = "Unexpected error. See console."; console.error(e); }
+      return data.email;
+    } catch (e) {
+      console.warn(e);
+      showErr("Username lookup timed out. Try your email.");
+      return null;
     }
+  }
 
-    el("signin").addEventListener("click", handleSignin);
-    el("forgot").addEventListener("click", handleForgot);
-    ["identifier","password"].forEach(id => el(id).addEventListener("keydown", (ev) => { if (ev.key === "Enter") handleSignin(); }));
-    el("setpass").addEventListener("click", handleSetPassword);
-  </script>
+  async function handleSignin(ev){
+    ev?.preventDefault?.();
+    err.textContent = "";
+    const id = el("identifier").value.trim();
+    const password = el("password").value;
+
+    if (!id || !password) { showErr("Enter your username/email and password."); return; }
+
+    btn.disabled = true;
+    showStatus("Signing in…");
+
+    try {
+      // If user typed an email we skip the lookup entirely
+      const email = looksLikeEmail(id) ? id : await resolveEmail(id);
+      if (!email) { showStatus("Not logged in."); return; }
+
+      const { error } = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        10000,
+        "sign in"
+      );
+      if (error) {
+        showErr(error.message || "Sign-in failed.");
+        showStatus("Not logged in.");
+        return;
+      }
+
+      showStatus("Logged in. Redirecting…");
+      setTimeout(() => location.href = "./index.html", 600);
+    } catch (e) {
+      showErr(e.message || "Unexpected error.");
+      showStatus("Not logged in.");
+    } finally {
+      btn.disabled = false; // <- always re-enable
+    }
+  }
+
+  async function handleForgot(){
+    err.textContent = "";
+    const id = el("identifier").value.trim();
+    if (!id) return showErr("Enter your username or email first.");
+    const email = looksLikeEmail(id) ? id : await resolveEmail(id);
+    if (!email) return;
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: location.origin + "/login.html"
+      });
+      if (error) return showErr(error.message || "Could not send reset email.");
+      showStatus("Reset email sent. Check your inbox.");
+    } catch (e) { showErr("Reset error. See console."); console.error(e); }
+  }
+
+  // Show notice if already logged in (no auto-redirect bounce)
+  async function showLoggedInNoticeIfAny() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    status.innerHTML = `Already logged in as <strong>${session.user.user_metadata?.username || session.user.email}</strong>.`;
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "8px";
+    actions.style.marginTop = "8px";
+    actions.innerHTML = `
+      <a class="btn" href="./menu.html">Continue to Menu</a>
+      <button id="logOutHere" class="btn">Sign out</button>
+    `;
+    status.after(actions);
+    document.getElementById("logOutHere").onclick = async () => {
+      await supabase.auth.signOut();
+      location.reload();
+    };
+  }
+  showLoggedInNoticeIfAny();
+
+  el("signin").addEventListener("click", handleSignin);
+  el("forgot").addEventListener("click", handleForgot);
+  ["identifier","password"].forEach(id => el(id).addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") handleSignin(ev);
+  }));
+</script>
 </body>
 </html>
