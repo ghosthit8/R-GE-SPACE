@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rage Space — Posts</title>
+<style>
+  :root { --green:#39ff14; --red:#ff0033; --bg:#000; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--green); font-family: system-ui, Arial, sans-serif; }
+  .wrap { max-width: 600px; margin: 32px auto; padding: 16px; }
+  h1 { text-align:center; letter-spacing:2px; text-shadow:0 0 8px var(--red); }
+  .card { border:1px solid var(--green); border-radius:16px; padding:16px; margin:16px 0; }
+  textarea, button, input { width:100%; padding:10px; margin:8px 0; border-radius:10px; border:1px solid var(--green); background:#010101; color:var(--green); }
+  button { cursor:pointer; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  ul { list-style:none; padding:0; margin:0; }
+  li { padding:8px 0; border-bottom:1px dashed #1b1b1b; }
+  .error { color:#ff6b6b; margin-top:6px; }
+  .ok { color:#39ff14; }
+  .topbar { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:12px; }
+  .link { text-decoration:none; color:var(--green); padding:8px 14px; border:1px solid var(--green); border-radius:8px; }
+  .link:hover { box-shadow:0 0 8px var(--green); }
+  .hidden { display:none; }
+  /* Back-to-home button (consistent with other pages) */
+  .back-btn { display:inline-block; margin-bottom:12px; padding:8px 14px; border:1px solid var(--green); border-radius:8px; background:#010101; color:var(--green); cursor:pointer; text-decoration:none; }
+  .back-btn:hover { box-shadow:0 0 8px var(--green); }
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <!-- New back-to-home button -->
+    <a class="back-btn" href="./index.html">← Back to Home</a>
+
+    <div class="topbar">
+      <!-- Replaced old "Back to login" with a home link for consistency -->
+      <a class="link" href="./index.html">Home</a>
+      <div id="whoami" class="ok"></div>
+      <button id="signout" class="link">Sign out</button>
+    </div>
+
+    <h1>RAGE SPACE — FEED</h1>
+
+    <section id="gate" class="card hidden">
+      <h3>Log in required</h3>
+      <p class="error">You must be logged in to view or post.</p>
+      <a class="link" href="./login.html">Go to login</a>
+    </section>
+
+    <section id="feed" class="card hidden">
+      <h3>Post something</h3>
+      <textarea id="postText" rows="3" placeholder="type something…"></textarea>
+      <div class="row">
+        <button id="postBtn">Post</button>
+        <button id="loadBtn">Load posts</button>
+      </div>
+      <div id="postError" class="error"></div>
+      <ul id="postList"></ul>
+      <p class="ok">Posting to <code>messages</code> table.</p>
+    </section>
+  </main>
+
+  <script type="module">
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+    const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+    // UI refs
+    const el = (id) => document.getElementById(id);
+    const gate = el("gate");
+    const feed = el("feed");
+    const whoami = el("whoami");
+    const btnSignOut = el("signout");
+    const postText = el("postText");
+    const postList = el("postList");
+    const postError = el("postError");
+
+    function showPostError(msg){ postError.textContent = msg || ""; }
+
+    // Require auth
+    async function requireAuth() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        gate.classList.remove("hidden");
+        feed.classList.add("hidden");
+        return null;
+      }
+      const name = session.user.user_metadata?.username || session.user.email;
+      whoami.textContent = `Logged in as ${name}`;
+      gate.classList.add("hidden");
+      feed.classList.remove("hidden");
+      return session.user;
+    }
+
+    // Post
+    async function loadPosts() {
+      showPostError("");
+      const { data, error } = await supabase
+        .from("messages")
+        .select("content, created_at")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) { showPostError("Load error: " + error.message); return; }
+      postList.innerHTML = "";
+      (data || []).forEach(row => {
+        const li = document.createElement("li");
+        const when = new Date(row.created_at).toLocaleString();
+        li.textContent = `[${when}] ${row.content}`;
+        postList.appendChild(li);
+      });
+    }
+
+    async function doPost() {
+      showPostError("");
+      const user = await requireAuth();
+      if (!user) return;
+      const content = (postText.value || "").trim();
+      if (!content) return showPostError("Type something to post.");
+      const { error } = await supabase
+        .from("messages")
+        .insert({ content, user_id: user.id });
+      if (error) return showPostError("Post error: " + error.message);
+      postText.value = "";
+      loadPosts();
+    }
+
+    // Events
+    el("postBtn").addEventListener("click", doPost);
+    el("loadBtn").addEventListener("click", loadPosts);
+    btnSignOut.addEventListener("click", async () => {
+      await supabase.auth.signOut();
+      location.href = "./login.html";
+    });
+
+    // Initial
+    await requireAuth();
+    await loadPosts();
+
+    // Keep gate reactive to auth changes
+    supabase.auth.onAuthStateChange(() => requireAuth());
+  </script>
+</body>
+</html>
