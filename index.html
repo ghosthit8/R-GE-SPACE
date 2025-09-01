@@ -1,61 +1,289 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Rage Space</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rage Space — Home</title>
+  <meta name="color-scheme" content="dark" />
   <style>
-    :root { --green:#39ff14; --red:#ff0033; --bg:#000; }
-    * { box-sizing: border-box; }
-    body {
-      margin:0; background:var(--bg); color:var(--green);
-      font-family: Arial, Helvetica, sans-serif; text-align:center;
-    }
-    h1 {
-      margin:80px 20px 8px; font-size:3rem; letter-spacing:4px;
-      text-shadow:0 0 10px var(--red);
-      position:relative; display:inline-block;
-    }
-    .anarchy { color:var(--red); text-shadow:0 0 10px var(--green); font-weight:700; }
-    p { opacity:.9; margin:0 0 30px; }
-    .btn {
-      display:inline-block; background:var(--green); color:#000;
-      padding:14px 28px; margin:10px; border-radius:10px; text-decoration:none;
-      font-size:1.1rem; border:0; cursor:pointer;
-    }
-    .btn:hover { background:var(--red); color:#fff; }
-    .footer { opacity:.6; margin-top:60px; font-size:.85rem; }
+    :root{
+      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5;
+      --muted:#8aff8a;
 
-    /* 🔥 Login button top-right */
-    .login-btn {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: transparent;
-      border: 2px solid var(--green);
-      color: var(--green);
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-size: 1rem;
-      text-decoration: none;
-      transition: 0.2s;
+      /* Tuning knobs */
+      --title-scale-y: 1.28;
+      --title-stroke: 0.8px;
+      --title-letterspace: 0.28rem;
     }
-    .login-btn:hover {
-      background: var(--red);
-      border-color: var(--red);
-      color: #fff;
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0; overflow-x:hidden; background:
+        radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.12), transparent 60%),
+        #000;
+      color:var(--green);
+      font-family: ui-sans-serif, system-ui, Arial, Helvetica, sans-serif;
+      -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    }
+
+    .wrap{ max-width:980px; margin:0 auto; padding:0 16px; }
+
+    .hero{
+      min-height:100dvh;
+      display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+      padding-top:16vh;
+    }
+
+    .title{
+      margin:0 auto 30px;
+      font-weight:600;
+      font-size:clamp(44px, 12.5vw, 150px);
+      letter-spacing:var(--title-letterspace);
+      text-transform:uppercase;
+      line-height:0.9;
+      transform:scaleY(var(--title-scale-y));
+      transform-origin:center;
+      color:var(--green);
+      -webkit-text-stroke: var(--title-stroke) var(--green);
+      text-shadow:
+        0 0 24px var(--red),
+        0 0 6px rgba(57,255,20,0.85);
+      text-align:center;
+      white-space:nowrap;
+      user-select:none;
+      animation: titleGlow 3.75s ease-in-out infinite alternate;
+    }
+
+    @keyframes titleGlow {
+      0% {
+        text-shadow:
+          0 0 18px rgba(255,0,51,0.50),
+          0 0 5px rgba(57,255,20,0.75);
+      }
+      100% {
+        text-shadow:
+          0 0 28px rgba(255,0,51,0.75),
+          0 0 10px rgba(57,255,20,1);
+      }
+    }
+
+    .tagline{
+      color:var(--green);
+      font-size:clamp(16px, 2.8vw, 24px);
+      line-height:1.55;
+      text-align:center;
+      max-width:780px;
+      margin:20px auto 0;
+      text-shadow:
+        0 0 10px rgba(57,255,20,0.45),
+        0 0 6px rgba(255,0,51,0.6);
+    }
+
+    .cta-row{
+      display:flex; gap:24px; flex-wrap:wrap; justify-content:center;
+      margin-top:7vh;
+    }
+
+    /* Base button */
+    .btn{
+      appearance:none; border:none; cursor:pointer;
+      padding:16px 28px;
+      font-size:clamp(18px, 4.5vw, 26px); font-weight:800;
+      border-radius:18px;
+      transition:
+        color .22s linear,
+        border-color .22s linear,
+        box-shadow .25s ease,
+        background-color .22s ease,
+        transform .08s ease;
+    }
+    .btn:active{ transform:translateY(1px) scale(0.99); }
+
+    /* Neon green filled (Enter & Sign Up) */
+    .btn.filled{
+      color:#001400; background:var(--green);
+      box-shadow:
+        0 0 24px rgba(57,255,20,0.55),
+        0 0 80px rgba(57,255,20,0.35) inset;
+    }
+
+    /* Flash RED while pressed (applies to any .btn) */
+    .btn:active{
+      background:var(--red) !important; color:#fff !important; border-color:var(--red) !important;
+      box-shadow:
+        0 0 28px rgba(255,0,51,0.8),
+        0 0 90px rgba(255,0,51,0.5) inset;
+      text-shadow:0 0 6px var(--red);
+    }
+
+    /* Green Login (ghost) */
+    .btn.ghost{
+      background:transparent; color:var(--green);
+      border:2px solid var(--green);
+      box-shadow:0 0 24px rgba(57,255,20,0.45);
+    }
+
+    /* Red Logout (ghost) */
+    .btn.ghost-red{
+      background:transparent; color:var(--red);
+      border:2px solid var(--red);
+      box-shadow:0 0 24px rgba(255,0,51,0.45);
+    }
+
+    /* When Enter gets locked (after click while logged-out) — stays RED */
+    .btn.locked{
+      background:var(--red) !important; color:#fff !important;
+      border:2px solid var(--red) !important;
+      box-shadow:
+        0 0 28px rgba(255,0,51,0.8),
+        0 0 90px rgba(255,0,51,0.5) inset;
+      cursor:not-allowed;
+    }
+
+    /* Fade pop when swapping states */
+    @keyframes swapFade {
+      from { opacity:.55; filter:blur(.25px); }
+      to   { opacity:1;   filter:none; }
+    }
+    .btn.swap-anim { animation: swapFade .22s ease; }
+
+    /* Pulse for Enter button (when it’s allowed) */
+    @keyframes pulseGlow {
+      0%   { box-shadow:0 0 24px rgba(57,255,20,0.55), 0 0 80px rgba(57,255,20,0.35) inset; }
+      50%  { box-shadow:0 0 60px rgba(57,255,20,0.95), 0 0 120px rgba(57,255,20,0.65) inset; }
+      100% { box-shadow:0 0 24px rgba(57,255,20,0.55), 0 0 80px rgba(57,255,20,0.35) inset; }
+    }
+    .btn.enter-pulse:not(.locked):active { animation: pulseGlow 0.5s ease; }
+
+    /* Flicker for Sign Up button */
+    @keyframes flickerGlow {
+      0%, 100% { box-shadow:0 0 24px rgba(255,0,51,0.6), 0 0 60px rgba(57,255,20,0.4); }
+      25%      { box-shadow:0 0 30px rgba(57,255,20,0.9), 0 0 80px rgba(255,0,51,0.5); }
+      50%      { box-shadow:0 0 40px rgba(255,0,51,0.95), 0 0 90px rgba(57,255,20,0.6); }
+      75%      { box-shadow:0 0 30px rgba(57,255,20,0.9), 0 0 80px rgba(255,0,51,0.5); }
+    }
+    .btn.signup-flicker:active { animation: flickerGlow 0.6s linear; }
+
+    .top-login{ position:fixed; top:18px; right:18px; z-index:10; }
+
+    .version{
+      position:fixed; bottom:20px; left:0; right:0;
+      text-align:center; color:var(--muted); font-size:14px; opacity:0.9;
+    }
+
+    /* message under Enter */
+    .enter-msg{
+      margin-top:12px; font-size:14px; color:var(--ink); text-align:center;
+      opacity:.9; min-height:1.2em;
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <!-- 🔥 Login button -->
-  <a href="login.html" class="login-btn">Login</a>
+  <div class="wrap">
+    <div class="top-login">
+      <button id="authBtn" class="btn ghost">Login</button>
+    </div>
 
-  <h1>R<span class="anarchy">Ⓐ</span>GE SPACE</h1>
-  <p>Drop your art. Unleash the battle. None of that censored bullshit. Talk about DIY shit in your cities. Fuck Instagram.</p>
+    <main class="hero">
+      <h1 class="title">RⒶGE&nbsp;&nbsp;SPACE</h1>
 
-  <a class="btn" href="menu.html">Enter</a>
-  <a class="btn" href="signup.html">Sign Up</a>
+      <p class="tagline">
+        Drop your art. Unleash the battle. None of that censored bullshit.
+        Talk about DIY shit in your cities. Fuck Instagram.
+      </p>
 
-  <div class="footer">v0.0.1 • prototype</div>
+      <div class="cta-row">
+        <button id="enterBtn" class="btn filled enter-pulse">🐇&nbsp;Enter</button>
+        <button id="signupBtn" class="btn filled signup-flicker">Sign Up</button>
+      </div>
+      <div id="enterMsg" class="enter-msg"></div>
+    </main>
+
+    <div class="version">v0.0.1 • prototype</div>
+  </div>
+
+  <script>
+    const sb = supabase.createClient(
+      "https://tuqvpcevrhciursxrgav.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
+    );
+
+    const authBtn = document.getElementById("authBtn");
+    const enterBtn = document.getElementById("enterBtn");
+    const signupBtn = document.getElementById("signupBtn");
+    const enterMsg = document.getElementById("enterMsg");
+
+    let isLoggedIn = false;
+
+    /* ---------- Top-right auth button (unchanged behavior) ---------- */
+    function withSwapAnim(el) {
+      el.classList.remove("swap-anim");
+      void el.offsetWidth; // reflow to restart animation
+      el.classList.add("swap-anim");
+    }
+
+    function setBtnAsLogin() {
+      authBtn.textContent = "Login";
+      authBtn.className = "btn ghost";
+      withSwapAnim(authBtn);
+      authBtn.onclick = () => { location.href = "login.html"; };
+    }
+
+    function setBtnAsLogout() {
+      authBtn.textContent = "Logout";
+      authBtn.className = "btn ghost-red";
+      withSwapAnim(authBtn);
+      authBtn.onclick = async () => {
+        const { error } = await sb.auth.signOut();
+        if (error) { console.error(error); return; }
+        // onAuthStateChange will flip UI
+      };
+    }
+
+    async function detectAndRenderAuth() {
+      const { data: sessionRes } = await sb.auth.getSession();
+      isLoggedIn = !!sessionRes?.session;
+
+      if (isLoggedIn) {
+        setBtnAsLogout();
+        // restore Enter to green, clear message
+        enterBtn.classList.remove("locked");
+        enterBtn.setAttribute("aria-disabled", "false");
+        enterMsg.textContent = "";
+      } else {
+        setBtnAsLogin();
+        // keep Enter green until they click; msg appears only after click
+        enterBtn.setAttribute("aria-disabled", "false"); // until they click
+      }
+    }
+
+    /* ---------- CTA logic ---------- */
+    // Enter button: only works if logged in
+    enterBtn.addEventListener("click", (e) => {
+      if (!isLoggedIn) {
+        e.preventDefault();
+        // turn/stay red & show message
+        enterBtn.classList.add("locked");
+        enterBtn.setAttribute("aria-disabled", "true");
+        enterMsg.textContent = 'login to follow the white rabbit...';
+        return;
+      }
+      // logged in → go to menu
+      location.href = "menu.html";
+    });
+
+    // Sign Up button: always allowed (red flash on press handled via CSS :active)
+    signupBtn.addEventListener("click", () => {
+      location.href = "signup.html";
+    });
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      await detectAndRenderAuth();
+      sb.auth.onAuthStateChange((_event) => {
+        detectAndRenderAuth();
+      });
+    });
+  </script>
 </body>
 </html>
