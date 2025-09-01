@@ -1,146 +1,541 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Posts</title>
-<style>
-  :root { --green:#39ff14; --red:#ff0033; --bg:#000; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--green); font-family: system-ui, Arial, sans-serif; }
-  .wrap { max-width: 600px; margin: 32px auto; padding: 16px; }
-  h1 { text-align:center; letter-spacing:2px; text-shadow:0 0 8px var(--red); }
-  .card { border:1px solid var(--green); border-radius:16px; padding:16px; margin:16px 0; }
-  textarea, button, input { width:100%; padding:10px; margin:8px 0; border-radius:10px; border:1px solid var(--green); background:#010101; color:var(--green); }
-  button { cursor:pointer; }
-  .row { display:flex; gap:8px; flex-wrap:wrap; }
-  ul { list-style:none; padding:0; margin:0; }
-  li { padding:8px 0; border-bottom:1px dashed #1b1b1b; }
-  .error { color:#ff6b6b; margin-top:6px; }
-  .ok { color:#39ff14; }
-  .topbar { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:12px; }
-  .link { text-decoration:none; color:var(--green); padding:8px 14px; border:1px solid var(--green); border-radius:8px; }
-  .link:hover { box-shadow:0 0 8px var(--green); }
-  .hidden { display:none; }
-  /* Back-to-home button (consistent with other pages) */
-  .back-btn { display:inline-block; margin-bottom:12px; padding:8px 14px; border:1px solid var(--green); border-radius:8px; background:#010101; color:var(--green); cursor:pointer; text-decoration:none; }
-  .back-btn:hover { box-shadow:0 0 8px var(--green); }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rage Space — City Chat</title>
+  <meta name="color-scheme" content="dark" />
+  <style>
+    :root {
+      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5;
+      --card:#070707; --muted:#8aff8a; --border:#0f2510;
+    }
+    * { box-sizing:border-box; }
+    html, body { height:100%; }
+    body {
+      margin:0; background:radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.12), transparent 60%) , #000;
+      color:var(--green); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      letter-spacing:0.2px;
+    }
+    a { color:var(--muted); text-decoration:none; }
+    .wrap { max-width:960px; margin:18px auto 40px; padding:16px; }
+    header {
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      background:linear-gradient(180deg, rgba(255,0,51,0.06), rgba(255,0,51,0.0));
+      border:1px solid var(--border); border-radius:18px; padding:14px 16px; position:sticky; top:10px; z-index:5; backdrop-filter: blur(2px);
+      box-shadow: 0 0 0 1px rgba(57,255,20,0.08), 0 8px 30px rgba(255,0,51,0.12) inset;
+    }
+    .brand {
+      display:flex; align-items:center; gap:12px; user-select:none;
+    }
+    .badge { font-size:12px; color:#111; background:var(--green); border-radius:999px; padding:2px 8px; font-weight:700; }
+    h1 {
+      margin:0; font-size: clamp(20px, 2.4vw, 28px); letter-spacing:2px; color:var(--green);
+      text-shadow: 0 0 6px rgba(255,0,51,0.55);
+    }
+    .glitch {
+      font-weight:900; display:inline-block; position:relative;
+    }
+    .glitch::before, .glitch::after {
+      content: attr(data-text);
+      position:absolute; left:0; top:0; opacity:.7; mix-blend-mode:screen; filter: blur(.3px);
+    }
+    .glitch::before { transform: translate(-1px, -0.5px); color:#f0f; clip-path: polygon(0 0, 100% 0, 100% 40%, 0 30%); }
+    .glitch::after { transform: translate(1px, 0.5px); color:#0ff; clip-path: polygon(0 60%, 100% 70%, 100% 100%, 0 100%); }
+
+    .controls {
+      display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+    }
+    select, input, button {
+      background:#060606; color:var(--ink); border:1px solid var(--green);
+      border-radius:12px; padding:10px 12px; font-family:inherit; font-size:14px; outline:none;
+    }
+    select { min-width:170px; }
+    button {
+      cursor:pointer; font-weight:700;
+      box-shadow: 0 0 0 1px rgba(57,255,20,0.2), 0 0 12px rgba(57,255,20,0.15) inset;
+      transition: transform .05s ease, box-shadow .2s ease;
+    }
+    button:hover { box-shadow: 0 0 0 1px rgba(57,255,20,0.45), 0 0 18px rgba(57,255,20,0.25) inset; }
+    button:active { transform: translateY(1px) scale(.99); }
+
+    .grid {
+      display:grid; grid-template-columns: 1fr 310px; gap:14px; margin-top:12px;
+    }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background:linear-gradient(180deg, rgba(57,255,20,0.06), rgba(57,255,20,0.02));
+      border:1px solid var(--border); border-radius:18px; padding:12px;
+      box-shadow: 0 0 0 1px rgba(57,255,20,0.08) inset, 0 12px 32px rgba(0,0,0,0.35);
+    }
+    .panel h2 { margin:4px 6px 10px; font-size:14px; text-transform:uppercase; letter-spacing:2px; color:var(--muted); }
+    .meta { color:#9dff9d; opacity:.85; font-size:12px; margin:2px 6px 10px; }
+
+    .chat {
+      display:flex; flex-direction:column; height:68vh; min-height:520px; gap:10px;
+    }
+    .messages {
+      flex:1; overflow:auto; padding:10px; border:1px dashed rgba(57,255,20,0.25);
+      border-radius:12px; background: repeating-linear-gradient(0deg, rgba(0,0,0,.7), rgba(0,0,0,.7) 28px, rgba(57,255,20,0.02) 29px);
+      scroll-behavior:smooth;
+    }
+    .msg {
+      background: #050805; border:1px solid rgba(57,255,20,0.25); border-left:3px solid var(--green);
+      border-radius:12px; padding:8px 10px; margin:8px 0; box-shadow: 0 1px 0 rgba(57,255,20,0.1) inset;
+      display:flex; gap:10px; position:relative;
+    }
+    .me { border-left-color: var(--red); }
+    .msg .who { font-weight:800; color:var(--green); }
+    .msg .time { color:#aaffaa; opacity:.6; font-size:11px; }
+    .msg .txt { color:#eaffea; white-space:pre-wrap; word-wrap:break-word; }
+    .msg .ops {
+      position:absolute; right:6px; top:6px; display:flex; gap:6px; opacity:.0;
+      transition:opacity .15s ease;
+    }
+    .msg:hover .ops { opacity:.9; }
+    .msg .ops button {
+      border-color: rgba(57,255,20,0.35); padding:4px 6px; border-radius:8px; font-weight:700; font-size:11px;
+      background:#041004;
+    }
+    .composer { display:flex; gap:8px; }
+    .composer input {
+      flex:1; height:44px; border-radius:14px; border-color:#0a260a;
+      background: #020502; color:var(--ink);
+    }
+    .hint { color:#a2ffa2; opacity:.75; font-size:12px; margin:2px 4px 0; }
+    .statusline { font-size:12px; color:#a2ffa2; opacity:.85; display:flex; gap:10px; align-items:center; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--red); box-shadow:0 0 8px var(--red); display:inline-block; }
+    .dot.ok { background:var(--green); box-shadow:0 0 8px var(--green); }
+
+    .sidebar .card {
+      background:#040704; border:1px solid var(--border); border-radius:14px; padding:10px; margin:10px 0;
+    }
+    .kicker { font-size:12px; color:#a2ffa2; opacity:.7; }
+    .pill {
+      display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border:1px solid var(--green); border-radius:999px; font-size:12px;
+      background:#010301; margin:4px 4px 0 0;
+    }
+    .footer {
+      margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between;
+      color:#b9ffb9; opacity:.85; font-size:12px;
+    }
+    .ghost {
+      opacity:.6; border-style:dashed;
+    }
+    .btn-ghost { background:#020402; border:1px dashed rgba(57,255,20,0.35); }
+    .white-rabbit { filter: drop-shadow(0 0 6px rgba(255,0,51,0.45)); }
+  </style>
 </head>
 <body>
-  <main class="wrap">
-    <!-- New back-to-home button -->
-    <a class="back-btn" href="./index.html">← Back to Home</a>
-
-    <div class="topbar">
-      <!-- Replaced old "Back to login" with a home link for consistency -->
-      <a class="link" href="./index.html">Home</a>
-      <div id="whoami" class="ok"></div>
-      <button id="signout" class="link">Sign out</button>
-    </div>
-
-    <h1>RAGE SPACE — FEED</h1>
-
-    <section id="gate" class="card hidden">
-      <h3>Log in required</h3>
-      <p class="error">You must be logged in to view or post.</p>
-      <a class="link" href="./login.html">Go to login</a>
-    </section>
-
-    <section id="feed" class="card hidden">
-      <h3>Post something</h3>
-      <textarea id="postText" rows="3" placeholder="type something…"></textarea>
-      <div class="row">
-        <button id="postBtn">Post</button>
-        <button id="loadBtn">Load posts</button>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <span class="badge">18+</span>
+        <h1>
+          <span class="glitch" data-text="RΔGE">RΔGE</span>
+          <span class="glitch" data-text="SPACE">SPACE</span>
+          <span class="white-rabbit">🐇</span>
+        </h1>
       </div>
-      <div id="postError" class="error"></div>
-      <ul id="postList"></ul>
-      <p class="ok">Posting to <code>messages</code> table.</p>
-    </section>
-  </main>
+      <div class="controls">
+        <select id="roomSelect" title="Pick your city room">
+          <option value="Dallas" selected>Dallas</option>
+          <option value="Austin">Austin</option>
+          <option value="Houston">Houston</option>
+          <option value="NYC">NYC</option>
+          <option value="LA">LA</option>
+          <option value="Berlin">Berlin</option>
+          <option value="Tokyo">Tokyo</option>
+        </select>
+        <input id="customRoom" placeholder="or type a room… (e.g., dallas-north)" />
+        <button id="joinBtn" title="Join room">Join</button>
+        <button id="leaveBtn" class="btn-ghost" title="Leave room">Leave</button>
+        <button id="logoutBtn" title="Sign out">Sign out</button>
+      </div>
+    </header>
 
+    <div class="grid">
+      <section class="panel chat">
+        <div class="meta">
+          <span class="statusline">
+            <span id="realtimeDot" class="dot"></span>
+            <span id="statusText">Connecting…</span>
+          </span>
+        </div>
+
+        <div id="messages" class="messages" aria-live="polite" aria-busy="true"></div>
+
+        <div class="composer">
+          <input id="messageInput" maxlength="800" placeholder="Type your message… (Enter to send, Shift+Enter = newline)" />
+          <button id="sendBtn">Send</button>
+        </div>
+        <div class="hint">Tips: keep it DIY, keep it legal. You can delete your own messages. No doxxing. No hate propaganda.</div>
+      </section>
+
+      <aside class="panel sidebar">
+        <h2>Who’s here</h2>
+        <div id="presence" class="card kicker">Nobody yet. Be the first to speak.</div>
+
+        <h2>Room</h2>
+        <div id="roomInfo" class="card">
+          <div><strong>Current:</strong> <span id="roomName">Dallas</span></div>
+          <div><strong>Messages:</strong> <span id="count">–</span></div>
+        </div>
+
+        <h2>Me</h2>
+        <div class="card">
+          <div><strong>Username:</strong> <span id="meName">…</span></div>
+          <div><strong>User ID:</strong> <span id="meId">…</span></div>
+          <div class="pill">Age-gate ✅</div>
+          <div class="pill">Anon key 🔐</div>
+        </div>
+
+        <div class="footer">
+          <div>“from the digital crypt”</div>
+          <div><a href="menu.html">⟵ back to menu</a></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Supabase JS (ESM) -->
   <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+    // === Supabase client: uses your project creds you shared ===
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+    // === Elements ===
+    const msgEl = document.getElementById("messages");
+    const inputEl = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const presenceEl = document.getElementById("presence");
+    const countEl = document.getElementById("count");
+    const roomNameEl = document.getElementById("roomName");
+    const meNameEl = document.getElementById("meName");
+    const meIdEl = document.getElementById("meId");
+    const rtDot = document.getElementById("realtimeDot");
+    const statusText = document.getElementById("statusText");
+    const roomSelect = document.getElementById("roomSelect");
+    const customRoom = document.getElementById("customRoom");
+    const joinBtn = document.getElementById("joinBtn");
+    const leaveBtn = document.getElementById("leaveBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
 
-    // UI refs
-    const el = (id) => document.getElementById(id);
-    const gate = el("gate");
-    const feed = el("feed");
-    const whoami = el("whoami");
-    const btnSignOut = el("signout");
-    const postText = el("postText");
-    const postList = el("postList");
-    const postError = el("postError");
+    // === State ===
+    let session = null;
+    let me = { id:null, username:null };
+    let currentRoom = "Dallas";
+    let channel = null;
+    let rateLimit = { last: 0, ms: 650 }; // simple client rate-limit
+    let presence = new Map(); // user_id -> lastSeen timestamp
 
-    function showPostError(msg){ postError.textContent = msg || ""; }
+    // === Utils ===
+    const sleep = (ms)=> new Promise(r => setTimeout(r, ms));
+    const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+    function fmtTime(ts){
+      const d = new Date(ts);
+      return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    }
+    function autoscroll(){
+      msgEl.scrollTop = msgEl.scrollHeight + 80;
+    }
+    function el(tag, attrs={}, ...kids){
+      const e = document.createElement(tag);
+      for (const [k,v] of Object.entries(attrs)) {
+        if (k === "class") e.className = v;
+        else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2), v);
+        else e.setAttribute(k, v);
+      }
+      kids.forEach(k => typeof k === "string" ? e.appendChild(document.createTextNode(k)) : (k && e.appendChild(k)));
+      return e;
+    }
 
-    // Require auth
-    async function requireAuth() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        gate.classList.remove("hidden");
-        feed.classList.add("hidden");
+    // === Login guard & identity ===
+    async function requireSession() {
+      const { data: { session: s } } = await supabase.auth.getSession();
+      if (!s) {
+        // Not logged in → kick back to login page
+        window.location.href = "login.html";
         return null;
       }
-      const name = session.user.user_metadata?.username || session.user.email;
-      whoami.textContent = `Logged in as ${name}`;
-      gate.classList.add("hidden");
-      feed.classList.remove("hidden");
-      return session.user;
+      session = s;
+      me.id = s.user.id;
+      me.username = s.user.user_metadata?.username ?? null;
+
+      // Optional: try profiles table if present
+      if (!me.username) {
+        const { data: prof, error } = await supabase.from("profiles").select("username").eq("id", me.id).maybeSingle();
+        if (!error && prof?.username) me.username = prof.username;
+      }
+
+      me.username ??= "user-" + s.user.id.slice(0,6);
+      meNameEl.textContent = me.username;
+      meIdEl.textContent = me.id.slice(0,8) + "…";
+      return s;
     }
 
-    // Post
-    async function loadPosts() {
-      showPostError("");
-      const { data, error } = await supabase
+    // === Messages UI ===
+    function renderMessage(m){
+      const mine = m.user_id === me.id;
+      const row = el("div", { class: "msg" + (mine ? " me" : "") });
+      const left = el("div", { class:"who" }, m.username || "anon");
+      const txt = el("div", { class:"txt" }, m.content || "");
+      const time = el("div", { class:"time" }, fmtTime(m.created_at || Date.now()));
+      const meta = el("div", { style:"display:flex; flex-direction:column; gap:2px; min-width:94px;" }, left, time);
+
+      const ops = el("div", { class:"ops" });
+      if (mine) {
+        const delBtn = el("button", { onclick: () => deleteMessage(m.id) }, "delete");
+        ops.appendChild(delBtn);
+      }
+
+      row.append(meta, txt, ops);
+      msgEl.appendChild(row);
+    }
+
+    function renderGhost(content){
+      const row = el("div", { class:"msg ghost me" });
+      const left = el("div", { class:"who" }, me.username);
+      const txt = el("div", { class:"txt" }, content);
+      const time = el("div", { class:"time" }, fmtTime(Date.now()));
+      const meta = el("div", { style:"display:flex; flex-direction:column; gap:2px; min-width:94px;" }, left, time);
+      row.append(meta, txt);
+      msgEl.appendChild(row);
+      return row;
+    }
+
+    async function deleteMessage(id){
+      const { error } = await supabase.from("messages")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", me.id);
+      if (error) alert("Delete failed: " + error.message);
+    }
+
+    function clearMessages(){
+      msgEl.innerHTML = "";
+      msgEl.setAttribute("aria-busy","true");
+    }
+
+    // === Presence (simple client-side) ===
+    function touchPresence(user_id, username){
+      presence.set(user_id, { username, ts: Date.now() });
+      drawPresence();
+    }
+    function prunePresence(){
+      const now = Date.now();
+      for (const [uid, info] of presence) {
+        if (now - info.ts > 60_000) presence.delete(uid);
+      }
+      drawPresence();
+    }
+    function drawPresence(){
+      if (presence.size === 0) {
+        presenceEl.textContent = "Nobody yet. Be the first to speak.";
+        return;
+      }
+      const out = [];
+      for (const {username} of presence.values()) out.push(username || "anon");
+      presenceEl.textContent = [...new Set(out)].slice(0,24).join(", ");
+    }
+    setInterval(prunePresence, 15_000);
+
+    // === Room join/leave & realtime ===
+    async function joinRoom(name){
+      currentRoom = (name || "Dallas").trim();
+      roomNameEl.textContent = currentRoom;
+      status("Loading messages…", false);
+
+      // (Re)subscribe
+      await subscribeRealtime(currentRoom);
+
+      // Load history
+      clearMessages();
+      const { data, error, count } = await supabase
         .from("messages")
-        .select("content, created_at")
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (error) { showPostError("Load error: " + error.message); return; }
-      postList.innerHTML = "";
-      (data || []).forEach(row => {
-        const li = document.createElement("li");
-        const when = new Date(row.created_at).toLocaleString();
-        li.textContent = `[${when}] ${row.content}`;
-        postList.appendChild(li);
-      });
+        .select("*", { count: "exact" })
+        .eq("room", currentRoom)
+        .order("created_at", { ascending: true })
+        .limit(400);
+      if (error) {
+        msgEl.appendChild(el("div", {}, "Error loading messages: " + error.message));
+      } else {
+        data.forEach(renderMessage);
+        countEl.textContent = count ?? data.length;
+      }
+      msgEl.removeAttribute("aria-busy");
+      autoscroll();
+
+      // Touch presence by sending a lightweight ping (no table write; just local)
+      touchPresence(me.id, me.username);
     }
 
-    async function doPost() {
-      showPostError("");
-      const user = await requireAuth();
-      if (!user) return;
-      const content = (postText.value || "").trim();
-      if (!content) return showPostError("Type something to post.");
-      const { error } = await supabase
-        .from("messages")
-        .insert({ content, user_id: user.id });
-      if (error) return showPostError("Post error: " + error.message);
-      postText.value = "";
-      loadPosts();
+    async function subscribeRealtime(room) {
+      // tear down previous
+      if (channel) {
+        try { await supabase.removeChannel(channel); } catch {}
+        channel = null;
+      }
+
+      channel = supabase
+        .channel(`room:${room}`)
+        // filtered row inserts for this room (supported filter syntax)
+        .on("postgres_changes",
+            { event: "INSERT", schema: "public", table: "messages", filter: `room=eq.${room}` },
+            payload => {
+              renderMessage(payload.new);
+              countEl.textContent = (parseInt(countEl.textContent || "0", 10) + 1).toString();
+              touchPresence(payload.new.user_id, payload.new.username);
+              autoscroll();
+            })
+        .on("postgres_changes",
+            { event: "DELETE", schema: "public", table: "messages", filter: `room=eq.${room}` },
+            payload => {
+              // Simple redraw approach: remove all and reload count
+              // (keeps code straightforward for now)
+              // You can optimize to remove only the specific node if you track DOM IDs.
+              joinRoom(currentRoom);
+            })
+        .subscribe(status => {
+          const sub = status === "SUBSCRIBED";
+          rtDot.classList.toggle("ok", sub);
+          if (sub) {
+            statusText.textContent = `Live in #${currentRoom}`;
+          }
+        });
     }
 
-    // Events
-    el("postBtn").addEventListener("click", doPost);
-    el("loadBtn").addEventListener("click", loadPosts);
-    btnSignOut.addEventListener("click", async () => {
+    function status(text, ok=true){
+      statusText.textContent = text;
+      rtDot.classList.toggle("ok", !!ok);
+    }
+
+    // === Send message ===
+    async function send(){
+      const now = Date.now();
+      if (now - rateLimit.last < rateLimit.ms) {
+        const wait = clamp(rateLimit.ms - (now - rateLimit.last), 150, 1200);
+        status(`Whoa tiger… ${Math.ceil(wait/1000)}s`, false);
+        return;
+      }
+      const raw = inputEl.value;
+      const content = raw.replace(/\s+$/,'');
+      if (!content) return;
+
+      rateLimit.last = now;
+      inputEl.value = "";
+      const ghost = renderGhost(content);
+      autoscroll();
+
+      const row = {
+        content,
+        room: currentRoom,
+        user_id: me.id,
+        username: me.username,
+      };
+      const { error } = await supabase.from("messages").insert(row);
+      if (error) {
+        ghost.style.opacity = 0.5;
+        ghost.style.borderColor = "rgba(255,0,51,0.6)";
+        status("Send failed: " + error.message, false);
+        inputEl.value = content; // restore draft
+      } else {
+        status("Sent ✓", true);
+      }
+    }
+
+    // === Wire UI ===
+    sendBtn.addEventListener("click", send);
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+    joinBtn.addEventListener("click", () => {
+      const choice = customRoom.value.trim() || roomSelect.value;
+      joinRoom(choice);
+      customRoom.value = "";
+    });
+    leaveBtn.addEventListener("click", async () => {
+      if (channel) { try { await supabase.removeChannel(channel); } catch {} }
+      channel = null;
+      status("Disconnected", false);
+    });
+    logoutBtn.addEventListener("click", async () => {
       await supabase.auth.signOut();
-      location.href = "./login.html";
+      window.location.href = "login.html";
     });
 
-    // Initial
-    await requireAuth();
-    await loadPosts();
+    // === Boot ===
+    await requireSession();
+    await joinRoom(currentRoom);
 
-    // Keep gate reactive to auth changes
-    supabase.auth.onAuthStateChange(() => requireAuth());
+    // === Optional: warm up count every 20s (keeps sidebar fresh) ===
+    setInterval(async () => {
+      const { count } = await supabase.from("messages").select("*", { count:"exact", head:true }).eq("room", currentRoom);
+      if (typeof count === "number") countEl.textContent = count.toString();
+    }, 20_000);
+
   </script>
+
+  <!--
+    ---------------------------------------
+    SCHEMA HELP (run once in Supabase SQL):
+    ---------------------------------------
+    -- Messages table for chat
+    create table if not exists public.messages (
+      id bigserial primary key,
+      user_id uuid not null references auth.users(id) on delete cascade,
+      username text not null,
+      room text not null,
+      content text not null check (length(content) between 1 and 800),
+      created_at timestamptz not null default now()
+    );
+
+    -- Row Level Security
+    alter table public.messages enable row level security;
+
+    -- Policies:
+    -- Read: anyone logged in can read room messages
+    create policy "read messages"
+      on public.messages for select
+      to authenticated
+      using ( true );
+
+    -- Insert: logged-in users can write their own messages
+    create policy "insert own"
+      on public.messages for insert
+      to authenticated
+      with check ( auth.uid() = user_id );
+
+    -- Delete: users can delete ONLY their own messages
+    create policy "delete own"
+      on public.messages for delete
+      to authenticated
+      using ( auth.uid() = user_id );
+
+    -- Optional lightweight profiles table (if you want)
+    create table if not exists public.profiles (
+      id uuid primary key references auth.users(id) on delete cascade,
+      username text unique not null,
+      updated_at timestamptz default now()
+    );
+    alter table public.profiles enable row level security;
+    create policy "profiles self"
+      on public.profiles for all
+      to authenticated
+      using ( auth.uid() = id )
+      with check ( auth.uid() = id );
+
+    -- Realtime: turn on for 'messages' in Supabase Realtime settings
+    -- (Database → Replication → Publications: select 'messages')
+  -->
 </body>
 </html>
