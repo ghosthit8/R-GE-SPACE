@@ -1,42 +1,54 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Rage Space - Menu</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Rage Space — Menu</title>
+  <link rel="stylesheet" href="style.css?v=2" />
   <style>
     body {
-      background: black;
-      color: #00ff00;
-      font-family: monospace;
+      margin: 0;
+      padding: 0;
       text-align: center;
-      margin-top: 15%;
     }
-    h1 {
-      letter-spacing: 6px;
-    }
-    .button {
-      display: block;
-      margin: 20px auto;
-      padding: 15px 30px;
-      font-size: 18px;
-      background: black;
-      border: 2px solid #00ff00;
-      color: #00ff00;
-      cursor: pointer;
+
+    /* Back button top-right */
+    .back-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      padding: 8px 14px;
+      border: 1px solid var(--green, #39ff14);
+      border-radius: 8px;
       text-decoration: none;
-      width: 200px;
+      color: var(--green, #39ff14);
+      background: transparent;
+      font-weight: bold;
+      text-shadow: 0 0 6px var(--green, #39ff14);
     }
-    .button:hover {
-      background: #00ff00;
-      color: black;
+    .back-btn:hover {
+      color: var(--red, #ff0033);
+      border-color: var(--red, #ff0033);
+      text-shadow: 0 0 6px var(--red, #ff0033);
+    }
+
+    /* Push content down */
+    .menu-title {
+      margin-top: 100px; /* moved lower */
+    }
+    .menu-buttons {
+      margin-top: 40px; /* extra space below title */
     }
   </style>
 </head>
 <body>
-  <h1>CHOOSE YOUR PATH</h1>
+  <a class="back-btn" href="index.html">⬅ BACK</a>
 
-  <a class="button" href="submit.html">SUBMIT ART</a>
-  <a class="button" href="matchup.html">ART BATTLE</a>
-  <a class="button" href="space.html">Ⓐ SPACE</a>
-
+  <h1 class="menu-title">CHOOSE YOUR PATH</h1>
+  <div class="menu-buttons">
+    <a class="button btn" href="submit.html">SUBMIT ART</a>
+    <a class="button btn" href="matchup.html">ART BATTLE</a>
+    <a class="button btn" href="ragespace.html">Ⓐ SPACE</a>
+  </div>
 </body>
 </html>
