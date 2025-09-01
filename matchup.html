@@ -2,97 +2,38 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Rage Space — Matchup</title>
-  <style>
-    :root { --green:#39ff14; --red:#ff0033; --bg:#000; --panel:#0a0a0a; }
-    * { box-sizing:border-box; }
-    body {
-      margin:0; background:var(--bg); color:var(--green);
-      font-family: Arial, Helvetica, sans-serif;
-    }
-    header {
-      padding:16px; border-bottom:1px solid #111; text-align:center;
-    }
-    h1 {
-      margin:0; font-size:1.6rem; letter-spacing:4px;
-      text-shadow:0 0 8px var(--red);
-    }
-    .anarchy { color:var(--red); text-shadow:0 0 8px var(--green); font-weight:700; }
-
-    .wrap {
-      max-width:900px; margin:18px auto; padding:12px;
-    }
-    .scorebar {
-      display:flex; justify-content:space-between; align-items:center;
-      gap:12px; background:var(--panel); border:1px dashed var(--green);
-      border-radius:12px; padding:10px 14px; margin-bottom:12px;
-    }
-    .score { font-weight:bold; }
-    .link {
-      color:var(--green); text-decoration:none; border-bottom:1px dotted var(--green);
-    }
-    .link:hover { color:#fff; border-color:#fff; }
-
-    .grid {
-      display:grid; grid-template-columns:1fr 1fr; gap:14px;
-    }
-    @media (max-width:700px){ .grid { grid-template-columns:1fr; } }
-
-    .tile {
-      position:relative; background:linear-gradient(135deg, #111 0%, #1a1a1a 100%);
-      border:1px solid #222; border-radius:16px; padding:10px; overflow:hidden;
-      min-height:280px;
-    }
-    /* Placeholder “art” block — replace with <img> later */
-    .art {
-      height:220px; border-radius:10px; border:1px solid #333;
-      background:
-        repeating-linear-gradient(45deg, rgba(57,255,20,.25) 0 6px, transparent 6px 12px),
-        linear-gradient(135deg, rgba(255,0,51,.2), rgba(57,255,20,.1));
-      box-shadow:0 0 24px rgba(57,255,20,.2) inset, 0 0 12px rgba(255,0,51,.2);
-    }
-    .meta { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
-    .btn {
-      background:var(--green); color:#000; border:0; border-radius:10px;
-      padding:10px 16px; cursor:pointer; font-weight:700;
-    }
-    .btn:hover { background:var(--red); color:#fff; }
-    .toast {
-      position:fixed; left:50%; transform:translateX(-50%);
-      bottom:18px; background:var(--panel); border:1px solid var(--green);
-      padding:10px 14px; border-radius:10px; display:none;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css?v=2" />
 </head>
 <body>
-  <header>
-  <h1>R<span class="anarchy">Ⓐ</span>GE SPACE — MATCHUP</h1>
-</header>
+  <header class="wrap" style="padding-top:0">
+    <h1>R<span class="anarchy">Ⓐ</span>GE SPACE — MATCHUP</h1>
+  </header>
 
-<div class="wrap">
-  <div class="scorebar">
-    <div class="score">Your points: <span id="pts">0</span></div>
-    <a class="btn" href="index.html">⬅ Back</a>
-  </div>
+  <div class="wrap">
+    <div class="scorebar">
+      <div class="score">Your points: <span id="pts">0</span></div>
+      <a class="btn" href="index.html">⬅ Back</a>
+    </div>
 
     <div class="grid">
       <!-- LEFT TILE -->
       <div class="tile">
-        <!-- Replace this div with: <img class="art" src="left.jpg" alt="Left entry"> -->
+        <!-- Replace with <img class="art" src="left.jpg" alt="Left entry"> -->
         <div class="art"></div>
         <div class="meta">
           <span>Entry #101 — LEFT</span>
-          <button class="btn" onclick="vote('left')">Vote Left</button>
+          <button class="btn primary" onclick="vote('left')">Vote Left</button>
         </div>
       </div>
 
       <!-- RIGHT TILE -->
       <div class="tile">
-        <!-- Replace this div with: <img class="art" src="right.jpg" alt="Right entry"> -->
         <div class="art"></div>
         <div class="meta">
           <span>Entry #102 — RIGHT</span>
-          <button class="btn" onclick="vote('right')">Vote Right</button>
+          <button class="btn primary" onclick="vote('right')">Vote Right</button>
         </div>
       </div>
     </div>
@@ -101,16 +42,15 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    // simple local “points” + feedback
     const ptsEl = document.getElementById('pts');
     const toast = document.getElementById('toast');
     let pts = 0;
 
     function vote(side){
-      pts += 10;                     // +10 per vote (prototype)
+      pts += 10;
       ptsEl.textContent = pts;
       showToast(`You voted ${side.toUpperCase()} (+10 pts)`);
-      // In the future: send vote to backend (Supabase) and lock voting per round
+      // TODO: send to Supabase + lock vote per round
     }
 
     function showToast(msg){
