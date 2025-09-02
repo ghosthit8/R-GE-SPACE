@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Rage Space — Sign up</title>
   <link rel="stylesheet" href="style.css?v=2" />
+  <style>
+    /* tiny helper so debug lines are readable */
+    #debug{font-family:ui-monospace,Consolas,monospace; font-size:.85rem; opacity:.9; margin-top:10px}
+    #debug b{color:#39ff14}
+  </style>
 </head>
 <body>
   <main class="wrap">
@@ -32,18 +37,23 @@
 
       <div id="status" class="muted">Not signed up yet.</div>
       <div id="err" class="error"></div>
+      <div id="debug" class="muted"></div>
 
       <p class="muted">Already have an account? <a class="link" href="./login.html">Go to Login</a></p>
     </section>
   </main>
 
   <script type="module">
+    const DEBUG = true;
+    const dlog = (...a) => { if(DEBUG){ console.log(...a); const el=document.getElementById("debug"); el.innerHTML += a.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' ')+"<br/>"; } };
+
     const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm")
       .catch((e) => { document.getElementById("err").textContent = "Couldn't load Supabase."; throw e; });
 
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+    dlog("<b>Init:</b> supabase client created");
 
     const el = (id) => document.getElementById(id);
     const status = el("status"), err = el("err"), btn = el("signup");
@@ -51,12 +61,15 @@
 
     const showErr = (m="") => { err.textContent = m; if (m) console.error(m); if (m) showStatus(""); };
     const showStatus = (m="") => { status.textContent = m; };
+
     const looksLikeEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
     const validUsername = (u) => /^[a-zA-Z0-9_]{3,20}$/.test(u);
 
-    // Promise timeout so nothing can hang the UI
     const withTimeout = (p, ms, label="request") =>
-      Promise.race([ p, new Promise((_, r)=>setTimeout(()=>r(new Error(label+" timed out")), ms)) ]);
+      Promise.race([
+        p,
+        new Promise((_, r)=>setTimeout(()=>r(new Error(label+" timed out")), ms))
+      ]);
 
     function calcAge(dobStr){
       if (!dobStr) return 0;
@@ -67,7 +80,7 @@
       return a;
     }
 
-    // Soft username availability hint (non-blocking if RPC is missing)
+    // best-effort availability hint; NEVER blocks signup
     let usernameTimer;
     usernameInput.addEventListener("input", () => {
       clearTimeout(usernameTimer);
@@ -75,8 +88,7 @@
       const u = usernameInput.value.trim();
       if (!validUsername(u)) {
         usernameMsg.textContent = "3–20 letters, numbers, or underscores.";
-        usernameMsg.className = "error";
-        return;
+        usernameMsg.className = "error"; return;
       }
       usernameTimer = setTimeout(async () => {
         try {
@@ -88,19 +100,10 @@
       }, 350);
     });
 
-    async function safeUsernameAvailable(u){
-      try {
-        const { data, error } = await withTimeout(
-          supabase.rpc('username_available', { uname: u }),
-          8000,
-          "username check"
-        );
-        if (error) return null;
-        return !!data;
-      } catch { return null; }
-    }
-
     async function handleSignup(){
+      // always re-enable on exit
+      const done = () => { if (!/menu\.html$/.test(location.href)) btn.disabled = false; };
+
       showErr("");
       const dob = el("dob").value;
       const attest = el("attest").checked;
@@ -108,88 +111,81 @@
       const email = el("email").value.trim();
       const password = el("password").value;
 
-      if (calcAge(dob) < 18 || !attest) return showErr("You must be 18+ and check the box to continue.");
-      if (!validUsername(username)) return showErr("Username: 3–20 chars, letters/numbers/_ only.");
-      if (!email || !password) return showErr("Email and password are required.");
-      if (!looksLikeEmail(email)) return showErr("Please enter a valid email.");
+      if (calcAge(dob) < 18 || !attest) { showErr("You must be 18+ and check the box to continue."); return; }
+      if (!validUsername(username)) { showErr("Username: 3–20 chars, letters/numbers/_ only."); return; }
+      if (!email || !password) { showErr("Email and password are required."); return; }
+      if (!looksLikeEmail(email)) { showErr("Please enter a valid email."); return; }
 
       btn.disabled = true;
       showStatus("Creating your account…");
+      dlog("<b>Step A:</b> signUp start");
 
       try {
-        // Non-fatal username check
-        const available = await safeUsernameAvailable(username);
-        if (available === false) { showErr("That username is taken. Pick another."); return; }
-
-        // Sign up
         const { data, error } = await withTimeout(
-          supabase.auth.signUp({
-            email, password,
-            options: { data: { username, dob } }
-          }),
-          15000,
-          "sign up"
+          supabase.auth.signUp({ email, password, options: { data: { username, dob } } }),
+          15000, "sign up"
         );
+        dlog("<b>Step A result:</b>", { hasData: !!data, hasError: !!error, errorMessage: error?.message });
         if (error) {
-          if (/already registered/i.test(error.message)) {
-            showErr("That email already has an account. Try logging in or resetting your password.");
-          } else {
-            showErr(error.message || "Sign up failed.");
-          }
-          return;
+          if (/already registered/i.test(error.message)) showErr("That email already has an account. Try logging in or resetting your password.");
+          else showErr(error.message || "Sign up failed.");
+          return done();
         }
 
-        // Try immediate sign-in (will fail if email confirmation is required)
+        // Try sign-in if we don't have a session
         if (!data.session) {
+          dlog("<b>Step B:</b> signIn start");
           const { error: loginErr } = await withTimeout(
             supabase.auth.signInWithPassword({ email, password }),
-            12000,
-            "sign in"
+            12000, "sign in"
           );
+          dlog("<b>Step B result:</b>", { loginError: loginErr?.message });
           if (loginErr) {
             if (/confirm/i.test(loginErr.message)) {
               showStatus("Almost done — check your email to confirm, then log in.");
-              return;
+            } else {
+              showErr(loginErr.message || "Could not log in after sign-up.");
             }
-            showErr(loginErr.message || "Could not log in after sign-up.");
-            return;
+            return done();
           }
           await new Promise(r=>setTimeout(r,200));
         }
 
-        // Confirm we actually have a session (mobile storage lag)
+        // Poll for session (mobile persistence lag)
+        dlog("<b>Step C:</b> getSession poll");
         let sess = (await supabase.auth.getSession()).data.session;
         for (let i=0; i<5 && !sess; i++) {
           await new Promise(r=>setTimeout(r,200));
           sess = (await supabase.auth.getSession()).data.session;
         }
+        dlog("<b>Step C result:</b>", { hasSession: !!sess });
         if (!sess) {
           showErr("Account created. Please log in.");
-          return;
+          return done();
         }
 
-        // Best-effort username mapping (won’t block success)
+        // Best-effort usernames map (won’t block)
+        dlog("<b>Step D:</b> usernames upsert start");
         try {
-          await withTimeout(
-            supabase.from("usernames")
-              .upsert({ user_id: sess.user.id, username, email }, { onConflict: "user_id" }),
-            12000,
-            "username map"
+          const { error: mapErr } = await withTimeout(
+            supabase.from("usernames").upsert(
+              { user_id: sess.user.id, username, email },
+              { onConflict: "user_id" }
+            ),
+            12000, "username map"
           );
+          dlog("<b>Step D result:</b>", { mapError: mapErr?.message });
         } catch (mapErr) {
-          console.warn("username map error", mapErr);
+          dlog("<b>Step D exception:</b>", String(mapErr));
         }
 
         showStatus("Signed up & logged in. Redirecting…");
         el("password").value = "";
         setTimeout(()=>{ location.href = "./menu.html"; }, 600);
-
       } catch (e) {
-        console.error(e);
+        dlog("<b>Catch:</b>", String(e));
         showErr(e.message || "Unexpected error.");
-      } finally {
-        // If we didn’t redirect yet, re-enable the button so you can try again
-        if (!/menu\.html$/.test(location.href)) btn.disabled = false;
+        done();
       }
     }
 
@@ -213,7 +209,7 @@
     }
     showLoggedInNoticeIfAny();
 
-    btn.addEventListener("click", handleSignup);
+    el("signup").addEventListener("click", handleSignup);
     ["username","email","password","dob"].forEach(id => {
       el(id).addEventListener("keydown", (ev) => { if (ev.key === "Enter") handleSignup(); });
     });
