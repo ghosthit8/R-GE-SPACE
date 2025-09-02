@@ -182,7 +182,8 @@
 <body>
   <div class="wrap">
     <div class="top-login">
-      <button id="authBtn" class="btn ghost">Login</button>
+      <!-- changed from <button> to <a> with a relative href -->
+      <a id="authBtn" class="btn ghost" href="./login.html" role="button">Login</a>
     </div>
 
     <main class="hero">
@@ -216,29 +217,32 @@
 
     let isLoggedIn = false;
 
-    /* ---------- Top-right auth button (unchanged behavior) ---------- */
     function withSwapAnim(el) {
       el.classList.remove("swap-anim");
-      void el.offsetWidth; // reflow to restart animation
+      void el.offsetWidth;
       el.classList.add("swap-anim");
     }
 
+    // Login state -> show "Login" and make it a real link to ./login.html
     function setBtnAsLogin() {
       authBtn.textContent = "Login";
       authBtn.className = "btn ghost";
+      authBtn.setAttribute("href", "./login.html");  // << important: relative
+      authBtn.onclick = null; // let the anchor handle navigation
       withSwapAnim(authBtn);
-      authBtn.onclick = () => { location.href = "login.html"; };
     }
 
+    // Logged in -> show "Logout" and prevent default navigation
     function setBtnAsLogout() {
       authBtn.textContent = "Logout";
       authBtn.className = "btn ghost-red";
-      withSwapAnim(authBtn);
-      authBtn.onclick = async () => {
+      authBtn.setAttribute("href", "#"); // stays on page
+      authBtn.onclick = async (e) => {
+        e.preventDefault();
         const { error } = await sb.auth.signOut();
-        if (error) { console.error(error); return; }
-        // onAuthStateChange will flip UI
+        if (error) { console.error(error); }
       };
+      withSwapAnim(authBtn);
     }
 
     async function detectAndRenderAuth() {
@@ -247,35 +251,31 @@
 
       if (isLoggedIn) {
         setBtnAsLogout();
-        // restore Enter to green, clear message
         enterBtn.classList.remove("locked");
         enterBtn.setAttribute("aria-disabled", "false");
         enterMsg.textContent = "";
       } else {
         setBtnAsLogin();
-        // keep Enter green until they click; msg appears only after click
-        enterBtn.setAttribute("aria-disabled", "false"); // until they click
+        enterBtn.setAttribute("aria-disabled", "false");
       }
     }
 
-    /* ---------- CTA logic ---------- */
     // Enter button: only works if logged in
     enterBtn.addEventListener("click", (e) => {
       if (!isLoggedIn) {
         e.preventDefault();
-        // turn/stay red & show message
         enterBtn.classList.add("locked");
         enterBtn.setAttribute("aria-disabled", "true");
         enterMsg.textContent = 'login to follow the white rabbit...';
         return;
       }
       // logged in → go to menu
-      location.href = "menu.html";
+      location.href = "./menu.html";
     });
 
-    // Sign Up button: always allowed (red flash on press handled via CSS :active)
+    // Sign Up button: always allowed
     signupBtn.addEventListener("click", () => {
-      location.href = "signup.html";
+      location.href = "./signup.html";
     });
 
     document.addEventListener("DOMContentLoaded", async () => {
