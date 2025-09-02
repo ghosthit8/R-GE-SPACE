@@ -49,10 +49,17 @@
     const status = el("status"), err = el("err"), btn = el("signup");
     const usernameInput = el("username"), usernameMsg = el("username-msg");
 
-    const showErr = (m="") => { err.textContent = m; if (m) console.error(m); };
+    const showErr = (m="") => { err.textContent = m; if (m) console.error(m); if (m) showStatus(""); };
     const showStatus = (m="") => { status.textContent = m; };
     const looksLikeEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
     const validUsername = (u) => /^[a-zA-Z0-9_]{3,20}$/.test(u);
+
+    // tiny timeout guard so no promise can hang the UI silently
+    const withTimeout = (p, ms, label="request") =>
+      Promise.race([
+        p,
+        new Promise((_, r) => setTimeout(() => r(new Error(label+" timed out")), ms))
+      ]);
 
     function calcAge(dobStr){
       if (!dobStr) return 0;
@@ -63,7 +70,7 @@
       return a;
     }
 
-    // Debounced availability check through RPC
+    // Debounced availability check (best-effort; non-blocking if RPC missing)
     let usernameTimer;
     usernameInput.addEventListener("input", () => {
       clearTimeout(usernameTimer);
@@ -77,17 +84,24 @@
       usernameTimer = setTimeout(async () => {
         try {
           const { data, error } = await supabase.rpc('username_available', { uname: u });
-          if (error) { console.warn(error); return; }
-          if (data) {
-            usernameMsg.textContent = "✔ Username available";
-            usernameMsg.className = "ok";
-          } else {
-            usernameMsg.textContent = "❌ Username already taken";
-            usernameMsg.className = "error";
-          }
-        } catch (e) { console.error(e); }
+          if (error) { usernameMsg.textContent = ""; return; }
+          if (data) { usernameMsg.textContent = "✔ Username available"; usernameMsg.className = "ok"; }
+          else { usernameMsg.textContent = "❌ Username already taken"; usernameMsg.className = "error"; }
+        } catch { /* ignore */ }
       }, 350);
     });
+
+    async function safeUsernameAvailable(u){
+      try {
+        const { data, error } = await withTimeout(
+          supabase.rpc('username_available', { uname: u }),
+          8000,
+          "username check"
+        );
+        if (error) return null;      // null => unknown, don't block signup
+        return !!data;               // true/false => available or not
+      } catch { return null; }
+    }
 
     async function handleSignup(){
       showErr("");
@@ -106,15 +120,16 @@
       showStatus("Creating your account…");
 
       try {
-        // quick availability re-check
-        const { data: ok } = await supabase.rpc('username_available', { uname: username });
-        if (!ok) { showErr("That username is taken. Pick another."); btn.disabled=false; return; }
+        // quick availability re-check (non-fatal if RPC is missing)
+        const available = await safeUsernameAvailable(username);
+        if (available === false) { showErr("That username is taken. Pick another."); btn.disabled=false; return; }
 
         // create auth user (store username/dob in metadata too)
-        const { data, error } = await supabase.auth.signUp({
-          email, password,
-          options: { data: { username, dob } }
-        });
+        const { data, error } = await withTimeout(
+          supabase.auth.signUp({ email, password, options: { data: { username, dob } } }),
+          15000,
+          "sign up"
+        );
         if (error) {
           if (/already registered/i.test(error.message)) {
             showErr("That email already has an account. Try logging in or resetting your password.");
@@ -124,51 +139,61 @@
           return;
         }
 
-        // If email confirmation is OFF, try to sign the user in immediately.
-        // If it's ON, this will likely fail with "Email not confirmed" (that's fine).
+        // Try to sign in (if confirm-email ON, this will fail with a helpful message)
         let session = data.session;
         if (!session) {
-          const { error: loginErr } = await supabase.auth.signInWithPassword({ email, password });
+          const { error: loginErr } = await withTimeout(
+            supabase.auth.signInWithPassword({ email, password }),
+            12000,
+            "sign in"
+          );
           if (loginErr) {
-            // If confirm-email is ON, tell the user and bail gracefully.
             if (/confirm/i.test(loginErr.message)) {
-              showErr("Check your email to confirm your account, then log in.");
+              showStatus("Almost done — check your email to confirm, then log in.");
+              showErr("");            // clear error box
+              btn.disabled = false;
               return;
             }
-            return showErr(loginErr.message || "Could not log in after sign-up.");
+            showErr(loginErr.message || "Could not log in after sign-up.");
+            btn.disabled = false;
+            return;
           }
-          // Give the browser a moment to persist the session
+          // allow storage to persist
           await new Promise(r => setTimeout(r, 200));
         }
 
-        // Double-check/poll for a real session (mobile storage can lag)
-        const sessRes = await supabase.auth.getSession();
-        let sess = sessRes.data.session;
-        if (!sess) {
-          for (let i=0; i<5 && !sess; i++) {
-            await new Promise(r => setTimeout(r, 200));
-            const again = await supabase.auth.getSession();
-            if (again.data.session) { sess = again.data.session; break; }
-          }
+        // Poll for session (mobile storage can lag)
+        let sess = (await supabase.auth.getSession()).data.session;
+        for (let i=0; i<5 && !sess; i++) {
+          await new Promise(r => setTimeout(r, 200));
+          sess = (await supabase.auth.getSession()).data.session;
         }
-
         if (!sess) {
-          // No session => don't try to write usernames; ask user to log in manually
+          showStatus("");
           showErr("Account created. Please log in.");
+          btn.disabled = false;
           return;
         }
 
         // Insert mapping (requires your RLS policy)
         const user = (await supabase.auth.getUser()).data.user;
         if (user) {
-          const { error: mapErr } = await supabase
-            .from("usernames")
-            .upsert({ user_id: user.id, username, email }, { onConflict: "user_id" });
+          const { error: mapErr } = await withTimeout(
+            supabase.from("usernames").upsert(
+              { user_id: user.id, username, email },
+              { onConflict: "user_id" }
+            ),
+            12000,
+            "username map"
+          );
           if (mapErr) {
-            console.warn("username map upsert error", mapErr);
             if (String(mapErr.message).match(/duplicate|unique|conflict/i)) {
-              return showErr("That username is already taken. Pick another.");
+              showErr("That username is already taken. Pick another.");
+              btn.disabled = false;
+              return;
             }
+            // non-fatal: log and continue
+            console.warn("username map upsert error", mapErr);
           }
         }
 
@@ -177,9 +202,12 @@
         setTimeout(() => { location.href = "./menu.html"; }, 600);
 
       } catch (e) {
-        showErr("Unexpected error. See console."); console.error(e);
+        console.error(e);
+        showStatus("");
+        showErr(e.message || "Unexpected error.");
       } finally {
-        btn.disabled = false;
+        // If we didn’t redirect, re-enable the button
+        if (!/menu\.html$/.test(location.href)) btn.disabled = false;
       }
     }
 
