@@ -182,7 +182,7 @@
 <body>
   <div class="wrap">
     <div class="top-login">
-      <!-- changed from <button> to <a> with a relative href -->
+      <!-- anchor behaves as a link when logged out; becomes Logout button when logged in -->
       <a id="authBtn" class="btn ghost" href="./login.html" role="button">Login</a>
     </div>
 
@@ -205,44 +205,51 @@
   </div>
 
   <script>
+    // Supabase client
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
-    const authBtn = document.getElementById("authBtn");
+    // Elements
+    const authBtn  = document.getElementById("authBtn");
     const enterBtn = document.getElementById("enterBtn");
-    const signupBtn = document.getElementById("signupBtn");
+    const signupBtn= document.getElementById("signupBtn");
     const enterMsg = document.getElementById("enterMsg");
 
     let isLoggedIn = false;
 
     function withSwapAnim(el) {
       el.classList.remove("swap-anim");
+      // reflow to restart animation
       void el.offsetWidth;
       el.classList.add("swap-anim");
     }
 
-    // Login state -> show "Login" and make it a real link to ./login.html
+    // Logged OUT → show "Login" link to login.html
     function setBtnAsLogin() {
       authBtn.textContent = "Login";
       authBtn.className = "btn ghost";
-      authBtn.setAttribute("href", "./login.html");  // << important: relative
-      authBtn.onclick = null; // let the anchor handle navigation
+      authBtn.setAttribute("href", "./login.html");
+      authBtn.onclick = null; // let the anchor navigate
       withSwapAnim(authBtn);
+      // show Sign Up when logged out
+      signupBtn.style.display = "";
     }
 
-    // Logged in -> show "Logout" and prevent default navigation
+    // Logged IN → show "Logout" and keep user on page
     function setBtnAsLogout() {
       authBtn.textContent = "Logout";
       authBtn.className = "btn ghost-red";
-      authBtn.setAttribute("href", "#"); // stays on page
+      authBtn.setAttribute("href", "#");
       authBtn.onclick = async (e) => {
         e.preventDefault();
         const { error } = await sb.auth.signOut();
-        if (error) { console.error(error); }
+        if (error) console.error(error);
       };
       withSwapAnim(authBtn);
+      // hide Sign Up when logged in
+      signupBtn.style.display = "none";
     }
 
     async function detectAndRenderAuth() {
@@ -251,16 +258,18 @@
 
       if (isLoggedIn) {
         setBtnAsLogout();
+        // enable Enter (clear any lock/message)
         enterBtn.classList.remove("locked");
-        enterBtn.setAttribute("aria-disabled", "false");
+        enterBtn.removeAttribute("aria-disabled");
         enterMsg.textContent = "";
       } else {
         setBtnAsLogin();
-        enterBtn.setAttribute("aria-disabled", "false");
+        // Enter stays available to click; we guard behavior below
+        enterBtn.removeAttribute("aria-disabled");
       }
     }
 
-    // Enter button: only works if logged in
+    // Enter: require login
     enterBtn.addEventListener("click", (e) => {
       if (!isLoggedIn) {
         e.preventDefault();
@@ -269,15 +278,16 @@
         enterMsg.textContent = 'login to follow the white rabbit...';
         return;
       }
-      // logged in → go to menu
+      // logged in → go to your app page
       location.href = "./menu.html";
     });
 
-    // Sign Up button: always allowed
+    // Sign Up: always allowed (hidden when logged in)
     signupBtn.addEventListener("click", () => {
       location.href = "./signup.html";
     });
 
+    // Initial render + live updates
     document.addEventListener("DOMContentLoaded", async () => {
       await detectAndRenderAuth();
       sb.auth.onAuthStateChange((_event) => {
