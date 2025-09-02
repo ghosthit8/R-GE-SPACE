@@ -54,12 +54,9 @@
     const looksLikeEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
     const validUsername = (u) => /^[a-zA-Z0-9_]{3,20}$/.test(u);
 
-    // tiny timeout guard so no promise can hang the UI silently
+    // Promise timeout so nothing can hang the UI
     const withTimeout = (p, ms, label="request") =>
-      Promise.race([
-        p,
-        new Promise((_, r) => setTimeout(() => r(new Error(label+" timed out")), ms))
-      ]);
+      Promise.race([ p, new Promise((_, r)=>setTimeout(()=>r(new Error(label+" timed out")), ms)) ]);
 
     function calcAge(dobStr){
       if (!dobStr) return 0;
@@ -70,7 +67,7 @@
       return a;
     }
 
-    // Debounced availability check (best-effort; non-blocking if RPC missing)
+    // Soft username availability hint (non-blocking if RPC is missing)
     let usernameTimer;
     usernameInput.addEventListener("input", () => {
       clearTimeout(usernameTimer);
@@ -85,9 +82,9 @@
         try {
           const { data, error } = await supabase.rpc('username_available', { uname: u });
           if (error) { usernameMsg.textContent = ""; return; }
-          if (data) { usernameMsg.textContent = "✔ Username available"; usernameMsg.className = "ok"; }
-          else { usernameMsg.textContent = "❌ Username already taken"; usernameMsg.className = "error"; }
-        } catch { /* ignore */ }
+          usernameMsg.textContent = data ? "✔ Username available" : "❌ Username already taken";
+          usernameMsg.className = data ? "ok" : "error";
+        } catch {}
       }, 350);
     });
 
@@ -98,8 +95,8 @@
           8000,
           "username check"
         );
-        if (error) return null;      // null => unknown, don't block signup
-        return !!data;               // true/false => available or not
+        if (error) return null;
+        return !!data;
       } catch { return null; }
     }
 
@@ -120,13 +117,16 @@
       showStatus("Creating your account…");
 
       try {
-        // quick availability re-check (non-fatal if RPC is missing)
+        // Non-fatal username check
         const available = await safeUsernameAvailable(username);
-        if (available === false) { showErr("That username is taken. Pick another."); btn.disabled=false; return; }
+        if (available === false) { showErr("That username is taken. Pick another."); return; }
 
-        // create auth user (store username/dob in metadata too)
+        // Sign up
         const { data, error } = await withTimeout(
-          supabase.auth.signUp({ email, password, options: { data: { username, dob } } }),
+          supabase.auth.signUp({
+            email, password,
+            options: { data: { username, dob } }
+          }),
           15000,
           "sign up"
         );
@@ -139,9 +139,8 @@
           return;
         }
 
-        // Try to sign in (if confirm-email ON, this will fail with a helpful message)
-        let session = data.session;
-        if (!session) {
+        // Try immediate sign-in (will fail if email confirmation is required)
+        if (!data.session) {
           const { error: loginErr } = await withTimeout(
             supabase.auth.signInWithPassword({ email, password }),
             12000,
@@ -150,71 +149,53 @@
           if (loginErr) {
             if (/confirm/i.test(loginErr.message)) {
               showStatus("Almost done — check your email to confirm, then log in.");
-              showErr("");            // clear error box
-              btn.disabled = false;
               return;
             }
             showErr(loginErr.message || "Could not log in after sign-up.");
-            btn.disabled = false;
             return;
           }
-          // allow storage to persist
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise(r=>setTimeout(r,200));
         }
 
-        // Poll for session (mobile storage can lag)
+        // Confirm we actually have a session (mobile storage lag)
         let sess = (await supabase.auth.getSession()).data.session;
         for (let i=0; i<5 && !sess; i++) {
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise(r=>setTimeout(r,200));
           sess = (await supabase.auth.getSession()).data.session;
         }
         if (!sess) {
-          showStatus("");
           showErr("Account created. Please log in.");
-          btn.disabled = false;
           return;
         }
 
-        // Insert mapping (requires your RLS policy)
-        const user = (await supabase.auth.getUser()).data.user;
-        if (user) {
-          const { error: mapErr } = await withTimeout(
-            supabase.from("usernames").upsert(
-              { user_id: user.id, username, email },
-              { onConflict: "user_id" }
-            ),
+        // Best-effort username mapping (won’t block success)
+        try {
+          await withTimeout(
+            supabase.from("usernames")
+              .upsert({ user_id: sess.user.id, username, email }, { onConflict: "user_id" }),
             12000,
             "username map"
           );
-          if (mapErr) {
-            if (String(mapErr.message).match(/duplicate|unique|conflict/i)) {
-              showErr("That username is already taken. Pick another.");
-              btn.disabled = false;
-              return;
-            }
-            // non-fatal: log and continue
-            console.warn("username map upsert error", mapErr);
-          }
+        } catch (mapErr) {
+          console.warn("username map error", mapErr);
         }
 
         showStatus("Signed up & logged in. Redirecting…");
         el("password").value = "";
-        setTimeout(() => { location.href = "./menu.html"; }, 600);
+        setTimeout(()=>{ location.href = "./menu.html"; }, 600);
 
       } catch (e) {
         console.error(e);
-        showStatus("");
         showErr(e.message || "Unexpected error.");
       } finally {
-        // If we didn’t redirect, re-enable the button
+        // If we didn’t redirect yet, re-enable the button so you can try again
         if (!/menu\.html$/.test(location.href)) btn.disabled = false;
       }
     }
 
     async function showLoggedInNoticeIfAny() {
-      const { data: { session} } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-
       status.innerHTML = `You’re already logged in as <strong>${session.user.user_metadata?.username || session.user.email}</strong>.`;
       const actions = document.createElement("div");
       actions.style.display = "flex";
