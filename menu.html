@@ -12,10 +12,10 @@
       text-align: center;
     }
 
-    /* Back button top-right */
+    /* Back button fixed to very top-right, safe for notches */
     .back-btn {
-      position: absolute;
-      top: 16px;
+      position: fixed;
+      top: calc(env(safe-area-inset-top, 0px) + 12px);
       right: 16px;
       padding: 8px 14px;
       border: 1px solid var(--green, #39ff14);
@@ -25,6 +25,8 @@
       background: transparent;
       font-weight: bold;
       text-shadow: 0 0 6px var(--green, #39ff14);
+      z-index: 9999;
+      pointer-events: auto;
     }
     .back-btn:hover {
       color: var(--red, #ff0033);
@@ -32,17 +34,17 @@
       text-shadow: 0 0 6px var(--red, #ff0033);
     }
 
-    /* Push content down */
+    /* Push title lower so button is clearly above it */
     .menu-title {
-      margin-top: 100px; /* moved lower */
+      margin-top: 160px; /* was 100; gives breathing room under the fixed button */
     }
     .menu-buttons {
-      margin-top: 40px; /* extra space below title */
+      margin-top: 40px;
     }
   </style>
 </head>
 <body>
-  <a class="back-btn" href="index.html">⬅ BACK</a>
+  <a class="back-btn" id="backBtn" href="index.html">⬅ BACK</a>
 
   <h1 class="menu-title">CHOOSE YOUR PATH</h1>
   <div class="menu-buttons">
@@ -50,5 +52,24 @@
     <a class="button btn" href="matchup.html">ART BATTLE</a>
     <a class="button btn" href="ragespace.html">Ⓐ SPACE</a>
   </div>
+
+  <script>
+    (function () {
+      const btn = document.getElementById('backBtn');
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+
+        // If there’s a previous page in history, go back
+        if (document.referrer && document.referrer !== location.href) {
+          history.back();
+          return;
+        }
+
+        // Otherwise, always load index.html from the same folder
+        const sameFolderHome = new URL('index.html', location.href);
+        location.href = sameFolderHome.href;
+      });
+    })();
+  </script>
 </body>
 </html>
