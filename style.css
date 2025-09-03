@@ -127,3 +127,36 @@ input, textarea {
   bottom:18px; background:var(--panel); border:1px solid var(--green);
   padding:10px 14px; border-radius:10px; display:none;
 }
+
+/* === Darker high-contrast neon green scan-line effect === */
+body {
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(57,255,20,0.1) 0px,
+    rgba(57,255,20,0.1) 2px,
+    transparent 5px
+  );
+  pointer-events: none;
+  z-index: 1;
+  animation: scrollScan 7s linear infinite;
+}
+
+@keyframes scrollScan {
+  from { background-position: 0 0; }
+  to   { background-position: 0 100vh; }
+}
+
+/* Ensure content sits above overlay */
+.wrap, header, main, .card, .grid, .menu-buttons,
+.scorebar, .auth-btn, .menu-title {
+  position: relative;
+  z-index: 2;
+}
