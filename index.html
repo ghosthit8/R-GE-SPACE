@@ -7,182 +7,92 @@
   <meta name="color-scheme" content="dark" />
   <style>
     :root{
-      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5;
-      --muted:#8aff8a;
-
-      /* Tuning knobs */
-      --title-scale-y: 1.28;
-      --title-stroke: 0.8px;
-      --title-letterspace: 0.28rem;
+      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --muted:#8aff8a;
+      --title-scale-y:1.28; --title-stroke:.8px; --title-letterspace:.28rem;
     }
-    *{ box-sizing:border-box; }
+    *{ box-sizing:border-box; margin:0; padding:0; }
     html,body{ height:100%; }
     body{
-      margin:0; overflow-x:hidden; background:
-        radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.12), transparent 60%),
-        #000;
+      overflow-x:hidden;
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          #000 0px,
+          #000 2px,
+          rgba(255,255,255,0.03) 3px
+        );
       color:var(--green);
-      font-family: ui-sans-serif, system-ui, Arial, Helvetica, sans-serif;
-      -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+      font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
+      -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+      position:relative;
     }
 
-    .wrap{ max-width:980px; margin:0 auto; padding:0 16px; }
-
-    .hero{
-      min-height:100dvh;
-      display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
-      padding-top:16vh;
-    }
+    .wrap{ max-width:980px; margin:0 auto; padding:0 16px; position:relative; z-index:2; }
+    .hero{ min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:16vh; }
 
     .title{
-      margin:0 auto 30px;
-      font-weight:600;
-      font-size:clamp(44px, 12.5vw, 150px);
-      letter-spacing:var(--title-letterspace);
-      text-transform:uppercase;
-      line-height:0.9;
-      transform:scaleY(var(--title-scale-y));
-      transform-origin:center;
-      color:var(--green);
-      -webkit-text-stroke: var(--title-stroke) var(--green);
-      text-shadow:
-        0 0 24px var(--red),
-        0 0 6px rgba(57,255,20,0.85);
-      text-align:center;
-      white-space:nowrap;
-      user-select:none;
-      animation: titleGlow 3.75s ease-in-out infinite alternate;
+      margin:0 auto 30px; font-weight:600; font-size:clamp(44px,12.5vw,150px);
+      letter-spacing:var(--title-letterspace); text-transform:uppercase; line-height:.9;
+      transform:scaleY(var(--title-scale-y)); transform-origin:center; color:var(--green);
+      -webkit-text-stroke:var(--title-stroke) var(--green);
+      text-shadow:0 0 24px var(--red), 0 0 6px rgba(57,255,20,.85);
+      text-align:center; white-space:nowrap; user-select:none;
+      animation:titleGlow 3.75s ease-in-out infinite alternate;
     }
-
-    @keyframes titleGlow {
-      0% {
-        text-shadow:
-          0 0 18px rgba(255,0,51,0.50),
-          0 0 5px rgba(57,255,20,0.75);
-      }
-      100% {
-        text-shadow:
-          0 0 28px rgba(255,0,51,0.75),
-          0 0 10px rgba(57,255,20,1);
-      }
+    @keyframes titleGlow{
+      0%{ text-shadow:0 0 18px rgba(255,0,51,.5), 0 0 5px rgba(57,255,20,.75); }
+      100%{ text-shadow:0 0 28px rgba(255,0,51,.75), 0 0 10px rgba(57,255,20,1); }
     }
 
     .tagline{
-      color:var(--green);
-      font-size:clamp(16px, 2.8vw, 24px);
-      line-height:1.55;
-      text-align:center;
-      max-width:780px;
-      margin:20px auto 0;
-      text-shadow:
-        0 0 10px rgba(57,255,20,0.45),
-        0 0 6px rgba(255,0,51,0.6);
+      color:var(--green); font-size:clamp(16px,2.8vw,24px); line-height:1.55; text-align:center;
+      max-width:780px; margin:20px auto 0; text-shadow:0 0 10px rgba(57,255,20,.45), 0 0 6px rgba(255,0,51,.6);
     }
+    .cta-row{ display:flex; gap:24px; flex-wrap:wrap; justify-content:center; margin-top:7vh; }
 
-    .cta-row{
-      display:flex; gap:24px; flex-wrap:wrap; justify-content:center;
-      margin-top:7vh;
-    }
-
-    /* Base button */
-    .btn{
-      appearance:none; border:none; cursor:pointer;
-      padding:16px 28px;
-      font-size:clamp(18px, 4.5vw, 26px); font-weight:800;
-      border-radius:18px;
-      transition:
-        color .22s linear,
-        border-color .22s linear,
-        box-shadow .25s ease,
-        background-color .22s ease,
-        transform .08s ease;
-    }
-    .btn:active{ transform:translateY(1px) scale(0.99); }
-
-    /* Neon green filled (Enter & Sign Up) */
-    .btn.filled{
-      color:#001400; background:var(--green);
-      box-shadow:
-        0 0 24px rgba(57,255,20,0.55),
-        0 0 80px rgba(57,255,20,0.35) inset;
-    }
-
-    /* Flash RED while pressed (applies to any .btn) */
+    .btn{ appearance:none; border:none; cursor:pointer; padding:16px 28px; font-size:clamp(18px,4.5vw,26px); font-weight:800; border-radius:18px;
+      transition: color .22s linear, border-color .22s linear, box-shadow .25s ease,
+                 background-color .22s ease, transform .08s ease; }
+    .btn:active{ transform:translateY(1px) scale(.99); }
+    .btn.filled{ color:#001400; background:var(--green);
+      box-shadow:0 0 24px rgba(57,255,20,.55), 0 0 80px rgba(57,255,20,.35) inset; }
     .btn:active{
-      background:var(--red) !important; color:#fff !important; border-color:var(--red) !important;
-      box-shadow:
-        0 0 28px rgba(255,0,51,0.8),
-        0 0 90px rgba(255,0,51,0.5) inset;
-      text-shadow:0 0 6px var(--red);
+      background:var(--red)!important; color:#fff!important; border-color:var(--red)!important;
+      box-shadow:0 0 28px rgba(255,0,51,.8), 0 0 90px rgba(255,0,51,.5) inset; text-shadow:0 0 6px var(--red);
     }
-
-    /* Green Login (ghost) */
-    .btn.ghost{
-      background:transparent; color:var(--green);
-      border:2px solid var(--green);
-      box-shadow:0 0 24px rgba(57,255,20,0.45);
-    }
-
-    /* Red Logout (ghost) */
-    .btn.ghost-red{
-      background:transparent; color:var(--red);
-      border:2px solid var(--red);
-      box-shadow:0 0 24px rgba(255,0,51,0.45);
-    }
-
-    /* When Enter gets locked (after click while logged-out) — stays RED */
+    .btn.ghost{ background:transparent; color:var(--green); border:2px solid var(--green); box-shadow:0 0 24px rgba(57,255,20,.45); }
+    .btn.ghost-red{ background:transparent; color:var(--red); border:2px solid var(--red); box-shadow:0 0 24px rgba(255,0,51,.45); }
     .btn.locked{
-      background:var(--red) !important; color:#fff !important;
-      border:2px solid var(--red) !important;
-      box-shadow:
-        0 0 28px rgba(255,0,51,0.8),
-        0 0 90px rgba(255,0,51,0.5) inset;
-      cursor:not-allowed;
+      background:var(--red)!important; color:#fff!important; border:2px solid var(--red)!important;
+      box-shadow:0 0 28px rgba(255,0,51,.8), 0 0 90px rgba(255,0,51,.5) inset; cursor:not-allowed;
     }
+    @keyframes swapFade{ from{opacity:.55;filter:blur(.25px)} to{opacity:1;filter:none} }
+    .btn.swap-anim{ animation:swapFade .22s ease; }
 
-    /* Fade pop when swapping states */
-    @keyframes swapFade {
-      from { opacity:.55; filter:blur(.25px); }
-      to   { opacity:1;   filter:none; }
+    /* glow fade for welcome text */
+    @keyframes welcomeGlow {
+      0%   { opacity:0; text-shadow:0 0 0 transparent; }
+      50%  { opacity:1; text-shadow:0 0 12px var(--green), 0 0 24px var(--red); }
+      100% { opacity:1; text-shadow:0 0 6px var(--green); }
     }
-    .btn.swap-anim { animation: swapFade .22s ease; }
+    .welcome-anim { animation: welcomeGlow 1.5s ease forwards; }
 
-    /* Pulse for Enter button (when it’s allowed) */
-    @keyframes pulseGlow {
-      0%   { box-shadow:0 0 24px rgba(57,255,20,0.55), 0 0 80px rgba(57,255,20,0.35) inset; }
-      50%  { box-shadow:0 0 60px rgba(57,255,20,0.95), 0 0 120px rgba(57,255,20,0.65) inset; }
-      100% { box-shadow:0 0 24px rgba(57,255,20,0.55), 0 0 80px rgba(57,255,20,0.35) inset; }
+    /* flicker glitch for login text */
+    @keyframes flicker {
+      0%,19%,21%,23%,25%,54%,56%,100% { opacity:1; text-shadow:0 0 6px var(--red), 0 0 12px var(--green); }
+      20%,24%,55% { opacity:0.2; text-shadow:none; }
     }
-    .btn.enter-pulse:not(.locked):active { animation: pulseGlow 0.5s ease; }
+    .flicker-anim { animation: flicker 1.2s linear 1; }
 
-    /* Flicker for Sign Up button */
-    @keyframes flickerGlow {
-      0%, 100% { box-shadow:0 0 24px rgba(255,0,51,0.6), 0 0 60px rgba(57,255,20,0.4); }
-      25%      { box-shadow:0 0 30px rgba(57,255,20,0.9), 0 0 80px rgba(255,0,51,0.5); }
-      50%      { box-shadow:0 0 40px rgba(255,0,51,0.95), 0 0 90px rgba(57,255,20,0.6); }
-      75%      { box-shadow:0 0 30px rgba(57,255,20,0.9), 0 0 80px rgba(255,0,51,0.5); }
-    }
-    .btn.signup-flicker:active { animation: flickerGlow 0.6s linear; }
-
-    .top-login{ position:fixed; top:18px; right:18px; z-index:10; }
-
-    .version{
-      position:fixed; bottom:20px; left:0; right:0;
-      text-align:center; color:var(--muted); font-size:14px; opacity:0.9;
-    }
-
-    /* message under Enter */
-    .enter-msg{
-      margin-top:12px; font-size:14px; color:var(--ink); text-align:center;
-      opacity:.9; min-height:1.2em;
-    }
+    .top-login{ position:fixed; top:28px; right:18px; z-index:3; }  /* moved down */
+    .version{ position:fixed; bottom:20px; left:0; right:0; text-align:center; color:var(--muted); font-size:14px; opacity:.9; z-index:3; }
+    .enter-msg{ margin-top:12px; font-size:14px; color:var(--ink); text-align:center; opacity:.9; min-height:1.2em; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="wrap">
     <div class="top-login">
-      <!-- anchor behaves as a link when logged out; becomes Logout button when logged in -->
       <a id="authBtn" class="btn ghost" href="./login.html" role="button">Login</a>
     </div>
 
@@ -205,93 +115,78 @@
   </div>
 
   <script>
-    // Supabase client
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
-    // Elements
-    const authBtn  = document.getElementById("authBtn");
-    const enterBtn = document.getElementById("enterBtn");
-    const signupBtn= document.getElementById("signupBtn");
-    const enterMsg = document.getElementById("enterMsg");
+    const authBtn   = document.getElementById("authBtn");
+    const enterBtn  = document.getElementById("enterBtn");
+    const signupBtn = document.getElementById("signupBtn");
+    const enterMsg  = document.getElementById("enterMsg");
 
     let isLoggedIn = false;
 
-    function withSwapAnim(el) {
-      el.classList.remove("swap-anim");
-      // reflow to restart animation
-      void el.offsetWidth;
-      el.classList.add("swap-anim");
+    function usernameFromSession(session){
+      const u = session?.user;
+      return u?.user_metadata?.username || u?.email || "user";
     }
 
-    // Logged OUT → show "Login" link to login.html
-    function setBtnAsLogin() {
+    function renderLoggedOut(){
       authBtn.textContent = "Login";
       authBtn.className = "btn ghost";
-      authBtn.setAttribute("href", "./login.html");
-      authBtn.onclick = null; // let the anchor navigate
-      withSwapAnim(authBtn);
-      // show Sign Up when logged out
+      authBtn.setAttribute("href","./login.html");
+      authBtn.onclick = null;
       signupBtn.style.display = "";
+      enterMsg.textContent = "";
+      enterMsg.classList.remove("welcome-anim","flicker-anim");
     }
 
-    // Logged IN → show "Logout" and keep user on page
-    function setBtnAsLogout() {
+    function renderLoggedIn(session){
       authBtn.textContent = "Logout";
       authBtn.className = "btn ghost-red";
-      authBtn.setAttribute("href", "#");
-      authBtn.onclick = async (e) => {
-        e.preventDefault();
-        const { error } = await sb.auth.signOut();
-        if (error) console.error(error);
-      };
-      withSwapAnim(authBtn);
-      // hide Sign Up when logged in
+      authBtn.setAttribute("href","#");
+      authBtn.onclick = async(e)=>{ e.preventDefault(); const {error}=await sb.auth.signOut(); if(error)console.error(error); };
       signupBtn.style.display = "none";
+      const name = usernameFromSession(session);
+      enterMsg.textContent = `Welcome, ${name}`;
+      enterMsg.classList.remove("flicker-anim","welcome-anim"); void enterMsg.offsetWidth;
+      enterMsg.classList.add("welcome-anim");
     }
 
-    async function detectAndRenderAuth() {
+    async function detectAndRenderAuth(){
       const { data: sessionRes } = await sb.auth.getSession();
-      isLoggedIn = !!sessionRes?.session;
-
-      if (isLoggedIn) {
-        setBtnAsLogout();
-        // enable Enter (clear any lock/message)
+      const session = sessionRes?.session;
+      isLoggedIn = !!session;
+      if (isLoggedIn){
+        renderLoggedIn(session);
         enterBtn.classList.remove("locked");
         enterBtn.removeAttribute("aria-disabled");
-        enterMsg.textContent = "";
       } else {
-        setBtnAsLogin();
-        // Enter stays available to click; we guard behavior below
-        enterBtn.removeAttribute("aria-disabled");
+        renderLoggedOut();
       }
     }
 
-    // Enter: require login
-    enterBtn.addEventListener("click", (e) => {
-      if (!isLoggedIn) {
+    enterBtn.addEventListener("click",(e)=>{
+      if (!isLoggedIn){
         e.preventDefault();
         enterBtn.classList.add("locked");
-        enterBtn.setAttribute("aria-disabled", "true");
+        enterBtn.setAttribute("aria-disabled","true");
         enterMsg.textContent = 'login to follow the white rabbit...';
+        enterMsg.classList.remove("welcome-anim","flicker-anim"); void enterMsg.offsetWidth;
+        enterMsg.classList.add("flicker-anim");
         return;
       }
-      // logged in → go to your app page
-      location.href = "./menu.html";
+      location.href="./menu.html";
     });
 
-    // Sign Up: always allowed (hidden when logged in)
-    signupBtn.addEventListener("click", () => {
-      location.href = "./signup.html";
-    });
+    signupBtn.addEventListener("click",()=>{ location.href="./signup.html"; });
 
-    // Initial render + live updates
-    document.addEventListener("DOMContentLoaded", async () => {
+    document.addEventListener("DOMContentLoaded",async()=>{
       await detectAndRenderAuth();
-      sb.auth.onAuthStateChange((_event) => {
-        detectAndRenderAuth();
+      sb.auth.onAuthStateChange((_e,session)=>{
+        isLoggedIn = !!session;
+        if (isLoggedIn) renderLoggedIn(session); else renderLoggedOut();
       });
     });
   </script>
