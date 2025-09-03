@@ -176,12 +176,7 @@
         </div>
 
         <h2>Me</h2>
-        <div class="card">
-          <div><strong>Username:</strong> <span id="meName">…</span></div>
-          <div><strong>User ID:</strong> <span id="meId">…</span></div>
-          <div class="pill">Age-gate ✅</div>
-          <div class="pill">Anon key 🔐</div>
-        </div>
+        <div class="card" id="meCard"></div>
 
         <div class="footer">
           <div>“from the digital crypt”</div>
@@ -194,14 +189,11 @@
   <!-- Layout script: measure header, set spacer height, optional fade-on-scroll -->
   <script>
     (function(){
-      const FADE_ON_SCROLL = true;  // set to true if you want the fade
+      const FADE_ON_SCROLL = true;
       const header = document.getElementById('site-header');
       const spacer = document.getElementById('header-spacer');
 
-      function measure(){
-        // +12px padding so the glow/shadow never touches content
-        spacer.style.height = (header.offsetHeight + 12) + 'px';
-      }
+      function measure(){ spacer.style.height = (header.offsetHeight + 12) + 'px'; }
       function fade(){
         if(!FADE_ON_SCROLL) return;
         const y = window.scrollY;
@@ -213,8 +205,6 @@
       window.addEventListener('resize', measure);
       window.addEventListener('orientationchange', measure);
       window.addEventListener('scroll', fade, { passive:true });
-
-      // If fonts change height after load (mobile), re-measure shortly after
       setTimeout(measure, 400);
     })();
   </script>
@@ -234,8 +224,6 @@
     const presenceEl = document.getElementById("presence");
     const countEl = document.getElementById("count");
     const roomNameEl = document.getElementById("roomName");
-    const meNameEl = document.getElementById("meName");
-    const meIdEl = document.getElementById("meId");
     const rtDot = document.getElementById("realtimeDot");
     const statusText = document.getElementById("statusText");
     const roomSelect = document.getElementById("roomSelect");
@@ -275,8 +263,6 @@
         if(!error && prof?.username) me.username = prof.username;
       }
       me.username ??= "user-" + s.user.id.slice(0,6);
-      meNameEl.textContent = me.username;
-      meIdEl.textContent = me.id.slice(0,8) + "…";
       return s;
     }
 
@@ -327,6 +313,9 @@
       roomNameEl.textContent=currentRoom;
       status("Loading messages…", false);
 
+      // Immediate presence as soon as you join a room
+      touchPresence(me.id, me.username);
+
       await subscribeRealtime(currentRoom);
 
       clearMessages();
@@ -337,6 +326,8 @@
       else{ data.forEach(renderMessage); countEl.textContent = count ?? data.length; }
       msgEl.removeAttribute("aria-busy");
       autoscroll();
+
+      // Touch again after load (safe no-op if already present)
       touchPresence(me.id, me.username);
     }
 
@@ -353,7 +344,11 @@
         .subscribe(status=>{
           const sub = status==="SUBSCRIBED";
           rtDot.classList.toggle("ok", sub);
-          if(sub) statusText.textContent = `Live in #${currentRoom}`;
+          if(sub){
+            statusText.textContent = `Live in #${currentRoom}`;
+            // Ensure presence reflects you once live
+            touchPresence(me.id, me.username);
+          }
         });
     }
 
@@ -378,8 +373,24 @@
 
     sendBtn.addEventListener("click", send);
     inputEl.addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } });
-    joinBtn.addEventListener("click", ()=>{ const choice=customRoom.value.trim()||roomSelect.value; joinRoom(choice); customRoom.value=""; });
-    leaveBtn.addEventListener("click", async ()=>{ if(channel){ try{ await supabase.removeChannel(channel); }catch{} } channel=null; status("Disconnected", false); });
+
+    // Join: immediate presence + room switch
+    joinBtn.addEventListener("click", ()=>{
+      const choice=customRoom.value.trim()||roomSelect.value;
+      touchPresence(me.id, me.username);   // instant “who’s here” update
+      joinRoom(choice);
+      customRoom.value="";
+    });
+
+    // Leave: instant removal
+    leaveBtn.addEventListener("click", async ()=>{
+      if(channel){ try{ await supabase.removeChannel(channel); }catch{} }
+      channel = null;
+      presence.delete(me.id);
+      drawPresence();
+      status("Disconnected", false);
+    });
+
     logoutBtn.addEventListener("click", async ()=>{ await supabase.auth.signOut(); window.location.href="login.html"; });
 
     await requireSession();
