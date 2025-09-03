@@ -48,6 +48,38 @@
       color:var(--green); font-size:clamp(16px,2.8vw,24px); line-height:1.55; text-align:center;
       max-width:780px; margin:20px auto 0; text-shadow:0 0 10px rgba(57,255,20,.45), 0 0 6px rgba(255,0,51,.6);
     }
+
+    /* ==== ENTER MESSAGE ==== */
+    .enter-msg{
+      margin: 100px auto 0;
+      font-size: 16px;
+      color: var(--ink);
+      text-align: center;
+      opacity: .95;
+      min-height: 1.6em;
+      will-change: opacity, text-shadow, filter;
+    }
+    /* Logged OUT: aggressive flicker */
+    @keyframes hardFlicker {
+      0%, 5%, 7%, 9%, 11%, 100% { opacity:1; text-shadow:0 0 10px var(--green), 0 0 18px var(--red); filter:none; }
+      6%, 10% { opacity:.2; text-shadow:none; filter:blur(.2px) contrast(1.1); }
+      40% { opacity:.85; text-shadow:0 0 6px var(--green), 0 0 10px var(--red); }
+      60% { opacity:.6; text-shadow:none; }
+      80% { opacity:1; text-shadow:0 0 12px var(--green), 0 0 16px var(--red); }
+    }
+    .enter-msg.logged-out{
+      animation: hardFlicker 1.35s linear infinite;
+    }
+    /* Logged IN: smooth glow */
+    @keyframes smoothGlow {
+      0%   { opacity:.85; text-shadow:0 0 6px var(--green); }
+      50%  { opacity:1;   text-shadow:0 0 14px var(--green), 0 0 22px var(--red); }
+      100% { opacity:.9;  text-shadow:0 0 8px var(--green); }
+    }
+    .enter-msg.logged-in{
+      animation: smoothGlow 2.6s ease-in-out infinite;
+    }
+
     .cta-row{ display:flex; gap:24px; flex-wrap:wrap; justify-content:center; margin-top:7vh; }
 
     .btn{ appearance:none; border:none; cursor:pointer; padding:16px 28px; font-size:clamp(18px,4.5vw,26px); font-weight:800; border-radius:18px;
@@ -66,27 +98,9 @@
       background:var(--red)!important; color:#fff!important; border:2px solid var(--red)!important;
       box-shadow:0 0 28px rgba(255,0,51,.8), 0 0 90px rgba(255,0,51,.5) inset; cursor:not-allowed;
     }
-    @keyframes swapFade{ from{opacity:.55;filter:blur(.25px)} to{opacity:1;filter:none} }
-    .btn.swap-anim{ animation:swapFade .22s ease; }
 
-    /* glow fade for welcome text */
-    @keyframes welcomeGlow {
-      0%   { opacity:0; text-shadow:0 0 0 transparent; }
-      50%  { opacity:1; text-shadow:0 0 12px var(--green), 0 0 24px var(--red); }
-      100% { opacity:1; text-shadow:0 0 6px var(--green); }
-    }
-    .welcome-anim { animation: welcomeGlow 1.5s ease forwards; }
-
-    /* flicker glitch for login text */
-    @keyframes flicker {
-      0%,19%,21%,23%,25%,54%,56%,100% { opacity:1; text-shadow:0 0 6px var(--red), 0 0 12px var(--green); }
-      20%,24%,55% { opacity:0.2; text-shadow:none; }
-    }
-    .flicker-anim { animation: flicker 1.2s linear 1; }
-
-    .top-login{ position:fixed; top:28px; right:18px; z-index:3; }  /* moved down */
+    .top-login{ position:fixed; top:28px; right:18px; z-index:3; }
     .version{ position:fixed; bottom:20px; left:0; right:0; text-align:center; color:var(--muted); font-size:14px; opacity:.9; z-index:3; }
-    .enter-msg{ margin-top:12px; font-size:14px; color:var(--ink); text-align:center; opacity:.9; min-height:1.2em; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -104,10 +118,13 @@
         Talk about DIY shit in your cities. Fuck Instagram.
       </p>
 
+      <!-- Buttons stay where they were -->
       <div class="cta-row">
         <button id="enterBtn" class="btn filled enter-pulse">🐇&nbsp;Enter</button>
         <button id="signupBtn" class="btn filled signup-flicker">Sign Up</button>
       </div>
+
+      <!-- 🔥 Enter message now sits BETWEEN buttons and version text -->
       <div id="enterMsg" class="enter-msg"></div>
     </main>
 
@@ -132,6 +149,12 @@
       return u?.user_metadata?.username || u?.email || "user";
     }
 
+    function setEnterMsgState(state){
+      enterMsg.classList.remove('logged-in','logged-out');
+      if(state === 'logged-in') enterMsg.classList.add('logged-in');
+      if(state === 'logged-out') enterMsg.classList.add('logged-out');
+    }
+
     function renderLoggedOut(){
       authBtn.textContent = "Login";
       authBtn.className = "btn ghost";
@@ -139,7 +162,7 @@
       authBtn.onclick = null;
       signupBtn.style.display = "";
       enterMsg.textContent = "";
-      enterMsg.classList.remove("welcome-anim","flicker-anim");
+      setEnterMsgState('logged-out');
     }
 
     function renderLoggedIn(session){
@@ -150,8 +173,7 @@
       signupBtn.style.display = "none";
       const name = usernameFromSession(session);
       enterMsg.textContent = `Welcome, ${name}`;
-      enterMsg.classList.remove("flicker-anim","welcome-anim"); void enterMsg.offsetWidth;
-      enterMsg.classList.add("welcome-anim");
+      setEnterMsgState('logged-in');
     }
 
     async function detectAndRenderAuth(){
@@ -173,8 +195,7 @@
         enterBtn.classList.add("locked");
         enterBtn.setAttribute("aria-disabled","true");
         enterMsg.textContent = 'login to follow the white rabbit...';
-        enterMsg.classList.remove("welcome-anim","flicker-anim"); void enterMsg.offsetWidth;
-        enterMsg.classList.add("flicker-anim");
+        setEnterMsgState('logged-out');
         return;
       }
       location.href="./menu.html";
