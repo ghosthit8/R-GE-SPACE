@@ -59,7 +59,6 @@
       min-height: 1.6em;
       will-change: opacity, text-shadow, filter;
     }
-    /* Logged OUT: aggressive flicker */
     @keyframes hardFlicker {
       0%, 5%, 7%, 9%, 11%, 100% { opacity:1; text-shadow:0 0 10px var(--green), 0 0 18px var(--red); filter:none; }
       6%, 10% { opacity:.2; text-shadow:none; filter:blur(.2px) contrast(1.1); }
@@ -67,24 +66,22 @@
       60% { opacity:.6; text-shadow:none; }
       80% { opacity:1; text-shadow:0 0 12px var(--green), 0 0 16px var(--red); }
     }
-    .enter-msg.logged-out{
-      animation: hardFlicker 1.35s linear infinite;
-    }
-    /* Logged IN: smooth glow */
+    .enter-msg.logged-out{ animation: hardFlicker 1.35s linear infinite; }
     @keyframes smoothGlow {
       0%   { opacity:.85; text-shadow:0 0 6px var(--green); }
       50%  { opacity:1;   text-shadow:0 0 14px var(--green), 0 0 22px var(--red); }
       100% { opacity:.9;  text-shadow:0 0 8px var(--green); }
     }
-    .enter-msg.logged-in{
-      animation: smoothGlow 2.6s ease-in-out infinite;
-    }
+    .enter-msg.logged-in{ animation: smoothGlow 2.6s ease-in-out infinite; }
 
     .cta-row{ display:flex; gap:24px; flex-wrap:wrap; justify-content:center; margin-top:7vh; }
 
-    .btn{ appearance:none; border:none; cursor:pointer; padding:16px 28px; font-size:clamp(18px,4.5vw,26px); font-weight:800; border-radius:18px;
+    .btn{
+      appearance:none; border:none; cursor:pointer; padding:16px 28px;
+      font-size:clamp(18px,4.5vw,26px); font-weight:800; border-radius:18px;
       transition: color .22s linear, border-color .22s linear, box-shadow .25s ease,
-                 background-color .22s ease, transform .08s ease; }
+                 background-color .22s ease, transform .08s ease;
+    }
     .btn:active{ transform:translateY(1px) scale(.99); }
     .btn.filled{ color:#001400; background:var(--green);
       box-shadow:0 0 24px rgba(57,255,20,.55), 0 0 80px rgba(57,255,20,.35) inset; }
@@ -100,12 +97,40 @@
     }
 
     .top-login{ position:fixed; top:28px; right:18px; z-index:3; }
+
+    /* NEW: top-left profile icon */
+    .top-profile{ position:fixed; top:28px; left:18px; z-index:3; display:none; }
+    .profile-chip{
+      display:inline-flex; align-items:center; gap:10px; text-decoration:none;
+      padding:10px 14px; border-radius:999px; border:2px solid var(--green);
+      color:var(--green); background:transparent; font-weight:700; font-size:14px;
+      box-shadow:0 0 18px rgba(57,255,20,.35);
+    }
+    .profile-chip:hover{ transform:translateY(-1px); }
+    .profile-ico{
+      width:22px; height:22px; border-radius:50%;
+      border:2px solid var(--green);
+      box-shadow:0 0 8px rgba(57,255,20,.55) inset;
+      display:inline-block; position:relative;
+      background:
+        radial-gradient(10px 10px at 50% 40%, rgba(57,255,20,.6), transparent 60%),
+        #000;
+    }
+
     .version{ position:fixed; bottom:20px; left:0; right:0; text-align:center; color:var(--muted); font-size:14px; opacity:.9; z-index:3; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="wrap">
+    <!-- NEW: Profile button -->
+    <div class="top-profile">
+      <a id="profileLink" class="profile-chip" href="./profile.html" aria-label="Profile">
+        <span class="profile-ico"></span>
+        <span>Profile</span>
+      </a>
+    </div>
+
     <div class="top-login">
       <a id="authBtn" class="btn ghost" href="./login.html" role="button">Login</a>
     </div>
@@ -118,13 +143,11 @@
         Talk about DIY shit in your cities. Fuck Instagram.
       </p>
 
-      <!-- Buttons stay where they were -->
       <div class="cta-row">
         <button id="enterBtn" class="btn filled enter-pulse">🐇&nbsp;Enter</button>
         <button id="signupBtn" class="btn filled signup-flicker">Sign Up</button>
       </div>
 
-      <!-- 🔥 Enter message now sits BETWEEN buttons and version text -->
       <div id="enterMsg" class="enter-msg"></div>
     </main>
 
@@ -137,10 +160,11 @@
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
-    const authBtn   = document.getElementById("authBtn");
-    const enterBtn  = document.getElementById("enterBtn");
-    const signupBtn = document.getElementById("signupBtn");
-    const enterMsg  = document.getElementById("enterMsg");
+    const authBtn     = document.getElementById("authBtn");
+    const enterBtn    = document.getElementById("enterBtn");
+    const signupBtn   = document.getElementById("signupBtn");
+    const enterMsg    = document.getElementById("enterMsg");
+    const topProfile  = document.querySelector(".top-profile");
 
     let isLoggedIn = false;
 
@@ -163,6 +187,7 @@
       signupBtn.style.display = "";
       enterMsg.textContent = "";
       setEnterMsgState('logged-out');
+      topProfile.style.display = "none";
     }
 
     function renderLoggedIn(session){
@@ -174,6 +199,7 @@
       const name = usernameFromSession(session);
       enterMsg.textContent = `Welcome, ${name}`;
       setEnterMsgState('logged-in');
+      topProfile.style.display = "block";   // show Profile button when logged in
     }
 
     async function detectAndRenderAuth(){
