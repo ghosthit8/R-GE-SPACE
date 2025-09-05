@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Rage Space — Profile</title>
+  <meta name="color-scheme" content="dark" />
+
+  <!-- scan lines / site theme -->
+  <link rel="stylesheet" href="./style.css" />
+
+  <style>
+    :root{
+      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --muted:#8aff8a;
+      --card:#070707; --border:#103010;
+    }
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{
+      margin:0; background:#000; color:var(--green);
+      font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+
+    /* ======== page-wide background image layer (click-through) ======== */
+    .profile-bg{
+      position:fixed; inset:0;
+      z-index:0;                 /* live behind everything */
+      overflow:hidden;
+      pointer-events:none;       /* let taps pass through the layer */
+    }
+    .profile-bg img{
+      position:absolute; inset:0;
+      width:100%; height:100%; object-fit:cover;
+      filter:none;               /* keep your scanlines visible */
+      pointer-events:none;       /* image itself never intercepts clicks */
+    }
+    .bg-camera{
+      position:fixed; right:16px;
+      bottom:calc(16px + env(safe-area-inset-bottom));
+      width:44px; height:44px; border-radius:50%;
+      display:inline-flex; align-items:center; justify-content:center;
+      border:2px solid var(--green); background:var(--green); color:#000; cursor:pointer;
+      box-shadow:0 0 18px rgba(57,255,20,.6);
+      z-index:9999;              /* float above everything */
+      pointer-events:auto;       /* button is clickable */
+    }
+    .bg-camera:hover{ background:#000; color:var(--green) }
+
+    /* keep the rest of the page above the fixed bg */
+    .profile-scope{ position:relative; z-index:1; }
+
+    /* ===================== Scoped shields ===================== */
+    .profile-scope .avatar,
+    .profile-scope .avatar > img{ border-radius:16px !important; }
+    .profile-scope .avatar > img{
+      display:block; width:100%; height:100%; object-fit:cover;
+    }
+
+    .profile-scope button::before,
+    .profile-scope button::after,
+    .profile-scope .back-chip::before,
+    .profile-scope .back-chip::after{
+      content:none !important; display:none !important;
+    }
+
+    .profile-scope .banner{ position:relative !important; }
+    .profile-scope .avatar-wrap{ position:absolute !important; }
+
+    .profile-scope .avatar-camera,
+    .profile-scope .banner-camera{
+      position:absolute !important;
+      left:auto !important;
+      top:auto !important;
+      transform:none !important;
+      z-index:6 !important;
+      color:#000 !important;
+    }
+    .profile-scope .banner-camera{ right:14px !important; bottom:14px !important; }
+    .profile-scope .avatar-camera{ right:-6px !important; bottom:-6px !important; }
+
+    .profile-scope .avatar-camera svg,
+    .profile-scope .banner-camera svg,
+    .bg-camera svg{
+      display:block !important;
+      width:22px; height:22px;
+      color:#000 !important;
+      fill:currentColor !important;
+      stroke:none !important;
+      opacity:1 !important;
+      filter:none !important;
+      z-index:2;
+    }
+    .profile-scope .avatar-camera svg path,
+    .profile-scope .banner-camera svg path,
+    .bg-camera svg path{
+      fill:currentColor !important;
+      stroke:none !important;
+    }
+
+    .profile-scope .cam-glyph,
+    .bg-camera .cam-glyph{
+      position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      font-size:18px; line-height:1;
+      color:#000 !important;
+      opacity:1 !important; filter:none !important; z-index:3;
+      pointer-events:none;
+    }
+    .profile-scope .avatar-camera:hover .cam-glyph,
+    .profile-scope .banner-camera:hover .cam-glyph,
+    .bg-camera:hover .cam-glyph{ color:var(--green) !important; }
+
+    /* ===================== Page styles ===================== */
+    .banner{
+      position:relative; height:260px; overflow:visible;
+      border-bottom:1px solid var(--border);
+      background:radial-gradient(900px 600px at 70% -10%, rgba(57,255,20,0.08), transparent 60%), #050505;
+    }
+    .banner img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
+    .banner::after{
+      content:""; position:absolute; inset:0;
+      background:linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,.70) 100%);
+      z-index:1; pointer-events:none;
+    }
+    .back-chip{
+      position:absolute; z-index:5; top:14px; left:14px;
+      text-decoration:none; display:inline-flex; align-items:center; gap:8px;
+      padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px;
+      color:var(--green); border:1.5px solid var(--green); background:rgba(0,0,0,.55);
+      backdrop-filter: blur(4px);
+      box-shadow:0 0 14px rgba(57,255,20,.35);
+    }
+
+    .banner-camera{
+      width:44px; height:44px; border-radius:50%;
+      display:inline-flex; align-items:center; justify-content:center;
+      border:2px solid var(--green); background:var(--green); color:#000; cursor:pointer;
+      box-shadow:0 0 18px rgba(57,255,20,.6);
+    }
+    .banner-camera:hover{ background:#000; color:var(--green) }
+    .icon{ width:22px; height:22px; display:block }
+
+    .avatar-wrap{
+      z-index:5; left:20px; bottom:-120px;
+      display:flex; flex-direction:column; align-items:center; gap:14px;
+    }
+    .avatar{
+      display:flex; justify-content:center; align-items:center;
+      width:180px; height:180px; border-radius:16px;
+      border:5px solid var(--green);
+      background:#0a0a0a;
+      box-shadow:0 0 25px rgba(57,255,20,.75);
+      color:var(--green); font-weight:900; font-size:40px;
+      text-shadow:0 0 8px rgba(255,0,51,.6);
+      overflow:hidden; user-select:none;
+    }
+    .avatar.is-blank{
+      background:
+        radial-gradient(45% 45% at 50% 35%, rgba(57,255,20,.22), transparent 60%),
+        #0a0a0a;
+    }
+
+    .avatar-camera{
+      width:44px; height:44px; border-radius:50%;
+      display:inline-flex; align-items:center; justify-content:center;
+      border:2px solid var(--green); background:var(--green); color:#000; cursor:pointer;
+      box-shadow:0 0 18px rgba(57,255,20,.6);
+    }
+    .avatar-camera:hover{ background:#000; color:var(--green) }
+
+    .edit-pill{
+      font-size:15px; font-weight:800; letter-spacing:.2px;
+      padding:12px 20px; border-radius:24px;
+      border:2px solid var(--green); color:#000; background:var(--green);
+      box-shadow:0 0 22px rgba(57,255,20,.7); cursor:pointer;
+      position:relative; top:45px;
+    }
+    .edit-pill:hover{ background:#000; color:var(--green) }
+
+    .info-block{
+      max-width:940px; margin:205px auto 0;
+      padding:0 16px;
+    }
+    .line{ margin:6px 0; font-size:16px; color:var(--ink) }
+    .label{ color:var(--green); font-weight:700; margin-right:6px }
+
+    .wrap{ max-width:940px; margin:18px auto 28px; padding:0 16px; }
+    section.card{
+      background:linear-gradient(180deg,#090909,#050505);
+      border:1px solid var(--green); border-radius:16px; padding:16px;
+      box-shadow:0 0 20px rgba(57,255,20,.12);
+    }
+    section.card + section.card{ margin-top:16px }
+    h3{ margin:0 0 10px; font-size:18px; text-shadow:0 0 10px var(--red) }
+    p, .text{ color:var(--ink) }
+
+    .btn{
+      border:2px solid var(--green); color:var(--green); background:transparent;
+      padding:10px 16px; border-radius:12px; font-weight:800; cursor:pointer;
+      box-shadow:0 0 16px rgba(57,255,20,.35);
+    }
+    .btn.red{ border-color:var(--red); color:var(--red) }
+
+    #editForm{ display:none; margin-top:16px }
+    label{ display:block; font-size:14px; margin:8px 0 6px }
+    input, select, textarea{
+      width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--green);
+      background:#0a0a0a; color:#d0ffd0;
+    }
+    input[type="file"]{ padding:10px; border-style:dashed }
+    textarea{ min-height:110px; resize:vertical }
+
+    .controls{ display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-top:12px }
+
+    .song-section{ margin:8px 0 16px }
+    .song-section h3{ margin:0 0 8px; font-size:18px; text-shadow:0 0 10px var(--red) }
+    .song-section audio{ width:100%; border:none; outline:none; background:transparent; box-shadow:none }
+
+    @media (max-width:560px){
+      .info-block{ margin-top:220px; }
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- ===== page background with camera ===== -->
+  <div class="profile-bg">
+    <img id="bgPreview" alt="">
+  </div>
+  <button id="bgCameraBtn" class="bg-camera" title="Change background" aria-label="Change background">
+    <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
+    </svg>
+    <span class="cam-glyph" aria-hidden="true">📷</span>
+  </button>
+  <input id="bgQuickFile" type="file" accept="image/*" style="display:none" />
+
+  <div class="profile-scope">
+
+    <!-- ===== Banner ===== -->
+    <header class="banner">
+      <img id="bannerPreview" alt="">
+      <a class="back-chip" href="./index.html">← Home</a>
+
+      <button id="bannerCameraBtn" class="banner-camera" title="Change banner" aria-label="Change banner">
+        <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
+        </svg>
+        <span class="cam-glyph" aria-hidden="true">📷</span>
+      </button>
+      <input id="bannerQuickFile" type="file" accept="image/*" style="display:none" />
+
+      <div class="avatar-wrap">
+        <div id="avatarPreview" class="avatar is-blank">PFP</div>
+
+        <button id="avatarCameraBtn" class="avatar-camera" title="Change profile photo" aria-label="Change profile photo">
+          <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
+          </svg>
+          <span class="cam-glyph" aria-hidden="true">📷</span>
+        </button>
+        <input id="avatarQuickFile" type="file" accept="image/*" style="display:none" />
+
+        <button id="toggleEditBtn" class="edit-pill">Edit Profile</button>
+      </div>
+    </header>
+
+    <!-- ===== Identity lines ===== -->
+    <div class="info-block">
+      <div class="line"><span class="label">Pronouns:</span><span id="pronounsText"></span></div>
+      <div class="line"><span class="label">Astrology:</span>
+        <span id="sunText"></span> ☉ /
+        <span id="moonText"></span> ☽ /
+        <span id="risingText"></span> ↑
+      </div>
+      <div class="line"><span class="label">Love language:</span><span id="loveLangText"></span></div>
+    </div>
+
+    <main class="wrap">
+      <div class="song-section">
+        <h3>Theme Song</h3>
+        <audio id="songPlayer" controls preload="none"></audio>
+      </div>
+
+      <section class="card">
+        <h3>Skills</h3>
+        <p id="skillsText" class="text"></p>
+      </section>
+
+      <section class="card">
+        <h3>Message to the Void</h3>
+        <p id="voidMsgText" class="text"></p>
+      </section>
+
+      <section class="card" id="editSection">
+        <div id="editForm">
+          <h3>Edit Profile</h3>
+
+          <label for="bannerFile">Banner</label>
+          <input id="bannerFile" type="file" accept="image/*" />
+
+          <label for="avatarFile">Profile Picture</label>
+          <input id="avatarFile" type="file" accept="image/*" />
+
+          <label for="pronouns">Pronouns</label>
+          <input id="pronouns" />
+
+          <div class="controls">
+            <div style="flex:1; min-width:120px"><label for="sun">Sun</label><input id="sun" /></div>
+            <div style="flex:1; min-width:120px"><label for="moon">Moon</label><input id="moon" /></div>
+            <div style="flex:1; min-width:120px"><label for="rising">Rising</label><input id="rising" /></div>
+          </div>
+
+          <label for="loveLang">Love Language</label>
+          <select id="loveLang">
+            <option value="">Select…</option>
+            <option>Words of Affirmation</option>
+            <option>Acts of Service</option>
+            <option>Receiving Gifts</option>
+            <option>Quality Time</option>
+            <option>Physical Touch</option>
+          </select>
+
+          <label for="songUrl">Song URL</label>
+          <input id="songUrl" placeholder="https://…" />
+          <label for="songFile">Song Upload</label>
+          <input id="songFile" type="file" accept="audio/*" />
+
+          <label for="skills">Skills</label>
+          <input id="skills" placeholder="Comma separated…" />
+
+          <label for="voidMsg">Void Message</label>
+          <textarea id="voidMsg"></textarea>
+
+          <div class="controls">
+            <button class="btn" id="saveBtn">Save</button>
+            <button class="btn red" id="signOutBtn">Sign out</button>
+          </div>
+          <p id="status" class="text"></p>
+        </div>
+      </section>
+    </main>
+
+  </div><!-- /profile-scope -->
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // --- Buckets ---
+    const AVATAR_BUCKET = 'avatars';
+    const BANNER_BUCKET = 'banners';
+    const SONG_BUCKET   = 'songs';
+    // Reuse your working banners bucket for background uploads:
+    const BG_BUCKET     = 'banners';
+
+    const sb = supabase.createClient(
+      "https://tuqvpcevrhciursxrgav.supabase.co",
+      "YOUR_REAL_SUPABASE_ANON_KEY_HERE"
+    );
+
+    const statusEl = document.getElementById("status");
+    const editForm = document.getElementById("editForm");
+    const toggleBtn = document.getElementById("toggleEditBtn");
+
+    // Display refs
+    const pronounsText = document.getElementById("pronounsText");
+    const sunText = document.getElementById("sunText");
+    const moonText = document.getElementById("moonText");
+    const risingText = document.getElementById("risingText");
+    const loveLangText = document.getElementById("loveLangText");
+    const skillsText = document.getElementById("skillsText");
+    const voidMsgText = document.getElementById("voidMsgText");
+    const avatarPreview = document.getElementById("avatarPreview");
+    const bannerPreview = document.getElementById("bannerPreview") || document.querySelector(".banner img");
+    const songPlayer = document.getElementById("songPlayer");
+    const bgPreview = document.getElementById("bgPreview");
+
+    // Inputs
+    const pronouns = document.getElementById("pronouns");
+    const sun = document.getElementById("sun");
+    const moon = document.getElementById("moon");
+    const rising = document.getElementById("rising");
+    const loveLang = document.getElementById("loveLang");
+    const skills = document.getElementById("skills");
+    const voidMsg = document.getElementById("voidMsg");
+    const avatarFile = document.getElementById("avatarFile");
+    const bannerFile = document.getElementById("bannerFile");
+    const songUrl = document.getElementById("songUrl");
+    const songFile = document.getElementById("songFile");
+
+    // Quick camera inputs
+    const bannerCameraBtn = document.getElementById('bannerCameraBtn');
+    const bannerQuickFile = document.getElementById('bannerQuickFile');
+    const avatarCameraBtn = document.getElementById('avatarCameraBtn');
+    const avatarQuickFile = document.getElementById('avatarQuickFile');
+    const bgCameraBtn = document.getElementById('bgCameraBtn');
+    const bgQuickFile = document.getElementById('bgQuickFile');
+
+    const saveBtn = document.getElementById("saveBtn");
+    const signOutBtn = document.getElementById("signOutBtn");
+
+    let userId = null;
+    let avatarUrl = null;
+    let bannerUrl = null;
+    let bgUrl = null;
+
+    /* ---------- Local cache ---------- */
+    const LS_KEY = "profile_cache_v1";
+    function cacheSet(partial){
+      const prev = JSON.parse(localStorage.getItem(LS_KEY)||"{}");
+      localStorage.setItem(LS_KEY, JSON.stringify({ ...prev, ...partial }));
+    }
+    function cacheGet(){
+      try { return JSON.parse(localStorage.getItem(LS_KEY)||"{}"); } catch { return {}; }
+    }
+
+    const say = (m) => statusEl && (statusEl.textContent = m);
+    function fileName(prefix, file){
+      const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+      return `${prefix}/${crypto.randomUUID()}.${ext}`;
+    }
+
+    toggleBtn?.addEventListener("click", ()=>{
+      editForm.style.display = (!editForm.style.display || editForm.style.display === "none") ? "block" : "none";
+    });
+
+    async function ensureProfileRow() {
+      const { error } = await sb.from('profiles')
+        .upsert({ id: userId, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+      if (error) console.error('ensureProfileRow:', error);
+    }
+
+    function setAvatarPlaceholder(){
+      avatarPreview.classList.add('is-blank');
+      avatarPreview.innerHTML = 'PFP';
+    }
+    function setAvatar(url){
+      avatarPreview.classList.remove('is-blank');
+      avatarPreview.innerHTML = `<img src="${url}" alt="Profile photo">`;
+    }
+
+    async function uploadToBucket(bucket, file){
+      const path = fileName(userId, file);
+      const { error } = await sb.storage.from(bucket).upload(path, file, { upsert:false });
+      if(error) throw error;
+      const { data } = sb.storage.from(bucket).getPublicUrl(path);
+      return data.publicUrl;
+    }
+
+    async function loadProfile(){
+      const cached = cacheGet();
+      if (cached.avatar_url) setAvatar(cached.avatar_url); else setAvatarPlaceholder();
+      if (cached.banner_url) bannerPreview.src = cached.banner_url;
+      if (cached.bg_url) bgPreview.src = cached.bg_url;
+
+      const { data, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
+      if(error){ console.error(error); say(error.message || "Load failed"); return; }
+
+      if(!data){
+        setAvatarPlaceholder();
+        bannerPreview.removeAttribute('src');
+        bgPreview.removeAttribute('src');
+        return;
+      }
+
+      pronounsText.textContent = data.pronouns || "";
+      sunText.textContent = data.sun || "";
+      moonText.textContent = data.moon || "";
+      risingText.textContent = data.rising || "";
+      loveLangText.textContent = data.love_language || "";
+      skillsText.textContent = (data.skills || []).join(", ");
+      voidMsgText.textContent = data.void_message || "";
+
+      if(data.avatar_url){ avatarUrl = data.avatar_url; setAvatar(avatarUrl); cacheSet({ avatar_url: avatarUrl }); }
+      else { setAvatarPlaceholder(); }
+
+      if(data.banner_url){ bannerUrl = data.banner_url; bannerPreview.src = bannerUrl; cacheSet({ banner_url: bannerUrl }); }
+      if(data.bg_url){ bgUrl = data.bg_url; bgPreview.src = bgUrl; cacheSet({ bg_url: bgUrl }); }
+      if(data.song_url){ songPlayer.src = data.song_url; songUrl.value = data.song_url; }
+
+      pronouns.value = data.pronouns || "";
+      sun.value = data.sun || "";
+      moon.value = data.moon || "";
+      rising.value = data.rising || "";
+      loveLang.value = data.love_language || "";
+      skills.value = (data.skills || []).join(", ");
+      voidMsg.value = data.void_message || "";
+    }
+
+    // Quick uploads via camera buttons
+    bannerCameraBtn.addEventListener('click', ()=> bannerQuickFile.click());
+    bannerQuickFile.addEventListener('change', async ()=>{
+      if(!bannerQuickFile.files[0]) return;
+      try{
+        say('Uploading banner…');
+        const url = await uploadToBucket(BANNER_BUCKET, bannerQuickFile.files[0]);
+        bannerUrl = url; bannerPreview.src = url; cacheSet({ banner_url: url });
+        await sb.from('profiles').upsert({ id:userId, banner_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
+        say('Banner updated.');
+      }catch(e){ console.error(e); say(e?.message || 'Banner upload failed.'); }
+      finally{ bannerQuickFile.value = ""; }
+    });
+
+    avatarCameraBtn.addEventListener('click', ()=> avatarQuickFile.click());
+    avatarQuickFile.addEventListener('change', async ()=>{
+      if(!avatarQuickFile.files[0]) return;
+      try{
+        say('Uploading avatar…');
+        const url = await uploadToBucket(AVATAR_BUCKET, avatarQuickFile.files[0]);
+        avatarUrl = url; setAvatar(url); cacheSet({ avatar_url: url });
+        await sb.from('profiles').upsert({ id:userId, avatar_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
+        say('Avatar updated.');
+      }catch(e){ console.error(e); say(e?.message || 'Avatar upload failed.'); }
+      finally{ avatarQuickFile.value = ""; }
+    });
+
+    // Background quick upload — instant preview + final public URL
+    bgCameraBtn.addEventListener('click', ()=> bgQuickFile.click());
+    bgQuickFile.addEventListener('change', async ()=>{
+      const file = bgQuickFile.files[0];
+      if(!file) return;
+      try{
+        // Instant local preview (so you see it even if upload fails)
+        bgPreview.src = URL.createObjectURL(file);
+
+        say('Uploading background…');
+        const url = await uploadToBucket(BG_BUCKET, file);
+
+        // Switch to permanent public URL
+        bgPreview.src = url;
+        bgUrl = url;
+        cacheSet({ bg_url: url });
+
+        const { error } = await sb.from('profiles').upsert(
+          { id:userId, bg_url: url, updated_at: new Date().toISOString() },
+          { onConflict:'id' }
+        );
+        if(error) throw error;
+
+        say('Background updated.');
+      }catch(e){
+        console.error(e);
+        say(e?.message || 'Background upload failed.');
+      }finally{
+        bgQuickFile.value = "";
+      }
+    });
+
+    // Full save via Edit form
+    saveBtn.addEventListener("click", async ()=>{
+      try{
+        say("Saving…");
+
+        if(avatarFile.files[0]) {
+          avatarUrl = await uploadToBucket(AVATAR_BUCKET, avatarFile.files[0]);
+          setAvatar(avatarUrl); cacheSet({ avatar_url: avatarUrl });
+        }
+        if(bannerFile.files[0]) {
+          bannerUrl = await uploadToBucket(BANNER_BUCKET, bannerFile.files[0]);
+          bannerPreview.src = bannerUrl; cacheSet({ banner_url: bannerUrl });
+        }
+
+        let finalSongUrl = songUrl.value?.trim();
+        if(songFile.files[0]) finalSongUrl = await uploadToBucket(SONG_BUCKET, songFile.files[0]);
+        if(finalSongUrl) cacheSet({ song_url: finalSongUrl });
+
+        const skillsArr = skills.value.split(",").map(s=>s.trim()).filter(Boolean);
+
+        const payload = {
+          id: userId,
+          pronouns: pronouns.value || null,
+          sun: sun.value || null,
+          moon: moon.value || null,
+          rising: rising.value || null,
+          love_language: loveLang.value || null,
+          skills: skillsArr,
+          void_message: voidMsg.value || null,
+          updated_at: new Date().toISOString()
+        };
+        if (typeof avatarUrl === "string") payload.avatar_url = avatarUrl;
+        if (typeof bannerUrl === "string") payload.banner_url = bannerUrl;
+        if (typeof bgUrl === "string") payload.bg_url = bgUrl;
+        if (finalSongUrl) payload.song_url = finalSongUrl;
+
+        const { error } = await sb.from("profiles").upsert(payload, { onConflict:"id" });
+        if(error) throw error;
+
+        say("Saved.");
+        await loadProfile();
+      }catch(e){
+        console.error(e);
+        say(e?.message || "Save failed.");
+      }
+    });
+
+    signOutBtn.addEventListener("click", async ()=>{
+      await sb.auth.signOut();
+      location.href="./index.html";
+    });
+
+    // Boot
+    document.addEventListener("DOMContentLoaded", async ()=>{
+      const { data:{ session } } = await sb.auth.getSession();
+      if(!session){ location.href="./login.html"; return; }
+      userId = session.user.id;
+      await ensureProfileRow();
+      await loadProfile();
+    });
+  </script>
+</body>
+</html>
