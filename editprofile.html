@@ -114,7 +114,7 @@
 
       <div class="row" style="margin-top:12px">
         <label for="skills">Skills <small class="hint">(comma-separated; will save as an array)</small></label>
-        <input id="skills" type="text" placeholder="glitch video, editing, analog capture, ..." />
+        <input id="skills" type="text" placeholder="dancing, taxidermy, guns, hacking ..." />
       </div>
 
       <div class="row" style="margin-top:12px">
@@ -192,20 +192,41 @@
       return (str||'').split(',').map(s=>s.trim()).filter(Boolean);
     }
 
-    // ---- Return wiring (Back/Cancel links respect ?return=...) ----
+    // ---------- GitHub Pages–safe return/redirect wiring ----------
+    function repoBase(){
+      // user site: "/" ; project site: "/<repo>/"
+      const segs = location.pathname.split('/').filter(Boolean);
+      return segs.length > 1 ? `/${segs[0]}/` : '/';
+    }
+    function withinSite(path){
+      const base = repoBase();
+      const clean = path.replace(/^\//,'');
+      return base + clean;
+    }
+
     const params = new URLSearchParams(location.search);
-    const returnPage = (()=>{
-      const r = params.get('return');
-      if(!r) return './profile.html';
-      // prevent absolute external redirects
+    const requestedReturn = params.get('return');
+    const safeReturn = (() => {
+      if (!requestedReturn) return withinSite('profile.html');
       try{
-        const u = new URL(r, location.href);
-        if(u.origin === location.origin) return u.pathname.replace(/^\/*/, './') + u.search + u.hash;
+        const u = new URL(requestedReturn, location.href);
+        if (u.origin === location.origin){
+          const p = u.pathname.replace(/^\/+/,''); // keep inside this repo base
+          return withinSite(p + u.search + u.hash);
+        }
       }catch{}
-      return './profile.html';
+      return withinSite('profile.html');
     })();
-    backLink.href = returnPage;
-    cancelLink.href = returnPage;
+
+    backLink.href = safeReturn;
+    cancelLink.href = safeReturn;
+
+    async function afterSaveRedirect(){
+      const u = new URL(safeReturn, location.href);
+      u.searchParams.set('saved','1');
+      location.href = u.toString();
+    }
+    // --------------------------------------------------------------
 
     // ---- Data I/O ----
     async function ensureProfileRow() {
@@ -284,17 +305,12 @@
       const { error } = await sb.from('profiles').upsert(payload, { onConflict:'id' });
       if(error){ console.error(error); say('Save failed', true); return; }
       say('Saved!');
-
-      // Redirect back — avoid querystrings on local file viewers
-      if(isLocal()){
-        // Use hash flag locally so file:// handlers don't break on '?'
-        const u = new URL(returnPage, location.href);
+      if (isLocal()){
+        const u = new URL(safeReturn, location.href);
         u.hash = (u.hash ? u.hash + '&' : '#') + 'saved=1';
         location.href = u.toString();
-      }else{
-        const u = new URL(returnPage, location.href);
-        u.searchParams.set('saved','1');
-        location.href = u.toString();
+      } else {
+        await afterSaveRedirect();
       }
     });
 
