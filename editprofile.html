@@ -192,38 +192,43 @@
       return (str||'').split(',').map(s=>s.trim()).filter(Boolean);
     }
 
-    // ---------- GitHub Pages–safe return/redirect wiring ----------
-    function repoBase(){
-      // user site: "/" ; project site: "/<repo>/"
-      const segs = location.pathname.split('/').filter(Boolean);
-      return segs.length > 1 ? `/${segs[0]}/` : '/';
-    }
-    const base = repoBase();
+    // ===== Same-folder return/redirect (GitHub Pages safe) =====
+    // Example: /F/editprofile.html -> DIR="/F/" -> DEFAULT_TARGET="/F/profile.html"
+    const DIR = location.pathname.replace(/[^/]*$/, '');  // strip filename, keep trailing slash
+    const DEFAULT_TARGET = DIR + 'profile.html';
 
-    function normalizeToSite(urlLike){
+    function safePath(urlLike){
       try{
-        const u = new URL(urlLike, location.href); // resolve "profile.html" etc.
-        if (u.origin !== location.origin) throw new Error('external');
-        const alreadyBase = u.pathname.startsWith(base);
-        const path = alreadyBase ? u.pathname : base + u.pathname.replace(/^\//,'');
+        const u = new URL(urlLike || '', location.href);
+        if (u.origin !== location.origin) throw 0;
+
+        // If the caller passed exactly "profile.html" or "./profile.html", the browser
+        // resolves it to the same folder automatically. We just return the resolved path.
+        // If they passed a folder path (ends with "/"), force "profile.html" inside it.
+        let path = u.pathname;
+        if (path.endsWith('/')) path += 'profile.html';
+
+        // If it doesn't look like a file (no "/name.ext"), fall back to same-folder target.
+        if (!/\/[^/]+\.[^/]+$/.test(path)) path = DEFAULT_TARGET;
+
         return path + u.search + u.hash;
       }catch{
-        return base + 'profile.html';
+        return DEFAULT_TARGET;
       }
     }
 
     const params = new URLSearchParams(location.search);
-    const safeReturn = normalizeToSite(params.get('return') || 'profile.html');
+    const safeReturn = safePath(params.get('return') || 'profile.html');
 
     backLink.href = safeReturn;
     cancelLink.href = safeReturn;
 
-    async function afterSaveRedirect(){
+    function afterSaveRedirect(){
       const u = new URL(safeReturn, location.href);
       u.searchParams.set('saved','1');
       location.href = u.toString();
     }
-    // --------------------------------------------------------------
+    // ===========================================================
 
     // ---- Data I/O ----
     async function ensureProfileRow() {
@@ -308,7 +313,7 @@
         u.hash = (u.hash ? u.hash + '&' : '#') + 'saved=1';
         location.href = u.toString();
       } else {
-        await afterSaveRedirect();
+        afterSaveRedirect();
       }
     });
 
