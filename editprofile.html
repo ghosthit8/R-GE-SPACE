@@ -75,7 +75,7 @@
 </head>
 <body>
   <main class="wrap">
-    <a class="back-chip" href="./profile.html">← Back to Profile</a>
+    <a id="backLink" class="back-chip" href="./profile.html">← Back</a>
     <h1>EDIT YOUR PROFILE</h1>
 
     <form id="editForm" class="card" autocomplete="off">
@@ -142,23 +142,26 @@
 
       <div class="actions" style="margin-top:18px">
         <button id="saveBtn" type="submit" class="btn">Save Changes</button>
-        <a class="btn ghost" href="./profile.html">Cancel</a>
+        <a class="btn ghost" id="cancelLink" href="./profile.html">Cancel</a>
         <small id="status" class="hint" style="margin-left:6px"></small>
       </div>
     </form>
   </main>
 
   <script>
-    // --- Buckets & Supabase ---
+    // ---- Config ----
     const SONG_BUCKET = 'songs';
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
-    // --- Els ---
+    // ---- Elements ----
+    const backLink = document.getElementById('backLink');
+    const cancelLink = document.getElementById('cancelLink');
     const form = document.getElementById('editForm');
     const statusEl = document.getElementById('status');
+
     const pronounsEl = document.getElementById('pronouns');
     const sunEl = document.getElementById('sun');
     const moonEl = document.getElementById('moon');
@@ -173,54 +176,60 @@
     const removeSongBtn = document.getElementById('removeSongBtn');
     const songPreview = document.getElementById('songPreview');
 
+    // ---- State ----
     let userId = null;
     let songUrl = null;
 
-    function say(msg, isError=false){
-      statusEl.textContent = msg || '';
-      statusEl.style.color = isError ? 'var(--red)' : 'var(--muted)';
-    }
-
+    // ---- Utils ----
+    function isLocal(){ return location.protocol === 'file:' || location.protocol === 'content:'; }
+    function say(msg, bad=false){ statusEl.textContent = msg||''; statusEl.style.color = bad ? 'var(--red)' : 'var(--muted)'; }
     function fileName(prefix, file){
       const ext = (file?.name?.split('.').pop() || 'bin').toLowerCase();
-      // nest under user uid for easier cleanup
       return `${prefix}/${crypto.randomUUID()}.${ext}`;
     }
+    function skillsToString(arr){ return Array.isArray(arr) ? arr.join(', ') : ''; }
+    function stringToSkills(str){
+      return (str||'').split(',').map(s=>s.trim()).filter(Boolean);
+    }
 
+    // ---- Return wiring (Back/Cancel links respect ?return=...) ----
+    const params = new URLSearchParams(location.search);
+    const returnPage = (()=>{
+      const r = params.get('return');
+      if(!r) return './profile.html';
+      // prevent absolute external redirects
+      try{
+        const u = new URL(r, location.href);
+        if(u.origin === location.origin) return u.pathname.replace(/^\/*/, './') + u.search + u.hash;
+      }catch{}
+      return './profile.html';
+    })();
+    backLink.href = returnPage;
+    cancelLink.href = returnPage;
+
+    // ---- Data I/O ----
     async function ensureProfileRow() {
       const { error } = await sb.from('profiles')
         .upsert({ id: userId, updated_at: new Date().toISOString() }, { onConflict:'id' });
       if (error) console.error('ensureProfileRow:', error);
     }
 
-    function skillsToString(arr){
-      if(!Array.isArray(arr)) return '';
-      return arr.join(', ');
-    }
-    function stringToSkills(str){
-      return (str || '')
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-    }
-
     async function loadProfile(){
       say('Loading...');
       const { data, error } = await sb.from('profiles').select('*').eq('id', userId).maybeSingle();
-      if(error){ console.error(error); say('Failed to load profile', true); return; }
+      if(error){ console.error(error); say('Failed to load', true); return; }
+      if(!data){ say(''); return; }
 
-      if(data){
-        pronounsEl.value = data.pronouns || '';
-        sunEl.value = data.sun || '';
-        moonEl.value = data.moon || '';
-        risingEl.value = data.rising || '';
-        loveLangEl.value = data.love_language || '';
-        skillsEl.value = skillsToString(data.skills);
-        voidMsgEl.value = data.void_message || '';
-        funnyStoryEl.value = data.funny_story || '';
-        songUrl = data.song_url || null;
-        if(songUrl){ songPreview.src = songUrl; } else { songPreview.removeAttribute('src'); }
-      }
+      pronounsEl.value = data.pronouns || '';
+      sunEl.value = data.sun || '';
+      moonEl.value = data.moon || '';
+      risingEl.value = data.rising || '';
+      loveLangEl.value = data.love_language || '';
+      skillsEl.value = skillsToString(data.skills);
+      voidMsgEl.value = data.void_message || '';
+      funnyStoryEl.value = data.funny_story || '';
+      songUrl = data.song_url || null;
+      if(songUrl){ songPreview.src = songUrl; } else { songPreview.removeAttribute('src'); }
       say('');
     }
 
@@ -244,13 +253,13 @@
       }
     }
 
-    async function removeSong(){
+    function removeSong(){
       songUrl = null;
       songPreview.removeAttribute('src');
       say('Song cleared. Remember to Save Changes.');
     }
 
-    // --- Events ---
+    // ---- Events ----
     uploadSongBtn.addEventListener('click', uploadSong);
     removeSongBtn.addEventListener('click', removeSong);
 
@@ -273,20 +282,26 @@
       };
 
       const { error } = await sb.from('profiles').upsert(payload, { onConflict:'id' });
-      if(error){
-        console.error(error);
-        say('Save failed', true);
-        return;
-      }
+      if(error){ console.error(error); say('Save failed', true); return; }
       say('Saved!');
-      // bounce back to profile with a success flag so you can toast if you want
-      location.href = './profile.html?saved=1';
+
+      // Redirect back — avoid querystrings on local file viewers
+      if(isLocal()){
+        // Use hash flag locally so file:// handlers don't break on '?'
+        const u = new URL(returnPage, location.href);
+        u.hash = (u.hash ? u.hash + '&' : '#') + 'saved=1';
+        location.href = u.toString();
+      }else{
+        const u = new URL(returnPage, location.href);
+        u.searchParams.set('saved','1');
+        location.href = u.toString();
+      }
     });
 
-    // --- Boot ---
+    // ---- Boot ----
     document.addEventListener('DOMContentLoaded', async ()=>{
       const { data:{ session } } = await sb.auth.getSession();
-      if(!session){ location.href = './login.html'; return; }
+      if(!session){ location.href="./login.html"; return; }
       userId = session.user.id;
       await ensureProfileRow();
       await loadProfile();
