@@ -170,12 +170,29 @@
     .song-section h3{ margin:0 0 8px; font-size:18px; text-shadow:0 0 10px var(--red) }
     .song-section audio{ width:100%; border:none; outline:none; background:transparent; box-shadow:none }
 
-    /* toast */
+    /* toast (compact) */
     .toast{
-      position:fixed; right:16px; top:16px; z-index:99999;
-      padding:10px 14px; border:2px solid var(--green); background:#050905;
-      color:var(--ink); border-radius:10px; box-shadow:0 0 16px rgba(57,255,20,.35);
-      display:none; font-weight:800;
+      position:fixed; z-index:99999;
+      top:12px; right:12px;
+      padding:8px 12px;
+      border:2px solid var(--green);
+      background:#050905;
+      color:var(--ink);
+      border-radius:10px;
+      box-shadow:0 0 16px rgba(57,255,20,.35);
+      display:none;
+      font-weight:800;
+
+      width:max-content;       /* shrink to fit text */
+      max-width:220px;         /* cap width */
+      height:auto;             /* never stretch vertically */
+      white-space:nowrap;      /* keep on one line */
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    /* center toast horizontally on very small screens */
+    @media (max-width:560px){
+      .toast{ right:50%; transform:translateX(50%); }
     }
 
     @media (max-width:560px){
