@@ -1,162 +1,250 @@
-/* ===== Rage Space global styles ===== */
-:root {
+/* ===== Rage Space — unified global styles ===== */
+
+/* --- Theme tokens --- */
+:root{
   --green:#39ff14;
   --red:#ff0033;
   --bg:#000;
   --panel:#0a0a0a;
+
+  --title-scale-y:1.28;
+  --title-stroke:1px;
+  --title-letterspace:.28rem;
 }
 
-html {
-  /* lock down mobile auto-font-scaling */
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
+html{
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+}
+*{ box-sizing:border-box; }
+
+/* --- Base --- */
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--green);
+  font-family:system-ui, Arial, Helvetica, sans-serif;
+  position:relative;
+  overflow-x:hidden;
 }
 
-* { box-sizing: border-box; }
+/* --- Layout helpers --- */
+.wrap{ max-width:720px; margin:48px auto; padding:16px; position:relative; z-index:2; }
+.card{ border:1px solid var(--green); border-radius:16px; padding:16px; margin:16px 0; background:#010101; }
+.hidden{ display:none !important; }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--green);
-  font-family: system-ui, Arial, Helvetica, sans-serif;
+/* --- Typography --- */
+h1{
+  margin:48px 20px 8px;
+  font-size:clamp(32px, 9vw, 72px);
+  letter-spacing:4px;
+  text-align:center;
+  text-shadow:0 0 10px var(--red);
 }
 
-/* Layout helpers */
-.wrap { max-width: 720px; margin: 48px auto; padding: 16px; }
-.card { border: 1px solid var(--green); border-radius: 16px; padding: 16px; margin: 16px 0; background: #010101; }
-.hidden { display: none !important; }
-
-/* Typography (responsive) */
-h1 {
-  margin: 48px 20px 8px;
-  font-size: clamp(32px, 9vw, 72px);
-  letter-spacing: 4px;
-  text-shadow: 0 0 10px var(--red);
-  text-align: center;
+/* Neon title used on home */
+.title-wrap{ position:relative; display:inline-block; }
+.title-wrap::after{
+  content:"";
+  position:absolute; inset:-20% -10% -10% -10%; z-index:-1;
+  background:
+    radial-gradient(60% 120% at 50% 50%, rgba(255,0,51,0.38), transparent 72%);
+  /* avoid heavy blur for Samsung; big glowy plume with shadows */
+  box-shadow:
+    0 0 70px 20px rgba(255,0,51,0.45),
+    0 0 140px 50px rgba(255,0,51,0.35);
 }
-h3 { margin-top: 0; }
-.anarchy { color: var(--red); text-shadow: 0 0 10px var(--green); font-weight: 700; }
-
-.tagline {
-  font-size: clamp(14px, 4.2vw, 20px);
-  line-height: 1.45;
-  text-align: center;
-  margin: 0 20px 30px;
-  opacity: .95;
+.title{
+  margin:0 auto 30px;
+  font-weight:800;
+  font-size:clamp(44px, 12.5vw, 150px);
+  letter-spacing:var(--title-letterspace);
+  text-transform:uppercase;
+  line-height:.9;
+  transform:scaleY(var(--title-scale-y));
+  transform-origin:center;
+  color:var(--green);
+  -webkit-text-stroke:var(--title-stroke) rgba(57,255,20,0.95);
+  text-shadow:
+    0 0 6px rgba(57,255,20,1),
+    0 0 16px rgba(57,255,20,1),
+    0 0 30px rgba(57,255,20,0.95),
+    0 0 54px rgba(255,0,51,0.6);
+  white-space:nowrap;
+  user-select:none;
+  backface-visibility:hidden;
+  will-change:filter, text-shadow;
 }
-.footer { opacity: .6; margin-top: 60px; font-size: .9rem; text-align: center; }
 
-/* Buttons & links */
-button, .btn, .link, .back-btn {
-  display: inline-block;
-  padding: 12px 20px;
-  margin: 8px 0;
-  border-radius: 12px;
-  border: 1px solid var(--green);
-  background: #010101;
-  color: var(--green);
-  text-decoration: none;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: clamp(16px, 4.2vw, 18px);
-  transition: .18s ease;
+.anarchy{ color:var(--red); text-shadow:0 0 10px var(--green); font-weight:700; }
+
+.tagline{
+  font-size:clamp(14px, 4.2vw, 20px);
+  line-height:1.45;
+  text-align:center;
+  margin:0 20px 30px;
+  opacity:.95;
+  text-shadow:0 0 10px rgba(57,255,20,.55), 0 0 6px rgba(255,0,51,.6);
 }
-button:hover, .btn:hover, .link:hover, .back-btn:hover { box-shadow: 0 0 8px var(--green); }
-button.primary, .btn.primary { background: var(--green); color: #000; border-color: var(--green); }
-button.primary:hover, .btn.primary:hover { background: var(--red); color: #fff; border-color: var(--red); }
+.footer{ opacity:.6; margin-top:60px; font-size:.9rem; text-align:center; }
+
+/* --- Buttons & links --- */
+button, .btn, .link, .back-btn{
+  display:inline-block;
+  padding:12px 20px;
+  margin:8px 0;
+  border-radius:12px;
+  border:2px solid var(--green);
+  background:transparent;
+  color:var(--green);
+  text-decoration:none;
+  cursor:pointer;
+  font-weight:700;
+  font-size:clamp(16px, 4.2vw, 18px);
+  transition: color .18s linear, border-color .18s linear, box-shadow .2s ease, background-color .18s ease, transform .08s ease;
+}
+button:hover, .btn:hover, .link:hover, .back-btn:hover{
+  box-shadow:0 0 12px rgba(57,255,20,.75);
+}
+button:active, .btn:active{ transform:translateY(1px) scale(.99); }
+
+/* Filled neon button */
+.btn.filled, button.primary{
+  background:var(--green);
+  color:#001400;
+  border-color:var(--green);
+  box-shadow:
+    0 0 14px rgba(57,255,20,.75),
+    0 0 60px rgba(57,255,20,.45) inset;
+}
+/* Ensure Enter text is true black */
+#enterBtn{ color:#000 !important; text-shadow:none !important; }
+
+.btn.filled:active, button.primary:active{
+  background:var(--red) !important; color:#fff !important; border-color:var(--red) !important;
+  box-shadow:0 0 28px rgba(255,0,51,.8), 0 0 90px rgba(255,0,51,.5) inset;
+}
+
+/* Ghost variants used by auth/profile chips */
+.btn.ghost{ background:transparent; color:var(--green); border:2px solid var(--green); box-shadow:0 0 18px rgba(57,255,20,.55); }
+.btn.ghost-red{ background:transparent; color:var(--red); border:2px solid var(--red); box-shadow:0 0 18px rgba(255,0,51,.55); }
 
 /* Top-right auth/login button on home */
-.auth-btn {
-  position: absolute;
-  top: 20px; right: 20px;
-  background: transparent;
-  border: 2px solid var(--green);
-  color: var(--green);
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 1rem;
+.auth-btn{
+  position:absolute; top:20px; right:20px;
+  background:transparent;
+  border:2px solid var(--green);
+  color:var(--green);
+  padding:8px 16px;
+  border-radius:8px;
+  font-size:1rem;
 }
-.auth-btn:hover { background: var(--red); border-color: var(--red); color: #fff; }
+.auth-btn:hover{ background:var(--red); border-color:var(--red); color:#fff; }
 
-/* Form elements */
-input, textarea {
-  width: 100%;
-  padding: 10px;
-  margin: 8px 0;
-  border-radius: 10px;
-  border: 1px solid var(--green);
-  background: #010101;
-  color: var(--green);
+/* --- Forms --- */
+input, textarea{
+  width:100%;
+  padding:10px;
+  margin:8px 0;
+  border-radius:10px;
+  border:1px solid var(--green);
+  background:#010101;
+  color:var(--green);
 }
-.muted { opacity: .85; font-size: .95rem; }
-.error { color: #ff6b6b; margin-top: 6px; }
-.ok { color: #39ff14; }
+.muted{ opacity:.85; font-size:.95rem; }
+.error{ color:#ff6b6b; margin-top:6px; }
+.ok{ color:#39ff14; }
 
-/* Feed topbar */
-.topbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+/* --- Feed Topbar --- */
+.topbar{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:12px; }
 
-/* Menu page buttons */
-.menu-title { text-align: center; letter-spacing: 6px; margin-top: 64px; }
-.menu-buttons { display: grid; gap: 16px; justify-items: center; margin-top: 24px; }
-.menu-buttons .button { width: 220px; text-align: center; }
+/* --- Menu page --- */
+.menu-title{ text-align:center; letter-spacing:6px; margin-top:64px; }
+.menu-buttons{ display:grid; gap:16px; justify-items:center; margin-top:24px; }
+.menu-buttons .button{ width:220px; text-align:center; }
 
-/* Matchup page */
-.scorebar {
+/* --- Matchup page --- */
+.scorebar{
   display:flex; justify-content:space-between; align-items:center;
   gap:12px; background:var(--panel); border:1px dashed var(--green);
   border-radius:12px; padding:10px 14px; margin-bottom:12px;
 }
-.grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-@media (max-width:700px){ .grid { grid-template-columns:1fr; } }
+.grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media (max-width:700px){ .grid{ grid-template-columns:1fr; } }
 
-.tile {
-  position:relative; background:linear-gradient(135deg, #111 0%, #1a1a1a 100%);
+.tile{
+  position:relative; background:linear-gradient(135deg,#111 0%,#1a1a1a 100%);
   border:1px solid #222; border-radius:16px; padding:10px; overflow:hidden;
   min-height:280px;
 }
-.art {
+.art{
   height:220px; border-radius:10px; border:1px solid #333;
   background:
     repeating-linear-gradient(45deg, rgba(57,255,20,.25) 0 6px, transparent 6px 12px),
     linear-gradient(135deg, rgba(255,0,51,.2), rgba(57,255,20,.1));
   box-shadow:0 0 24px rgba(57,255,20,.2) inset, 0 0 12px rgba(255,0,51,.2);
 }
-.meta { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
-.toast {
+.meta{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+.toast{
   position:fixed; left:50%; transform:translateX(-50%);
   bottom:18px; background:var(--panel); border:1px solid var(--green);
   padding:10px 14px; border-radius:10px; display:none;
 }
 
-/* === Darker high-contrast neon green scan-line effect === */
-body {
-  position: relative;
-  overflow-x: hidden;
+/* --- Hero section height fallback --- */
+.hero{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:16vh; }
+@supports (min-height:100dvh){
+  .hero{ min-height:100dvh; }
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(57,255,20,0.1) 0px,
-    rgba(57,255,20,0.1) 2px,
-    transparent 5px
-  );
-  pointer-events: none;
-  z-index: 1;
-  animation: scrollScan 7s linear infinite;
+/* --- Global scan-line overlay (strong) --- */
+body::before{
+  content:"";
+  position:fixed; inset:0; z-index:1; pointer-events:none;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 1px,
+      rgba(57,255,20,0.09) 2px,
+      rgba(57,255,20,0.09) 3px
+    );
+  opacity:.95;
+  animation:scrollScan 7s linear infinite;
+}
+@keyframes scrollScan{
+  from{ background-position:0 0; }
+  to  { background-position:0 100vh; }
 }
 
-@keyframes scrollScan {
-  from { background-position: 0 0; }
-  to   { background-position: 0 100vh; }
-}
-
-/* Ensure content sits above overlay */
+/* Make sure content sits above overlay */
 .wrap, header, main, .card, .grid, .menu-buttons,
-.scorebar, .auth-btn, .menu-title {
-  position: relative;
-  z-index: 2;
+.scorebar, .auth-btn, .menu-title{ position:relative; z-index:2; }
+
+/* ================= Samsung Internet overrides =================
+   Add class "samsung" to <html> or <body> using a tiny UA check.
+   These tweaks make glow/scanlines punchier on Samsung Internet. */
+.samsung body::before{
+  opacity:1;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 1px,
+      rgba(57,255,20,0.12) 2px,
+      rgba(57,255,20,0.12) 3px
+    );
+}
+.samsung .title{
+  -webkit-text-stroke:1.2px rgba(57,255,20,0.98);
+  text-shadow:
+    0 0 8px rgba(57,255,20,1),
+    0 0 18px rgba(57,255,20,1),
+    0 0 36px rgba(57,255,20,1),
+    0 0 64px rgba(255,0,51,0.65);
+}
+.samsung .title-wrap::after{
+  box-shadow:
+    0 0 80px 24px rgba(255,0,51,0.5),
+    0 0 160px 60px rgba(255,0,51,0.4);
 }
