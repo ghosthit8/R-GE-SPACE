@@ -198,25 +198,22 @@
       const segs = location.pathname.split('/').filter(Boolean);
       return segs.length > 1 ? `/${segs[0]}/` : '/';
     }
-    function withinSite(path){
-      const base = repoBase();
-      const clean = path.replace(/^\//,'');
-      return base + clean;
+    const base = repoBase();
+
+    function normalizeToSite(urlLike){
+      try{
+        const u = new URL(urlLike, location.href); // resolve "profile.html" etc.
+        if (u.origin !== location.origin) throw new Error('external');
+        const alreadyBase = u.pathname.startsWith(base);
+        const path = alreadyBase ? u.pathname : base + u.pathname.replace(/^\//,'');
+        return path + u.search + u.hash;
+      }catch{
+        return base + 'profile.html';
+      }
     }
 
     const params = new URLSearchParams(location.search);
-    const requestedReturn = params.get('return');
-    const safeReturn = (() => {
-      if (!requestedReturn) return withinSite('profile.html');
-      try{
-        const u = new URL(requestedReturn, location.href);
-        if (u.origin === location.origin){
-          const p = u.pathname.replace(/^\/+/,''); // keep inside this repo base
-          return withinSite(p + u.search + u.hash);
-        }
-      }catch{}
-      return withinSite('profile.html');
-    })();
+    const safeReturn = normalizeToSite(params.get('return') || 'profile.html');
 
     backLink.href = safeReturn;
     cancelLink.href = safeReturn;
@@ -305,6 +302,7 @@
       const { error } = await sb.from('profiles').upsert(payload, { onConflict:'id' });
       if(error){ console.error(error); say('Save failed', true); return; }
       say('Saved!');
+
       if (isLocal()){
         const u = new URL(safeReturn, location.href);
         u.hash = (u.hash ? u.hash + '&' : '#') + 'saved=1';
