@@ -152,7 +152,7 @@
       <div class="actions" style="margin-top:18px">
         <button id="saveBtn" type="submit" class="btn">Save Changes</button>
         <a class="btn ghost" id="cancelLink" href="./profile.html">Cancel</a>
-        <small id="status" class="hint" style="margin-left:6px"></small>
+        <small id="status" class="hint" style="margin-left:6px" aria-live="polite"></small>
       </div>
     </form>
   </main>
@@ -209,8 +209,9 @@
       try{
         const u = new URL(urlLike || '', location.href);
         if (u.origin !== location.origin) throw 0;
-        let path = u.pathname;
-        if (path.endsWith('/')) path += 'profile.html';
+        // if path is a directory, force profile.html
+        let path = u.pathname.endsWith('/') ? (u.pathname + 'profile.html') : u.pathname;
+        // if it doesn't look like a file, fallback
         if (!/\/[^/]+\.[^/]+$/.test(path)) path = DEFAULT_TARGET;
         return path + u.search + u.hash;
       }catch{
@@ -227,6 +228,8 @@
     function afterSaveRedirect(){
       const u = new URL(safeReturn, location.href);
       u.searchParams.set('saved','1');
+      // cache-buster to avoid stale GitHub Pages
+      u.searchParams.set('v', Date.now().toString());
       location.href = u.toString();
     }
     // ===========================================================
