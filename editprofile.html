@@ -105,23 +105,72 @@
 
     let userId=null; let songUrl=null;
 
-    // utils
+    // ====== Helpers ======
     function say(m,b=false){statusEl.textContent=m||'';statusEl.style.color=b?'var(--red)':'var(--muted)'}
     function stringToSkills(s){return (s||'').split(',').map(v=>v.trim()).filter(Boolean)}
     function skillsToString(a){return Array.isArray(a)?a.join(', '):(a||'')}
     function fileName(prefix,file){const ext=(file?.name?.split('.').pop()||'bin').toLowerCase();return `${prefix}/${crypto.randomUUID()}.${ext}`}
     function isYouTubeUrl(u){return /youtu\.?be|youtube\.com/i.test(u||'')}
-    function extractYouTubeId(url){try{const u=new URL(url,location.href); if(u.hostname.includes('youtu.be'))return u.pathname.split('/').filter(Boolean)[0]||null; if(u.hostname.includes('youtube.com')){ if(u.pathname.startsWith('/watch'))return u.searchParams.get('v'); const p=u.pathname.split('/').filter(Boolean); if(p[0]==='shorts'||p[0]==='embed')return p[1]||null; }}catch{} return null}
-    function makeYouTubeEmbed(id){return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&controls=1`}
 
-    // return target
+    // --- SUPER ROBUST YT ID EXTRACTOR ---
+    function extractYouTubeIdStrict(input) {
+      if (!input) return null;
+      const s = String(input).trim();
+
+      // 1) direct 11-char ID
+      const idOnly = s.match(/^[A-Za-z0-9_-]{11}$/);
+      if (idOnly) return idOnly[0];
+
+      // 2) try parsing URL forms
+      try {
+        const u = new URL(s, location.href);
+
+        // youtu.be/<id>
+        if (/\byoutu\.be$/i.test(u.hostname)) {
+          const id = u.pathname.split('/').filter(Boolean)[0];
+          if (id && id.length === 11) return id;
+        }
+
+        // youtube.com/watch?v=<id>
+        if (/\byoutube\.com$/i.test(u.hostname)) {
+          const v = u.searchParams.get('v');
+          if (v && v.length === 11) return v;
+
+          // /embed/<id> or /shorts/<id> or /live/<id>
+          const parts = u.pathname.split('/').filter(Boolean);
+          if (parts.length >= 2 && ['embed','shorts','live'].includes(parts[0])) {
+            const id = parts[1];
+            if (id && id.length === 11) return id;
+          }
+        }
+      } catch { /* not a URL, fall through */ }
+
+      // 3) last resort: find any 11-char chunk
+      const m = s.match(/([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/);
+      return m ? m[1] : null;
+    }
+
+    function makeYouTubeEmbed(id){
+      return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&controls=1`;
+    }
+
+    // ====== Safe return target ======
     const DEFAULT_TARGET='profile.html';
-    function safePath(urlLike){try{const u=new URL(urlLike||'',location.href); if(u.origin!==location.origin)throw 0; let p=u.pathname.endsWith('/')?(u.pathname+'profile.html'):u.pathname; if(!/\/[^/]+\.[^/]+$/.test(p))p=DEFAULT_TARGET; return p+u.search+u.hash}catch{ return DEFAULT_TARGET}}
+    function safePath(urlLike){
+      try{
+        const u=new URL(urlLike||'',location.href);
+        if(u.origin!==location.origin)throw 0;
+        let p=u.pathname.endsWith('/')?(u.pathname+'profile.html'):u.pathname;
+        if(!/\/[^/]+\.[^/]+$/.test(p))p=DEFAULT_TARGET;
+        return p+u.search+u.hash
+      }catch{ return DEFAULT_TARGET}
+    }
     const params=new URLSearchParams(location.search); const safeReturn=safePath(params.get('return')||'profile.html');
     backLink.href=safeReturn; cancelLink.href=safeReturn;
 
     function afterSaveRedirect(){const u=new URL(safeReturn,location.href); u.searchParams.set('saved','1'); u.searchParams.set('v',Date.now().toString()); location.href=u.toString()}
 
+    // ====== Data I/O ======
     async function ensureProfileRow(){await sb.from('profiles').upsert({id:userId,updated_at:new Date().toISOString()},{onConflict:'id'})}
 
     async function loadProfile(){
@@ -135,9 +184,16 @@
       voidMsgEl.value=data.void_message||''; funnyStoryEl.value=data.funny_story||'';
 
       songUrl=data.song_url||null;
-      if(songUrl&&isYouTubeUrl(songUrl)){ ytPreview.src=songUrl; ytPreview.style.display='block'; songYouTubeEl.value=songUrl; songPreview.removeAttribute('src'); }
-      else if(songUrl){ songPreview.src=songUrl; songYouTubeEl.value=''; ytPreview.removeAttribute('src'); ytPreview.style.display='none'; }
-      else{ songPreview.removeAttribute('src'); songYouTubeEl.value=''; ytPreview.removeAttribute('src'); ytPreview.style.display='none'; }
+
+      // Preview current song
+      if(songUrl&&isYouTubeUrl(songUrl)){
+        ytPreview.src=songUrl; ytPreview.style.display='block'; songYouTubeEl.value=songUrl; songPreview.removeAttribute('src');
+      } else if(songUrl){
+        songPreview.src=songUrl; songYouTubeEl.value=''; ytPreview.removeAttribute('src'); ytPreview.style.display='none';
+      } else {
+        songPreview.removeAttribute('src'); songYouTubeEl.value=''; ytPreview.removeAttribute('src'); ytPreview.style.display='none';
+      }
+
       say('');
     }
 
@@ -154,19 +210,40 @@
       }catch(e){ console.error(e); say(`Upload failed: ${e.message||e}`,true) }
       finally{ songFileEl.value=''; }
     }
-    function removeSong(){ songUrl=null; songPreview.removeAttribute('src'); ytPreview.style.display='none'; ytPreview.removeAttribute('src'); songYouTubeEl.value=''; say('Song cleared. Remember to Save Changes.') }
+    function removeSong(){
+      songUrl=null;
+      songPreview.removeAttribute('src');
+      ytPreview.style.display='none'; ytPreview.removeAttribute('src');
+      songYouTubeEl.value='';
+      say('Song cleared. Remember to Save Changes.');
+    }
 
     uploadSongBtn.addEventListener('click',uploadSong);
     removeSongBtn.addEventListener('click',removeSong);
 
-    useYouTubeBtn.addEventListener('click',()=>{
-      const raw=songYouTubeEl.value.trim(); const id=extractYouTubeId(raw);
-      if(!id){ say('Invalid YouTube link',true); return; }
-      const embed=makeYouTubeEmbed(id);
-      songUrl=embed; ytPreview.src=embed; ytPreview.style.display='block'; songPreview.removeAttribute('src');
+    // ====== Use YouTube Link (robust) ======
+    useYouTubeBtn.addEventListener('click', () => {
+      const raw = (songYouTubeEl.value || '').trim();
+      const id = extractYouTubeIdStrict(raw);
+
+      if (!id) {
+        say('Invalid YouTube link. Paste a full URL or the 11-char ID.', true);
+        ytPreview.style.display = 'none';
+        ytPreview.removeAttribute('src');
+        return;
+      }
+
+      const embed = makeYouTubeEmbed(id);
+      songUrl = embed;                          // <- this is what gets saved to profiles.song_url
+      ytPreview.src = embed;
+      ytPreview.style.display = 'block';
+      songPreview.removeAttribute('src');
+
       say('YouTube link set. Remember to Save Changes.');
+      console.log('YouTube embed set:', embed);
     });
 
+    // ====== Save (with skills array->text fallback) ======
     form.addEventListener('submit',async e=>{
       e.preventDefault(); say('Saving...');
       const payloadArr={ id:userId, pronouns:pronounsEl.value.trim(), sun:sunEl.value.trim(), moon:moonEl.value.trim(), rising:risingEl.value.trim(),
