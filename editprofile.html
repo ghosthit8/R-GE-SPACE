@@ -25,6 +25,84 @@
     @media (max-width:720px){ .grid{ grid-template-columns:1fr } .grid-3{ grid-template-columns:1fr } }
     #status{ display:inline-block; max-width:280px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   </style>
+
+  <!-- Load Supabase later; first add a self-contained YT handler so the button always works -->
+  <script>
+    // Minimal status helper (safe even if later code fails)
+    function __say(msg, isErr){
+      var s = document.getElementById('status');
+      if(!s) return;
+      s.textContent = msg || '';
+      s.style.color = isErr ? 'var(--red)' : 'var(--muted)';
+    }
+    // Robust ID extractor
+    function __ytId(input){
+      if(!input) return null;
+      var s = String(input).trim();
+
+      var idOnly = s.match(/^[A-Za-z0-9_-]{11}$/);
+      if(idOnly) return idOnly[0];
+
+      try{
+        var u = new URL(s, location.href);
+        if(/\byoutu\.be$/i.test(u.hostname)){
+          var id = u.pathname.split('/').filter(Boolean)[0];
+          if(id && id.length===11) return id;
+        }
+        if(/\byoutube\.com$/i.test(u.hostname)){
+          var v = u.searchParams.get('v');
+          if(v && v.length===11) return v;
+          var parts = u.pathname.split('/').filter(Boolean);
+          if(parts.length>=2 && ['embed','shorts','live'].includes(parts[0])){
+            var id2 = parts[1]; if(id2 && id2.length===11) return id2;
+          }
+        }
+      }catch(e){}
+
+      var m = s.match(/([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/);
+      return m ? m[1] : null;
+    }
+    function __ytEmbed(id){
+      return 'https://www.youtube.com/embed/'+id+'?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&controls=1';
+    }
+
+    // GLOBAL handler used by the button's inline onclick
+    window.handleUseYouTube = function(){
+      try{
+        var input = document.getElementById('songYouTube');
+        var ytPrev = document.getElementById('ytPreview');
+        var audioPrev = document.getElementById('songPreview');
+        var raw = (input && input.value || '').trim();
+        var id = __ytId(raw);
+        if(!id){
+          __say('Invalid YouTube link. Paste a full URL or the 11-char ID.', true);
+          if(ytPrev){ ytPrev.style.display='none'; ytPrev.removeAttribute('src'); }
+          return;
+        }
+        var embed = __ytEmbed(id);
+        // Save selected URL in a global so later script (and Save) can use it
+        window.__songUrl = embed;
+
+        if(ytPrev){
+          ytPrev.src = embed;
+          ytPrev.style.display = 'block';
+        }
+        if(audioPrev){ audioPrev.removeAttribute('src'); }
+        __say('YouTube link set. Remember to Save Changes.');
+        console.log('YouTube embed set:', embed);
+      }catch(err){
+        console.error(err);
+        __say('Could not set YouTube link: '+(err.message||err), true);
+        alert('Error setting YouTube link: ' + (err.message||err));
+      }
+    };
+
+    // Show any earlier JS errors in the status area
+    window.addEventListener('error', function(e){
+      __say('Script error: ' + (e.message||'unknown'), true);
+    });
+  </script>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -71,7 +149,7 @@
         <div class="song-box">
           <div class="song-row">
             <input id="songYouTube" type="text" placeholder="https://youtu.be/... or https://youtube.com/watch?v=..." />
-            <!-- inline onclick fallback so it ALWAYS fires -->
+            <!-- inline fallback calls global that exists BEFORE any other JS -->
             <button id="useYouTubeBtn" type="button" class="btn" onclick="handleUseYouTube()">Use YouTube Link</button>
             <small class="hint">Optional. Overrides upload. Autoplays muted on profile.</small>
           </div>
@@ -88,13 +166,7 @@
   </main>
 
   <script>
-    /* ===== Error reporter so silent JS errors are visible ===== */
-    window.addEventListener('error', (e)=>{
-      const s=document.getElementById('status');
-      if(s) { s.textContent = 'Script error: ' + (e.message || 'unknown'); s.style.color='var(--red)'; }
-    });
-
-    /* ===== Supabase ===== */
+    // ===== Supabase client =====
     const sb = supabase.createClient("YOUR_SUPABASE_URL","YOUR_ANON_KEY");
     const SONG_BUCKET='songs';
 
@@ -110,88 +182,23 @@
     const songYouTubeEl=document.getElementById('songYouTube'); const ytPreview=document.getElementById('ytPreview');
     const form=document.getElementById('editForm');
 
-    let userId=null; let songUrl=null;
+    // use global value if set by the early handler
+    let userId=null; let songUrl = window.__songUrl || null;
 
-    // ===== Helpers =====
+    // utils
     function say(m,b=false){statusEl.textContent=m||'';statusEl.style.color=b?'var(--red)':'var(--muted)'}
     function stringToSkills(s){return (s||'').split(',').map(v=>v.trim()).filter(Boolean)}
     function skillsToString(a){return Array.isArray(a)?a.join(', '):(a||'')}
     function fileName(prefix,file){const ext=(file?.name?.split('.').pop()||'bin').toLowerCase();return `${prefix}/${crypto.randomUUID()}.${ext}`}
     function isYouTubeUrl(u){return /youtu\.?be|youtube\.com/i.test(u||'')}
 
-    // --- SUPER ROBUST YT ID EXTRACTOR ---
-    function extractYouTubeIdStrict(input) {
-      if (!input) return null;
-      const s = String(input).trim();
-
-      // 1) 11-char ID by itself
-      const idOnly = s.match(/^[A-Za-z0-9_-]{11}$/);
-      if (idOnly) return idOnly[0];
-
-      // 2) URL forms
-      try {
-        const u = new URL(s, location.href);
-        if (/\byoutu\.be$/i.test(u.hostname)) {
-          const id = u.pathname.split('/').filter(Boolean)[0];
-          if (id && id.length === 11) return id;
-        }
-        if (/\byoutube\.com$/i.test(u.hostname)) {
-          const v = u.searchParams.get('v');
-          if (v && v.length === 11) return v;
-          const parts = u.pathname.split('/').filter(Boolean);
-          if (parts.length >= 2 && ['embed','shorts','live'].includes(parts[0])) {
-            const id = parts[1]; if (id && id.length === 11) return id;
-          }
-        }
-      } catch { /* not a URL */ }
-
-      // 3) last resort: find any 11-char chunk
-      const m = s.match(/([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/);
-      return m ? m[1] : null;
-    }
-
-    function makeYouTubeEmbed(id){
-      return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&controls=1`;
-    }
-
-    // expose handler globally for inline onclick fallback
-    window.handleUseYouTube = function handleUseYouTube(){
-      try{
-        const raw = (songYouTubeEl.value || '').trim();
-        const id = extractYouTubeIdStrict(raw);
-        if (!id) {
-          say('Invalid YouTube link. Paste a full URL or the 11-char ID.', true);
-          ytPreview.style.display = 'none'; ytPreview.removeAttribute('src');
-          return;
-        }
-        const embed = makeYouTubeEmbed(id);
-        songUrl = embed;                                     // what we save to DB
-        ytPreview.src = embed; ytPreview.style.display = 'block';
-        songPreview.removeAttribute('src');
-        say('YouTube link set. Remember to Save Changes.');
-        console.log('YouTube embed set:', embed);
-      }catch(err){
-        console.error(err); say('Could not set YouTube link: '+(err.message||err), true);
-        alert('Error setting YouTube link: ' + (err.message||err));
-      }
-    };
-
-    // ===== Return target & redirect =====
+    // return target
     const DEFAULT_TARGET='profile.html';
-    function safePath(urlLike){
-      try{
-        const u=new URL(urlLike||'',location.href);
-        if(u.origin!==location.origin)throw 0;
-        let p=u.pathname.endsWith('/')?(u.pathname+'profile.html'):u.pathname;
-        if(!/\/[^/]+\.[^/]+$/.test(p))p=DEFAULT_TARGET;
-        return p+u.search+u.hash;
-      }catch{ return DEFAULT_TARGET }
-    }
+    function safePath(urlLike){try{const u=new URL(urlLike||'',location.href); if(u.origin!==location.origin)throw 0; let p=u.pathname.endsWith('/')?(u.pathname+'profile.html'):u.pathname; if(!/\/[^/]+\.[^/]+$/.test(p))p=DEFAULT_TARGET; return p+u.search+u.hash}catch{ return DEFAULT_TARGET}}
     const params=new URLSearchParams(location.search); const safeReturn=safePath(params.get('return')||'profile.html');
     backLink.href=safeReturn; cancelLink.href=safeReturn;
     function afterSaveRedirect(){const u=new URL(safeReturn,location.href); u.searchParams.set('saved','1'); u.searchParams.set('v',Date.now().toString()); location.href=u.toString()}
 
-    // ===== Data I/O =====
     async function ensureProfileRow(){await sb.from('profiles').upsert({id:userId,updated_at:new Date().toISOString()},{onConflict:'id'})}
 
     async function loadProfile(){
@@ -204,7 +211,9 @@
       loveLangEl.value=data.love_language||''; skillsEl.value=Array.isArray(data.skills)?skillsToString(data.skills):(data.skills||'');
       voidMsgEl.value=data.void_message||''; funnyStoryEl.value=data.funny_story||'';
 
-      songUrl=data.song_url||null;
+      // prefer the manual selection if already chosen
+      songUrl = window.__songUrl || data.song_url || null;
+
       if(songUrl&&isYouTubeUrl(songUrl)){ ytPreview.src=songUrl; ytPreview.style.display='block'; songYouTubeEl.value=songUrl; songPreview.removeAttribute('src'); }
       else if(songUrl){ songPreview.src=songUrl; songYouTubeEl.value=''; ytPreview.removeAttribute('src'); ytPreview.style.display='none'; }
       else{ songPreview.removeAttribute('src'); songYouTubeEl.value=''; ytPreview.removeAttribute('src'); ytPreview.style.display='none'; }
@@ -219,23 +228,22 @@
         const {error:upErr}=await sb.storage.from(SONG_BUCKET).upload(path,file,{upsert:false});
         if(upErr)throw upErr;
         const {data}=sb.storage.from(SONG_BUCKET).getPublicUrl(path);
-        songUrl=data.publicUrl; songPreview.src=songUrl; ytPreview.style.display='none'; ytPreview.removeAttribute('src'); songYouTubeEl.value='';
+        songUrl=data.publicUrl; window.__songUrl = songUrl;
+        songPreview.src=songUrl; ytPreview.style.display='none'; ytPreview.removeAttribute('src'); songYouTubeEl.value='';
         say('Song uploaded. Remember to Save Changes.');
       }catch(e){ console.error(e); say(`Upload failed: ${e.message||e}`,true) }
       finally{ songFileEl.value=''; }
     }
-    function removeSong(){ songUrl=null; songPreview.removeAttribute('src'); ytPreview.style.display='none'; ytPreview.removeAttribute('src'); songYouTubeEl.value=''; say('Song cleared. Remember to Save Changes.') }
+    function removeSong(){ songUrl=null; window.__songUrl=null; songPreview.removeAttribute('src'); ytPreview.style.display='none'; ytPreview.removeAttribute('src'); songYouTubeEl.value=''; say('Song cleared. Remember to Save Changes.') }
 
-    // Bind non-critical buttons (inline onclick already covers YT)
     uploadSongBtn.addEventListener('click',uploadSong);
     removeSongBtn.addEventListener('click',removeSong);
 
-    // Save (with skills array->text fallback)
     form.addEventListener('submit',async e=>{
       e.preventDefault(); say('Saving...');
       const payloadArr={ id:userId, pronouns:pronounsEl.value.trim(), sun:sunEl.value.trim(), moon:moonEl.value.trim(), rising:risingEl.value.trim(),
         love_language:loveLangEl.value||null, skills:stringToSkills(skillsEl.value), void_message:voidMsgEl.value.trim(),
-        funny_story:funnyStoryEl.value.trim(), song_url:songUrl||null, updated_at:new Date().toISOString() };
+        funny_story:funnyStoryEl.value.trim(), song_url:(window.__songUrl ?? songUrl) || null, updated_at:new Date().toISOString() };
 
       let { error } = await sb.from('profiles').upsert(payloadArr,{onConflict:'id'});
 
