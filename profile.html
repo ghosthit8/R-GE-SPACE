@@ -162,13 +162,6 @@
     h3{ margin:0 0 10px; font-size:18px; text-shadow:0 0 10px var(--red) }
     p, .text{ color:var(--ink) }
 
-    .btn{
-      border:2px solid var(--green); color:var(--green); background:transparent;
-      padding:10px 16px; border-radius:12px; font-weight:800; cursor:pointer;
-      box-shadow:0 0 16px rgba(57,255,20,.35);
-    }
-    .btn.red{ border-color:var(--red); color:var(--red) }
-
     .song-section{ margin:8px 0 16px }
     .song-section h3{ margin:0 0 8px; font-size:18px; text-shadow:0 0 10px var(--red) }
 
@@ -270,7 +263,7 @@
 
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
+      "YOUR_ANON_KEY"
     );
 
     // Display refs
@@ -398,6 +391,7 @@
         const url = data.song_url || null;
         if (url){
           if (isYouTubeUrl(url)){
+            // If a raw watch/shorts URL ended up saved, try to embed as-is anyway; ideally DB holds the /embed form already.
             mountYouTube(songMount, url);
           } else {
             mountAudio(songMount, url);
