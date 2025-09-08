@@ -46,19 +46,17 @@
       box-shadow: inset 0 0 10px rgba(57,255,20,.08);
     }
     textarea{ min-height:110px; resize:vertical; }
-    small.hint{ color:var(--muted); opacity:0.9 }
-
+    .actions{ display:flex; gap:10px; align-items:center; }
     .btn{
-      border:2px solid var(--green); color:#000; background:var(--green);
-      padding:12px 18px; border-radius:14px; font-weight:900; cursor:pointer;
-      box-shadow:0 0 16px rgba(57,255,20,.55);
+      appearance:none; border:none; border-radius:999px; padding:10px 16px;
+      background:var(--green); color:#000; font-weight:900; cursor:pointer;
+      box-shadow:0 0 18px rgba(57,255,20,.45);
     }
-    .btn.ghost{ background:transparent; color:var(--green) }
-    .btn.red{ border-color:var(--red); color:var(--red); background:transparent; box-shadow:0 0 16px rgba(255,0,51,.35); }
-    .actions{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-
+    .btn.ghost{ background:transparent; color:var(--green); border:1.5px solid var(--green); }
+    .btn.red{ background:var(--red); color:#fff; }
+    .hint{ color:var(--muted); font-size:12px; }
     .song-box{
-      display:flex; flex-direction:column; gap:10px;
+      display:grid; gap:8px;
       padding:12px; border:1px dashed var(--border); border-radius:12px; background:#080808;
     }
     .song-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
@@ -91,12 +89,12 @@
       <div class="grid">
         <div class="row">
           <label for="pronouns">Pronouns</label>
-          <input id="pronouns" type="text" placeholder="they/them, she/her, he/him, etc." />
+          <input id="pronouns" type="text" placeholder="she/they/he/..." />
         </div>
         <div class="row">
           <label for="loveLang">Love language</label>
           <select id="loveLang">
-            <option value="">— choose —</option>
+            <option value="">— Select —</option>
             <option>Words of affirmation</option>
             <option>Quality time</option>
             <option>Acts of service</option>
@@ -104,48 +102,64 @@
             <option>Physical touch</option>
           </select>
         </div>
-      </div>
 
-      <div class="grid-3" style="margin-top:12px">
-        <div class="row">
-          <label for="sun">Sun</label>
-          <input id="sun" type="text" placeholder="Aries, Taurus, etc." />
-        </div>
-        <div class="row">
-          <label for="moon">Moon</label>
-          <input id="moon" type="text" placeholder="Sagittarius, Scorpio, etc." />
-        </div>
-        <div class="row">
-          <label for="rising">Rising</label>
-          <input id="rising" type="text" placeholder="Leo, Pisces, etc." />
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:12px">
-        <label for="skills">Skills <small class="hint">(comma-separated; will save as an array)</small></label>
-        <input id="skills" type="text" placeholder="dancing, taxidermy, guns, hacking ..." />
-      </div>
-
-      <div class="row" style="margin-top:12px">
-        <label for="voidMsg">Message to the Void</label>
-        <textarea id="voidMsg" placeholder="Speak into the abyss..."></textarea>
-      </div>
-
-      <div class="row" style="margin-top:12px">
-        <label for="funnyStory">Funny Story</label>
-        <textarea id="funnyStory" placeholder="Tell us a chaotic legend..."></textarea>
-      </div>
-
-      <div class="row" style="margin-top:16px">
-        <label>Theme Song</label>
-        <div class="song-box">
-          <div class="song-row">
-            <input id="songFile" type="file" accept="audio/*" />
-            <button id="uploadSongBtn" type="button" class="btn">Upload / Replace</button>
-            <button id="removeSongBtn" type="button" class="btn red">Remove</button>
-            <small class="hint">Accepted: audio files. Upload stores to Supabase Storage.</small>
+        <div class="grid-3">
+          <div class="row">
+            <label for="sun">Sun Sign</label>
+            <input id="sun" type="text" placeholder="Aries" />
           </div>
-          <audio id="songPreview" controls preload="none"></audio>
+          <div class="row">
+            <label for="moon">Moon Sign</label>
+            <input id="moon" type="text" placeholder="Scorpio" />
+          </div>
+          <div class="row">
+            <label for="rising">Rising</label>
+            <input id="rising" type="text" placeholder="Virgo" />
+          </div>
+        </div>
+
+        <div class="row" style="grid-column:1 / -1">
+          <label for="skills">Skills (comma separated)</label>
+          <input id="skills" type="text" placeholder="editing, analog glitch, color grading" />
+          <small class="hint">We’ll show these as a list on your profile.</small>
+        </div>
+
+        <div class="row" style="grid-column:1 / -1">
+          <label for="voidMsg">Message to the Void</label>
+          <textarea id="voidMsg" placeholder="Scream into the void..."></textarea>
+        </div>
+
+        <div class="row" style="grid-column:1 / -1">
+          <label for="funnyStory">Funny Story</label>
+          <textarea id="funnyStory" placeholder="Tell us something ridiculous..."></textarea>
+        </div>
+
+        <!-- ===== Theme Song (File upload) ===== -->
+        <div class="row" style="grid-column:1 / -1">
+          <label>Theme Song</label>
+          <div class="song-box">
+            <div class="song-row">
+              <input id="songFile" type="file" accept="audio/*" />
+              <button id="uploadSongBtn" type="button" class="btn">Upload / Replace</button>
+              <button id="removeSongBtn" type="button" class="btn red">Remove</button>
+              <small class="hint">Accepted: audio files. Upload stores to Supabase Storage.</small>
+            </div>
+            <audio id="songPreview" controls preload="none"></audio>
+          </div>
+        </div>
+
+        <!-- ===== Theme Song (YouTube link) ===== -->
+        <div class="row" style="grid-column:1 / -1">
+          <label for="songYouTube">Theme Song (YouTube link)</label>
+          <div class="song-box">
+            <div class="song-row">
+              <input id="songYouTube" type="text" placeholder="https://youtu.be/VIDEO or https://www.youtube.com/watch?v=VIDEO" />
+              <button id="useYouTubeBtn" type="button" class="btn">Use YouTube Link</button>
+              <small class="hint">Optional. If provided, it overrides the uploaded audio. Autoplays muted on profile.</small>
+            </div>
+            <iframe id="ytPreview" width="560" height="315" style="max-width:100%; aspect-ratio:16/9; border:0; display:none"
+              allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+          </div>
         </div>
       </div>
 
@@ -162,7 +176,7 @@
     const SONG_BUCKET = 'songs';
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz...cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
     // ---- Elements ----
@@ -185,59 +199,73 @@
     const removeSongBtn = document.getElementById('removeSongBtn');
     const songPreview = document.getElementById('songPreview');
 
+    const songYouTubeEl = document.getElementById('songYouTube');
+    const useYouTubeBtn = document.getElementById('useYouTubeBtn');
+    const ytPreview = document.getElementById('ytPreview');
+
     // ---- State ----
     let userId = null;
     let songUrl = null;
 
     // ---- Utils ----
     function isLocal(){ return location.protocol === 'file:' || location.protocol === 'content:'; }
-    function say(msg, bad=false){ statusEl.textContent = msg||''; statusEl.style.color = bad ? 'var(--red)' : 'var(--muted)'; }
+    function say(msg, bad=false){ statusEl.textContent = msg; statusEl.style.color = bad ? 'var(--red)' : 'var(--muted)'; }
+    function stringToSkills(s){ return (s||'').split(',').map(v=>v.trim()).filter(Boolean); }
+    function skillsToString(arr){ return (arr||[]).join(', '); }
     function fileName(prefix, file){
-      const ext = (file?.name?.split('.').pop() || 'bin').toLowerCase();
+      const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
       return `${prefix}/${crypto.randomUUID()}.${ext}`;
     }
-    function skillsToString(arr){ return Array.isArray(arr) ? arr.join(', ') : ''; }
-    function stringToSkills(str){
-      return (str||'').split(',').map(s=>s.trim()).filter(Boolean);
+
+    function extractYouTubeId(url){
+      if(!url) return null;
+      try{
+        const u = new URL(url, location.href);
+        if (u.hostname.includes('youtu.be')) return u.pathname.split('/').filter(Boolean)[0] || null;
+        if (u.hostname.includes('youtube.com')){
+          if (u.pathname.startsWith('/watch')) return u.searchParams.get('v');
+          const parts = u.pathname.split('/').filter(Boolean);
+          if (parts[0] === 'shorts' || parts[0] === 'embed') return parts[1] || null;
+        }
+      }catch{}
+      return null;
     }
+    function makeYouTubeEmbed(id, {autoplay=true, muted=true}={}){
+      const ap = autoplay ? 1 : 0;
+      const mu = muted ? 1 : 0;
+      return `https://www.youtube.com/embed/${id}?autoplay=${ap}&mute=${mu}&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&controls=1`;
+    }
+    function isYouTubeUrl(u){ return /youtu\.?be|youtube\.com/i.test(u||''); }
 
-    // ===== Same-folder return/redirect (GitHub Pages safe) =====
-    const DIR = location.pathname.replace(/[^/]*$/, '');
-    const DEFAULT_TARGET = DIR + 'profile.html';
-
+    // ---- Safe return target (Back/Cancel) ----
+    const DEFAULT_TARGET = 'profile.html';
     function safePath(urlLike){
       try{
         const u = new URL(urlLike || '', location.href);
         if (u.origin !== location.origin) throw 0;
-        // if path is a directory, force profile.html
         let path = u.pathname.endsWith('/') ? (u.pathname + 'profile.html') : u.pathname;
-        // if it doesn't look like a file, fallback
         if (!/\/[^/]+\.[^/]+$/.test(path)) path = DEFAULT_TARGET;
         return path + u.search + u.hash;
       }catch{
         return DEFAULT_TARGET;
       }
     }
-
     const params = new URLSearchParams(location.search);
     const safeReturn = safePath(params.get('return') || 'profile.html');
-
     backLink.href = safeReturn;
     cancelLink.href = safeReturn;
 
     function afterSaveRedirect(){
       const u = new URL(safeReturn, location.href);
       u.searchParams.set('saved','1');
-      // cache-buster to avoid stale GitHub Pages
       u.searchParams.set('v', Date.now().toString());
       location.href = u.toString();
     }
-    // ===========================================================
 
     // ---- Data I/O ----
     async function ensureProfileRow() {
       const { error } = await sb.from('profiles')
-        .upsert({ id: userId, updated_at: new Date().toISOString() }, { onConflict:'id' });
+        .upsert({ id: userId, updated_at: new Date().toISOString() }, { onConflict: 'id' });
       if (error) console.error('ensureProfileRow:', error);
     }
 
@@ -255,8 +283,32 @@
       skillsEl.value = skillsToString(data.skills);
       voidMsgEl.value = data.void_message || '';
       funnyStoryEl.value = data.funny_story || '';
+
       songUrl = data.song_url || null;
-      if(songUrl){ songPreview.src = songUrl; } else { songPreview.removeAttribute('src'); }
+
+      // Preview current song
+      if (songUrl){
+        if (isYouTubeUrl(songUrl)){
+          // If DB holds a non-embed URL, normalize it into an embed and show preview
+          const id = extractYouTubeId(songUrl);
+          const embed = id ? makeYouTubeEmbed(id, {autoplay:false, muted:true}) : songUrl;
+          ytPreview.src = embed;
+          ytPreview.style.display = 'block';
+          songYouTubeEl.value = songUrl; // keep the original link in the input
+          songPreview.removeAttribute('src');
+        } else {
+          songPreview.src = songUrl;
+          ytPreview.removeAttribute('src');
+          ytPreview.style.display = 'none';
+          songYouTubeEl.value = '';
+        }
+      } else {
+        songPreview.removeAttribute('src');
+        ytPreview.removeAttribute('src');
+        ytPreview.style.display = 'none';
+        songYouTubeEl.value = '';
+      }
+
       say('');
     }
 
@@ -271,6 +323,8 @@
         const { data } = sb.storage.from(SONG_BUCKET).getPublicUrl(path);
         songUrl = data.publicUrl;
         songPreview.src = songUrl;
+        ytPreview.removeAttribute('src'); ytPreview.style.display = 'none';
+        songYouTubeEl.value = '';
         say('Song uploaded. Remember to Save Changes.');
       }catch(e){
         console.error(e);
@@ -283,12 +337,26 @@
     function removeSong(){
       songUrl = null;
       songPreview.removeAttribute('src');
+      ytPreview.removeAttribute('src'); ytPreview.style.display = 'none';
+      songYouTubeEl.value = '';
       say('Song cleared. Remember to Save Changes.');
     }
 
     // ---- Events ----
     uploadSongBtn.addEventListener('click', uploadSong);
     removeSongBtn.addEventListener('click', removeSong);
+
+    useYouTubeBtn.addEventListener('click', ()=>{
+      const raw = songYouTubeEl.value.trim();
+      const id = extractYouTubeId(raw);
+      if(!id){ say('Invalid YouTube link', true); return; }
+      const embed = makeYouTubeEmbed(id, {autoplay:true, muted:true});
+      songUrl = embed; // store the embed; profile will autoplay muted
+      ytPreview.src = embed;
+      ytPreview.style.display = 'block';
+      songPreview.removeAttribute('src');
+      say('YouTube link set. Remember to Save Changes.');
+    });
 
     form.addEventListener('submit', async (e)=>{
       e.preventDefault();
