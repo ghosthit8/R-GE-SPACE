@@ -19,7 +19,6 @@
       font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
       -webkit-font-smoothing:antialiased;
     }
-
     .wrap{ max-width:940px; margin:24px auto 64px; padding:0 16px; }
     .back-chip{ text-decoration:none; display:inline-flex; align-items:center; gap:8px;
       padding:8px 12px; border-radius:999px; font-weight:800; font-size:13px;
@@ -64,10 +63,7 @@
 
     <form id="editForm" class="card" autocomplete="off">
       <div class="grid">
-        <div class="row">
-          <label for="pronouns">Pronouns</label>
-          <input id="pronouns" type="text" placeholder="they/them, she/her, he/him, etc." />
-        </div>
+        <div class="row"><label for="pronouns">Pronouns</label><input id="pronouns" type="text" /></div>
         <div class="row">
           <label for="loveLang">Love language</label>
           <select id="loveLang">
@@ -87,30 +83,18 @@
         <div class="row"><label for="rising">Rising</label><input id="rising" type="text" /></div>
       </div>
 
-      <div class="row" style="margin-top:12px">
-        <label for="skills">Skills <small class="hint">(comma-separated)</small></label>
-        <input id="skills" type="text" />
-      </div>
-
-      <div class="row" style="margin-top:12px">
-        <label for="voidMsg">Message to the Void</label>
-        <textarea id="voidMsg"></textarea>
-      </div>
-
-      <div class="row" style="margin-top:12px">
-        <label for="funnyStory">Funny Story</label>
-        <textarea id="funnyStory"></textarea>
-      </div>
+      <div class="row" style="margin-top:12px"><label for="skills">Skills</label><input id="skills" type="text" /></div>
+      <div class="row" style="margin-top:12px"><label for="voidMsg">Message to the Void</label><textarea id="voidMsg"></textarea></div>
+      <div class="row" style="margin-top:12px"><label for="funnyStory">Funny Story</label><textarea id="funnyStory"></textarea></div>
 
       <!-- Theme Song upload -->
       <div class="row" style="margin-top:16px">
-        <label>Theme Song</label>
+        <label>Theme Song (upload)</label>
         <div class="song-box">
           <div class="song-row">
             <input id="songFile" type="file" accept="audio/*" />
             <button id="uploadSongBtn" type="button" class="btn">Upload / Replace</button>
             <button id="removeSongBtn" type="button" class="btn red">Remove</button>
-            <small class="hint">Accepted: audio files. Upload stores to Supabase Storage.</small>
           </div>
           <audio id="songPreview" controls preload="none"></audio>
         </div>
@@ -168,13 +152,13 @@
     function fileName(prefix,file){const ext=(file?.name?.split('.').pop()||'bin').toLowerCase();return `${prefix}/${crypto.randomUUID()}.${ext}`;}
     function skillsToString(arr){return Array.isArray(arr)?arr.join(', '):'';}
     function stringToSkills(str){return (str||'').split(',').map(s=>s.trim()).filter(Boolean);}
-    function isYouTubeUrl(u){return /youtu\.?be|youtube\.com/i.test(u||'');}
     function extractYouTubeId(url){try{const u=new URL(url,location.href);
       if(u.hostname.includes('youtu.be'))return u.pathname.split('/').filter(Boolean)[0]||null;
       if(u.hostname.includes('youtube.com')){if(u.pathname.startsWith('/watch'))return u.searchParams.get('v');
         const p=u.pathname.split('/').filter(Boolean);if(p[0]==='shorts'||p[0]==='embed')return p[1]||null;}
     }catch{}return null;}
-    function makeYouTubeEmbed(id,{autoplay=true,muted=true}={}){return `https://www.youtube.com/embed/${id}?autoplay=${autoplay?1:0}&mute=${muted?1:0}&playsinline=1&rel=0&modestbranding=1&controls=1`;}
+    function makeYouTubeEmbed(id){return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&controls=1`;}
+    function isYouTubeUrl(u){return /youtu\.?be|youtube\.com/i.test(u||'');}
 
     const DIR=location.pathname.replace(/[^/]*$/,''); const DEFAULT_TARGET=DIR+'profile.html';
     function safePath(urlLike){try{const u=new URL(urlLike||'',location.href);if(u.origin!==location.origin)throw 0;
@@ -197,16 +181,14 @@
       catch(e){console.error(e);say('Upload failed',true);}finally{songFileEl.value='';}}
     function removeSong(){songUrl=null;songPreview.removeAttribute('src');ytPreview.style.display='none';say('Song cleared. Remember to Save Changes.');}
     useYouTubeBtn.addEventListener('click',()=>{const vid=extractYouTubeId(songYouTubeEl.value.trim());if(!vid){say('Invalid YouTube link',true);return;}
-      songUrl=makeYouTubeEmbed(vid,{autoplay:true,muted:true});ytPreview.src=songUrl;ytPreview.style.display='block';songPreview.removeAttribute('src');say('YouTube link set. Remember to Save Changes.');});
+      songUrl=makeYouTubeEmbed(vid);ytPreview.src=songUrl;ytPreview.style.display='block';songPreview.removeAttribute('src');say('YouTube link set. Remember to Save Changes.');});
 
     uploadSongBtn.addEventListener('click',uploadSong);removeSongBtn.addEventListener('click',removeSong);
 
     form.addEventListener('submit',async e=>{e.preventDefault();say('Saving...');
       const payload={id:userId,pronouns:pronounsEl.value.trim(),sun:sunEl.value.trim(),moon:moonEl.value.trim(),rising:risingEl.value.trim(),love_language:loveLangEl.value||null,
         skills:stringToSkills(skillsEl.value),void_message:voidMsgEl.value.trim(),funny_story:funnyStoryEl.value.trim(),song_url:songUrl||null,updated_at:new Date().toISOString()};
-      const{error}=await sb.from('profiles').upsert(payload,{onConflict:'id'});if(error){console.error(error);say('Save failed',true);return;}say('Saved!');
-      if(location.protocol==='file:'||location.protocol==='content:'){const u=new URL(safeReturn,location.href);u.hash=(u.hash?u.hash+'&':'#')+'saved=1';location.href=u.toString();}
-      else{afterSaveRedirect();}});
+      const{error}=await sb.from('profiles').upsert(payload,{onConflict:'id'});if(error){console.error(error);say('Save failed',true);return;}say('Saved!');afterSaveRedirect();});
 
     document.addEventListener('DOMContentLoaded',async()=>{const{data:{session}}=await sb.auth.getSession();if(!session){location.href="./login.html";return;}
       userId=session.user.id;await ensureProfileRow();await loadProfile();});
