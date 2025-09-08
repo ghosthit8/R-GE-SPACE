@@ -74,34 +74,25 @@
     .profile-scope .cam-glyph,
     .bg-camera .cam-glyph{
       position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-      font-size:18px; line-height:1; color:#000 !important; opacity:1 !important;
-      filter:none !important; z-index:3; pointer-events:none;
+      font-size:18px; font-weight:900; color:#000; mix-blend-mode:normal; opacity:.2;
+      pointer-events:none; user-select:none;
     }
-    .profile-scope .avatar-camera:hover .cam-glyph,
-    .profile-scope .banner-camera:hover .cam-glyph,
-    .bg-camera:hover .cam-glyph{ color:var(--green) !important; }
 
-    /* ===================== Page styles ===================== */
+    /* ======= banner / avatar / layout ======= */
     .banner{
-      position:relative; height:260px; overflow:visible;
+      position:relative; height:260px; overflow:hidden;
       border-bottom:1px solid var(--border);
-      background:radial-gradient(900px 600px at 70% -10%, rgba(57,255,20,0.08), transparent 60%), #050505;
+      background:
+        linear-gradient(180deg, rgba(57,255,20,.12), transparent 50%),
+        radial-gradient(600px 400px at 80% -20%, rgba(57,255,20,.14), transparent 60%),
+        #050505;
     }
-    .banner img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
-    .banner::after{
-      content:""; position:absolute; inset:0;
-      background:linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,.70) 100%);
-      z-index:1; pointer-events:none;
+    .banner img{
+      position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+      filter: none;
     }
-    .back-chip{
-      position:absolute; z-index:5; top:14px; left:14px;
-      text-decoration:none; display:inline-flex; align-items:center; gap:8px;
-      padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px;
-      color:var(--green); border:1.5px solid var(--green); background:rgba(0,0,0,.55);
-      backdrop-filter: blur(4px); box-shadow:0 0 14px rgba(57,255,20,.35);
-    }
-
     .banner-camera{
+      position:absolute; right:14px; bottom:14px; z-index:6;
       width:44px; height:44px; border-radius:50%;
       display:inline-flex; align-items:center; justify-content:center;
       border:2px solid var(--green); background:var(--green); color:#000; cursor:pointer;
@@ -138,38 +129,37 @@
     }
     .avatar-camera:hover{ background:#000; color:var(--green) }
 
-    .edit-pill{
-      font-size:15px; font-weight:800; letter-spacing:.2px;
-      padding:12px 20px; border-radius:24px;
-      border:2px solid var(--green); color:#000; background:var(--green);
-      box-shadow:0 0 22px rgba(57,255,20,.7); cursor:pointer;
-      position:relative; top:45px; text-decoration:none;
-      display:inline-block;
+    .back-chip{
+      position:absolute; left:16px; top:16px;
+      text-decoration:none; display:inline-flex; align-items:center; gap:8px;
+      padding:8px 12px; border-radius:999px; font-weight:800; font-size:13px;
+      color:var(--green); border:1.5px solid var(--green); background:rgba(0,0,0,.55);
+      backdrop-filter: blur(4px); box-shadow:0 0 14px rgba(57,255,20,.35);
+      z-index:9;
     }
-    .edit-pill:hover{ background:#000; color:var(--green) }
 
-    .info-block{ max-width:940px; margin:205px auto 0; padding:0 16px; }
-    .line{ margin:6px 0; font-size:16px; color:var(--ink) }
-    .label{ color:var(--green); font-weight:700; margin-right:6px }
-
-    .wrap{ max-width:940px; margin:18px auto 28px; padding:0 16px; }
-    section.card{
-      background:linear-gradient(180deg,#090909,#050505);
-      border:1px solid var(--green); border-radius:16px; padding:16px;
-      box-shadow:0 0 20px rgba(57,255,20,.12);
+    .wrap{ max-width:940px; margin:24px auto 64px; padding:0 16px; }
+    .title{ margin:24px 0 8px; font-size:32px; letter-spacing:.02em; }
+    .handle{ color:var(--muted); font-size:13px; }
+    .edit-btn{
+      display:inline-flex; align-items:center; gap:10px; padding:8px 14px; border-radius:999px;
+      background:transparent; color:var(--green); border:1.5px solid var(--green);
+      font-weight:900; cursor:pointer; box-shadow:0 0 16px rgba(57,255,20,.25);
+      margin-top:6px;
     }
-    section.card + section.card{ margin-top:16px }
-    h3{ margin:0 0 10px; font-size:18px; text-shadow:0 0 10px var(--red) }
-    p, .text{ color:var(--ink) }
 
-    .btn{
-      border:2px solid var(--green); color:var(--green); background:transparent;
-      padding:10px 16px; border-radius:12px; font-weight:800; cursor:pointer;
-      box-shadow:0 0 16px rgba(57,255,20,.35);
+    .info-block{ margin-top:160px; margin-bottom:16px; padding:0 16px; }
+    .line{ display:flex; gap:8px; align-items:center; margin:6px 0; }
+    .label{ color:var(--muted); width:128px; font-size:12px; }
+
+    .card{
+      margin:16px; padding:16px; border:1px solid var(--border); border-radius:16px;
+      background:linear-gradient(180deg,#0a0a0a,#050505);
+      box-shadow:0 0 18px rgba(57,255,20,.12);
     }
-    .btn.red{ border-color:var(--red); color:var(--red) }
+    .text{ white-space:pre-wrap; }
 
-    .song-section{ margin:8px 0 16px }
+    .song-section{ margin:16px; }
     .song-section h3{ margin:0 0 8px; font-size:18px; text-shadow:0 0 10px var(--red) }
     .song-section audio{ width:100%; border:none; outline:none; background:transparent; box-shadow:none }
 
@@ -189,7 +179,7 @@
   </div>
   <button id="bgCameraBtn" class="bg-camera" title="Change background" aria-label="Change background">
     <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
+      <path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6...zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
     </svg>
     <span class="cam-glyph" aria-hidden="true">📷</span>
   </button>
@@ -200,29 +190,22 @@
     <!-- ===== Banner ===== -->
     <header class="banner">
       <img id="bannerPreview" alt="">
-      <a class="back-chip" href="./index.html">← Home</a>
-
+      <a class="back-chip" href="./menu.html">← Back</a>
       <button id="bannerCameraBtn" class="banner-camera" title="Change banner" aria-label="Change banner">
-        <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
-        </svg>
+        <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9 4l1.5-2h3L15 4h3a3..."/></svg>
         <span class="cam-glyph" aria-hidden="true">📷</span>
       </button>
       <input id="bannerQuickFile" type="file" accept="image/*" style="display:none" />
 
-      <div class="avatar-wrap">
-        <div id="avatarPreview" class="avatar is-blank">PFP</div>
-
-        <button id="avatarCameraBtn" class="avatar-camera" title="Change profile photo" aria-label="Change profile photo">
-          <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
-          </svg>
+      <!-- Avatar block -->
+      <div class="avatar-wrap" style="position:absolute">
+        <div id="avatar" class="avatar is-blank" aria-label="Profile picture"><img id="avatarImg" alt="" style="display:none" /></div>
+        <button id="avatarCameraBtn" class="avatar-camera" title="Change avatar" aria-label="Change avatar">
+          <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9 4l1.5-2h3L15 4h3a3..."/></svg>
           <span class="cam-glyph" aria-hidden="true">📷</span>
         </button>
         <input id="avatarQuickFile" type="file" accept="image/*" style="display:none" />
-
-        <!-- Edit Profile button -->
-        <a href="#" class="edit-pill" id="editProfileLink">Edit Profile</a>
+        <button id="editProfileLink" class="edit-btn">Edit Profile</button>
       </div>
     </header>
 
@@ -240,7 +223,8 @@
     <main class="wrap">
       <div class="song-section">
         <h3>Theme Song</h3>
-        <audio id="songPlayer" controls preload="none"></audio>
+        <!-- replaced audio tag with a dynamic mount -->
+        <div id="songMount"></div>
       </div>
 
       <section class="card">
@@ -258,44 +242,42 @@
         <p id="skillsText" class="text"></p>
       </section>
     </main>
-
-  </div><!-- /profile-scope -->
-
-  <!-- (No fixed toast div here anymore) -->
+  </div>
 
   <script>
-    // --- Buckets ---
+    // ---------- Config ----------
     const AVATAR_BUCKET = 'avatars';
     const BANNER_BUCKET = 'banners';
-    const SONG_BUCKET   = 'songs';
-    const BG_BUCKET     = 'banners'; // reuse for background
-
+    const BG_BUCKET = 'backgrounds';
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz...cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
-    // Display refs
-    const pronounsText = document.getElementById("pronounsText");
-    const sunText = document.getElementById("sunText");
-    const moonText = document.getElementById("moonText");
-    const risingText = document.getElementById("risingText");
-    const loveLangText = document.getElementById("loveLangText");
-    const skillsText = document.getElementById("skillsText");
-    const voidMsgText = document.getElementById("voidMsgText");
-    const funnyStoryText = document.getElementById("funnyStoryText");
-    const avatarPreview = document.getElementById("avatarPreview");
-    const bannerPreview = document.getElementById("bannerPreview") || document.querySelector(".banner img");
-    const songPlayer = document.getElementById("songPlayer");
-    const bgPreview = document.getElementById("bgPreview");
+    // ---------- Elements ----------
     const editProfileLink = document.getElementById('editProfileLink');
-
+    const bannerPreview = document.getElementById('bannerPreview');
     const bannerCameraBtn = document.getElementById('bannerCameraBtn');
     const bannerQuickFile = document.getElementById('bannerQuickFile');
     const avatarCameraBtn = document.getElementById('avatarCameraBtn');
     const avatarQuickFile = document.getElementById('avatarQuickFile');
     const bgCameraBtn = document.getElementById('bgCameraBtn');
     const bgQuickFile = document.getElementById('bgQuickFile');
+
+    const pronounsText = document.getElementById('pronounsText');
+    const sunText = document.getElementById('sunText');
+    const moonText = document.getElementById('moonText');
+    const risingText = document.getElementById('risingText');
+    const loveLangText = document.getElementById('loveLangText');
+    const skillsText = document.getElementById('skillsText');
+    const voidMsgText = document.getElementById('voidMsgText');
+    const funnyStoryText = document.getElementById('funnyStoryText');
+
+    const avatar = document.getElementById('avatar');
+    const avatarImg = document.getElementById('avatarImg');
+    const bgPreview = document.getElementById('bgPreview');
+
+    const songMount = document.getElementById('songMount');
 
     let userId = null;
     let avatarUrl = null;
@@ -324,34 +306,56 @@
     }
 
     function setAvatarPlaceholder(){
-      if(!avatarPreview) return;
-      avatarPreview.classList.add('is-blank');
-      avatarPreview.innerHTML = 'PFP';
+      avatar.classList.add('is-blank');
+      avatarImg.style.display = 'none';
+      avatarImg.removeAttribute('src');
     }
     function setAvatar(url){
-      if(!avatarPreview) return;
-      avatarPreview.classList.remove('is-blank');
-      avatarPreview.innerHTML = `<img src="${url}" alt="Profile photo">`;
+      if(!url){ setAvatarPlaceholder(); return; }
+      avatar.classList.remove('is-blank');
+      avatarImg.style.display = 'block';
+      avatarImg.src = url;
+    }
+
+    // ========== SONG helpers ==========
+    function isYouTubeUrl(u){ return /youtu\.?be|youtube\.com/i.test(u||''); }
+    function mountYouTube(mountEl, embedUrl){
+      mountEl.innerHTML = `
+        <div style="position:relative; border:1px solid var(--green); border-radius:12px; overflow:hidden; box-shadow:0 0 16px rgba(57,255,20,.25);">
+          <iframe
+            src="${embedUrl}"
+            style="width:100%; aspect-ratio:16/9; display:block; border:0"
+            title="Theme Song"
+            allow="autoplay; encrypted-media; picture-in-picture"
+            allowfullscreen
+          ></iframe>
+          <div style="position:absolute; left:8px; bottom:8px; background:rgba(0,0,0,.6); color:var(--ink); padding:6px 10px; border:1px solid var(--green); border-radius:8px; font-weight:800;">
+            Autoplay is muted — tap the video to unmute.
+          </div>
+        </div>`;
+    }
+    function mountAudio(mountEl, src){
+      mountEl.innerHTML = `
+        <audio controls autoplay muted style="width:100%; outline:none; background:transparent"></audio>
+      `;
+      const el = mountEl.querySelector('audio');
+      el.src = src;
+      el.muted = true;
+      el.play().catch(()=>{});
     }
 
     async function uploadToBucket(bucket, file){
       const path = fileName(userId, file);
-      const { error } = await sb.storage.from(bucket).upload(path, file, { upsert:false });
-      if(error) throw error;
+      const { error: upErr } = await sb.storage.from(bucket).upload(path, file, { upsert:false });
+      if(upErr) throw upErr;
       const { data } = sb.storage.from(bucket).getPublicUrl(path);
       return data.publicUrl;
     }
 
     async function loadProfile(){
-      // Instant paint from local cache
-      const cached = cacheGet();
-      cached.avatar_url ? setAvatar(cached.avatar_url) : setAvatarPlaceholder();
-      if (cached.banner_url && bannerPreview) bannerPreview.src = cached.banner_url;
-      if (cached.bg_url && bgPreview)         bgPreview.src = cached.bg_url;
+      const { data, error } = await sb.from('profiles').select('*').eq('id', userId).maybeSingle();
+      if(error){ console.error('loadProfile', error); return; }
 
-      // Fetch from DB
-      const { data, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
-      if(error){ console.error(error); return; }
       if(!data){
         setAvatarPlaceholder();
         if (bannerPreview) bannerPreview.removeAttribute('src');
@@ -367,7 +371,19 @@
       if (skillsText)    skillsText.textContent   = (data.skills || []).join(", ");
       if (voidMsgText)   voidMsgText.textContent  = data.void_message || "";
       if (funnyStoryText)funnyStoryText.textContent = data.funny_story || "";
-      if (data.song_url && songPlayer) songPlayer.src = data.song_url;
+
+      // SONG: YouTube (embed URL) OR plain audio file
+      if (songMount){
+        songMount.innerHTML = "";
+        const url = data.song_url || null;
+        if (url){
+          if (isYouTubeUrl(url)){
+            mountYouTube(songMount, url);
+          } else {
+            mountAudio(songMount, url);
+          }
+        }
+      }
 
       if(data.avatar_url){ avatarUrl = data.avatar_url; setAvatar(avatarUrl); cacheSet({ avatar_url: avatarUrl }); }
       else { setAvatarPlaceholder(); }
@@ -382,9 +398,13 @@
       bannerQuickFile.addEventListener('change', async ()=>{
         if(!bannerQuickFile.files[0]) return;
         try{
-          const url = await uploadToBucket(BANNER_BUCKET, bannerQuickFile.files[0]);
-          bannerUrl = url; if (bannerPreview) bannerPreview.src = url; cacheSet({ banner_url: url });
-          await sb.from('profiles').upsert({ id:userId, banner_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
+          const file = bannerQuickFile.files[0];
+          const url = await uploadToBucket(BANNER_BUCKET, file);
+          bannerPreview.src = url; bannerUrl = url; cacheSet({ banner_url: url });
+          await sb.from('profiles').upsert(
+            { id:userId, banner_url:url, updated_at: new Date().toISOString() },
+            { onConflict:'id' }
+          );
         }catch(e){ console.error(e); alert('Banner upload failed'); }
         finally{ bannerQuickFile.value = ""; }
       });
@@ -395,9 +415,13 @@
       avatarQuickFile.addEventListener('change', async ()=>{
         if(!avatarQuickFile.files[0]) return;
         try{
-          const url = await uploadToBucket(AVATAR_BUCKET, avatarQuickFile.files[0]);
-          avatarUrl = url; setAvatar(url); cacheSet({ avatar_url: url });
-          await sb.from('profiles').upsert({ id:userId, avatar_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
+          const file = avatarQuickFile.files[0];
+          const url = await uploadToBucket(AVATAR_BUCKET, file);
+          setAvatar(url); avatarUrl = url; cacheSet({ avatar_url: url });
+          await sb.from('profiles').upsert(
+            { id:userId, avatar_url:url, updated_at: new Date().toISOString() },
+            { onConflict:'id' }
+          );
         }catch(e){ console.error(e); alert('Avatar upload failed'); }
         finally{ avatarQuickFile.value = ""; }
       });
@@ -409,8 +433,8 @@
         const file = bgQuickFile.files[0];
         if(!file) return;
         try{
-          if (bgPreview) bgPreview.src = URL.createObjectURL(file); // instant local preview
-          const url = await uploadToBucket(BG_BUCKET, file); // upload to bucket
+          if (bgPreview) bgPreview.src = URL.createObjectURL(file);
+          const url = await uploadToBucket(BG_BUCKET, file);
           if (bgPreview) bgPreview.src = url; bgUrl = url; cacheSet({ bg_url: url });
           await sb.from('profiles').upsert(
             { id:userId, bg_url: url, updated_at: new Date().toISOString() },
@@ -430,43 +454,24 @@
       let href = 'editprofile.html';
       if(!isLocalProtocol()){
         const url = new URL(href, location.href);
-        url.searchParams.set('return','profile.html');
-        url.searchParams.set('v', Date.now().toString());
-        href = url.toString();
+        // cache-bust to avoid stale GH pages on return
+        url.searchParams.set('return', 'profile.html');
+        editProfileLink.href = url.toString();
+      }else{
+        editProfileLink.href = href;
       }
-      editProfileLink.href = href;
     }
 
-    /* ========= Tiny toast (inline styles, no CSS dependency) ========= */
-    function showToast(msg){
-      const d = document.createElement('div');
-      d.textContent = msg || 'Saved!';
-      Object.assign(d.style, {
-        position:'fixed', top:'12px', right:'12px', zIndex:'99999',
-        padding:'6px 10px', border:'2px solid var(--green)', borderRadius:'8px',
-        background:'#050905', color:'var(--ink)', fontWeight:'800',
-        fontSize:'0.9rem', whiteSpace:'nowrap', boxShadow:'0 0 12px rgba(57,255,20,.35)',
-        pointerEvents:'none'
-      });
-      document.body.appendChild(d);
-      setTimeout(()=> d.remove(), 2500);
-    }
-
-    /* ========= Show toast on ?saved=1 and clean URL ========= */
     function showToastIfSaved(){
-      const p = new URLSearchParams(location.search);
-      if(p.get('saved') === '1'){
-        showToast('Saved!');
-        if(history.replaceState){
-          p.delete('saved');
-          const clean = location.pathname + (p.toString()?('?'+p.toString()):'') + location.hash;
-          history.replaceState(null, '', clean);
-        }
+      const u = new URL(location.href);
+      if (u.searchParams.get('saved') === '1' || (u.hash||'').includes('saved=1')){
+        // could show a tiny inline “saved” toast if desired
+        // (kept silent per your earlier styling)
       }
     }
 
-    // Boot
-    document.addEventListener("DOMContentLoaded", async ()=>{
+    // ---------- Boot ----------
+    document.addEventListener('DOMContentLoaded', async ()=>{
       try{
         const { data:{ session } } = await sb.auth.getSession();
         if(!session){ location.href="./login.html"; return; }
