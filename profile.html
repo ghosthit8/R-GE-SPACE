@@ -23,7 +23,7 @@
     /* Hide any legacy .toast so it can’t cover the page */
     .toast{ display:none !important; }
 
-    /* ======== page-wide background image layer (click-through) ======== */
+    /* ===== page-wide background image layer (click-through) ===== */
     .profile-bg{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
     .profile-bg img{
       position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
@@ -230,6 +230,8 @@
     </div>
 
     <main class="wrap">
+
+      <!-- ===== Theme Song ===== -->
       <div class="song-section">
         <h3>Theme Song</h3>
         <!-- Dynamic mount: YouTube embed OR audio element -->
@@ -254,16 +256,16 @@
 
   </div><!-- /profile-scope -->
 
+  <!-- tiny inline toast (no external CSS deps) -->
   <script>
     // --- Buckets ---
     const AVATAR_BUCKET = 'avatars';
     const BANNER_BUCKET = 'banners';
-    const SONG_BUCKET   = 'songs';
     const BG_BUCKET     = 'banners'; // reuse for background
 
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
-      "YOUR_ANON_KEY"
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
     // Display refs
@@ -275,6 +277,7 @@
     const skillsText = document.getElementById("skillsText");
     const voidMsgText = document.getElementById("voidMsgText");
     const funnyStoryText = document.getElementById("funnyStoryText");
+
     const avatarPreview = document.getElementById("avatarPreview");
     const bannerPreview = document.getElementById("bannerPreview") || document.querySelector(".banner img");
     const bgPreview = document.getElementById("bgPreview");
@@ -290,9 +293,6 @@
     const songMount = document.getElementById('songMount');
 
     let userId = null;
-    let avatarUrl = null;
-    let bannerUrl = null;
-    let bgUrl = null;
 
     /* ---------- Local cache ---------- */
     const LS_KEY = "profile_cache_v1";
@@ -316,12 +316,10 @@
     }
 
     function setAvatarPlaceholder(){
-      if(!avatarPreview) return;
       avatarPreview.classList.add('is-blank');
       avatarPreview.innerHTML = 'PFP';
     }
     function setAvatar(url){
-      if(!avatarPreview) return;
       avatarPreview.classList.remove('is-blank');
       avatarPreview.innerHTML = `<img src="${url}" alt="Profile photo">`;
     }
@@ -334,9 +332,10 @@
       return data.publicUrl;
     }
 
-    // ===== Theme Song helpers =====
+    /* ========= Theme Song helpers ========= */
     function isYouTubeUrl(u){ return /youtu\.?be|youtube\.com/i.test(u||''); }
     function mountYouTube(mountEl, embedUrl){
+      // If someone saved a raw watch link, it will still render, but ideally song_url is an /embed URL
       mountEl.innerHTML = `
         <div style="position:relative; border:1px solid var(--green); border-radius:12px; overflow:hidden; box-shadow:0 0 16px rgba(57,255,20,.25);">
           <iframe
@@ -346,7 +345,8 @@
             allow="autoplay; encrypted-media; picture-in-picture"
             allowfullscreen
           ></iframe>
-          <div style="position:absolute; left:8px; bottom:8px; background:rgba(0,0,0,.6); color:var(--ink); padding:6px 10px; border:1px solid var(--green); border-radius:8px; font-weight:800;">
+          <div style="position:absolute; left:8px; bottom:8px; background:rgba(0,0,0,.6); color:var(--ink);
+                      padding:6px 10px; border:1px solid var(--green); border-radius:8px; font-weight:800;">
             Autoplay is muted — tap the video to unmute.
           </div>
         </div>`;
@@ -359,61 +359,14 @@
       el.play().catch(()=>{});
     }
 
-    async function loadProfile(){
-      // Instant paint from local cache
-      const cached = cacheGet();
-      cached.avatar_url ? setAvatar(cached.avatar_url) : setAvatarPlaceholder();
-      if (cached.banner_url && bannerPreview) bannerPreview.src = cached.banner_url;
-      if (cached.bg_url && bgPreview)         bgPreview.src = cached.bg_url;
-
-      // Fetch from DB
-      const { data, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
-      if(error){ console.error(error); return; }
-      if(!data){
-        setAvatarPlaceholder();
-        if (bannerPreview) bannerPreview.removeAttribute('src');
-        if (bgPreview) bgPreview.removeAttribute('src');
-        return;
-      }
-
-      if (pronounsText)  pronounsText.textContent = data.pronouns || "";
-      if (sunText)       sunText.textContent      = data.sun || "";
-      if (moonText)      moonText.textContent     = data.moon || "";
-      if (risingText)    risingText.textContent   = data.rising || "";
-      if (loveLangText)  loveLangText.textContent = data.love_language || "";
-      if (skillsText)    skillsText.textContent   = (data.skills || []).join(", ");
-      if (voidMsgText)   voidMsgText.textContent  = data.void_message || "";
-      if (funnyStoryText)funnyStoryText.textContent = data.funny_story || "";
-
-      // Theme Song: YouTube (embed) OR audio file
-      if (songMount){
-        songMount.innerHTML = "";
-        const url = data.song_url || null;
-        if (url){
-          if (isYouTubeUrl(url)){
-            // If a raw watch/shorts URL ended up saved, try to embed as-is anyway; ideally DB holds the /embed form already.
-            mountYouTube(songMount, url);
-          } else {
-            mountAudio(songMount, url);
-          }
-        }
-      }
-
-      if(data.avatar_url){ avatarUrl = data.avatar_url; setAvatar(avatarUrl); cacheSet({ avatar_url: avatarUrl }); }
-      else { setAvatarPlaceholder(); }
-
-      if(data.banner_url && bannerPreview){ bannerUrl = data.banner_url; bannerPreview.src = bannerUrl; cacheSet({ banner_url: bannerUrl }); }
-      if(data.bg_url && bgPreview){ bgUrl = data.bg_url; bgPreview.src = bgUrl; cacheSet({ bg_url: bgUrl }); }
-    }
-
-    /* ========= Camera quick uploads ========= */
+    /* ========= Quick upload cameras ========= */
     if(bannerCameraBtn && bannerQuickFile){
       bannerCameraBtn.addEventListener('click', ()=> bannerQuickFile.click());
       bannerQuickFile.addEventListener('change', async ()=>{
         if(!bannerQuickFile.files[0]) return;
         try{
           const url = await uploadToBucket(BANNER_BUCKET, bannerQuickFile.files[0]);
-          bannerUrl = url; if (bannerPreview) bannerPreview.src = url; cacheSet({ banner_url: url });
+          if (bannerPreview) bannerPreview.src = url; cacheSet({ banner_url: url });
           await sb.from('profiles').upsert({ id:userId, banner_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
         }catch(e){ console.error(e); alert('Banner upload failed'); }
         finally{ bannerQuickFile.value = ""; }
@@ -426,7 +379,7 @@
         if(!avatarQuickFile.files[0]) return;
         try{
           const url = await uploadToBucket(AVATAR_BUCKET, avatarQuickFile.files[0]);
-          avatarUrl = url; setAvatar(url); cacheSet({ avatar_url: url });
+          setAvatar(url); cacheSet({ avatar_url: url });
           await sb.from('profiles').upsert({ id:userId, avatar_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
         }catch(e){ console.error(e); alert('Avatar upload failed'); }
         finally{ avatarQuickFile.value = ""; }
@@ -439,35 +392,23 @@
         const file = bgQuickFile.files[0];
         if(!file) return;
         try{
-          if (bgPreview) bgPreview.src = URL.createObjectURL(file); // instant local preview
-          const url = await uploadToBucket(BG_BUCKET, file); // upload to bucket
-          if (bgPreview) bgPreview.src = url; bgUrl = url; cacheSet({ bg_url: url });
-          await sb.from('profiles').upsert(
-            { id:userId, bg_url: url, updated_at: new Date().toISOString() },
-            { onConflict:'id' }
-          );
+          if (bgPreview) bgPreview.src = URL.createObjectURL(file); // instant
+          const url = await uploadToBucket(BG_BUCKET, file);
+          if (bgPreview) bgPreview.src = url; cacheSet({ bg_url: url });
+          await sb.from('profiles').upsert({ id:userId, bg_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
         }catch(e){ console.error(e); alert('Background upload failed'); }
         finally{ bgQuickFile.value = ""; }
       });
     }
 
-    /* ========= Edit button wiring ========= */
-    function isLocalProtocol(){
-      return location.protocol === 'file:' || location.protocol === 'content:';
-    }
+    /* ========= Edit link + toast ========= */
     function wireEditProfileLink(){
       if(!editProfileLink) return;
-      let href = 'editprofile.html';
-      if(!isLocalProtocol()){
-        const url = new URL(href, location.href);
-        url.searchParams.set('return','profile.html');
-        url.searchParams.set('v', Date.now().toString());
-        href = url.toString();
-      }
-      editProfileLink.href = href;
+      const u = new URL('editprofile.html', location.href);
+      u.searchParams.set('return','profile.html');
+      u.searchParams.set('v', Date.now().toString()); // cache-bust
+      editProfileLink.href = u.toString();
     }
-
-    /* ========= Tiny toast & cleanup ========= */
     function showToast(msg){
       const d = document.createElement('div');
       d.textContent = msg || 'Saved!';
@@ -491,6 +432,49 @@
           history.replaceState(null, '', clean);
         }
       }
+    }
+
+    /* ========= Load profile ========= */
+    async function loadProfile(){
+      // Quick paint from cache
+      const cached = cacheGet();
+      cached.avatar_url ? setAvatar(cached.avatar_url) : setAvatarPlaceholder();
+      if (cached.banner_url && bannerPreview) bannerPreview.src = cached.banner_url;
+      if (cached.bg_url && bgPreview)         bgPreview.src = cached.bg_url;
+
+      // DB pull
+      const { data, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
+      if(error){ console.error(error); return; }
+      if(!data){
+        setAvatarPlaceholder();
+        if (bannerPreview) bannerPreview.removeAttribute('src');
+        if (bgPreview) bgPreview.removeAttribute('src');
+        return;
+      }
+
+      pronounsText.textContent = data.pronouns || "";
+      sunText.textContent      = data.sun || "";
+      moonText.textContent     = data.moon || "";
+      risingText.textContent   = data.rising || "";
+      loveLangText.textContent = data.love_language || "";
+      skillsText.textContent   = Array.isArray(data.skills) ? (data.skills.join(", ")) : (data.skills || "");
+      voidMsgText.textContent  = data.void_message || "";
+      funnyStoryText.textContent = data.funny_story || "";
+
+      // Theme Song mount
+      songMount.innerHTML = "";
+      const s = data.song_url || null;
+      if (s){
+        if (isYouTubeUrl(s)) mountYouTube(songMount, s);
+        else                 mountAudio(songMount, s);
+      }
+
+      // Cache media URLs for snappy reloads
+      if(data.avatar_url){ setAvatar(data.avatar_url); cacheSet({ avatar_url: data.avatar_url }); }
+      else setAvatarPlaceholder();
+
+      if(data.banner_url && bannerPreview){ bannerPreview.src = data.banner_url; cacheSet({ banner_url: data.banner_url }); }
+      if(data.bg_url && bgPreview){ bgPreview.src = data.bg_url; cacheSet({ bg_url: data.bg_url }); }
     }
 
     // Boot
