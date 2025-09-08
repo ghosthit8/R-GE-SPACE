@@ -20,6 +20,9 @@
       -webkit-font-smoothing:antialiased;
     }
 
+    /* Hide any legacy .toast so it can’t cover the page */
+    .toast{ display:none !important; }
+
     /* ======== page-wide background image layer (click-through) ======== */
     .profile-bg{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
     .profile-bg img{
@@ -34,7 +37,7 @@
       box-shadow:0 0 18px rgba(57,255,20,.6); z-index:9999; pointer-events:auto;
     }
     .bg-camera:hover{ background:#000; color:var(--green) }
-    .profile-scope{ position:relative; z-index:1; }
+    .profile-scope{ position:relative; z-index:2; } /* ensure above scanlines */
 
     /* ===================== Scoped shields ===================== */
     .profile-scope .avatar,
@@ -170,36 +173,6 @@
     .song-section h3{ margin:0 0 8px; font-size:18px; text-shadow:0 0 10px var(--red) }
     .song-section audio{ width:100%; border:none; outline:none; background:transparent; box-shadow:none }
 
-    /* ===== Tiny, non-blocking TOAST (overrides any global styles) ===== */
-    #toast.toast{
-      position: fixed !important;
-      z-index: 99999 !important;
-      top: 12px !important;
-      right: 12px !important;
-      bottom: auto !important;
-      left: auto !important;
-      transform: none !important;
-
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-
-      padding: 6px 10px !important;
-      border: 2px solid var(--green) !important;
-      border-radius: 8px !important;
-      background: #050905 !important;
-      color: var(--ink) !important;
-      font-weight: 800 !important;
-      font-size: 0.9rem !important;
-      white-space: nowrap !important;
-
-      box-shadow: 0 0 12px rgba(57,255,20,.35) !important;
-      pointer-events: none !important; /* never blocks the page */
-    }
-    #toast.toast::before, #toast.toast::after{
-      content:none !important; display:none !important;
-    }
-
     @media (max-width:560px){
       .info-block{ margin-top:220px; }
     }
@@ -288,8 +261,7 @@
 
   </div><!-- /profile-scope -->
 
-  <!-- Toast -->
-  <div id="toast" class="toast">Saved!</div>
+  <!-- (No fixed toast div here anymore) -->
 
   <script>
     // --- Buckets ---
@@ -317,9 +289,7 @@
     const songPlayer = document.getElementById("songPlayer");
     const bgPreview = document.getElementById("bgPreview");
     const editProfileLink = document.getElementById('editProfileLink');
-    const toastEl = document.getElementById('toast');
 
-    // Quick camera inputs
     const bannerCameraBtn = document.getElementById('bannerCameraBtn');
     const bannerQuickFile = document.getElementById('bannerQuickFile');
     const avatarCameraBtn = document.getElementById('avatarCameraBtn');
@@ -451,7 +421,7 @@
       });
     }
 
-    /* ========= Edit button wiring (GitHub Pages) ========= */
+    /* ========= Edit button wiring ========= */
     function isLocalProtocol(){
       return location.protocol === 'file:' || location.protocol === 'content:';
     }
@@ -461,19 +431,32 @@
       if(!isLocalProtocol()){
         const url = new URL(href, location.href);
         url.searchParams.set('return','profile.html');
-        url.searchParams.set('v', Date.now().toString()); // cache-buster
+        url.searchParams.set('v', Date.now().toString());
         href = url.toString();
       }
       editProfileLink.href = href;
     }
 
-    /* ========= Tiny toast on ?saved=1 ========= */
+    /* ========= Tiny toast (inline styles, no CSS dependency) ========= */
+    function showToast(msg){
+      const d = document.createElement('div');
+      d.textContent = msg || 'Saved!';
+      Object.assign(d.style, {
+        position:'fixed', top:'12px', right:'12px', zIndex:'99999',
+        padding:'6px 10px', border:'2px solid var(--green)', borderRadius:'8px',
+        background:'#050905', color:'var(--ink)', fontWeight:'800',
+        fontSize:'0.9rem', whiteSpace:'nowrap', boxShadow:'0 0 12px rgba(57,255,20,.35)',
+        pointerEvents:'none'
+      });
+      document.body.appendChild(d);
+      setTimeout(()=> d.remove(), 2500);
+    }
+
+    /* ========= Show toast on ?saved=1 and clean URL ========= */
     function showToastIfSaved(){
       const p = new URLSearchParams(location.search);
-      if(p.get('saved') === '1' && toastEl){
-        toastEl.style.display = 'inline-flex';
-        setTimeout(()=> { if (toastEl) toastEl.style.display = 'none'; }, 2500);
-        // clean URL param (no reload)
+      if(p.get('saved') === '1'){
+        showToast('Saved!');
         if(history.replaceState){
           p.delete('saved');
           const clean = location.pathname + (p.toString()?('?'+p.toString()):'') + location.hash;
