@@ -2,121 +2,106 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Rage Space — DM</title>
   <meta name="color-scheme" content="dark" />
   <style>
-    :root{ --green:#39ff14; --ink:#e5ffe5; --mine:#102b10; --theirs:#0b0b0b; --border:#103010; }
-    *{ box-sizing:border-box }
-    html,body{ height:100% }
-    body{ margin:0; background:#000; color:var(--green); font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; }
-    header{ position:sticky; top:0; z-index:10; background:rgba(0,0,0,.7); backdrop-filter:blur(6px);
-      border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; gap:10px; }
-    a.back{ color:var(--green); text-decoration:none; border:1px solid var(--green); padding:6px 10px; border-radius:999px; font-weight:700; }
-    .title{ margin:0; font-size:16px; letter-spacing:.4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .wrap{ height:calc(100% - 56px); display:flex; flex-direction:column; }
-    #log{ flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
-    .msg{ max-width:80%; padding:10px 12px; border:1px solid var(--border); border-radius:12px; color:var(--ink); }
-    .mine{ align-self:flex-end; background:var(--mine); border-color:#1e4a1e; }
-    .theirs{ align-self:flex-start; background:var(--theirs); }
-    .composer{ display:flex; gap:8px; padding:12px; border-top:1px solid var(--border); background:rgba(0,0,0,.7); }
-    textarea{ flex:1; resize:none; min-height:44px; max-height:180px; background:#060606; color:var(--ink); border:1px solid var(--border); border-radius:10px; padding:10px; }
-    button.send{ background:var(--green); color:#000; font-weight:800; border:none; padding:10px 14px; border-radius:10px; }
-    .pfp{ width:22px; height:22px; border-radius:6px; overflow:hidden; border:1px solid var(--green); margin-right:6px; }
-    .header-user{ display:flex; align-items:center; min-width:0; }
-    .header-user img{ width:22px; height:22px; object-fit:cover; display:block; }
+    :root{
+      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5;
+    }
+    body{
+      margin:0; background:var(--bg); color:var(--green);
+      font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+    .chat-box{
+      height:80vh; overflow-y:auto; padding:1rem;
+      display:flex; flex-direction:column;
+    }
+    .msg{ margin:.25rem 0; padding:.5rem; border-radius:6px; max-width:70%; }
+    .me{ align-self:flex-end; background:#111; color:var(--green); }
+    .them{ align-self:flex-start; background:#222; color:var(--ink); }
+    .input-bar{
+      display:flex; padding:.5rem; border-top:1px solid #222;
+    }
+    input{
+      flex:1; background:#000; color:var(--green);
+      border:1px solid #333; border-radius:6px; padding:.5rem;
+    }
+    button{
+      margin-left:.5rem; background:var(--green); color:#000;
+      font-weight:bold; border:none; border-radius:6px; padding:0 .75rem;
+    }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <header>
-    <a class="back" href="./inbox.html">← Inbox</a>
-    <div class="header-user">
-      <div class="pfp" id="hdrPfp"></div>
-      <h1 class="title" id="hdrName">Loading…</h1>
-    </div>
-  </header>
 
-  <main class="wrap">
-    <div id="log"></div>
+  <div class="chat-box" id="chat"></div>
 
-    <form class="composer" id="composer">
-      <textarea id="input" placeholder="Say something…" maxlength="2000"></textarea>
-      <button class="send" id="sendBtn">Send</button>
-    </form>
-  </main>
+  <form class="input-bar" id="chat-form">
+    <input id="message-input" autocomplete="off" placeholder="Say something…" />
+    <button type="submit">Send</button>
+  </form>
 
+  <!-- Supabase client -->
+  <script src="https://unpkg.com/@supabase/supabase-js"></script>
   <script>
-    const sb = supabase.createClient(
-      "https://tuqvpcevrhciursxrgav.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
-    );
+    // TODO: replace with your values
+    const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
+    const SUPABASE_KEY = "YOUR-ANON-KEY";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    const qs = new URLSearchParams(location.search);
-    const threadId = qs.get('thread') || '';
-    const log = document.getElementById('log');
-    const input = document.getElementById('input');
-    const composer = document.getElementById('composer');
-    const sendBtn = document.getElementById('sendBtn');
-    const hdrName = document.getElementById('hdrName');
-    const hdrPfp = document.getElementById('hdrPfp');
+    const currentUser = "@user"; // you can pull from auth instead
 
-    let me = null, other = null;
+    const chatBox = document.getElementById("chat");
+    const form = document.getElementById("chat-form");
+    const input = document.getElementById("message-input");
 
-    function addMsg(m){
-      const div = document.createElement('div');
-      div.className = 'msg ' + (m.sender === me.id ? 'mine' : 'theirs');
-      div.textContent = m.body;
-      log.appendChild(div);
-      log.scrollTop = log.scrollHeight;
+    // render helper
+    function renderMessage(msg){
+      const div = document.createElement("div");
+      div.className = "msg " + (msg.user === currentUser ? "me" : "them");
+      div.textContent = `${msg.user}: ${msg.content}`;
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    async function boot(){
-      if(!threadId){ alert('Missing thread id'); history.back(); return; }
-      const { data:{ session } } = await sb.auth.getSession();
-      if(!session){ location.href = './login.html'; return; }
-      me = session.user;
-
-      // Get thread & other user
-      const { data: thread, error } = await sb.from('dm_threads').select('id,a,b').eq('id', threadId).single();
-      if(error){ console.error(error); alert('Thread not found'); return; }
-      const otherId = thread.a === me.id ? thread.b : thread.a;
-
-      const { data: otherProfile } = await sb.from('profiles')
-        .select('id,username,display_name,avatar_url').eq('id', otherId).single();
-      other = otherProfile || { username:'user' };
-
-      // Header
-      hdrName.textContent = other.display_name || ('@'+(other.username||'user'));
-      if(other.avatar_url){ hdrPfp.innerHTML = `<img src="${other.avatar_url}" alt="">`; }
-
-      // Load existing messages
-      const { data: msgs } = await sb.from('dm_messages')
-        .select('id,body,created_at,sender')
-        .eq('thread_id', threadId)
-        .order('created_at',{ascending:true});
-      (msgs||[]).forEach(addMsg);
-
-      // Realtime inserts
-      sb.channel('dm-'+threadId)
-        .on('postgres_changes', { event:'INSERT', schema:'public', table:'dm_messages', filter:`thread_id=eq.${threadId}` },
-          payload => addMsg(payload.new)
-        )
-        .subscribe();
+    // initial load
+    async function loadMessages(){
+      let { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if(error){ console.error(error); return; }
+      chatBox.innerHTML = "";
+      data.forEach(renderMessage);
     }
 
-    composer.addEventListener('submit', async (e)=>{
+    // send
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = input.value.trim();
       if(!text) return;
-      sendBtn.disabled = true;
-      const { error } = await sb.from('dm_messages').insert({ thread_id: threadId, sender: me.id, body: text });
-      if(error){ console.error(error); alert('Failed to send'); }
-      input.value = '';
-      sendBtn.disabled = false;
+      // optimistically render
+      renderMessage({ user: currentUser, content: text });
+      input.value = "";
+      // push to Supabase
+      const { error } = await supabase
+        .from("messages")
+        .insert([{ user: currentUser, content: text }]);
+      if(error) console.error("Supabase insert error:", error);
     });
 
-    document.addEventListener('DOMContentLoaded', boot);
+    // subscribe for realtime
+    supabase
+      .channel("messages")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, payload => {
+        renderMessage(payload.new);
+      })
+      .subscribe();
+
+    // go
+    loadMessages();
   </script>
 </body>
 </html>
