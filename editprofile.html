@@ -23,7 +23,7 @@
     .song-box{ display:flex; flex-direction:column; gap:10px; padding:12px; border:1px dashed var(--border); border-radius:12px; background:#080808 }
     .song-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap } audio{ width:100% }
     @media (max-width:720px){ .grid{ grid-template-columns:1fr } .grid-3{ grid-template-columns:1fr } }
-    #status{ display:inline-block; max-width:280px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    #status{ display:inline-block; max-width:320px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -67,12 +67,12 @@
 
       <!-- YouTube -->
       <div class="row" style="margin-top:16px">
-        <label for="songYouTube">Theme Song (YouTube link)</label>
+        <label for="songYouTube">Theme Song (YouTube link or ID)</label>
         <div class="song-box">
           <div class="song-row">
-            <input id="songYouTube" type="text" placeholder="https://youtu.be/... or https://youtube.com/watch?v=..." />
+            <input id="songYouTube" type="text" placeholder="https://youtu.be/... or https://youtube.com/watch?v=... or 11-char ID" />
             <button id="useYouTubeBtn" type="button" class="btn">Use YouTube Link</button>
-            <small class="hint">Optional. Overrides upload. Autoplays muted on profile.</small>
+            <small class="hint">Optional. Overrides upload. On profile it autoplays muted and unmutes on first tap.</small>
           </div>
           <iframe id="ytPreview" width="560" height="315" style="max-width:100%; aspect-ratio:16/9; border:0; display:none" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
         </div>
@@ -87,20 +87,20 @@
   </main>
 
   <script>
-    /* ===== Basic error reporter to the page ===== */
+    // ---------- Error reporter to page ----------
     window.addEventListener('error', (e)=>{
       const s=document.getElementById('status');
       if(s){ s.textContent = 'Script error: ' + (e.message||'unknown'); s.style.color='var(--red)'; }
     });
 
-    /* ===== Supabase ===== */
+    // ---------- Supabase ----------
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
     const SONG_BUCKET='songs';
 
-    // el refs
+    // ---------- Refs ----------
     const statusEl=document.getElementById('status');
     const backLink=document.getElementById('backLink'); const cancelLink=document.getElementById('cancelLink');
     const pronounsEl=document.getElementById('pronouns'); const sunEl=document.getElementById('sun');
@@ -112,16 +112,18 @@
     const songYouTubeEl=document.getElementById('songYouTube'); const useYouTubeBtn=document.getElementById('useYouTubeBtn'); const ytPreview=document.getElementById('ytPreview');
     const form=document.getElementById('editForm');
 
-    let userId=null; let songUrl=null;
+    let userId=null;
+    // `songValue` holds either a YouTube ID (11 chars) OR an uploaded file URL
+    let songValue=null;
 
-    // ===== Helpers =====
+    // ---------- Utils ----------
     function say(m,b=false){statusEl.textContent=m||'';statusEl.style.color=b?'var(--red)':'var(--muted)'}
     function stringToSkills(s){return (s||'').split(',').map(v=>v.trim()).filter(Boolean)}
     function skillsToString(a){return Array.isArray(a)?a.join(', '):(a||'')}
     function fileName(prefix,file){const ext=(file?.name?.split('.').pop()||'bin').toLowerCase();return `${prefix}/${crypto.randomUUID()}.${ext}`}
-    function isYouTubeUrl(u){return /youtu\.?be|youtube\.com/i.test(u||'')}
+    function isYouTubeLike(u){return /youtu\.?be|youtube\.com/i.test(u||'')}
 
-    // Robust YT ID extraction
+    // Extract a robust YouTube ID, or return null
     function extractYTId(input) {
       if (!input) return null;
       const s = String(input).trim();
@@ -138,19 +140,18 @@
           if (v && v.length === 11) return v;
           const parts = u.pathname.split('/').filter(Boolean);
           if (parts[0] && (parts[0]==='shorts' || parts[0]==='embed' || parts[0]==='live')) {
-            const id2 = parts[1];
-            if (id2 && id2.length === 11) return id2;
+            const id2 = parts[1]; if (id2 && id2.length===11) return id2;
           }
         }
       } catch {}
       const m = s.match(/([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/);
       return m ? m[1] : null;
     }
-    function makeYTEmbed(id) {
+    function embedFromId(id){
       return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&controls=1`;
     }
 
-    // ===== Safe return target =====
+    // ---------- Return target ----------
     const DEFAULT_TARGET='profile.html';
     function safePath(urlLike){
       try{
@@ -165,7 +166,7 @@
     backLink.href=safeReturn; cancelLink.href=safeReturn;
     function afterSaveRedirect(){const u=new URL(safeReturn,location.href); u.searchParams.set('saved','1'); u.searchParams.set('v',Date.now().toString()); location.href=u.toString()}
 
-    // ===== Data I/O =====
+    // ---------- DB helpers ----------
     async function ensureProfileRow(){await sb.from('profiles').upsert({id:userId,updated_at:new Date().toISOString()},{onConflict:'id'})}
 
     async function loadProfile(){
@@ -178,10 +179,26 @@
       loveLangEl.value=data.love_language||''; skillsEl.value=Array.isArray(data.skills)?skillsToString(data.skills):(data.skills||'');
       voidMsgEl.value=data.void_message||''; funnyStoryEl.value=data.funny_story||'';
 
-      songUrl=data.song_url||null;
-      if(songUrl&&isYouTubeUrl(songUrl)){ ytPreview.src=songUrl; ytPreview.style.display='block'; songYouTubeEl.value=songUrl; songPreview.removeAttribute('src'); }
-      else if(songUrl){ songPreview.src=songUrl; songYouTubeEl.value=''; ytPreview.removeAttribute('src'); ytPreview.style.display='none'; }
-      else{ songPreview.removeAttribute('src'); songYouTubeEl.value=''; ytPreview.removeAttribute('src'); ytPreview.style.display='none'; }
+      // song_url may be a file URL or a YT URL/ID from older saves
+      if(data.song_url){
+        const maybeId = extractYTId(data.song_url);
+        if (maybeId) {
+          songValue = maybeId;                      // store ID
+          songYouTubeEl.value = `https://youtu.be/${maybeId}`;
+          ytPreview.src = embedFromId(maybeId); ytPreview.style.display='block';
+          songPreview.removeAttribute('src');
+        } else {
+          songValue = data.song_url;                // treat as file URL
+          songPreview.src = songValue;
+          ytPreview.removeAttribute('src'); ytPreview.style.display='none';
+          songYouTubeEl.value='';
+        }
+      }else{
+        songValue=null;
+        songPreview.removeAttribute('src');
+        ytPreview.removeAttribute('src'); ytPreview.style.display='none';
+        songYouTubeEl.value='';
+      }
       say('');
     }
 
@@ -193,56 +210,66 @@
         const {error:upErr}=await sb.storage.from(SONG_BUCKET).upload(path,file,{upsert:false});
         if(upErr)throw upErr;
         const {data}=sb.storage.from(SONG_BUCKET).getPublicUrl(path);
-        songUrl=data.publicUrl; songPreview.src=songUrl; ytPreview.style.display='none'; ytPreview.removeAttribute('src'); songYouTubeEl.value='';
+        songValue=data.publicUrl;                   // save file URL
+        songPreview.src=songValue;
+        ytPreview.style.display='none'; ytPreview.removeAttribute('src');
+        songYouTubeEl.value='';
         say('Song uploaded. Remember to Save Changes.');
       }catch(e){ console.error(e); say(`Upload failed: ${e.message||e}`,true) }
       finally{ songFileEl.value=''; }
     }
-    function removeSong(){ songUrl=null; songPreview.removeAttribute('src'); ytPreview.style.display='none'; ytPreview.removeAttribute('src'); songYouTubeEl.value=''; say('Song cleared. Remember to Save Changes.') }
+    function removeSong(){
+      songValue=null;
+      songPreview.removeAttribute('src');
+      ytPreview.style.display='none'; ytPreview.removeAttribute('src');
+      songYouTubeEl.value='';
+      say('Song cleared. Remember to Save Changes.');
+    }
 
-    // ===== Bind buttons AFTER DOM is ready =====
+    // ---------- Event bindings ----------
     document.addEventListener("DOMContentLoaded", async ()=>{
       try{
         const {data:{session}}=await sb.auth.getSession();
         if(!session){ location.href="./login.html"; return; }
         userId=session.user.id;
 
-        // Binders
         uploadSongBtn.addEventListener('click',uploadSong);
         removeSongBtn.addEventListener('click',removeSong);
 
-        useYouTubeBtn.addEventListener("click", () => {
+        useYouTubeBtn.addEventListener('click', ()=>{
           try{
             const raw = songYouTubeEl.value.trim();
             const id = extractYTId(raw);
-            if (!id) {
-              say("Invalid YouTube link", true);
-              ytPreview.style.display = "none";
-              ytPreview.removeAttribute("src");
-              return;
-            }
-            const embed = makeYTEmbed(id);
-            songUrl = embed;                    // keep for save
-            ytPreview.src = embed;
-            ytPreview.style.display = "block";
-            songPreview.removeAttribute("src");
-            say("YouTube link set. Remember to Save Changes.");
+            if(!id){ say('Invalid YouTube link/ID', true); ytPreview.style.display='none'; ytPreview.removeAttribute('src'); return; }
+            // Save just the ID
+            songValue = id;
+            ytPreview.src = embedFromId(id);
+            ytPreview.style.display = 'block';
+            songPreview.removeAttribute('src');
+            say('YouTube set. Remember to Save Changes.');
           }catch(err){
-            console.error("YT handler error", err);
-            say("Error: " + (err.message||err), true);
+            console.error(err); say('Error: '+(err.message||err), true);
           }
         });
 
-        // Load initial data
         await ensureProfileRow();
         await loadProfile();
 
-        // Save handler
         form.addEventListener('submit', async (e)=>{
           e.preventDefault(); say('Saving...');
-          const payloadArr={ id:userId, pronouns:pronounsEl.value.trim(), sun:sunEl.value.trim(), moon:moonEl.value.trim(), rising:risingEl.value.trim(),
-            love_language:loveLangEl.value||null, skills:stringToSkills(skillsEl.value), void_message:voidMsgEl.value.trim(),
-            funny_story:funnyStoryEl.value.trim(), song_url:songUrl||null, updated_at:new Date().toISOString() };
+          const payloadArr={
+            id:userId,
+            pronouns:pronounsEl.value.trim(),
+            sun:sunEl.value.trim(),
+            moon:moonEl.value.trim(),
+            rising:risingEl.value.trim(),
+            love_language:loveLangEl.value||null,
+            skills:stringToSkills(skillsEl.value),
+            void_message:voidMsgEl.value.trim(),
+            funny_story:funnyStoryEl.value.trim(),
+            song_url:songValue || null,             // <-- stores YT ID or file URL
+            updated_at:new Date().toISOString()
+          };
 
           let { error } = await sb.from('profiles').upsert(payloadArr,{onConflict:'id'});
 
@@ -257,8 +284,7 @@
         });
 
       }catch(e){
-        console.error(e);
-        say('Boot error: ' + (e.message||e), true);
+        console.error(e); say('Boot error: '+(e.message||e), true);
       }
     });
   </script>
