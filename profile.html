@@ -101,6 +101,17 @@
       backdrop-filter: blur(4px); box-shadow:0 0 14px rgba(57,255,20,.35);
     }
 
+    .top-right{
+      position:absolute; top:14px; right:14px; z-index:6; display:flex; gap:8px;
+    }
+    .chip{
+      text-decoration:none; display:inline-flex; align-items:center; gap:8px;
+      padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px;
+      color:#000; background:var(--green); border:1.5px solid var(--green);
+      box-shadow:0 0 14px rgba(57,255,20,.35);
+    }
+    .chip.ghost{ background:rgba(0,0,0,.55); color:var(--green); }
+
     .banner-camera{
       width:44px; height:44px; border-radius:50%;
       display:inline-flex; align-items:center; justify-content:center;
@@ -195,6 +206,11 @@
       <img id="bannerPreview" alt="">
       <a class="back-chip" href="./index.html">← Home</a>
 
+      <!-- Top-right area: Messages (only when logged in) -->
+      <div class="top-right">
+        <a id="inboxBtn" class="chip" href="./inbox.html" style="display:none">Messages</a>
+      </div>
+
       <button id="bannerCameraBtn" class="banner-camera" title="Change banner" aria-label="Change banner">
         <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
           <path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
@@ -214,8 +230,9 @@
         </button>
         <input id="avatarQuickFile" type="file" accept="image/*" style="display:none" />
 
-        <!-- Edit Profile button -->
+        <!-- Edit / DM buttons -->
         <a href="#" class="edit-pill" id="editProfileLink">Edit Profile</a>
+        <a href="#" class="edit-pill" id="dmButton" style="display:none">Message privately</a>
       </div>
     </header>
 
@@ -235,7 +252,6 @@
       <!-- ===== Theme Song ===== -->
       <div class="song-section">
         <h3>Theme Song</h3>
-        <!-- We’ll toggle between these based on song_url -->
         <audio id="songPlayer" controls preload="none" style="display:none"></audio>
         <div id="ytWrap" style="display:none">
           <div id="ytPlayer" style="width:100%; aspect-ratio:16/9;"></div>
@@ -292,11 +308,19 @@
     const bgCameraBtn = document.getElementById('bgCameraBtn');
     const bgQuickFile = document.getElementById('bgQuickFile');
 
+    // New UI bits
+    const inboxBtn = document.getElementById('inboxBtn');
+    const dmButton = document.getElementById('dmButton');
+
     // Song refs
     const songPlayer = document.getElementById('songPlayer');
     const ytWrap = document.getElementById('ytWrap');
 
-    let userId = null;
+    // Auth + routing
+    let me = null;        // current session user (or null)
+    let target = null;    // profile we’re viewing
+    let viewingOwn = false;
+
     let ytPlayer = null;
     let ytVideoId = null;
 
@@ -315,7 +339,7 @@
       return `${prefix}/${crypto.randomUUID()}.${ext}`;
     }
 
-    async function ensureProfileRow() {
+    async function ensureProfileRow(userId) {
       const { error } = await sb.from('profiles')
         .upsert({ id: userId, updated_at: new Date().toISOString() }, { onConflict: 'id' });
       if (error) console.error('ensureProfileRow:', error);
@@ -333,7 +357,7 @@
     }
 
     async function uploadToBucket(bucket, file){
-      const path = fileName(userId, file);
+      const path = fileName(target.id, file); // use viewed/owner id (only enabled when viewingOwn)
       const { error } = await sb.storage.from(bucket).upload(path, file, { upsert:false });
       if(error) throw error;
       const { data } = sb.storage.from(bucket).getPublicUrl(path);
@@ -388,7 +412,6 @@
         playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0, modestbranding: 1, controls: 1 },
         events: {
           onReady: ()=>{
-            // Unmute on first user interaction anywhere
             const unmuteOnce = ()=>{
               try{ if(ytPlayer && ytPlayer.isMuted()) ytPlayer.unMute(); }catch{}
               document.removeEventListener('click', unmuteOnce, true);
@@ -402,56 +425,86 @@
     }
 
     /* ========= Quick upload cameras ========= */
-    if(bannerCameraBtn && bannerQuickFile){
-      bannerCameraBtn.addEventListener('click', ()=> bannerQuickFile.click());
-      bannerQuickFile.addEventListener('change', async ()=>{
-        if(!bannerQuickFile.files[0]) return;
-        try{
-          const url = await uploadToBucket(BANNER_BUCKET, bannerQuickFile.files[0]);
-          if (bannerPreview) bannerPreview.src = url; cacheSet({ banner_url: url });
-          await sb.from('profiles').upsert({ id:userId, banner_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
-        }catch(e){ console.error(e); alert('Banner upload failed'); }
-        finally{ bannerQuickFile.value = ""; }
-      });
+    function wireUploads(){
+      // Only active when viewing own profile
+      const enabled = viewingOwn;
+
+      // Banner
+      if(bannerCameraBtn && bannerQuickFile){
+        bannerCameraBtn.style.display = enabled ? '' : 'none';
+        if(enabled){
+          bannerCameraBtn.onclick = ()=> bannerQuickFile.click();
+          bannerQuickFile.onchange = async ()=>{
+            if(!bannerQuickFile.files[0]) return;
+            try{
+              const url = await uploadToBucket(BANNER_BUCKET, bannerQuickFile.files[0]);
+              if (bannerPreview) bannerPreview.src = url; cacheSet({ banner_url: url });
+              await sb.from('profiles').upsert({ id:target.id, banner_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
+            }catch(e){ console.error(e); alert('Banner upload failed'); }
+            finally{ bannerQuickFile.value = ""; }
+          };
+        } else {
+          bannerCameraBtn.onclick = null;
+          bannerQuickFile.onchange = null;
+        }
+      }
+
+      // Avatar
+      if(avatarCameraBtn && avatarQuickFile){
+        avatarCameraBtn.style.display = enabled ? '' : 'none';
+        if(enabled){
+          avatarCameraBtn.onclick = ()=> avatarQuickFile.click();
+          avatarQuickFile.onchange = async ()=>{
+            if(!avatarQuickFile.files[0]) return;
+            try{
+              const url = await uploadToBucket(AVATAR_BUCKET, avatarQuickFile.files[0]);
+              setAvatar(url); cacheSet({ avatar_url: url });
+              await sb.from('profiles').upsert({ id:target.id, avatar_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
+            }catch(e){ console.error(e); alert('Avatar upload failed'); }
+            finally{ avatarQuickFile.value = ""; }
+          };
+        } else {
+          avatarCameraBtn.onclick = null;
+          avatarQuickFile.onchange = null;
+        }
+      }
+
+      // Page BG
+      if(bgCameraBtn && bgQuickFile){
+        bgCameraBtn.style.display = enabled ? '' : 'none';
+        if(enabled){
+          bgCameraBtn.onclick = ()=> bgQuickFile.click();
+          bgQuickFile.onchange = async ()=>{
+            const file = bgQuickFile.files[0];
+            if(!file) return;
+            try{
+              if (bgPreview) bgPreview.src = URL.createObjectURL(file); // instant local preview
+              const url = await uploadToBucket(BG_BUCKET, file); // upload to bucket
+              if (bgPreview) bgPreview.src = url; cacheSet({ bg_url: url });
+              await sb.from('profiles').upsert(
+                { id:target.id, bg_url: url, updated_at: new Date().toISOString() },
+                { onConflict:'id' }
+              );
+            }catch(e){ console.error(e); alert('Background upload failed'); }
+            finally{ bgQuickFile.value = ""; }
+          };
+        } else {
+          bgCameraBtn.onclick = null;
+          bgQuickFile.onchange = null;
+        }
+      }
     }
 
-    if(avatarCameraBtn && avatarQuickFile){
-      avatarCameraBtn.addEventListener('click', ()=> avatarQuickFile.click());
-      avatarQuickFile.addEventListener('change', async ()=>{
-        if(!avatarQuickFile.files[0]) return;
-        try{
-          const url = await uploadToBucket(AVATAR_BUCKET, avatarQuickFile.files[0]);
-          setAvatar(url); cacheSet({ avatar_url: url });
-          await sb.from('profiles').upsert({ id:userId, avatar_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
-        }catch(e){ console.error(e); alert('Avatar upload failed'); }
-        finally{ avatarQuickFile.value = ""; }
-      });
-    }
-
-    if(bgCameraBtn && bgQuickFile){
-      bgCameraBtn.addEventListener('click', ()=> bgQuickFile.click());
-      bgQuickFile.addEventListener('change', async ()=>{
-        const file = bgQuickFile.files[0];
-        if(!file) return;
-        try{
-          if (bgPreview) bgPreview.src = URL.createObjectURL(file); // instant local preview
-          const url = await uploadToBucket(BG_BUCKET, file); // upload to bucket
-          if (bgPreview) bgPreview.src = url; cacheSet({ bg_url: url });
-          await sb.from('profiles').upsert(
-            { id:userId, bg_url: url, updated_at: new Date().toISOString() },
-            { onConflict:'id' }
-          );
-        }catch(e){ console.error(e); alert('Background upload failed'); }
-        finally{ bgQuickFile.value = ""; }
-      });
-    }
-
-    /* ========= Edit button wiring ========= */
+    /* ========= Edit link ========= */
     function isLocalProtocol(){
       return location.protocol === 'file:' || location.protocol === 'content:';
     }
     function wireEditProfileLink(){
       if(!editProfileLink) return;
+      if(!viewingOwn){
+        editProfileLink.style.display = 'none';
+        return;
+      }
       let href = 'editprofile.html';
       if(!isLocalProtocol()){
         const url = new URL(href, location.href);
@@ -488,24 +541,28 @@
       }
     }
 
-    /* ========= Load profile ========= */
-    async function loadProfile(){
-      // Instant paint from local cache
+    /* ========= Load a profile ========= */
+    async function loadProfileBy(idOrUsername){
+      // Instant paint from local cache (only helps when viewing own)
       const cached = cacheGet();
       cached.avatar_url ? setAvatar(cached.avatar_url) : setAvatarPlaceholder();
       if (cached.banner_url && bannerPreview) bannerPreview.src = cached.banner_url;
       if (cached.bg_url && bgPreview)         bgPreview.src = cached.bg_url;
 
-      // Fetch from DB
-      const { data, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
-      if(error){ console.error(error); return; }
-      if(!data){
+      // Fetch from DB (by id or username)
+      let q = sb.from("profiles").select("*").limit(1);
+      if (idOrUsername.kind === 'id') q = q.eq("id", idOrUsername.value);
+      else                             q = q.ilike("username", idOrUsername.value);
+      const { data, error } = await q.maybeSingle();
+      if(error || !data){
+        console.error(error||'Profile not found');
         setAvatarPlaceholder();
         if (bannerPreview) bannerPreview.removeAttribute('src');
         if (bgPreview) bgPreview.removeAttribute('src');
-        return;
+        return null;
       }
 
+      // Paint
       if (pronounsText)  pronounsText.textContent = data.pronouns || "";
       if (sunText)       sunText.textContent      = data.sun || "";
       if (moonText)      moonText.textContent     = data.moon || "";
@@ -515,48 +572,103 @@
       if (voidMsgText)   voidMsgText.textContent  = data.void_message || "";
       if (funnyStoryText)funnyStoryText.textContent = data.funny_story || "";
 
-      // --- Theme song selection ---
-      const s = data.song_url || null; // may be YT ID, YT URL, or file URL
+      // Theme song (YT or file)
+      const s = data.song_url || null;
       let asId = null;
-
-      if (isYouTubeId(s)) {
-        asId = s;
-      } else if (isYouTubeUrl(s)) {
-        asId = extractYouTubeIdStrict(s);
-      }
+      if (isYouTubeId(s)) asId = s;
+      else if (isYouTubeUrl(s)) asId = extractYouTubeIdStrict(s);
 
       if (asId) {
         ytVideoId = asId;
         if (ytWrap) ytWrap.style.display = 'block';
         if (songPlayer) { songPlayer.pause(); songPlayer.style.display = 'none'; }
-        if (window.YT && window.YT.Player) makeOrUpdateYTPlayer(); // API already loaded
+        if (window.YT && window.YT.Player) makeOrUpdateYTPlayer();
       } else if (s) {
-        // Not YouTube → treat as file URL
         if (songPlayer) { songPlayer.src = s; songPlayer.style.display = 'block'; }
         if (ytWrap) ytWrap.style.display = 'none';
       } else {
-        // No song set
         if (songPlayer) { songPlayer.removeAttribute('src'); songPlayer.style.display = 'none'; }
         if (ytWrap) ytWrap.style.display = 'none';
       }
 
-      // Cache media URLs for snappy reloads
+      // Media
       if(data.avatar_url){ setAvatar(data.avatar_url); cacheSet({ avatar_url: data.avatar_url }); }
       else setAvatarPlaceholder();
 
       if(data.banner_url && bannerPreview){ bannerPreview.src = data.banner_url; cacheSet({ banner_url: data.banner_url }); }
       if(data.bg_url && bgPreview){ bgPreview.src = data.bg_url; cacheSet({ bg_url: data.bg_url }); }
+
+      return data;
     }
 
-    // Boot
+    /* ========= DM helper ========= */
+    async function openOrCreateDM(otherId){
+      if(!me){ location.href = './login.html'; return; }
+      const a = me.id;
+      const b = otherId;
+      const least = a < b ? a : b;
+      const greatest = a < b ? b : a;
+
+      // Try find existing (works even if you used generated min_user/max_user columns)
+      let { data: thread, error } = await sb
+        .from('dm_threads')
+        .select('id,a,b')
+        .or(`and(a.eq.${least},b.eq.${greatest}),and(a.eq.${greatest},b.eq.${least})`)
+        .maybeSingle();
+
+      if(!thread){
+        const { data: created, error: insertErr } = await sb
+          .from('dm_threads')
+          .insert({ a, b })
+          .select('id')
+          .single();
+        if(insertErr){ alert('Could not start DM'); return; }
+        thread = created;
+      }
+      location.href = `./dm.html?thread=${thread.id}`;
+    }
+
+    /* ========= Boot ========= */
     document.addEventListener("DOMContentLoaded", async ()=>{
       try{
+        // Session (may be null)
         const { data:{ session } } = await sb.auth.getSession();
-        if(!session){ location.href="./login.html"; return; }
-        userId = session.user.id;
-        await ensureProfileRow();
-        await loadProfile();
+        me = session?.user || null;
+
+        // Routing
+        const qs = new URLSearchParams(location.search);
+        const qUsername = (qs.get('u')||'').trim();
+        const qUid = (qs.get('uid')||'').trim();
+
+        if(!qUsername && !qUid){
+          // Viewing ME (requires login)
+          if(!me){ location.href="./login.html"; return; }
+          viewingOwn = true;
+          target = await loadProfileBy({ kind:'id', value: me.id });
+          if (!target) { await ensureProfileRow(me.id); target = { id: me.id }; }
+        } else {
+          // Viewing someone else (or possibly self via link)
+          const idOrUsername = qUid ? { kind:'id', value:qUid } : { kind:'username', value:qUsername };
+          target = await loadProfileBy(idOrUsername);
+          if(!target){ alert('Profile not found'); return; }
+          viewingOwn = !!(me && me.id === target.id);
+        }
+
+        // Inbox button only if logged in
+        if(inboxBtn) inboxBtn.style.display = me ? '' : 'none';
+
+        // Toggle edit vs DM
         wireEditProfileLink();
+        wireUploads();
+        if(dmButton){
+          dmButton.style.display = viewingOwn ? 'none' : '';
+          dmButton.onclick = (e)=>{ e.preventDefault(); openOrCreateDM(target.id); };
+        }
+
+        // Ensure row for self (so uploads have a row)
+        if(viewingOwn && me) await ensureProfileRow(me.id);
+
+        // Toast handling
         showToastIfSaved();
       }catch(e){
         console.error('Boot error:', e);
