@@ -56,6 +56,9 @@
     .profile-scope .banner-camera{
       position:absolute !important; left:auto !important; top:auto !important;
       transform:none !important; z-index:6 !important; color:#000 !important;
+      width:44px; height:44px; border-radius:50%;
+      display:inline-flex; align-items:center; justify-content:center;
+      border:2px solid var(--green); background:var(--green); box-shadow:0 0 18px rgba(57,255,20,.6);
     }
     .profile-scope .banner-camera{ right:14px !important; bottom:14px !important; }
     .profile-scope .avatar-camera{ right:-6px !important; bottom:-6px !important; }
@@ -64,12 +67,7 @@
     .profile-scope .banner-camera svg,
     .bg-camera svg{
       display:block !important; width:22px; height:22px; color:#000 !important;
-      fill:currentColor !important; stroke:none !important; opacity:1 !important;
-      filter:none !important; z-index:2;
     }
-    .profile-scope .avatar-camera svg path,
-    .profile-scope .banner-camera svg path,
-    .bg-camera svg path{ fill:currentColor !important; stroke:none !important; }
 
     .profile-scope .cam-glyph,
     .bg-camera .cam-glyph{
@@ -112,15 +110,6 @@
     }
     .chip.ghost{ background:rgba(0,0,0,.55); color:var(--green); }
 
-    .banner-camera{
-      width:44px; height:44px; border-radius:50%;
-      display:inline-flex; align-items:center; justify-content:center;
-      border:2px solid var(--green); background:var(--green); color:#000; cursor:pointer;
-      box-shadow:0 0 18px rgba(57,255,20,.6);
-    }
-    .banner-camera:hover{ background:#000; color:var(--green) }
-    .icon{ width:22px; height:22px; display:block }
-
     .avatar-wrap{
       z-index:5; left:20px; bottom:-120px;
       display:flex; flex-direction:column; align-items:center; gap:14px;
@@ -140,14 +129,6 @@
         radial-gradient(45% 45% at 50% 35%, rgba(57,255,20,.22), transparent 60%),
         #0a0a0a;
     }
-
-    .avatar-camera{
-      width:44px; height:44px; border-radius:50%;
-      display:inline-flex; align-items:center; justify-content:center;
-      border:2px solid var(--green); background:var(--green); color:#000; cursor:pointer;
-      box-shadow:0 0 18px rgba(57,255,20,.6);
-    }
-    .avatar-camera:hover{ background:#000; color:var(--green) }
 
     .edit-pill{
       font-size:15px; font-weight:800; letter-spacing:.2px;
@@ -208,7 +189,10 @@
 
       <!-- Top-right area: Messages (only when logged in) -->
       <div class="top-right">
-        <a id="inboxBtn" class="chip" href="./inbox.html" style="display:none">Messages</a>
+        <a id="inboxBtn" class="chip" href="./inbox.html" style="display:none">
+          Messages
+          <span id="inboxBadge" style="display:none;margin-left:6px;padding:2px 6px;border-radius:10px;background:#000;border:1px solid currentColor;font-size:12px;line-height:1;">0</span>
+        </a>
       </div>
 
       <button id="bannerCameraBtn" class="banner-camera" title="Change banner" aria-label="Change banner">
@@ -309,8 +293,9 @@
     const bgQuickFile = document.getElementById('bgQuickFile');
 
     // New UI bits
-    const inboxBtn = document.getElementById('inboxBtn');
-    const dmButton = document.getElementById('dmButton');
+    const inboxBtn   = document.getElementById('inboxBtn');
+    const inboxBadge = document.getElementById('inboxBadge');
+    const dmButton   = document.getElementById('dmButton');
 
     // Song refs
     const songPlayer = document.getElementById('songPlayer');
@@ -610,7 +595,7 @@
       const greatest = a < b ? b : a;
 
       // Try find existing (works even if you used generated min_user/max_user columns)
-      let { data: thread, error } = await sb
+      let { data: thread } = await sb
         .from('dm_threads')
         .select('id,a,b')
         .or(`and(a.eq.${least},b.eq.${greatest}),and(a.eq.${greatest},b.eq.${least})`)
@@ -626,6 +611,34 @@
         thread = created;
       }
       location.href = `./dm.html?thread=${thread.id}`;
+    }
+
+    /* ========= Unread-ish badge (optional lightweight) ========= */
+    async function updateInboxBadge(){
+      if(!me || !inboxBadge) return;
+      const { data: threads } = await sb
+        .from('dm_threads')
+        .select('id,a,b,created_at')
+        .order('created_at', { ascending:false });
+
+      if(!threads || threads.length===0){
+        inboxBadge.style.display='none';
+        return;
+      }
+
+      let count = 0;
+      for(const t of threads){
+        const { data: last } = await sb
+          .from('dm_messages')
+          .select('sender,created_at')
+          .eq('thread_id', t.id)
+          .order('created_at', { ascending:false })
+          .limit(1)
+          .maybeSingle();
+        if(last && last.sender !== me.id) count++;
+      }
+      if(count>0){ inboxBadge.textContent = count; inboxBadge.style.display=''; }
+      else { inboxBadge.style.display='none'; }
     }
 
     /* ========= Boot ========= */
@@ -668,7 +681,8 @@
         // Ensure row for self (so uploads have a row)
         if(viewingOwn && me) await ensureProfileRow(me.id);
 
-        // Toast handling
+        // Badge + toast handling
+        if(me) updateInboxBadge().catch(console.error);
         showToastIfSaved();
       }catch(e){
         console.error('Boot error:', e);
