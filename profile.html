@@ -301,12 +301,33 @@
     // --- Buckets ---
     const AVATAR_BUCKET = 'avatars';
     const BANNER_BUCKET = 'banners';
-    const BG_BUCKET     = 'backgrounds'; // ✅ use dedicated backgrounds bucket
+    const BG_BUCKET     = 'backgrounds'; // dedicated backgrounds bucket
 
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
+
+    // --------- helpers ---------
+    const bust = (url, ver=Date.now()) => url ? (url + (url.includes('?') ? '&' : '?') + 'v=' + ver) : url;
+
+    // per-user cache (used only when viewing OWN profile)
+    let CACHE_UID = null;
+    const cache = {
+      key(uid){ return `profile_cache_${uid}`; },
+      set(uid, partial){
+        if(!uid) return;
+        const k = this.key(uid);
+        const prev = JSON.parse(localStorage.getItem(k) || "{}");
+        localStorage.setItem(k, JSON.stringify({ ...prev, ...partial }));
+      },
+      get(uid){
+        if(!uid) return {};
+        try { return JSON.parse(localStorage.getItem(this.key(uid)) || "{}"); }
+        catch { return {}; }
+      },
+      clear(uid){ if(uid) localStorage.removeItem(this.key(uid)); }
+    };
 
     // Display refs
     const pronounsText = document.getElementById("pronounsText");
@@ -338,7 +359,7 @@
     const songPlayer = document.getElementById('songPlayer');
     const ytWrap = document.getElementById('ytWrap');
 
-    // About refs (NEW)
+    // About refs
     const displayNameEl = document.getElementById('displayName');
     const handleText = document.getElementById('handleText');
     const cityText = document.getElementById('cityText');
@@ -354,16 +375,6 @@
 
     let ytPlayer = null;
     let ytVideoId = null;
-
-    /* ---------- Local cache ---------- */
-    const LS_KEY = "profile_cache_v1";
-    function cacheSet(partial){
-      const prev = JSON.parse(localStorage.getItem(LS_KEY)||"{}");
-      localStorage.setItem(LS_KEY, JSON.stringify({ ...prev, ...partial }));
-    }
-    function cacheGet(){
-      try { return JSON.parse(localStorage.getItem(LS_KEY)||"{}"); } catch { return {}; }
-    }
 
     function fileName(prefix, file){
       const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
@@ -392,7 +403,7 @@
       const { error } = await sb.storage.from(bucket).upload(path, file, { upsert:false });
       if(error) throw error;
       const { data } = sb.storage.from(bucket).getPublicUrl(path);
-      return data.publicUrl;
+      return data.publicUrl; // raw public URL (no bust)
     }
 
     /* ========= YouTube helpers ========= */
@@ -428,16 +439,13 @@
     function makeOrUpdateYTPlayer(){
       if(!ytVideoId) return;
 
-      // Hide audio, show yt
       if(songPlayer){ songPlayer.pause(); songPlayer.style.display = 'none'; }
       if(ytWrap){ ytWrap.style.display = 'block'; }
 
-      // Update existing player if present
       if(ytPlayer){
         try { ytPlayer.loadVideoById(ytVideoId); ytPlayer.mute(); return; } catch {}
       }
 
-      // Create new YT player
       ytPlayer = new YT.Player('ytPlayer', {
         videoId: ytVideoId,
         playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0, modestbranding: 1, controls: 1 },
@@ -457,7 +465,6 @@
 
     /* ========= Quick upload cameras ========= */
     function wireUploads(){
-      // Only active when viewing own profile
       const enabled = viewingOwn;
 
       // Banner
@@ -468,9 +475,11 @@
           bannerQuickFile.onchange = async ()=>{
             if(!bannerQuickFile.files[0]) return;
             try{
-              const url = await uploadToBucket(BANNER_BUCKET, bannerQuickFile.files[0]);
-              if (bannerPreview) bannerPreview.src = url; cacheSet({ banner_url: url });
-              await sb.from('profiles').upsert({ id:target.id, banner_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
+              const raw = await uploadToBucket(BANNER_BUCKET, bannerQuickFile.files[0]);
+              const ver = Date.now();
+              if (bannerPreview) bannerPreview.src = bust(raw, ver);           // show busted
+              if (CACHE_UID) cache.set(CACHE_UID, { banner_url: bust(raw,ver) }); // cache busted
+              await sb.from('profiles').upsert({ id:target.id, banner_url: raw, updated_at: new Date().toISOString() }, { onConflict:'id' });
             }catch(e){ console.error(e); alert('Banner upload failed'); }
             finally{ bannerQuickFile.value = ""; }
           };
@@ -488,9 +497,11 @@
           avatarQuickFile.onchange = async ()=>{
             if(!avatarQuickFile.files[0]) return;
             try{
-              const url = await uploadToBucket(AVATAR_BUCKET, avatarQuickFile.files[0]);
-              setAvatar(url); cacheSet({ avatar_url: url });
-              await sb.from('profiles').upsert({ id:target.id, avatar_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
+              const raw = await uploadToBucket(AVATAR_BUCKET, avatarQuickFile.files[0]);
+              const ver = Date.now();
+              setAvatar(bust(raw, ver));                           // show busted
+              if (CACHE_UID) cache.set(CACHE_UID, { avatar_url: bust(raw,ver) });
+              await sb.from('profiles').upsert({ id:target.id, avatar_url: raw, updated_at: new Date().toISOString() }, { onConflict:'id' });
             }catch(e){ console.error(e); alert('Avatar upload failed'); }
             finally{ avatarQuickFile.value = ""; }
           };
@@ -510,10 +521,12 @@
             if(!file) return;
             try{
               if (bgPreview) bgPreview.src = URL.createObjectURL(file); // instant local preview
-              const url = await uploadToBucket(BG_BUCKET, file); // upload to bucket
-              if (bgPreview) bgPreview.src = url; cacheSet({ bg_url: url });
+              const raw = await uploadToBucket(BG_BUCKET, file);
+              const ver = Date.now();
+              if (bgPreview) bgPreview.src = bust(raw, ver);
+              if (CACHE_UID) cache.set(CACHE_UID, { bg_url: bust(raw,ver) });
               await sb.from('profiles').upsert(
-                { id:target.id, bg_url: url, updated_at: new Date().toISOString() },
+                { id:target.id, bg_url: raw, updated_at: new Date().toISOString() },
                 { onConflict:'id' }
               );
             }catch(e){ console.error(e); alert('Background upload failed'); }
@@ -597,12 +610,19 @@
         (updated ? ` • Updated ${updated.toLocaleDateString()}` : '');
     }
 
-    async function loadProfileBy(idOrUsername){
-      // Instant paint from local cache (only helps when viewing own)
-      const cached = cacheGet();
-      cached.avatar_url ? setAvatar(cached.avatar_url) : setAvatarPlaceholder();
-      if (cached.banner_url && bannerPreview) bannerPreview.src = cached.banner_url;
-      if (cached.bg_url && bgPreview)         bgPreview.src = cached.bg_url;
+    async function loadProfileBy(idOrUsername, useCache=false){
+      // Paint from per-user cache ONLY when viewing own profile
+      if (useCache && CACHE_UID) {
+        const cached = cache.get(CACHE_UID);
+        if (cached.avatar_url) setAvatar(cached.avatar_url); else setAvatarPlaceholder();
+        if (cached.banner_url && bannerPreview) bannerPreview.src = cached.banner_url;
+        if (cached.bg_url && bgPreview)         bgPreview.src     = cached.bg_url;
+      } else {
+        // for other users, never show last user's cached media
+        setAvatarPlaceholder();
+        if (bannerPreview) bannerPreview.removeAttribute('src');
+        if (bgPreview) bgPreview.removeAttribute('src');
+      }
 
       // Fetch from DB (by id or username)
       let q = sb.from("profiles").select("*").limit(1);
@@ -611,9 +631,6 @@
       const { data, error } = await q.maybeSingle();
       if(error || !data){
         console.error(error||'Profile not found');
-        setAvatarPlaceholder();
-        if (bannerPreview) bannerPreview.removeAttribute('src');
-        if (bgPreview) bgPreview.removeAttribute('src');
         displayNameEl.textContent = 'Profile not found';
         handleText.textContent = '';
         cityText.textContent = '—';
@@ -653,12 +670,14 @@
         if (ytWrap) ytWrap.style.display = 'none';
       }
 
-      // Media
-      if(data.avatar_url){ setAvatar(data.avatar_url); cacheSet({ avatar_url: data.avatar_url }); }
+      // Media (use updated_at as a stable version stamp)
+      const ver = data.updated_at ? new Date(data.updated_at).getTime() : Date.now();
+
+      if(data.avatar_url){ setAvatar(bust(data.avatar_url, ver)); if (useCache && CACHE_UID) cache.set(CACHE_UID, { avatar_url: bust(data.avatar_url, ver) }); }
       else setAvatarPlaceholder();
 
-      if(data.banner_url && bannerPreview){ bannerPreview.src = data.banner_url; cacheSet({ banner_url: data.banner_url }); }
-      if(data.bg_url && bgPreview){ bgPreview.src = data.bg_url; cacheSet({ bg_url: data.bg_url }); }
+      if(data.banner_url && bannerPreview){ bannerPreview.src = bust(data.banner_url, ver); if (useCache && CACHE_UID) cache.set(CACHE_UID, { banner_url: bust(data.banner_url, ver) }); }
+      if(data.bg_url && bgPreview){ bgPreview.src = bust(data.bg_url, ver); if (useCache && CACHE_UID) cache.set(CACHE_UID, { bg_url: bust(data.bg_url, ver) }); }
 
       return data;
     }
@@ -671,7 +690,6 @@
       const least = a < b ? a : b;
       const greatest = a < b ? b : a;
 
-      // Try find existing (works even if you used generated min_user/max_user columns)
       let { data: thread } = await sb
         .from('dm_threads')
         .select('id,a,b')
@@ -730,19 +748,30 @@
         const qUsername = (qs.get('u')||'').trim();
         const qUid = (qs.get('uid')||'').trim();
 
+        let selector, useCache=false;
         if(!qUsername && !qUid){
           // Viewing ME (requires login)
           if(!me){ location.href="./login.html"; return; }
           viewingOwn = true;
-          target = await loadProfileBy({ kind:'id', value: me.id });
-          if (!target) { await ensureProfileRow(me.id); target = { id: me.id }; }
+          CACHE_UID = me.id;               // cache keyed by my uid
+          selector = { kind:'id', value: me.id };
+          useCache = true;                 // only for self
         } else {
           // Viewing someone else (or possibly self via link)
-          const idOrUsername = qUid ? { kind:'id', value:qUid } : { kind:'username', value:qUsername };
-          target = await loadProfileBy(idOrUsername);
-          if(!target){ alert('Profile not found'); return; }
-          viewingOwn = !!(me && me.id === target.id);
+          selector = qUid ? { kind:'id', value:qUid } : { kind:'username', value:qUsername };
+          viewingOwn = !!(me && qUid && me.id === qUid); // refined after fetch if username path
+          CACHE_UID = viewingOwn ? me.id : null;         // only cache self
+          useCache = viewingOwn;
         }
+
+        target = await loadProfileBy(selector, useCache);
+        if(!target){
+          if (viewingOwn && me){ await ensureProfileRow(me.id); target = { id: me.id }; }
+          else { alert('Profile not found'); return; }
+        }
+        // If user came by username, update viewingOwn once we know target.id
+        if(me && target && target.id) viewingOwn = (me.id === target.id);
+        if(!viewingOwn) CACHE_UID = null;
 
         // Inbox button only if logged in
         if(inboxBtn) inboxBtn.style.display = me ? '' : 'none';
