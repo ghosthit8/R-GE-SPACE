@@ -21,6 +21,7 @@
     letter-spacing:.2px;
   }
   a{ color:var(--muted); text-decoration:none; }
+  a:hover{ text-decoration:underline; }
 
   /* ===== HEADER (fixed) ===== */
   header{
@@ -237,7 +238,7 @@
     let currentRoom="Dallas";
     let channel=null;
     let rateLimit={ last:0, ms:650 };
-    let presence=new Map();
+    let presence=new Map(); // uid -> { username, ts }
 
     const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
     const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
@@ -253,6 +254,7 @@
       kids.forEach(k=> typeof k==="string" ? e.appendChild(document.createTextNode(k)) : (k && e.appendChild(k)));
       return e;
     }
+    const profileHref = (uid)=> `profile.html?uid=${encodeURIComponent(uid)}`;
 
     async function requireSession(){
       const { data:{ session:s } } = await supabase.auth.getSession();
@@ -269,11 +271,20 @@
     function renderMessage(m){
       const mine = m.user_id === me.id;
       const row = el("div", { class:"msg" + (mine ? " me" : "") });
-      const left = el("div", { class:"who" }, m.username || "anon");
-      const time = el("div", { class:"time" }, fmtTime(m.created_at || Date.now()));
-      const txt  = el("div", { class:"txt" }, m.content || "");
-      const meta = el("div", { style:"display:flex;flex-direction:column;gap:2px;min-width:94px;" }, left, time);
 
+      // clickable name → profile.html?uid=USER_ID
+      let nameNode;
+      const label = m.username || "anon";
+      if (m.user_id) {
+        nameNode = el("a", { class:"who", href: profileHref(m.user_id), title:`View ${label}'s profile` }, label);
+      } else {
+        nameNode = el("div", { class:"who" }, label);
+      }
+
+      const time = el("div", { class:"time" }, fmtTime(m.created_at || Date.now()));
+      const meta = el("div", { style:"display:flex;flex-direction:column;gap:2px;min-width:94px;" }, nameNode, time);
+
+      const txt  = el("div", { class:"txt" }, m.content || "");
       const ops = el("div", { class:"ops" });
       if (mine) ops.appendChild(el("button", { onclick:()=>deleteMessage(m.id) }, "delete"));
 
@@ -283,10 +294,10 @@
 
     function renderGhost(content){
       const row = el("div", { class:"msg ghost me" });
-      const left = el("div", { class:"who" }, me.username);
+      const nameNode = el("a", { class:"who", href: profileHref(me.id), title:`View ${me.username}'s profile` }, me.username);
       const time = el("div", { class:"time" }, fmtTime(Date.now()));
       const txt  = el("div", { class:"txt" }, content);
-      const meta = el("div", { style:"display:flex;flex-direction:column;gap:2px;min-width:94px;" }, left, time);
+      const meta = el("div", { style:"display:flex;flex-direction:column;gap:2px;min-width:94px;" }, nameNode, time);
       row.append(meta, txt);
       msgEl.appendChild(row);
       return row;
@@ -302,9 +313,21 @@
     function touchPresence(user_id, username){ presence.set(user_id,{username,ts:Date.now()}); drawPresence(); }
     function prunePresence(){ const now=Date.now(); for(const [uid,info] of presence){ if(now-info.ts>60000) presence.delete(uid); } drawPresence(); }
     function drawPresence(){
-      if(presence.size===0){ presenceEl.textContent="Nobody yet. Be the first to speak."; return; }
-      const out=[]; for(const {username} of presence.values()) out.push(username || "anon");
-      presenceEl.textContent=[...new Set(out)].slice(0,24).join(", ");
+      presenceEl.innerHTML = "";
+      if(presence.size===0){
+        presenceEl.textContent="Nobody yet. Be the first to speak.";
+        return;
+      }
+      const seen=new Set();
+      for(const [uid,info] of presence){
+        const label = info.username || "anon";
+        if(seen.has(uid)) continue;
+        seen.add(uid);
+        const pill = uid
+          ? el("a", { class:"pill", href:profileHref(uid), title:`View ${label}'s profile` }, label)
+          : el("span", { class:"pill" }, label);
+        presenceEl.appendChild(pill);
+      }
     }
     setInterval(prunePresence, 15000);
 
