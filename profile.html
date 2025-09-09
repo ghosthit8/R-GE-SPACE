@@ -20,7 +20,6 @@
       -webkit-font-smoothing:antialiased;
     }
 
-    /* Hide any legacy .toast so it can’t cover the page */
     .toast{ display:none !important; }
 
     /* ===== page-wide background image layer (click-through) ===== */
@@ -37,7 +36,7 @@
       box-shadow:0 0 18px rgba(57,255,20,.6); z-index:9999; pointer-events:auto;
     }
     .bg-camera:hover{ background:#000; color:var(--green) }
-    .profile-scope{ position:relative; z-index:2; } /* ensure above scanlines */
+    .profile-scope{ position:relative; z-index:2; }
 
     /* ===================== Scoped shields ===================== */
     .profile-scope .avatar,
@@ -158,7 +157,7 @@
     .song-section h3{ margin:0 0 8px; font-size:18px; text-shadow:0 0 10px var(--red) }
     .song-section audio{ width:100%; border:none; outline:none; background:transparent; box-shadow:none }
 
-    /* --- NEW: About / Links layout --- */
+    /* --- About / Links layout --- */
     .about-grid{ display:grid; grid-template-columns:1fr; gap:12px; }
     .title-row{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
     .display-name{ font-size:24px; font-weight:900; letter-spacing:.5px; margin:0; }
@@ -200,7 +199,6 @@
       <img id="bannerPreview" alt="">
       <a class="back-chip" href="./menu.html">← Menu</a>
 
-      <!-- Top-right area: Messages (only when logged in) -->
       <div class="top-right">
         <a id="inboxBtn" class="chip" href="./inbox.html" style="display:none">
           Messages
@@ -227,7 +225,6 @@
         </button>
         <input id="avatarQuickFile" type="file" accept="image/*" style="display:none" />
 
-        <!-- Edit / DM buttons -->
         <a href="#" class="edit-pill" id="editProfileLink">Edit Profile</a>
         <a href="#" class="edit-pill" id="dmButton" style="display:none">Message privately</a>
       </div>
@@ -245,8 +242,6 @@
     </div>
 
     <main class="wrap">
-
-      <!-- ===== About (NEW) ===== -->
       <section class="card" id="aboutCard">
         <div class="about-grid">
           <div class="title-row">
@@ -270,7 +265,6 @@
         </div>
       </section>
 
-      <!-- ===== Theme Song ===== -->
       <div class="song-section">
         <h3>Theme Song</h3>
         <audio id="songPlayer" controls preload="none" style="display:none"></audio>
@@ -301,7 +295,7 @@
     // --- Buckets ---
     const AVATAR_BUCKET = 'avatars';
     const BANNER_BUCKET = 'banners';
-    const BG_BUCKET     = 'backgrounds'; // dedicated backgrounds bucket
+    const BG_BUCKET     = 'banners'; // reuse banner bucket for background
 
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
@@ -311,7 +305,7 @@
     // --------- helpers ---------
     const bust = (url, ver=Date.now()) => url ? (url + (url.includes('?') ? '&' : '?') + 'v=' + ver) : url;
 
-    // per-user cache (used only when viewing OWN profile)
+    // per-user cache (only for self)
     let CACHE_UID = null;
     const cache = {
       key(uid){ return `profile_cache_${uid}`; },
@@ -350,16 +344,13 @@
     const bgCameraBtn = document.getElementById('bgCameraBtn');
     const bgQuickFile = document.getElementById('bgQuickFile');
 
-    // New UI bits
     const inboxBtn   = document.getElementById('inboxBtn');
     const inboxBadge = document.getElementById('inboxBadge');
     const dmButton   = document.getElementById('dmButton');
 
-    // Song refs
     const songPlayer = document.getElementById('songPlayer');
     const ytWrap = document.getElementById('ytWrap');
 
-    // About refs
     const displayNameEl = document.getElementById('displayName');
     const handleText = document.getElementById('handleText');
     const cityText = document.getElementById('cityText');
@@ -369,16 +360,18 @@
     const metaRow = document.getElementById('metaRow');
 
     // Auth + routing
-    let me = null;        // current session user (or null)
-    let target = null;    // profile we’re viewing
+    let me = null;
+    let target = null;
     let viewingOwn = false;
 
     let ytPlayer = null;
     let ytVideoId = null;
 
-    function fileName(prefix, file){
+    // ---- path helpers (subfolders avoid logical collisions) ----
+    function pathFor(kind, file){
       const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
-      return `${prefix}/${crypto.randomUUID()}.${ext}`;
+      const folder = (kind === 'banner') ? 'banner' : (kind === 'bg' ? 'bg' : 'misc');
+      return `${target.id}/${folder}/${crypto.randomUUID()}.${ext}`;
     }
 
     async function ensureProfileRow(userId) {
@@ -398,12 +391,12 @@
       avatarPreview.innerHTML = `<img src="${url}" alt="Profile photo">`;
     }
 
-    async function uploadToBucket(bucket, file){
-      const path = fileName(target.id, file); // use viewed/owner id (only enabled when viewingOwn)
+    async function uploadToBucket(bucket, file, kind){
+      const path = pathFor(kind, file);
       const { error } = await sb.storage.from(bucket).upload(path, file, { upsert:false });
       if(error) throw error;
       const { data } = sb.storage.from(bucket).getPublicUrl(path);
-      return data.publicUrl; // raw public URL (no bust)
+      return data.publicUrl; // raw public URL
     }
 
     /* ========= YouTube helpers ========= */
@@ -412,9 +405,7 @@
     function extractYouTubeIdStrict(input) {
       if (!input) return null;
       const s = String(input).trim();
-
-      if (isYouTubeId(s)) return s; // already an ID
-
+      if (isYouTubeId(s)) return s;
       try {
         const u = new URL(s, location.href);
         if (/\byoutu\.be$/i.test(u.hostname)) {
@@ -431,7 +422,6 @@
           }
         }
       } catch {}
-
       const m = s.match(/([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/);
       return m ? m[1] : null;
     }
@@ -475,13 +465,15 @@
           bannerQuickFile.onchange = async ()=>{
             if(!bannerQuickFile.files[0]) return;
             try{
-              const raw = await uploadToBucket(BANNER_BUCKET, bannerQuickFile.files[0]);
+              const raw = await uploadToBucket(BANNER_BUCKET, bannerQuickFile.files[0], 'banner');
               const ver = Date.now();
-              if (bannerPreview) bannerPreview.src = bust(raw, ver);           // show busted
-              if (CACHE_UID) cache.set(CACHE_UID, { banner_url: bust(raw,ver) }); // cache busted
+              if (bannerPreview) bannerPreview.src = bust(raw, ver);
+              if (CACHE_UID) cache.set(CACHE_UID, { banner_url: bust(raw,ver) });
               await sb.from('profiles').upsert({ id:target.id, banner_url: raw, updated_at: new Date().toISOString() }, { onConflict:'id' });
-            }catch(e){ console.error(e); alert('Banner upload failed'); }
-            finally{ bannerQuickFile.value = ""; }
+            }catch(e){
+              console.error('Banner upload failed:', e);
+              alert('Banner upload failed: ' + (e?.message || 'unknown error'));
+            } finally { bannerQuickFile.value = ""; }
           };
         } else {
           bannerCameraBtn.onclick = null;
@@ -497,13 +489,15 @@
           avatarQuickFile.onchange = async ()=>{
             if(!avatarQuickFile.files[0]) return;
             try{
-              const raw = await uploadToBucket(AVATAR_BUCKET, avatarQuickFile.files[0]);
+              const raw = await uploadToBucket(AVATAR_BUCKET, avatarQuickFile.files[0], 'avatar');
               const ver = Date.now();
-              setAvatar(bust(raw, ver));                           // show busted
+              setAvatar(bust(raw, ver));
               if (CACHE_UID) cache.set(CACHE_UID, { avatar_url: bust(raw,ver) });
               await sb.from('profiles').upsert({ id:target.id, avatar_url: raw, updated_at: new Date().toISOString() }, { onConflict:'id' });
-            }catch(e){ console.error(e); alert('Avatar upload failed'); }
-            finally{ avatarQuickFile.value = ""; }
+            }catch(e){
+              console.error('Avatar upload failed:', e);
+              alert('Avatar upload failed: ' + (e?.message || 'unknown error'));
+            } finally { avatarQuickFile.value = ""; }
           };
         } else {
           avatarCameraBtn.onclick = null;
@@ -521,7 +515,7 @@
             if(!file) return;
             try{
               if (bgPreview) bgPreview.src = URL.createObjectURL(file); // instant local preview
-              const raw = await uploadToBucket(BG_BUCKET, file);
+              const raw = await uploadToBucket(BG_BUCKET, file, 'bg');
               const ver = Date.now();
               if (bgPreview) bgPreview.src = bust(raw, ver);
               if (CACHE_UID) cache.set(CACHE_UID, { bg_url: bust(raw,ver) });
@@ -529,8 +523,10 @@
                 { id:target.id, bg_url: raw, updated_at: new Date().toISOString() },
                 { onConflict:'id' }
               );
-            }catch(e){ console.error(e); alert('Background upload failed'); }
-            finally{ bgQuickFile.value = ""; }
+            }catch(e){
+              console.error('Background upload failed:', e);
+              alert('Background upload failed: ' + (e?.message || 'unknown error'));
+            } finally { bgQuickFile.value = ""; }
           };
         } else {
           bgCameraBtn.onclick = null;
@@ -611,20 +607,17 @@
     }
 
     async function loadProfileBy(idOrUsername, useCache=false){
-      // Paint from per-user cache ONLY when viewing own profile
       if (useCache && CACHE_UID) {
         const cached = cache.get(CACHE_UID);
         if (cached.avatar_url) setAvatar(cached.avatar_url); else setAvatarPlaceholder();
         if (cached.banner_url && bannerPreview) bannerPreview.src = cached.banner_url;
         if (cached.bg_url && bgPreview)         bgPreview.src     = cached.bg_url;
       } else {
-        // for other users, never show last user's cached media
         setAvatarPlaceholder();
         if (bannerPreview) bannerPreview.removeAttribute('src');
         if (bgPreview) bgPreview.removeAttribute('src');
       }
 
-      // Fetch from DB (by id or username)
       let q = sb.from("profiles").select("*").limit(1);
       if (idOrUsername.kind === 'id') q = q.eq("id", idOrUsername.value);
       else                             q = q.ilike("username", idOrUsername.value);
@@ -640,7 +633,6 @@
         return null;
       }
 
-      // Identity / About
       pronounsText.textContent = data.pronouns || '';
       sunText.textContent      = data.sun || '';
       moonText.textContent     = data.moon || '';
@@ -651,7 +643,7 @@
       funnyStoryText.textContent = data.funny_story || '';
       setAbout(data);
 
-      // Theme song (YT or file)
+      // Theme song
       const s = data.song_url || null;
       let asId = null;
       if (isYouTubeId(s)) asId = s;
@@ -670,7 +662,7 @@
         if (ytWrap) ytWrap.style.display = 'none';
       }
 
-      // Media (use updated_at as a stable version stamp)
+      // Media (use updated_at as version stamp)
       const ver = data.updated_at ? new Date(data.updated_at).getTime() : Date.now();
 
       if(data.avatar_url){ setAvatar(bust(data.avatar_url, ver)); if (useCache && CACHE_UID) cache.set(CACHE_UID, { avatar_url: bust(data.avatar_url, ver) }); }
@@ -708,7 +700,7 @@
       location.href = `./dm.html?thread=${thread.id}`;
     }
 
-    /* ========= Unread-ish badge (optional lightweight) ========= */
+    /* ========= Unread-ish badge ========= */
     async function updateInboxBadge(){
       if(!me || !inboxBadge) return;
       const { data: threads } = await sb
@@ -739,28 +731,24 @@
     /* ========= Boot ========= */
     document.addEventListener("DOMContentLoaded", async ()=>{
       try{
-        // Session (may be null)
         const { data:{ session } } = await sb.auth.getSession();
         me = session?.user || null;
 
-        // Routing
         const qs = new URLSearchParams(location.search);
         const qUsername = (qs.get('u')||'').trim();
         const qUid = (qs.get('uid')||'').trim();
 
         let selector, useCache=false;
         if(!qUsername && !qUid){
-          // Viewing ME (requires login)
           if(!me){ location.href="./login.html"; return; }
           viewingOwn = true;
-          CACHE_UID = me.id;               // cache keyed by my uid
+          CACHE_UID = me.id;
           selector = { kind:'id', value: me.id };
-          useCache = true;                 // only for self
+          useCache = true;
         } else {
-          // Viewing someone else (or possibly self via link)
           selector = qUid ? { kind:'id', value:qUid } : { kind:'username', value:qUsername };
-          viewingOwn = !!(me && qUid && me.id === qUid); // refined after fetch if username path
-          CACHE_UID = viewingOwn ? me.id : null;         // only cache self
+          viewingOwn = !!(me && qUid && me.id === qUid);
+          CACHE_UID = viewingOwn ? me.id : null;
           useCache = viewingOwn;
         }
 
@@ -769,14 +757,11 @@
           if (viewingOwn && me){ await ensureProfileRow(me.id); target = { id: me.id }; }
           else { alert('Profile not found'); return; }
         }
-        // If user came by username, update viewingOwn once we know target.id
         if(me && target && target.id) viewingOwn = (me.id === target.id);
         if(!viewingOwn) CACHE_UID = null;
 
-        // Inbox button only if logged in
         if(inboxBtn) inboxBtn.style.display = me ? '' : 'none';
 
-        // Toggle edit vs DM
         wireEditProfileLink();
         wireUploads();
         if(dmButton){
@@ -784,10 +769,8 @@
           dmButton.onclick = (e)=>{ e.preventDefault(); openOrCreateDM(target.id); };
         }
 
-        // Ensure row for self (so uploads have a row)
         if(viewingOwn && me) await ensureProfileRow(me.id);
 
-        // Badge + toast handling
         if(me) updateInboxBadge().catch(console.error);
         showToastIfSaved();
       }catch(e){
@@ -796,7 +779,7 @@
     });
   </script>
 
-  <!-- Load YouTube IFrame API once; it will call onYouTubeIframeAPIReady() globally -->
+  <!-- Load YouTube IFrame API once -->
   <script>
     (function(){
       const s=document.createElement('script');
