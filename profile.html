@@ -158,6 +158,19 @@
     .song-section h3{ margin:0 0 8px; font-size:18px; text-shadow:0 0 10px var(--red) }
     .song-section audio{ width:100%; border:none; outline:none; background:transparent; box-shadow:none }
 
+    /* --- NEW: About / Links layout --- */
+    .about-grid{ display:grid; grid-template-columns:1fr; gap:12px; }
+    .title-row{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+    .display-name{ font-size:24px; font-weight:900; letter-spacing:.5px; margin:0; }
+    .handle{ color:#b9ffb9; opacity:.9; font-size:14px; }
+    .kv{ display:grid; grid-template-columns:120px 1fr; gap:8px; }
+    .kv .k{ color:#9dff9d; opacity:.85; font-size:12px; }
+    .kv .v{ color:var(--ink); }
+    .links{ display:flex; flex-wrap:wrap; gap:8px; }
+    .links a{ display:inline-flex; align-items:center; gap:8px; padding:4px 10px; border:1px solid var(--green); border-radius:999px; background:#010301; font-size:12px; color:var(--ink); text-decoration:none; }
+    .links a:hover{ text-decoration:underline; }
+    .meta{ color:#a2ffa2; opacity:.8; font-size:12px; margin-top:6px; }
+    .empty{ color:#a2ffa2; opacity:.6; font-style:italic; }
     @media (max-width:560px){
       .info-block{ margin-top:220px; }
     }
@@ -185,7 +198,7 @@
     <!-- ===== Banner ===== -->
     <header class="banner">
       <img id="bannerPreview" alt="">
-      <a class="back-chip" href="./index.html">← Home</a>
+      <a class="back-chip" href="./menu.html">← Menu</a>
 
       <!-- Top-right area: Messages (only when logged in) -->
       <div class="top-right">
@@ -233,6 +246,30 @@
 
     <main class="wrap">
 
+      <!-- ===== About (NEW) ===== -->
+      <section class="card" id="aboutCard">
+        <div class="about-grid">
+          <div class="title-row">
+            <h3 class="display-name" id="displayName">Loading…</h3>
+            <span class="handle" id="handleText"></span>
+          </div>
+          <div class="kv">
+            <div class="k">City</div><div class="v" id="cityText" class="empty">—</div>
+          </div>
+          <div class="kv">
+            <div class="k">Bio</div><div class="v" id="bioText" class="empty">—</div>
+          </div>
+          <div class="kv">
+            <div class="k">Links</div>
+            <div class="v">
+              <div class="links" id="linksWrap"></div>
+              <div id="noLinks" class="empty">No links yet.</div>
+            </div>
+          </div>
+          <div class="meta" id="metaRow"></div>
+        </div>
+      </section>
+
       <!-- ===== Theme Song ===== -->
       <div class="song-section">
         <h3>Theme Song</h3>
@@ -264,7 +301,7 @@
     // --- Buckets ---
     const AVATAR_BUCKET = 'avatars';
     const BANNER_BUCKET = 'banners';
-    const BG_BUCKET     = 'banners'; // reuse for background
+    const BG_BUCKET     = 'backgrounds'; // ✅ use dedicated backgrounds bucket
 
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
@@ -300,6 +337,15 @@
     // Song refs
     const songPlayer = document.getElementById('songPlayer');
     const ytWrap = document.getElementById('ytWrap');
+
+    // About refs (NEW)
+    const displayNameEl = document.getElementById('displayName');
+    const handleText = document.getElementById('handleText');
+    const cityText = document.getElementById('cityText');
+    const bioText = document.getElementById('bioText');
+    const linksWrap = document.getElementById('linksWrap');
+    const noLinks = document.getElementById('noLinks');
+    const metaRow = document.getElementById('metaRow');
 
     // Auth + routing
     let me = null;        // current session user (or null)
@@ -527,6 +573,30 @@
     }
 
     /* ========= Load a profile ========= */
+    function setAbout(profile){
+      const name = profile.display_name || profile.full_name || profile.username || 'Unnamed User';
+      displayNameEl.textContent = name;
+      handleText.textContent = profile.username ? ('@' + profile.username) : ('id:' + profile.id.slice(0,6));
+      cityText.textContent = profile.city || '—';
+      bioText.textContent = profile.bio || '—';
+      if (bioText.textContent === '—') bioText.classList.add('empty');
+
+      const links = [];
+      if (profile.website)   links.push({ label:'Website', href: profile.website.startsWith('http') ? profile.website : ('https://' + profile.website) });
+      if (profile.instagram) links.push({ label:'Instagram', href:`https://instagram.com/${String(profile.instagram).replace(/^@/,'')}` });
+      if (profile.tiktok)    links.push({ label:'TikTok', href:`https://tiktok.com/@${String(profile.tiktok).replace(/^@/,'')}` });
+      if (profile.youtube)   links.push({ label:'YouTube', href: profile.youtube.startsWith('http') ? profile.youtube : `https://youtube.com/${profile.youtube}` });
+
+      linksWrap.innerHTML = links.map(l=>`<a target="_blank" rel="noopener noreferrer" href="${l.href}">🔗 ${l.label}</a>`).join('');
+      noLinks.style.display = links.length ? 'none' : '';
+
+      const created = profile.created_at ? new Date(profile.created_at) : null;
+      const updated = profile.updated_at ? new Date(profile.updated_at) : null;
+      metaRow.textContent =
+        (created ? `Joined ${created.toLocaleDateString()}` : '') +
+        (updated ? ` • Updated ${updated.toLocaleDateString()}` : '');
+    }
+
     async function loadProfileBy(idOrUsername){
       // Instant paint from local cache (only helps when viewing own)
       const cached = cacheGet();
@@ -544,18 +614,25 @@
         setAvatarPlaceholder();
         if (bannerPreview) bannerPreview.removeAttribute('src');
         if (bgPreview) bgPreview.removeAttribute('src');
+        displayNameEl.textContent = 'Profile not found';
+        handleText.textContent = '';
+        cityText.textContent = '—';
+        bioText.textContent = '—'; bioText.classList.add('empty');
+        linksWrap.innerHTML = ''; noLinks.style.display = '';
+        metaRow.textContent = '';
         return null;
       }
 
-      // Paint
-      if (pronounsText)  pronounsText.textContent = data.pronouns || "";
-      if (sunText)       sunText.textContent      = data.sun || "";
-      if (moonText)      moonText.textContent     = data.moon || "";
-      if (risingText)    risingText.textContent   = data.rising || "";
-      if (loveLangText)  loveLangText.textContent = data.love_language || "";
-      if (skillsText)    skillsText.textContent   = Array.isArray(data.skills) ? data.skills.join(", ") : (data.skills || "");
-      if (voidMsgText)   voidMsgText.textContent  = data.void_message || "";
-      if (funnyStoryText)funnyStoryText.textContent = data.funny_story || "";
+      // Identity / About
+      pronounsText.textContent = data.pronouns || '';
+      sunText.textContent      = data.sun || '';
+      moonText.textContent     = data.moon || '';
+      risingText.textContent   = data.rising || '';
+      loveLangText.textContent = data.love_language || '';
+      skillsText.textContent   = Array.isArray(data.skills) ? data.skills.join(", ") : (data.skills || '');
+      voidMsgText.textContent  = data.void_message || '';
+      funnyStoryText.textContent = data.funny_story || '';
+      setAbout(data);
 
       // Theme song (YT or file)
       const s = data.song_url || null;
