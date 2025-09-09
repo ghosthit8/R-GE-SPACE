@@ -164,6 +164,7 @@
 
     .song-section{ margin:8px 0 16px }
     .song-section h3{ margin:0 0 8px; font-size:18px; text-shadow:0 0 10px var(--red) }
+    .song-section audio{ width:100%; border:none; outline:none; background:transparent; box-shadow:none }
 
     @media (max-width:560px){
       .info-block{ margin-top:220px; }
@@ -234,8 +235,11 @@
       <!-- ===== Theme Song ===== -->
       <div class="song-section">
         <h3>Theme Song</h3>
-        <!-- Dynamic mount: YouTube embed OR audio element -->
-        <div id="songMount"></div>
+        <!-- We’ll toggle between these based on song_url -->
+        <audio id="songPlayer" controls preload="none" style="display:none"></audio>
+        <div id="ytWrap" style="display:none">
+          <div id="ytPlayer" style="width:100%; aspect-ratio:16/9;"></div>
+        </div>
       </div>
 
       <section class="card">
@@ -256,7 +260,6 @@
 
   </div><!-- /profile-scope -->
 
-  <!-- tiny inline toast (no external CSS deps) -->
   <script>
     // --- Buckets ---
     const AVATAR_BUCKET = 'avatars';
@@ -277,7 +280,6 @@
     const skillsText = document.getElementById("skillsText");
     const voidMsgText = document.getElementById("voidMsgText");
     const funnyStoryText = document.getElementById("funnyStoryText");
-
     const avatarPreview = document.getElementById("avatarPreview");
     const bannerPreview = document.getElementById("bannerPreview") || document.querySelector(".banner img");
     const bgPreview = document.getElementById("bgPreview");
@@ -290,9 +292,13 @@
     const bgCameraBtn = document.getElementById('bgCameraBtn');
     const bgQuickFile = document.getElementById('bgQuickFile');
 
-    const songMount = document.getElementById('songMount');
+    // Song refs
+    const songPlayer = document.getElementById('songPlayer');
+    const ytWrap = document.getElementById('ytWrap');
 
     let userId = null;
+    let ytPlayer = null;
+    let ytVideoId = null;
 
     /* ---------- Local cache ---------- */
     const LS_KEY = "profile_cache_v1";
@@ -316,10 +322,12 @@
     }
 
     function setAvatarPlaceholder(){
+      if(!avatarPreview) return;
       avatarPreview.classList.add('is-blank');
       avatarPreview.innerHTML = 'PFP';
     }
     function setAvatar(url){
+      if(!avatarPreview) return;
       avatarPreview.classList.remove('is-blank');
       avatarPreview.innerHTML = `<img src="${url}" alt="Profile photo">`;
     }
@@ -332,31 +340,65 @@
       return data.publicUrl;
     }
 
-    /* ========= Theme Song helpers ========= */
+    /* ========= YouTube helpers ========= */
     function isYouTubeUrl(u){ return /youtu\.?be|youtube\.com/i.test(u||''); }
-    function mountYouTube(mountEl, embedUrl){
-      // If someone saved a raw watch link, it will still render, but ideally song_url is an /embed URL
-      mountEl.innerHTML = `
-        <div style="position:relative; border:1px solid var(--green); border-radius:12px; overflow:hidden; box-shadow:0 0 16px rgba(57,255,20,.25);">
-          <iframe
-            src="${embedUrl}"
-            style="width:100%; aspect-ratio:16/9; display:block; border:0"
-            title="Theme Song"
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowfullscreen
-          ></iframe>
-          <div style="position:absolute; left:8px; bottom:8px; background:rgba(0,0,0,.6); color:var(--ink);
-                      padding:6px 10px; border:1px solid var(--green); border-radius:8px; font-weight:800;">
-            Autoplay is muted — tap the video to unmute.
-          </div>
-        </div>`;
+    function isYouTubeId(s){ return /^[A-Za-z0-9_-]{11}$/.test(s||''); }
+    function extractYouTubeIdStrict(input) {
+      if (!input) return null;
+      const s = String(input).trim();
+
+      if (isYouTubeId(s)) return s; // already an ID
+
+      try {
+        const u = new URL(s, location.href);
+        if (/\byoutu\.be$/i.test(u.hostname)) {
+          const id = u.pathname.split('/').filter(Boolean)[0];
+          if (isYouTubeId(id)) return id;
+        }
+        if (/\byoutube\.com$/i.test(u.hostname)) {
+          const v = u.searchParams.get('v');
+          if (isYouTubeId(v)) return v;
+          const parts = u.pathname.split('/').filter(Boolean);
+          if (parts.length >= 2 && ['embed','shorts','live'].includes(parts[0])) {
+            const id = parts[1];
+            if (isYouTubeId(id)) return id;
+          }
+        }
+      } catch {}
+
+      const m = s.match(/([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/);
+      return m ? m[1] : null;
     }
-    function mountAudio(mountEl, src){
-      mountEl.innerHTML = `<audio controls autoplay muted style="width:100%; outline:none; background:transparent"></audio>`;
-      const el = mountEl.querySelector('audio');
-      el.src = src;
-      el.muted = true;
-      el.play().catch(()=>{});
+
+    function makeOrUpdateYTPlayer(){
+      if(!ytVideoId) return;
+
+      // Hide audio, show yt
+      if(songPlayer){ songPlayer.pause(); songPlayer.style.display = 'none'; }
+      if(ytWrap){ ytWrap.style.display = 'block'; }
+
+      // Update existing player if present
+      if(ytPlayer){
+        try { ytPlayer.loadVideoById(ytVideoId); ytPlayer.mute(); return; } catch {}
+      }
+
+      // Create new YT player
+      ytPlayer = new YT.Player('ytPlayer', {
+        videoId: ytVideoId,
+        playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0, modestbranding: 1, controls: 1 },
+        events: {
+          onReady: ()=>{
+            // Unmute on first user interaction anywhere
+            const unmuteOnce = ()=>{
+              try{ if(ytPlayer && ytPlayer.isMuted()) ytPlayer.unMute(); }catch{}
+              document.removeEventListener('click', unmuteOnce, true);
+              document.removeEventListener('touchstart', unmuteOnce, true);
+            };
+            document.addEventListener('click', unmuteOnce, true);
+            document.addEventListener('touchstart', unmuteOnce, true);
+          }
+        }
+      });
     }
 
     /* ========= Quick upload cameras ========= */
@@ -392,23 +434,35 @@
         const file = bgQuickFile.files[0];
         if(!file) return;
         try{
-          if (bgPreview) bgPreview.src = URL.createObjectURL(file); // instant
-          const url = await uploadToBucket(BG_BUCKET, file);
+          if (bgPreview) bgPreview.src = URL.createObjectURL(file); // instant local preview
+          const url = await uploadToBucket(BG_BUCKET, file); // upload to bucket
           if (bgPreview) bgPreview.src = url; cacheSet({ bg_url: url });
-          await sb.from('profiles').upsert({ id:userId, bg_url: url, updated_at: new Date().toISOString() }, { onConflict:'id' });
+          await sb.from('profiles').upsert(
+            { id:userId, bg_url: url, updated_at: new Date().toISOString() },
+            { onConflict:'id' }
+          );
         }catch(e){ console.error(e); alert('Background upload failed'); }
         finally{ bgQuickFile.value = ""; }
       });
     }
 
-    /* ========= Edit link + toast ========= */
+    /* ========= Edit button wiring ========= */
+    function isLocalProtocol(){
+      return location.protocol === 'file:' || location.protocol === 'content:';
+    }
     function wireEditProfileLink(){
       if(!editProfileLink) return;
-      const u = new URL('editprofile.html', location.href);
-      u.searchParams.set('return','profile.html');
-      u.searchParams.set('v', Date.now().toString()); // cache-bust
-      editProfileLink.href = u.toString();
+      let href = 'editprofile.html';
+      if(!isLocalProtocol()){
+        const url = new URL(href, location.href);
+        url.searchParams.set('return','profile.html');
+        url.searchParams.set('v', Date.now().toString());
+        href = url.toString();
+      }
+      editProfileLink.href = href;
     }
+
+    /* ========= Tiny toast ========= */
     function showToast(msg){
       const d = document.createElement('div');
       d.textContent = msg || 'Saved!';
@@ -436,13 +490,13 @@
 
     /* ========= Load profile ========= */
     async function loadProfile(){
-      // Quick paint from cache
+      // Instant paint from local cache
       const cached = cacheGet();
       cached.avatar_url ? setAvatar(cached.avatar_url) : setAvatarPlaceholder();
       if (cached.banner_url && bannerPreview) bannerPreview.src = cached.banner_url;
       if (cached.bg_url && bgPreview)         bgPreview.src = cached.bg_url;
 
-      // DB pull
+      // Fetch from DB
       const { data, error } = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
       if(error){ console.error(error); return; }
       if(!data){
@@ -452,21 +506,38 @@
         return;
       }
 
-      pronounsText.textContent = data.pronouns || "";
-      sunText.textContent      = data.sun || "";
-      moonText.textContent     = data.moon || "";
-      risingText.textContent   = data.rising || "";
-      loveLangText.textContent = data.love_language || "";
-      skillsText.textContent   = Array.isArray(data.skills) ? (data.skills.join(", ")) : (data.skills || "");
-      voidMsgText.textContent  = data.void_message || "";
-      funnyStoryText.textContent = data.funny_story || "";
+      if (pronounsText)  pronounsText.textContent = data.pronouns || "";
+      if (sunText)       sunText.textContent      = data.sun || "";
+      if (moonText)      moonText.textContent     = data.moon || "";
+      if (risingText)    risingText.textContent   = data.rising || "";
+      if (loveLangText)  loveLangText.textContent = data.love_language || "";
+      if (skillsText)    skillsText.textContent   = Array.isArray(data.skills) ? data.skills.join(", ") : (data.skills || "");
+      if (voidMsgText)   voidMsgText.textContent  = data.void_message || "";
+      if (funnyStoryText)funnyStoryText.textContent = data.funny_story || "";
 
-      // Theme Song mount
-      songMount.innerHTML = "";
-      const s = data.song_url || null;
-      if (s){
-        if (isYouTubeUrl(s)) mountYouTube(songMount, s);
-        else                 mountAudio(songMount, s);
+      // --- Theme song selection ---
+      const s = data.song_url || null; // may be YT ID, YT URL, or file URL
+      let asId = null;
+
+      if (isYouTubeId(s)) {
+        asId = s;
+      } else if (isYouTubeUrl(s)) {
+        asId = extractYouTubeIdStrict(s);
+      }
+
+      if (asId) {
+        ytVideoId = asId;
+        if (ytWrap) ytWrap.style.display = 'block';
+        if (songPlayer) { songPlayer.pause(); songPlayer.style.display = 'none'; }
+        if (window.YT && window.YT.Player) makeOrUpdateYTPlayer(); // API already loaded
+      } else if (s) {
+        // Not YouTube → treat as file URL
+        if (songPlayer) { songPlayer.src = s; songPlayer.style.display = 'block'; }
+        if (ytWrap) ytWrap.style.display = 'none';
+      } else {
+        // No song set
+        if (songPlayer) { songPlayer.removeAttribute('src'); songPlayer.style.display = 'none'; }
+        if (ytWrap) ytWrap.style.display = 'none';
       }
 
       // Cache media URLs for snappy reloads
@@ -491,6 +562,18 @@
         console.error('Boot error:', e);
       }
     });
+  </script>
+
+  <!-- Load YouTube IFrame API once; it will call onYouTubeIframeAPIReady() globally -->
+  <script>
+    (function(){
+      const s=document.createElement('script');
+      s.src="https://www.youtube.com/iframe_api";
+      document.head.appendChild(s);
+    })();
+    function onYouTubeIframeAPIReady(){
+      if(typeof makeOrUpdateYTPlayer==='function') makeOrUpdateYTPlayer();
+    }
   </script>
 </body>
 </html>
