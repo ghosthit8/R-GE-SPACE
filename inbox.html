@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rage Space — Inbox</title>
+  <meta name="color-scheme" content="dark" />
+  <style>
+    :root{ --green:#39ff14; --ink:#e5ffe5; --card:#0a0a0a; --border:#103010; --red:#ff0033; }
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{ margin:0; background:#000; color:var(--green); font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; }
+    header{ position:sticky; top:0; z-index:10; background:rgba(0,0,0,.7); backdrop-filter:blur(6px);
+      border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; gap:10px; }
+    a.back{ color:var(--green); text-decoration:none; border:1px solid var(--green); padding:6px 10px; border-radius:999px; font-weight:700; }
+    .wrap{ max-width:940px; margin:0 auto; padding:16px; }
+    .thread{ display:flex; gap:12px; padding:14px; background:linear-gradient(180deg,#0a0a0a,#050505); border:1px solid var(--border);
+      border-radius:12px; margin:10px 0; text-decoration:none; color:var(--ink); align-items:center; }
+    .thread:hover{ outline:2px solid var(--green); }
+    .pfp{ width:48px; height:48px; border-radius:12px; background:#111; border:2px solid var(--green); overflow:hidden; flex:0 0 auto; }
+    .pfp img{ width:100%; height:100%; object-fit:cover; display:block; }
+    .meta{ display:flex; flex-direction:column; min-width:0 }
+    .name{ color:var(--green); font-weight:800; }
+    .last{ color:var(--ink); opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+    .empty{ color:var(--ink); opacity:.7; text-align:center; padding:40px 0; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header>
+    <a class="back" href="./index.html">← Home</a>
+    <h1 style="margin:0;font-size:18px;letter-spacing:.5px;">Direct Messages</h1>
+  </header>
+
+  <main class="wrap">
+    <div id="list"></div>
+    <div id="empty" class="empty" style="display:none;">No conversations yet. Find a profile and hit <b>Message privately</b>.</div>
+  </main>
+
+  <script>
+    const sb = supabase.createClient(
+      "https://tuqvpcevrhciursxrgav.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
+    );
+
+    const list = document.getElementById('list');
+    const empty = document.getElementById('empty');
+    let me = null;
+
+    function threadRow(other, thread, lastMsg){
+      const a = document.createElement('a');
+      a.href = `./dm.html?thread=${thread.id}`;
+      a.className = 'thread';
+      a.innerHTML = `
+        <div class="pfp">${other?.avatar_url ? `<img src="${other.avatar_url}" alt="">` : ''}</div>
+        <div class="meta">
+          <div class="name">${other?.display_name || ('@'+(other?.username||'user'))}</div>
+          <div class="last">${lastMsg?.body ? lastMsg.body : 'No messages yet'}</div>
+        </div>
+      `;
+      return a;
+    }
+
+    async function loadInbox(){
+      list.innerHTML = '';
+      const { data: { session } } = await sb.auth.getSession();
+      if(!session){ location.href = './login.html'; return; }
+      me = session.user;
+
+      // 1) fetch my threads (RLS limits to mine)
+      const { data: threads, error } = await sb
+        .from('dm_threads')
+        .select('id,a,b,created_at')
+        .order('created_at', { ascending:false });
+      if(error){ console.error(error); return; }
+
+      if(!threads || threads.length===0){ empty.style.display = ''; return; }
+      empty.style.display = 'none';
+
+      // 2) fetch other participants' profiles in one go
+      const otherIds = threads.map(t => t.a === me.id ? t.b : t.a);
+      const uniqIds = [...new Set(otherIds)];
+      const { data: others } = await sb
+        .from('profiles')
+        .select('id,username,display_name,avatar_url')
+        .in('id', uniqIds);
+
+      const byId = Object.fromEntries((others||[]).map(u => [u.id, u]));
+
+      // 3) for each thread, get last message (small N → per-thread query is fine)
+      for(const t of threads){
+        const otherId = t.a === me.id ? t.b : t.a;
+        const { data: last } = await sb
+          .from('dm_messages')
+          .select('id,body,created_at,sender')
+          .eq('thread_id', t.id)
+          .order('created_at', { ascending:false })
+          .limit(1)
+          .maybeSingle();
+
+        list.appendChild(threadRow(byId[otherId], t, last));
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadInbox);
+  </script>
+</body>
+</html>
