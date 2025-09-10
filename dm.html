@@ -6,7 +6,7 @@
   <title>Rage Space — DM</title>
   <meta name="color-scheme" content="dark" />
 
-  <!-- Use your global Rage Space styles (scanlines, vars, buttons, etc.) -->
+  <!-- Global Rage Space styles (scanlines live here) -->
   <link rel="stylesheet" href="./css.html" />
 
   <!-- Page-specific tweaks -->
@@ -15,23 +15,29 @@
     *{ box-sizing:border-box }
     body{ margin:0; background:var(--bg); color:var(--green);
       font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased; }
+
+    /* Put chat UI ABOVE the scanline overlay from css.html (which uses body::before with z-index:1) */
+    .topbar, .chat-box, .input-bar { position: relative; z-index: 2; }
+
     .topbar{ display:flex; align-items:center; gap:.75rem; padding:.6rem 1rem;
       border-bottom:1px solid var(--border); position:sticky; top:0; background:#000c; backdrop-filter: blur(6px); }
     .chip{ border:1px solid var(--border); padding:.25rem .6rem; border-radius:999px; }
     .note{ opacity:.7; font-size:.85rem }
+
     .chat-box{ height:calc(100vh - 112px); overflow-y:auto; padding:1rem; display:flex; flex-direction:column; }
     .msg{ margin:.25rem 0; padding:.6rem .75rem; border-radius:12px; max-width:78%; line-height:1.25; word-wrap:break-word; }
     .me{ align-self:flex-end; background:#0f0f0f; color:var(--green); }
-    .them{ align-self:flex-start; background:#171717; color:#e5ffe5; } /* avoid missing --ink */
+    .them{ align-self:flex-start; background:#171717; color:#e5ffe5; }
     .by{ opacity:.85; font-size:.82rem; margin-right:.35rem }
     .ts{ opacity:.55; font-size:.72rem; margin-top:.25rem }
+
     .input-bar{ display:flex; gap:.5rem; padding:.6rem; border-top:1px solid var(--border);
       position:sticky; bottom:0; background:#000; }
     input{ flex:1; background:#000; color:var(--green); border:1px solid #2a2a2a; border-radius:10px; padding:.7rem .8rem; }
     button{ background:var(--green); color:#000; font-weight:800; border:none; border-radius:10px; padding:0 1rem; }
     .empty{ opacity:.6; font-size:.9rem; text-align:center; margin-top:20vh; }
     .err { position:fixed; left:50%; transform:translateX(-50%); bottom:76px; background:#170000; color:#ff9b9b;
-      border:1px solid #330; padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%; }
+      border:1px solid #330; padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%; z-index: 3; }
     .disabled{ opacity:.5; pointer-events:none }
   </style>
 </head>
@@ -39,7 +45,6 @@
 
   <div class="topbar">
     <a class="chip" href="inbox.html">← Inbox</a>
-    <span id="room-label" class="chip">DM</span>
     <span class="note" id="whoami"></span>
   </div>
 
@@ -65,7 +70,6 @@
     /************ Room ************/
     const params = new URLSearchParams(location.search);
     const ROOM_ID = params.get("dm") || "global";
-    document.getElementById("room-label").textContent = `DM — ${ROOM_ID}`;
 
     /************ DOM refs ************/
     const chatBox = document.getElementById("chat");
@@ -77,7 +81,12 @@
     const errBox = document.getElementById("err");
     const renderedIds = new Set();
 
-    function showError(msg){ errBox.textContent = msg; errBox.style.display = "block"; setTimeout(()=> errBox.style.display="none", 2500); }
+    function showError(msg){
+      errBox.textContent = msg;
+      errBox.style.display = "block";
+      clearTimeout(showError._t);
+      showError._t = setTimeout(()=> errBox.style.display="none", 2500);
+    }
 
     function deriveName(u){
       if(!u) return null;
@@ -85,14 +94,14 @@
       return m.username || m.full_name || u.email || ("user-" + (u.id || "").slice(0,6));
     }
 
-    // format timestamp WITH seconds (local timezone)
+    // Timestamp WITH seconds
     function fmtTS(iso){
       try{
         const d = new Date(iso);
         return d.toLocaleString(undefined, {
           month: "short", day: "numeric",
           hour: "numeric", minute: "2-digit", second: "2-digit"
-        }); // e.g., "Sep 10, 7:28:05 PM"
+        });
       }catch(_){ return ""; }
     }
 
@@ -132,7 +141,8 @@
         .select("id, room_id, sender_name, content, created_at")
         .eq("room_id", ROOM_ID)
         .order("created_at", { ascending: true });
-      if(error){ console.error(error); showError("Load failed — check policies"); return; }
+
+      if(error){ console.error(error); showError("Load failed — " + (error.message || "check policies")); return; }
       chatBox.innerHTML = "";
       if (!data || data.length === 0) chatBox.appendChild(emptyState);
       data.forEach(renderMessage);
@@ -141,7 +151,8 @@
     const state = { user: null, displayName: null };
 
     async function ensureAuthAndName(){
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) console.warn("auth.getUser error:", error);
       state.user = user || null;
       state.displayName = deriveName(user);
 
@@ -169,7 +180,7 @@
         .select()
         .single();
 
-      if(error){ console.error("Insert error:", error); showError("Send failed — check RLS policies / keys"); return; }
+      if(error){ console.error("Insert error:", error); showError("Send failed — " + (error.message || "check RLS policies / keys")); return; }
       renderMessage(data);
     });
 
