@@ -71,6 +71,15 @@
     const empty = document.getElementById('empty');
     let me = null;
 
+    // Robust name fallback if profile lacks username/display_name
+    function displayName(u){
+      if(!u) return '@user';
+      if(u.display_name && u.display_name.trim()) return u.display_name;
+      if(u.username && u.username.trim()) return '@' + u.username.trim();
+      const short = (u.id || '').slice(0,6);
+      return short ? ('@user-' + short) : '@user';
+    }
+
     function threadRow(other, thread, lastMsg, isUnread){
       const a = document.createElement('a');
       a.href = `./dm.html?thread=${thread.id}`;
@@ -78,7 +87,7 @@
       a.innerHTML = `
         <div class="pfp">${other?.avatar_url ? `<img src="${other.avatar_url}" alt="">` : ''}</div>
         <div class="meta">
-          <div class="name">${other?.display_name || ('@'+(other?.username||'user'))}</div>
+          <div class="name">${displayName(other)}</div>
           <div class="last">${lastMsg?.body ? lastMsg.body : 'No messages yet'}</div>
         </div>
       `;
@@ -121,6 +130,7 @@
           .limit(1)
           .maybeSingle();
 
+        // localStorage key used by dm.html
         const lastReadKey = `dm_last_read_${t.id}`;
         const lastRead = Number(localStorage.getItem(lastReadKey) || 0);
         const lastTime = last?.created_at ? new Date(last.created_at).getTime() : 0;
