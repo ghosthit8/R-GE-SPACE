@@ -6,33 +6,31 @@
   <title>Rage Space — DM</title>
   <meta name="color-scheme" content="dark" />
 
-  <!-- Global Rage Space styles (scanlines live there on other pages) -->
-  <!-- If your css.html is at the site root, keep the leading slash; otherwise use a relative path -->
-  <link rel="stylesheet" href="/css.html" />
+  <!-- Global Rage Space styles (scanlines, buttons, etc.) -->
+  <link rel="stylesheet" href="./css.html" />
 
-  <!-- Page-specific + scanline fallback (same intensity as your css.html) -->
+  <!-- Page-specific tweaks -->
   <style>
     :root{ --green:#39ff14; --bg:#000; --border:#151515; }
     *{ box-sizing:border-box }
     body{
       margin:0; background:var(--bg); color:var(--green);
-      font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased;
-      position: relative; overflow-x: hidden; /* needed by scanline overlay */
+      font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
+      -webkit-font-smoothing:antialiased;
+      position: relative; overflow-x: hidden; /* for scanline overlay */
     }
 
-    /* === Scanline fallback (same as your css.html) === */
+    /* If css.html fails to load, this is a fallback scanline layer (same intensity). */
     body::before{
       content:"";
-      position: fixed;
-      inset: 0;
+      position: fixed; inset: 0;
       background: repeating-linear-gradient(
         to bottom,
         rgba(57,255,20,0.1) 0px,
         rgba(57,255,20,0.1) 2px,
         transparent 5px
       );
-      pointer-events: none;
-      z-index: 1;
+      pointer-events: none; z-index: 1;
       animation: scrollScan 7s linear infinite;
     }
     @keyframes scrollScan{
@@ -41,21 +39,28 @@
     }
 
     /* Put chat UI ABOVE the overlay */
-    .topbar, .chat-box, .input-bar, .err { position: relative; z-index: 2; }
+    .topbar, .chat-box, .typing-row, .input-bar, .err { position: relative; z-index: 2; }
 
     .topbar{
       display:flex; align-items:center; gap:.75rem; padding:.6rem 1rem;
-      border-bottom:1px solid var(--border); position:sticky; top:0; background:#000c; backdrop-filter: blur(6px);
+      border-bottom:1px solid var(--border); position:sticky; top:0;
+      background:#000c; backdrop-filter: blur(6px);
     }
     .chip{ border:1px solid var(--border); padding:.25rem .6rem; border-radius:999px; }
     .note{ opacity:.7; font-size:.85rem }
 
-    .chat-box{ height:calc(100vh - 112px); overflow-y:auto; padding:1rem; display:flex; flex-direction:column; }
+    .chat-box{
+      height:calc(100vh - 152px); /* leave room for typing + input bar */
+      overflow-y:auto; padding:1rem; display:flex; flex-direction:column;
+    }
     .msg{ margin:.25rem 0; padding:.6rem .75rem; border-radius:12px; max-width:78%; line-height:1.25; word-wrap:break-word; }
     .me{ align-self:flex-end; background:#0f0f0f; color:var(--green); }
-    .them{ align-self:flex-start; background:#171717; color:#e5ffe5; } /* safe fallback for --ink */
+    .them{ align-self:flex-start; background:#171717; color:#e5ffe5; } /* safe fallback */
     .by{ opacity:.85; font-size:.82rem; margin-right:.35rem }
     .ts{ opacity:.55; font-size:.72rem; margin-top:.25rem }
+
+    .typing-row{ padding:0 1rem .25rem; min-height:1.25rem; }
+    #typing-indicator{ opacity:.8; font-size:.85rem; display:none; }
 
     .input-bar{
       display:flex; gap:.5rem; padding:.6rem; border-top:1px solid var(--border);
@@ -66,7 +71,8 @@
       border:1px solid #2a2a2a; border-radius:10px; padding:.7rem .8rem;
     }
     button{
-      background:var(--green); color:#000; font-weight:800; border:none; border-radius:10px; padding:0 1rem;
+      background:var(--green); color:#000; font-weight:800;
+      border:none; border-radius:10px; padding:0 1rem;
     }
     .empty{ opacity:.6; font-size:.9rem; text-align:center; margin-top:20vh; }
     .err{
@@ -86,6 +92,11 @@
 
   <div class="chat-box" id="chat">
     <div class="empty" id="empty">No messages yet. Say hi 👋</div>
+  </div>
+
+  <!-- typing indicator row -->
+  <div class="typing-row">
+    <div id="typing-indicator" class="note"></div>
   </div>
 
   <form class="input-bar" id="chat-form" autocomplete="off">
@@ -115,6 +126,7 @@
     const emptyState = document.getElementById("empty");
     const whoami = document.getElementById("whoami");
     const errBox = document.getElementById("err");
+    const typingEl = document.getElementById("typing-indicator");
     const renderedIds = new Set();
 
     function showError(msg){
@@ -220,6 +232,7 @@
       renderMessage(data);
     });
 
+    /************ Realtime: new messages ************/
     supabase
       .channel("room_" + ROOM_ID)
       .on(
@@ -229,6 +242,50 @@
       )
       .subscribe();
 
+    /************ Realtime: typing indicator (broadcast) ************/
+    // throttle helper
+    function throttle(fn, ms){
+      let last = 0;
+      return (...args) => {
+        const now = Date.now();
+        if (now - last > ms){ last = now; fn(...args); }
+      };
+    }
+
+    let typingHideTimer = null;
+
+    const typingChan = supabase.channel(`typing_${ROOM_ID}`, {
+      config: {
+        broadcast: { self: false },  // don't receive our own typing
+        presence:  { key: 'client' }
+      }
+    });
+
+    typingChan.on('broadcast', { event: 'typing' }, (payload) => {
+      const from = payload?.payload?.name || 'Someone';
+      // don't show if it's us (paranoia check)
+      if (from === state.displayName) return;
+      typingEl.textContent = `${from} is typing…`;
+      typingEl.style.display = 'block';
+      clearTimeout(typingHideTimer);
+      typingHideTimer = setTimeout(() => { typingEl.style.display = 'none'; }, 3000);
+    });
+
+    typingChan.subscribe();
+
+    const sendTyping = throttle(() => {
+      if (!state.user) return;
+      typingChan.send({ type:'broadcast', event:'typing', payload:{ name: state.displayName } });
+    }, 1200);
+
+    // hook input
+    input.addEventListener('input', sendTyping);
+    input.addEventListener('focus', () => {
+      if (!state.user) return;
+      typingChan.send({ type:'broadcast', event:'typing', payload:{ name: state.displayName } });
+    });
+
+    // init
     (async function init(){
       await ensureAuthAndName();
       await loadMessages();
