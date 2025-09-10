@@ -332,18 +332,16 @@
       if (error) console.error('ensureProfileRow:', error);
     }
 
-    // NEW: store display_name / username from auth metadata
+    // NEW: write display_name/username from auth metadata so inbox/DM shows real names
     async function ensureIdentityFields(user){
       if(!user) return;
       const display_name = user.user_metadata?.full_name ?? null;
       const username = user.user_metadata?.username ?? (user.email ? user.email.split('@')[0] : null);
-      if (display_name || username) {
-        const { error } = await sb.from('profiles').upsert(
-          { id: user.id, display_name, username, updated_at: new Date().toISOString() },
-          { onConflict: 'id' }
-        );
-        if (error) console.warn('ensureIdentityFields:', error);
-      }
+      const payload = { id:user.id, updated_at:new Date().toISOString() };
+      if (display_name !== null) payload.display_name = display_name;
+      if (username !== null) payload.username = username;
+      const { error } = await sb.from('profiles').upsert(payload, { onConflict:'id' });
+      if (error) console.warn('ensureIdentityFields:', error);
     }
 
     function setAvatarPlaceholder(){
