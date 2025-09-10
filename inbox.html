@@ -1,79 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Rage Space — Inbox</title>
-  <meta name="color-scheme" content="dark" />
-
-  <!-- If you have a shared stylesheet, keep it + bump ?v= when you change CSS -->
-  <link rel="stylesheet" href="./style.css?v=4" />
-
+  <meta name="color-scheme" content="dark"/>
   <style>
-    :root{ --green:#39ff14; --ink:#e5ffe5; --card:#0a0a0a; --border:#103010; --red:#ff0033; }
-    *{ box-sizing:border-box }
+    :root{ --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --muted:#8aff8a; }
+    *{ box-sizing:border-box; margin:0; padding:0 }
     html,body{ height:100% }
-    body{ margin:0; background:#000; color:var(--green); font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; }
-
-    header{
-      position:sticky; top:0; z-index:10; background:rgba(0,0,0,.7); backdrop-filter:blur(6px);
-      border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; gap:10px;
+    body{
+      background:#000; color:var(--green);
+      font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
+      -webkit-font-smoothing:antialiased;
     }
-    a.back{
-      color:var(--green); text-decoration:none; border:1px solid var(--green);
-      padding:6px 12px; border-radius:999px; font-weight:800;
+    .wrap{ max-width:900px; margin:0 auto; padding:16px }
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px;
     }
-
-    .wrap{ max-width:940px; margin:0 auto; padding:16px; }
-    .thread{
-      display:flex; gap:12px; padding:14px;
-      background:linear-gradient(180deg,#0a0a0a,#050505);
-      border:1px solid var(--border); border-radius:12px;
-      margin:10px 0; text-decoration:none; color:var(--ink); align-items:center;
-      transition:border-color .2s ease, box-shadow .2s ease, transform .08s ease;
-      position:relative;
+    .me-chip{
+      display:inline-flex; align-items:center; gap:10px; padding:8px 12px; border-radius:999px;
+      border:2px solid var(--green); box-shadow:0 0 14px rgba(57,255,20,.35);
+      text-decoration:none; color:var(--green); background:transparent; font-weight:800;
     }
-    .thread:active{ transform:translateY(1px) }
-    .thread:hover{ outline:2px solid var(--green); }
+    .pfp{ width:28px; height:28px; border-radius:50%; border:2px solid var(--green); display:inline-block; overflow:hidden; background:#0a0a0a; }
+    .pfp img{ width:100%; height:100%; object-fit:cover; display:block }
+    .btn{ appearance:none; border:2px solid var(--green); color:#000; background:var(--green); font-weight:800; padding:10px 14px; border-radius:12px; text-decoration:none; }
+    .btn.ghost{ background:transparent; color:var(--green) }
 
-    .pfp{ width:48px; height:48px; border-radius:12px; background:#111; border:2px solid var(--green); overflow:hidden; flex:0 0 auto; }
-    .pfp img{ width:100%; height:100%; object-fit:cover; display:block; }
-
-    .meta{ display:flex; flex-direction:column; min-width:0 }
-    .name{ color:var(--green); font-weight:800; }
-    .last{ color:var(--ink); opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
-
-    .empty{ color:var(--ink); opacity:.7; text-align:center; padding:40px 0; }
-
-    /* 🔴 Unread flicker — inline so it won’t be stale-cached */
-    @keyframes redPulse {
-      0%, 100% { box-shadow: 0 0 0 rgba(255,0,51,0), inset 0 0 0 rgba(255,0,51,0); }
-      50%      { box-shadow: 0 0 14px rgba(255,0,51,.75), 0 0 34px rgba(255,0,51,.35);
-                 outline: 2px solid rgba(255,0,51,.55); }
+    .list{ display:flex; flex-direction:column; gap:10px; }
+    .row{
+      display:flex; align-items:center; gap:12px; padding:12px; border:1px solid #103010; border-radius:12px;
+      background:linear-gradient(180deg,#090909,#050505);
+      text-decoration:none; color:var(--ink);
+      transition: transform .06s ease;
     }
-    .thread.unread{
-      border-color: var(--red);
-      animation: redPulse 1.4s ease-in-out infinite;
-      will-change: box-shadow, outline;
+    .row:active{ transform:translateY(1px) }
+    .who{ color:var(--green); font-weight:900; letter-spacing:.2px }
+    .meta{ margin-left:auto; font-size:12px; color:var(--muted) }
+    .msg{ color:var(--ink); font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:50vw }
+
+    /* red glow for unseen */
+    .unseen{
+      box-shadow:0 0 14px rgba(255,0,51,.55), inset 0 0 50px rgba(255,0,51,.07);
+      border-color:var(--red);
     }
-    @media (prefers-reduced-motion: reduce){
-      .thread.unread{ animation:none; box-shadow:0 0 10px rgba(255,0,51,.6); }
+    .badge{
+      display:inline-block; min-width:20px; padding:2px 6px; border-radius:999px; margin-left:6px;
+      background:#000; border:1px solid currentColor; color:var(--red); font-size:12px; line-height:1; text-align:center;
     }
+    .empty{ margin-top:24px; color:var(--muted) }
   </style>
-
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <header>
-    <!-- Per your requirement: “Home” → “Back” and go to profile.html -->
-    <a class="back" href="./profile.html">← Back</a>
-    <h1 style="margin:0;font-size:18px;letter-spacing:.5px;">Direct Messages</h1>
-  </header>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="btn ghost" href="./menu.html">← Menu</a>
+      <a id="meChip" class="me-chip" href="./profile.html">
+        <span class="pfp" id="mePfp"></span>
+        <span id="meName">…</span>
+      </a>
+      <a id="logoutBtn" class="btn ghost" href="#">Logout</a>
+    </div>
 
-  <main class="wrap">
-    <div id="list"></div>
-    <div id="empty" class="empty" style="display:none;">No conversations yet. Find a profile and hit <b>Message privately</b>.</div>
-  </main>
+    <h2 style="margin:6px 0 14px; letter-spacing:.25px;">Inbox</h2>
+    <div id="list" class="list"></div>
+    <p id="empty" class="empty" style="display:none">No messages yet.</p>
+  </div>
 
   <script>
     const sb = supabase.createClient(
@@ -81,97 +75,147 @@
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
-    const list  = document.getElementById('list');
-    const empty = document.getElementById('empty');
+    const meName = document.getElementById('meName');
+    const mePfp  = document.getElementById('mePfp');
+    const listEl = document.getElementById('list');
+    const emptyEl= document.getElementById('empty');
+
     let me = null;
 
-    function lastReadKey(threadId){ return `dm_last_read_${threadId}`; }
-    function getLastRead(threadId){
-      const v = localStorage.getItem(lastReadKey(threadId));
-      return v ? parseInt(v, 10) : 0;
+    const bust = (url, ver=Date.now()) => url ? (url + (url.includes('?')?'&':'?') + 'v=' + ver) : url;
+
+    async function getProfile(uid){
+      const { data, error } = await sb.from('profiles').select('id,username,display_name,avatar_url,updated_at').eq('id', uid).maybeSingle();
+      if(error) { console.warn('profile lookup', error); }
+      return data || null;
     }
 
-    function threadRow(other, thread, lastMsg, unread){
-      const a = document.createElement('a');
-      a.href = `./dm.html?thread=${thread.id}`;
-      a.className = 'thread' + (unread ? ' unread' : '');
-      a.innerHTML = `
-        <div class="pfp">${other?.avatar_url ? `<img src="${other.avatar_url}" alt="">` : ''}</div>
-        <div class="meta">
-          <div class="name">${other?.display_name?.trim()
-            || (other?.username ? '@'+other.username.trim() : '@user-' + (other?.id||'').slice(0,6))}</div>
-          <div class="last">${lastMsg?.body ? lastMsg.body : 'No messages yet'}</div>
-        </div>
-      `;
-      return a;
+    function nameFrom(profile){
+      return profile?.username || profile?.display_name || 'user';
     }
 
-    async function loadInbox(){
-      list.innerHTML = '';
-      const { data: { session } } = await sb.auth.getSession();
-      if(!session){ location.href = './login.html'; return; }
-      me = session.user;
+    function setMyHeader(profile){
+      meName.textContent = nameFrom(profile);
+      if(profile?.avatar_url){
+        mePfp.innerHTML = `<img alt="" src="${bust(profile.avatar_url, profile.updated_at ? new Date(profile.updated_at).getTime() : Date.now())}">`;
+      } else {
+        mePfp.innerHTML = "";
+      }
+    }
 
-      // 1) My threads (RLS should scope these)
-      const { data: threads, error: tErr } = await sb
+    function threadKey(tid){ return `dm_last_read_${tid}`; }
+    function getLastRead(tid){
+      try{ return parseInt(localStorage.getItem(threadKey(tid))||'0',10) || 0; }catch{ return 0; }
+    }
+    function setLastRead(tid, ts){
+      try{ localStorage.setItem(threadKey(tid), String(ts||Date.now())); }catch{}
+    }
+
+    async function loadThreads(){
+      const { data: threads, error } = await sb
         .from('dm_threads')
-        .select('id,a,b,created_at')
+        .select('id,a,b,created_at,updated_at')
+        .or(`a.eq.${me.id},b.eq.${me.id}`)
+        .order('updated_at', { ascending:false })
         .order('created_at', { ascending:false });
 
-      if(tErr){ console.error(tErr); return; }
+      if(error){ console.error(error); return; }
 
-      if(!threads || threads.length===0){ empty.style.display = ''; return; }
-      empty.style.display = 'none';
+      listEl.innerHTML = '';
+      if(!threads || threads.length === 0){
+        emptyEl.style.display = '';
+        return;
+      }
+      emptyEl.style.display = 'none';
 
-      // 2) Others’ profiles
-      const otherIds = threads.map(t => t.a === me.id ? t.b : t.a);
-      const uniqIds = [...new Set(otherIds)];
-      const { data: others, error: oErr } = await sb
-        .from('profiles')
-        .select('id,username,display_name,avatar_url')
-        .in('id', uniqIds);
-
-      if(oErr){ console.warn(oErr); }
-
-      const byId = Object.fromEntries((others||[]).map(u => [u.id, u]));
-
-      // 3) Last msg per thread + unread calc
       for(const t of threads){
-        const otherId = t.a === me.id ? t.b : t.a;
+        const otherId = (t.a === me.id) ? t.b : t.a;
 
-        const { data: last } = await sb
+        // fetch last message
+        const { data:lastMsg } = await sb
           .from('dm_messages')
-          .select('id,body,created_at,sender')
+          .select('id,sender,content,created_at')
           .eq('thread_id', t.id)
           .order('created_at', { ascending:false })
           .limit(1)
           .maybeSingle();
 
-        const lastTs = last?.created_at ? Date.parse(last.created_at) : 0;
-        const lastReadTs = getLastRead(t.id);
-        const isUnread = !!(last && last.sender !== me.id && lastTs > lastReadTs);
+        // fetch other profile
+        const other = await getProfile(otherId);
+        const otherName = nameFrom(other);
+        const ver = other?.updated_at ? new Date(other.updated_at).getTime() : Date.now();
+        const avatar = other?.avatar_url ? `<img alt="" src="${bust(other.avatar_url, ver)}">` : '';
 
-        list.appendChild(threadRow(byId[otherId], t, last, isUnread));
+        // unseen?
+        const lastRead = getLastRead(t.id);
+        const lastTs = lastMsg ? new Date(lastMsg.created_at).getTime() : new Date(t.updated_at || t.created_at).getTime();
+        const isFromOther = lastMsg ? (lastMsg.sender !== me.id) : false;
+        const unseen = isFromOther && lastTs > lastRead;
 
-        // Realtime updates for each thread (so glow flips on without reload)
-        sb.channel(`dm_thread_${t.id}`)
-          .on('postgres_changes',
-              { event:'INSERT', schema:'public', table:'dm_messages', filter:`thread_id=eq.${t.id}` },
-              (payload)=>{
-                const newMsg = payload.new;
-                // Only mark unread if it's from the other user
-                if(newMsg.sender !== me.id){
-                  // find the row and add .unread
-                  const row = [...list.querySelectorAll('a.thread')]
-                    .find(el => el.getAttribute('href')?.includes(`thread=${t.id}`));
-                  if(row) row.classList.add('unread');
-                }
-              }
-          ).subscribe();
+        // row
+        const a = document.createElement('a');
+        a.className = 'row' + (unseen ? ' unseen' : '');
+        a.href = `./dm.html?thread=${t.id}`;
+        a.innerHTML = `
+          <span class="pfp">${avatar}</span>
+          <div style="min-width:0">
+            <div class="who">${otherName}${unseen?'<span class="badge">new</span>':''}</div>
+            <div class="msg">${lastMsg?.content ? escapeHtml(lastMsg.content) : '— no messages yet —'}</div>
+          </div>
+          <div class="meta">${timeAgo(lastMsg?.created_at || t.updated_at || t.created_at)}</div>
+        `;
+        // mark read when clicked
+        a.addEventListener('click', ()=> setLastRead(t.id, Date.now()));
+        listEl.appendChild(a);
       }
     }
 
-    document.addEventListener('DOMContentLoaded', loadInbox);
+    function escapeHtml(s){
+      return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function timeAgo(iso){
+      if(!iso) return '';
+      const d = new Date(iso).getTime(), now = Date.now();
+      const s = Math.max(1, Math.floor((now - d)/1000));
+      const units = [
+        ['y', 31536000],
+        ['mo', 2592000],
+        ['d', 86400],
+        ['h', 3600],
+        ['m', 60],
+      ];
+      for(const [u, sec] of units){
+        if(s >= sec) return Math.floor(s/sec) + u;
+      }
+      return s + 's';
+    }
+
+    async function boot(){
+      const { data:{ session } } = await sb.auth.getSession();
+      if(!session){ location.href='./login.html'; return; }
+      me = session.user;
+
+      // header: pull my profile (to avoid showing email)
+      const myProfile = await getProfile(me.id);
+      setMyHeader(myProfile);
+
+      // logout
+      document.getElementById('logoutBtn').onclick = async (e)=>{
+        e.preventDefault();
+        await sb.auth.signOut();
+        location.href='./index.html';
+      };
+
+      await loadThreads();
+
+      // realtime: bump list on new messages
+      sb.channel('dm_inbox_rt')
+        .on('postgres_changes', { event: '*', schema:'public', table:'dm_messages' }, loadThreads)
+        .subscribe();
+    }
+
+    document.addEventListener('DOMContentLoaded', boot);
   </script>
 </body>
 </html>
