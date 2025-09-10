@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="dark" />
   <style>
     :root{
-      --green:#39ff14; --bg:#000; --ink:#e5ffe5; --border:#0f2a0f; --red:#ff0033; --muted:#8aff8a;
+      --green:#39ff14; --bg:#000; --ink:#e5ffe5; --border:#0f2a0f; --red:#ff0033;
     }
     *{ box-sizing:border-box }
     body{
@@ -59,7 +59,7 @@
     .meta{ display:flex; flex-direction:column; gap:6px; flex:1; min-width:0; }
     .row1{ display:flex; align-items:center; gap:10px; }
     .name{ color:var(--green); font-weight:900; font-size:1.05rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .time{ margin-left:auto; color:var(--muted); opacity:.9; font-size:.85rem; white-space:nowrap; }
+    .time{ margin-left:auto; color:#8aff8a; opacity:.8; font-size:.85rem; white-space:nowrap; }
     .last{ color:var(--ink); opacity:.9; font-size:.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .err{
       position:fixed; left:50%; transform:translateX(-50%); bottom:76px; z-index:10;
@@ -101,34 +101,25 @@
     }
 
     /* ---------- Helpers ---------- */
-    const bust = (url, ver=Date.now()) => url ? (url + (url.includes('?')?'&':'?') + 'v=' + ver) : url;
-
     function lastReadKey(threadId){ return `dm_last_read_${threadId}`; }
     function getLastRead(threadId){
       const v = localStorage.getItem(lastReadKey(threadId));
       return v ? parseInt(v, 10) : 0;
     }
-    function setLastRead(threadId, ts){
-      try{ localStorage.setItem(lastReadKey(threadId), String(ts||Date.now())); }catch{}
-    }
-
     const fmtTime = (iso)=>{
       if(!iso) return '';
       const d = new Date(iso);
       return d.toLocaleString([], { month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' });
     };
 
-    // Name fallback: username -> display_name -> @user-<id6>
+    // Prefer @username; only use display_name if it does NOT look like an email
     function nameFromProfile(p, otherId){
       if (p) {
-        if (p.username && p.username.trim())     return '@' + p.username.trim();
-        if (p.display_name && p.display_name.trim()) return p.display_name.trim();
+        if (p.username && p.username.trim()) return '@' + p.username.trim();
+        if (p.display_name && p.display_name.trim() && !p.display_name.includes('@'))
+          return p.display_name.trim();
       }
       return '@user-' + (otherId || '').slice(0,6);
-    }
-
-    function escapeHtml(s){
-      return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
     function threadRow(otherProfile, otherId, thread, lastMsg, unread){
@@ -137,25 +128,19 @@
       a.href = `./dm.html?thread=${thread.id}`;
       a.className = 'thread' + (unread ? ' unread' : '');
 
-      const ver = otherProfile?.updated_at ? new Date(otherProfile.updated_at).getTime() : Date.now();
-      const avatar = otherProfile?.avatar_url ? `<img src="${bust(otherProfile.avatar_url, ver)}" alt="">` : '';
-
-      const lastTextRaw = (lastMsg?.content ?? lastMsg?.body ?? '');
-      const lastText = lastTextRaw ? escapeHtml(lastTextRaw) : 'No messages yet';
+      const avatar = otherProfile?.avatar_url
+        ? `<img src="${otherProfile.avatar_url}" alt="">` : '';
 
       a.innerHTML = `
         <div class="pfp">${avatar}</div>
         <div class="meta">
           <div class="row1">
             <div class="name">${name}</div>
-            <div class="time">${fmtTime(lastMsg?.created_at || thread.created_at)}</div>
+            <div class="time">${fmtTime(lastMsg?.created_at)}</div>
           </div>
-          <div class="last">${lastText}</div>
+          <div class="last">${lastMsg?.body ? lastMsg.body : 'No messages yet'}</div>
         </div>
       `;
-
-      // When you click in, mark as read immediately so glow clears on return
-      a.addEventListener('click', ()=> setLastRead(thread.id, Date.now()));
       return a;
     }
 
@@ -169,53 +154,50 @@
       if (!session) { location.href = './login.html'; return; }
       me = session.user;
 
-      // Only threads I'm in
+      // Filter to only threads the user participates in (avoids RLS errors)
       const { data: threads, error: tErr } = await sb
         .from('dm_threads')
-        .select('id,a,b,created_at,updated_at')
+        .select('id,a,b,created_at')
         .or(`a.eq.${me.id},b.eq.${me.id}`)
-        .order('updated_at', { ascending:false })
         .order('created_at', { ascending:false });
 
       if (tErr) { showErr('Failed to load threads'); console.error(tErr); return; }
+
       if (!threads || threads.length === 0) { empty.style.display = ''; return; }
       empty.style.display = 'none';
 
       const otherIds = threads.map(t => t.a === me.id ? t.b : t.a);
-      const uniqOther = [...new Set(otherIds)];
+      const uniq = [...new Set(otherIds)];
 
-      // Load profiles for the OTHER users
-      let profilesById = {};
-      if (uniqOther.length){
-        const { data: profiles, error: pErr } = await sb
-          .from('profiles')
-          .select('id,username,display_name,avatar_url,updated_at')
-          .in('id', uniqOther);
-        if (pErr) console.warn('profiles error:', pErr);
-        profilesById = Object.fromEntries((profiles||[]).map(p => [p.id, p]));
-      }
+      // Load profiles for the OTHER users (may be empty for some; we’ll fallback)
+      const { data: profiles, error: pErr } = await sb
+        .from('profiles')
+        .select('id,username,display_name,avatar_url')
+        .in('id', uniq);
+
+      if (pErr) { console.warn('profiles error:', pErr); }
+
+      const byId = Object.fromEntries((profiles||[]).map(p => [p.id, p]));
 
       for (const t of threads){
         const otherId = (t.a === me.id) ? t.b : t.a;
 
-        // Last message in thread (uses 'content', falls back to 'body')
+        // Get last message in thread
         const { data: last } = await sb
           .from('dm_messages')
-          .select('id,content,body,created_at,sender')
+          .select('id,body,created_at,sender')
           .eq('thread_id', t.id)
           .order('created_at', { ascending:false })
           .limit(1)
           .maybeSingle();
 
-        const lastTs = last?.created_at ? Date.parse(last.created_at) : Date.parse(t.updated_at || t.created_at);
+        const lastTs = last?.created_at ? Date.parse(last.created_at) : 0;
         const lastReadTs = getLastRead(t.id);
         const isUnread = !!(last && last.sender !== me.id && lastTs > lastReadTs);
 
-        list.appendChild(
-          threadRow(profilesById[otherId], otherId, t, last, isUnread)
-        );
+        list.appendChild(threadRow(byId[otherId], otherId, t, last, isUnread));
 
-        // Realtime glow when new message arrives from other person
+        // Realtime: if a new message arrives from the other person, mark glow
         sb.channel(`dm_thread_${t.id}`)
           .on('postgres_changes',
               { event:'INSERT', schema:'public', table:'dm_messages', filter:`thread_id=eq.${t.id}` },
