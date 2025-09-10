@@ -6,32 +6,74 @@
   <title>Rage Space — Inbox</title>
   <meta name="color-scheme" content="dark" />
   <style>
-    :root{ --green:#39ff14; --ink:#e5ffe5; --card:#0a0a0a; --border:#103010; --red:#ff0033; }
+    :root{
+      --green:#39ff14; --ink:#e5ffe5; --card:#0a0a0a; --border:#103010; --red:#ff0033;
+    }
     *{ box-sizing:border-box }
     html,body{ height:100% }
-    body{ margin:0; background:#000; color:var(--green); font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased; }
-    header{ position:sticky; top:0; z-index:10; background:rgba(0,0,0,.7); backdrop-filter:blur(6px); border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; gap:10px; }
-    a.back{ color:var(--green); text-decoration:none; border:1px solid var(--green); padding:6px 10px; border-radius:999px; font-weight:700; }
-    a.back:hover{ background:rgba(57,255,20,.08); }
+    body{
+      margin:0; background:#000; color:var(--green);
+      font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+
+    header{
+      position:sticky; top:0; z-index:10; background:rgba(0,0,0,.7); backdrop-filter:blur(6px);
+      border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; gap:10px;
+    }
+    a.back{
+      color:var(--green); text-decoration:none; border:1px solid var(--green);
+      padding:6px 10px; border-radius:999px; font-weight:800;
+    }
     .wrap{ max-width:940px; margin:0 auto; padding:16px; }
 
-    .thread{ position:relative; display:flex; gap:12px; padding:14px; background:linear-gradient(180deg,#0a0a0a,#050505); border:1px solid var(--border); border-radius:12px; margin:10px 0; text-decoration:none; color:var(--ink); align-items:center; transition:transform .15s ease; }
-    .thread:hover{ outline:2px solid var(--green); transform:translateY(-1px); }
+    .thread{
+      display:flex; gap:12px; padding:14px;
+      background:linear-gradient(180deg,#0a0a0a,#050505);
+      border:1px solid var(--border); border-radius:12px; margin:10px 0;
+      text-decoration:none; color:var(--ink); align-items:center;
+      transition: box-shadow .2s ease, outline .2s ease, border-color .2s ease;
+      position: relative;
+    }
+    .thread:hover{ outline:2px solid var(--green); }
 
     .pfp{ width:48px; height:48px; border-radius:12px; background:#111; border:2px solid var(--green); overflow:hidden; flex:0 0 auto; }
     .pfp img{ width:100%; height:100%; object-fit:cover; display:block; }
 
-    .meta{ display:flex; flex-direction:column; min-width:0 }
-    .name{ color:var(--green); font-weight:800; }
+    .meta{ display:flex; flex-direction:column; min-width:0; flex:1; }
+    .row1{ display:flex; align-items:center; gap:8px; min-width:0; }
+    .name{ color:var(--green); font-weight:900; letter-spacing:.2px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .time{ color:var(--ink); opacity:.6; font-size:.85rem; margin-left:auto; }
     .last{ color:var(--ink); opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 
-    .thread.unread{ border-color:rgba(255,0,51,.7); box-shadow:0 0 16px rgba(255,0,51,.35), inset 0 0 10px rgba(255,0,51,.16); animation:flicker-red 2.2s infinite ease-in-out; }
-    .thread.unread::after{ content:''; position:absolute; right:10px; top:10px; width:10px; height:10px; border-radius:999px; background:var(--red); box-shadow:0 0 10px rgba(255,0,51,.9), 0 0 20px rgba(255,0,51,.6); }
-    @keyframes flicker-red{ 0%,100%{box-shadow:0 0 12px rgba(255,0,51,.25), inset 0 0 8px rgba(255,0,51,.12);} 10%{box-shadow:0 0 22px rgba(255,0,51,.5), inset 0 0 14px rgba(255,0,51,.2);} 25%{box-shadow:0 0 9px rgba(255,0,51,.18), inset 0 0 6px rgba(255,0,51,.1);} 55%{box-shadow:0 0 24px rgba(255,0,51,.55), inset 0 0 16px rgba(255,0,51,.22);} 75%{box-shadow:0 0 11px rgba(255,0,51,.22), inset 0 0 8px rgba(255,0,51,.12);} }
-    @media (prefers-reduced-motion:reduce){ .thread.unread{ animation:none; } }
+    /* Unread reddish flicker */
+    @keyframes flickerRed {
+      0%   { box-shadow: 0 0 0 rgba(255,0,51,0), inset 0 0 0 rgba(255,0,51,0); border-color: var(--border); }
+      4%   { box-shadow: 0 0 14px rgba(255,0,51,.75); border-color: rgba(255,0,51,.85); }
+      8%   { box-shadow: 0 0 6px rgba(255,0,51,.25); }
+      12%  { box-shadow: 0 0 18px rgba(255,0,51,.9); }
+      16%  { box-shadow: 0 0 10px rgba(255,0,51,.35); }
+      20%  { box-shadow: 0 0 16px rgba(255,0,51,.75); }
+      100% { box-shadow: 0 0 8px rgba(255,0,51,.3); border-color: rgba(255,0,51,.7); }
+    }
+    .unread{
+      animation: flickerRed 2.2s infinite steps(20);
+    }
+    .badge{
+      background:#000; border:1px solid var(--red); color:#ffd9e0; font-weight:800;
+      padding:2px 6px; border-radius:999px; font-size:.75rem; letter-spacing:.2px;
+    }
 
     .empty{ color:var(--ink); opacity:.7; text-align:center; padding:40px 0; }
+    .err{
+      position:fixed; left:50%; transform:translateX(-50%);
+      bottom:76px; background:#170000; color:#ff9b9b; border:1px solid #330;
+      padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%;
+      z-index: 50; white-space:pre-wrap;
+    }
   </style>
+
+  <!-- Supabase v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -45,35 +87,106 @@
     <div id="empty" class="empty" style="display:none;">No conversations yet. Find a profile and hit <b>Message privately</b>.</div>
   </main>
 
+  <div id="err" class="err"></div>
+
   <script>
+    /* ------------------ Supabase ------------------ */
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
+    /* ------------------ DOM ------------------ */
     const list = document.getElementById('list');
     const empty = document.getElementById('empty');
+    const errBox = document.getElementById('err');
+
+    function showError(msg, extra){
+      errBox.textContent = extra ? `${msg}\n${extra}` : msg;
+      errBox.style.display = 'block';
+      clearTimeout(showError._t);
+      showError._t = setTimeout(()=> errBox.style.display='none', 3500);
+      console.error('[inbox]', msg, extra || '');
+    }
+
     let me = null;
+    // cache of profiles we’ve already fetched
+    const profileCache = new Map(); // id -> { id, username, display_name, avatar_url }
 
-    const safeName = (p, id) =>
-      (p?.display_name && p.display_name.trim()) ? p.display_name.trim()
-      : (p?.username && p.username.trim()) ? '@'+p.username.trim()
-      : '@user-'+(id||'').slice(0,6);
+    function displayNameForProfile(p){
+      if(!p) return '@user-????';
+      return (p.display_name && p.display_name.trim())
+        || (p.username && ('@' + p.username.trim()))
+        || ('@user-' + (p.id||'').slice(0,6));
+    }
 
-    function threadRow(other, otherId, thread, lastMsg, isUnread){
+    function lastReadKey(threadId){ return `dm_last_read_${threadId}`; }
+    function getLastRead(threadId){
+      const v = localStorage.getItem(lastReadKey(threadId));
+      const n = v ? Number(v) : 0;
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    // Build a single thread row element
+    function threadRow({thread, otherProfile, lastMsg, unread}){
       const a = document.createElement('a');
       a.href = `./dm.html?thread=${thread.id}`;
-      a.className = 'thread' + (isUnread ? ' unread' : '');
+      a.className = 'thread' + (unread ? ' unread' : '');
+      a.dataset.threadId = thread.id;
+
+      const name = displayNameForProfile(otherProfile);
+      const lastText = lastMsg?.body ? lastMsg.body : 'No messages yet';
+      const ts = lastMsg?.created_at ? new Date(lastMsg.created_at) : null;
+      const timeStr = ts ? ts.toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+
       a.innerHTML = `
-        <div class="pfp">${other?.avatar_url ? `<img src="${other.avatar_url}" alt="">` : ''}</div>
+        <div class="pfp">${otherProfile?.avatar_url ? `<img src="${otherProfile.avatar_url}" alt="">` : ''}</div>
         <div class="meta">
-          <div class="name">${safeName(other, otherId)}</div>
-          <div class="last">${lastMsg?.body ? lastMsg.body : 'No messages yet'}</div>
+          <div class="row1">
+            <div class="name">${name}</div>
+            <div class="time">${timeStr}</div>
+            ${unread ? `<span class="badge">NEW</span>` : ``}
+          </div>
+          <div class="last">${lastText}</div>
         </div>
       `;
       return a;
     }
 
+    // Update/replace a thread row in the list
+    function upsertThreadRow(rendered){
+      const existing = list.querySelector(`.thread[data-thread-id="${rendered.thread.id}"]`);
+      const el = threadRow(rendered);
+      if(existing) existing.replaceWith(el);
+      else list.appendChild(el);
+    }
+
+    // Load profiles in bulk and fill cache
+    async function fetchProfiles(ids){
+      const need = ids.filter(id => !profileCache.has(id));
+      if(need.length === 0) return;
+      const { data, error } = await sb
+        .from('profiles')
+        .select('id,username,display_name,avatar_url')
+        .in('id', need);
+      if(error){ showError('Failed to load profiles', error.message); return; }
+      (data||[]).forEach(p => profileCache.set(p.id, p));
+    }
+
+    // Get last message for a thread
+    async function fetchLastMessage(threadId){
+      const { data, error } = await sb
+        .from('dm_messages')
+        .select('id,body,created_at,sender')
+        .eq('thread_id', threadId)
+        .order('created_at', { ascending:false })
+        .limit(1)
+        .maybeSingle();
+      if(error){ showError('Failed to load last message', error.message); }
+      return data || null;
+    }
+
+    // Render the entire inbox
     async function loadInbox(){
       list.innerHTML = '';
       const { data: { session } } = await sb.auth.getSession();
@@ -84,41 +197,71 @@
         .from('dm_threads')
         .select('id,a,b,created_at')
         .order('created_at', { ascending:false });
-      if(error){ console.error(error); empty.textContent='Error loading conversations.'; empty.style.display=''; return; }
+      if(error){ showError('Failed to load threads', error.message); return; }
 
-      if(!threads || threads.length===0){ empty.style.display=''; return; }
+      if(!threads || threads.length === 0){ empty.style.display=''; return; }
       empty.style.display='none';
 
+      // resolve other participant ids
       const otherIds = threads.map(t => t.a === me.id ? t.b : t.a);
-      const uniqIds = [...new Set(otherIds)];
-      const { data: others } = await sb
-        .from('profiles')
-        .select('id,username,display_name,avatar_url')
-        .in('id', uniqIds);
+      const uniqOtherIds = [...new Set(otherIds)];
+      await fetchProfiles(uniqOtherIds);
 
-      const byId = Object.fromEntries((others||[]).map(u => [u.id, u]));
-
+      // per-thread last messages
       for(const t of threads){
         const otherId = t.a === me.id ? t.b : t.a;
+        const otherProfile = profileCache.get(otherId) || null;
+        const lastMsg = await fetchLastMessage(t.id);
 
-        const { data: last } = await sb
-          .from('dm_messages')
-          .select('id,body,created_at,sender')
-          .eq('thread_id', t.id)
-          .order('created_at', { ascending:false })
-          .limit(1)
-          .maybeSingle();
+        const lastRead = getLastRead(t.id); // ms
+        const lastMsgMs = lastMsg?.created_at ? new Date(lastMsg.created_at).getTime() : 0;
 
-        const lastReadKey = `dm_last_read_${t.id}`;
-        const lastRead = Number(localStorage.getItem(lastReadKey) || 0);
-        const lastTime = last?.created_at ? new Date(last.created_at).getTime() : 0;
-        const isUnread = !!(last && last.sender !== me.id && lastTime > lastRead);
+        // unread if: there is a message newer than our lastRead AND it was sent by the other user
+        const unread = !!(lastMsg && lastMsgMs > lastRead && lastMsg.sender !== me.id);
 
-        list.appendChild(threadRow(byId[otherId], otherId, t, last, isUnread));
+        upsertThreadRow({ thread:t, otherProfile, lastMsg, unread });
       }
     }
 
-    document.addEventListener('DOMContentLoaded', loadInbox);
+    // Live updates when new messages arrive → update affected thread row
+    function subscribeRealtime(){
+      sb
+        .channel('inbox_rt')
+        .on('postgres_changes',
+            { event:'INSERT', schema:'public', table:'dm_messages' },
+            async (payload)=>{
+              const m = payload.new;
+              // Only care about threads I am in
+              const { data: t } = await sb
+                .from('dm_threads')
+                .select('id,a,b')
+                .eq('id', m.thread_id)
+                .maybeSingle();
+              if(!t) return;
+              if(!(t.a === me.id || t.b === me.id)) return;
+
+              const otherId = t.a === me.id ? t.b : t.a;
+              await fetchProfiles([otherId]);
+              const otherProfile = profileCache.get(otherId) || null;
+
+              const lastMsg = {
+                id: m.id, body: m.body, created_at: m.created_at, sender: m.sender
+              };
+
+              const lastRead = getLastRead(t.id);
+              const lastMsgMs = new Date(m.created_at).getTime();
+              const unread = (m.sender !== me.id) && (lastMsgMs > lastRead);
+
+              upsertThreadRow({ thread:t, otherProfile, lastMsg, unread });
+            }
+        )
+        .subscribe();
+    }
+
+    document.addEventListener('DOMContentLoaded', async ()=>{
+      await loadInbox();
+      subscribeRealtime();
+    });
   </script>
 </body>
 </html>
