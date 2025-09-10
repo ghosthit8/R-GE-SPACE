@@ -41,7 +41,7 @@
     .chip{ border:1px solid var(--border); padding:.25rem .6rem; border-radius:999px; }
     .note{ opacity:.7; font-size:.85rem }
 
-    /* extra: tiny pfp + other name resolved from dm_threads */
+    /* tiny pfp + other name from dm_threads */
     .tiny-pfp{ width:26px; height:26px; border-radius:8px; overflow:hidden; border:1px solid var(--green); background:#111; }
     .tiny-pfp img{ width:100%; height:100%; object-fit:cover; display:block; }
     .otherName{ font-weight:800; letter-spacing:.2px; }
@@ -62,7 +62,7 @@
     button{ background:var(--green); color:#000; font-weight:800; border:none; border-radius:10px; padding:0 1rem; }
     .empty{ opacity:.6; font-size:.9rem; text-align:center; margin-top:20vh; }
     .err{ position:fixed; left:50%; transform:translateX(-50%); bottom:76px; background:#170000; color:#ff9b9b; border:1px solid #330;
-      padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%; }
+      padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%; white-space:pre-wrap; }
     .disabled{ opacity:.5; pointer-events:none }
   </style>
 </head>
@@ -90,17 +90,17 @@
 
   <div id="err" class="err"></div>
 
-  <!-- Supabase client -->
-  <script src="https://unpkg.com/@supabase/supabase-js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     /************ Supabase config ************/
-    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const sb = supabase.createClient(
+      "https://tuqvpcevrhciursxrgav.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
+    );
 
     /************ Resolve thread id ************/
     const sp = new URLSearchParams(location.search);
-    const THREAD_ID = sp.get("thread") || sp.get("dm"); // support both
+    const THREAD_ID = sp.get("thread") || sp.get("dm");
     if(!THREAD_ID){ alert("Missing thread id"); location.href = "inbox.html"; }
 
     /************ Unread marker used by inbox ************/
@@ -121,11 +121,12 @@
     const renderedIds = new Set();
 
     /************ Helpers ************/
-    function showError(msg){
-      errBox.textContent = msg;
+    function showError(msg, extra){
+      errBox.textContent = extra ? `${msg}\n${extra}` : msg;
       errBox.style.display = "block";
       clearTimeout(showError._t);
-      showError._t = setTimeout(()=> errBox.style.display="none", 2500);
+      showError._t = setTimeout(()=> errBox.style.display="none", 4500);
+      console.error(msg, extra || "");
     }
     const fmtTS = iso => {
       try{
@@ -149,19 +150,14 @@
       const div = document.createElement("div");
       div.className = "msg " + (mine ? "me" : "them");
 
-      const who = document.createElement("span");
-      who.className = "by";
-      who.textContent = mine ? "You:" : "";
-
       const text = document.createElement("span");
-      text.textContent = " " + (row.body || "");
+      text.textContent = (row.body || "");
 
       const ts = document.createElement("div");
       ts.className = "ts";
       ts.textContent = fmtTS(row.created_at);
       ts.style.textAlign = mine ? "right" : "left";
 
-      if (who.textContent) div.appendChild(who);
       div.appendChild(text);
       div.appendChild(ts);
 
@@ -174,13 +170,13 @@
     }
 
     async function loadMessages(){
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("dm_messages")
         .select("id, thread_id, sender, body, created_at")
         .eq("thread_id", THREAD_ID)
         .order("created_at", { ascending: true });
 
-      if(error){ console.error("Load error:", error); showError("Load failed — " + (error.message || "check policies")); return; }
+      if(error){ showError("Load failed — check table/permissions.", JSON.stringify(error, null, 2)); return; }
       chatBox.innerHTML = "";
       if (!data || data.length === 0) {
         if (!emptyState.parentNode) chatBox.appendChild(emptyState);
@@ -192,32 +188,34 @@
 
     async function loadOtherHeader(meId){
       try{
-        const { data: t } = await supabase
+        const { data: t, error: te } = await sb
           .from("dm_threads")
           .select("id,a,b")
           .eq("id", THREAD_ID)
           .maybeSingle();
+        if(te){ console.warn(te); return; }
         if(!t) return;
         const otherId = (t.a === meId) ? t.b : t.a;
-        const { data: p } = await supabase
+        const { data: p, error: pe } = await sb
           .from("profiles")
           .select("id,username,display_name,avatar_url")
           .eq("id", otherId)
           .maybeSingle();
-        otherNameEl.textContent = nameFromProfile(p);
+        if(pe){ console.warn(pe); }
+        otherNameEl.textContent = nameFromProfile(p) || ('@user-' + (otherId||'').slice(0,6));
         otherNameEl.style.display = "inline";
         if(p?.avatar_url){
           otherPfpEl.innerHTML = `<img src="${p.avatar_url}" alt="">`;
           otherPfpEl.style.display = "block";
         }
       }catch(e){
-        // ignore; header just won't show extra info
+        console.warn(e);
       }
     }
 
     /************ Auth ************/
     async function ensureAuth(){
-      const { data: { user }, error } = await supabase.auth.getUser();
+      const { data: { user }, error } = await sb.auth.getUser();
       if (error) console.warn("auth.getUser error:", error);
       state.user = user || null;
 
@@ -225,14 +223,15 @@
         whoami.textContent = "• not signed in — please log in";
         form.classList.add("disabled");
         input.disabled = true; sendBtn.disabled = true;
+        return false;
       } else {
         const uname = user.user_metadata?.username || user.user_metadata?.full_name || user.email || ("user-" + user.id.slice(0,6));
         state.displayName = uname;
         whoami.textContent = `• you are ${uname}`;
         form.classList.remove("disabled");
         input.disabled = false; sendBtn.disabled = false;
+        return true;
       }
-      return !!user;
     }
 
     /************ Send ************/
@@ -243,16 +242,24 @@
       if(!text) return;
       input.value = "";
 
-      const { error } = await supabase
+      // Insert into dm_messages (same table inbox reads)
+      const { data, error } = await sb
         .from("dm_messages")
-        .insert({ thread_id: THREAD_ID, sender: state.user.id, body: text });
+        .insert({ thread_id: THREAD_ID, sender: state.user.id, body: text })
+        .select("id, thread_id, sender, body, created_at")
+        .single();
 
-      if(error){ console.error("Insert error:", error); showError("Send failed — " + (error.message || "check RLS policies / keys")); return; }
-      // The realtime insert handler will render it, then mark read.
+      if(error){
+        showError("Send failed — likely RLS/policy or column mismatch.", JSON.stringify(error, null, 2));
+        return;
+      }
+
+      // Render immediately (don’t wait for realtime)
+      renderMessage(data);
     });
 
     /************ Realtime: new messages in this thread ************/
-    supabase
+    sb
       .channel("dm_thread_" + THREAD_ID)
       .on(
         "postgres_changes",
@@ -262,26 +269,15 @@
       .subscribe();
 
     /************ Realtime: typing indicator (broadcast) ************/
-    function throttle(fn, ms){
-      let last = 0;
-      return (...args) => {
-        const now = Date.now();
-        if (now - last > ms){ last = now; fn(...args); }
-      };
-    }
-
+    function throttle(fn, ms){ let last=0; return (...a)=>{const n=Date.now(); if(n-last>ms){last=n; fn(...a);} }; }
     let typingHideTimer = null;
 
-    const typingChan = supabase.channel(`typing_${THREAD_ID}`, {
-      config: {
-        broadcast: { self: false },  // don't receive our own typing
-        presence:  { key: 'client' }
-      }
+    const typingChan = sb.channel(`typing_${THREAD_ID}`, {
+      config: { broadcast: { self:false }, presence: { key:'client' } }
     });
 
-    typingChan.on('broadcast', { event: 'typing' }, (payload) => {
+    typingChan.on('broadcast', { event:'typing' }, (payload) => {
       const from = payload?.payload?.name || 'Someone';
-      // don't show if it's us
       if (from === state.displayName) return;
       typingEl.textContent = `${from} is typing…`;
       typingEl.style.display = 'block';
@@ -290,12 +286,10 @@
     });
 
     typingChan.subscribe();
-
     const sendTyping = throttle(() => {
       if (!state.user) return;
       typingChan.send({ type:'broadcast', event:'typing', payload:{ name: state.displayName } });
     }, 1200);
-
     input.addEventListener('input', sendTyping);
     input.addEventListener('focus', () => {
       if (!state.user) return;
@@ -314,8 +308,7 @@
       document.addEventListener('visibilitychange', () => {
         if(document.visibilityState === 'visible') markThreadRead();
       });
-      // immediate on first open too
-      markThreadRead();
+      markThreadRead(); // immediate on first open
     })();
   </script>
 </body>
