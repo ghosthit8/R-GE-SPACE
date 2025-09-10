@@ -2,293 +2,315 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Rage Space — Direct Message</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Rage Space — DM</title>
   <meta name="color-scheme" content="dark" />
+
+  <!-- Global Rage Space styles (scanlines, buttons, etc.) -->
+  <link rel="stylesheet" href="./css.html" />
+
+  <!-- Page-specific tweaks -->
   <style>
-    :root{
-      --green:#39ff14; --ink:#e5ffe5; --bg:#000; --border:#103010; --card:#0a0a0a; --red:#ff0033;
-    }
+    :root{ --green:#39ff14; --bg:#000; --border:#151515; }
     *{ box-sizing:border-box }
-    html,body{ height:100% }
     body{
       margin:0; background:var(--bg); color:var(--green);
       font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
       -webkit-font-smoothing:antialiased;
+      position: relative; overflow-x: hidden; /* for scanline overlay */
     }
 
-    header{
-      position:sticky; top:0; z-index:10;
-      background:rgba(0,0,0,.7); backdrop-filter:blur(6px);
-      border-bottom:1px solid var(--border);
-      padding:12px 16px; display:flex; align-items:center; gap:12px;
+    /* If css.html fails to load, this is a fallback scanline layer (same intensity). */
+    body::before{
+      content:"";
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(57,255,20,0.1) 0px,
+        rgba(57,255,20,0.1) 2px,
+        transparent 5px
+      );
+      pointer-events: none; z-index: 1;
+      animation: scrollScan 7s linear infinite;
     }
-    a.back{
-      color:var(--green); text-decoration:none; border:1px solid var(--green);
-      padding:6px 10px; border-radius:999px; font-weight:700; line-height:1;
-    }
-    a.back:hover{ background:rgba(57,255,20,.08); }
-    .title{
-      display:flex; align-items:center; gap:10px; min-width:0;
-    }
-    .tiny-pfp{
-      width:28px; height:28px; border-radius:8px; overflow:hidden; flex:0 0 auto;
-      border:1px solid var(--green); background:#111;
-    }
-    .tiny-pfp img{ width:100%; height:100%; object-fit:cover; display:block; }
-    .other-name{
-      font-size:16px; font-weight:800; letter-spacing:.2px; color:var(--green);
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60vw;
+    @keyframes scrollScan{
+      from{ background-position: 0 0; }
+      to  { background-position: 0 100vh; }
     }
 
-    .wrap{ max-width:940px; margin:0 auto; padding:12px 16px 90px; }
+    /* Put chat UI ABOVE the overlay */
+    .topbar, .chat-box, .typing-row, .input-bar, .err { position: relative; z-index: 2; }
 
-    /* Chat area */
-    #messages{
-      display:flex; flex-direction:column; gap:8px;
+    .topbar{
+      display:flex; align-items:center; gap:.75rem; padding:.6rem 1rem;
+      border-bottom:1px solid var(--border); position:sticky; top:0;
+      background:#000c; backdrop-filter: blur(6px);
     }
-    .row{
-      display:flex; width:100%;
-    }
-    .row.me{ justify-content:flex-end; }
-    .row.them{ justify-content:flex-start; }
+    .chip{ border:1px solid var(--border); padding:.25rem .6rem; border-radius:999px; }
+    .note{ opacity:.7; font-size:.85rem }
 
-    .bubble{
-      max-width:70%;
-      padding:10px 12px; border-radius:14px;
-      background:linear-gradient(180deg,#0c0c0c,#070707);
-      border:1px solid var(--border); color:var(--ink);
-      box-shadow: inset 0 0 10px rgba(57,255,20,.07);
-      word-wrap:break-word; white-space:pre-wrap;
-      line-height:1.25;
+    .chat-box{
+      height:calc(100vh - 152px); /* leave room for typing + input bar */
+      overflow-y:auto; padding:1rem; display:flex; flex-direction:column;
     }
-    .row.me .bubble{
-      border-color:#1d401d; box-shadow: inset 0 0 10px rgba(57,255,20,.14);
-    }
-    .meta-line{
-      font-size:11px; opacity:.7; margin-top:4px; color:var(--ink);
-    }
+    .msg{ margin:.25rem 0; padding:.6rem .75rem; border-radius:12px; max-width:78%; line-height:1.25; word-wrap:break-word; }
+    .me{ align-self:flex-end; background:#0f0f0f; color:var(--green); }
+    .them{ align-self:flex-start; background:#171717; color:#e5ffe5; } /* safe fallback */
+    .by{ opacity:.85; font-size:.82rem; margin-right:.35rem }
+    .ts{ opacity:.55; font-size:.72rem; margin-top:.25rem }
 
-    /* Composer */
-    .composer{
-      position:fixed; left:0; right:0; bottom:0; z-index:9;
-      background:rgba(0,0,0,.78); backdrop-filter:blur(6px);
-      border-top:1px solid var(--border);
+    .typing-row{ padding:0 1rem .25rem; min-height:1.25rem; }
+    #typing-indicator{ opacity:.8; font-size:.85rem; display:none; }
+
+    .input-bar{
+      display:flex; gap:.5rem; padding:.6rem; border-top:1px solid var(--border);
+      position:sticky; bottom:0; background:#000;
     }
-    .composer-inner{
-      max-width:940px; margin:0 auto; padding:10px 16px; display:flex; gap:8px;
+    input{
+      flex:1; background:#000; color:var(--green);
+      border:1px solid #2a2a2a; border-radius:10px; padding:.7rem .8rem;
     }
-    .composer input{
-      flex:1; padding:12px 12px; border-radius:10px; border:1px solid var(--border);
-      background:linear-gradient(180deg,#0b0b0b,#060606); color:var(--ink);
-      outline:none;
+    button{
+      background:var(--green); color:#000; font-weight:800;
+      border:none; border-radius:10px; padding:0 1rem;
     }
-    .send{
-      padding:10px 14px; border-radius:10px; border:1px solid var(--green);
-      background:#031803; color:var(--green); font-weight:800; cursor:pointer;
+    .empty{ opacity:.6; font-size:.9rem; text-align:center; margin-top:20vh; }
+    .err{
+      position:fixed; left:50%; transform:translateX(-50%);
+      bottom:76px; background:#170000; color:#ff9b9b; border:1px solid #330;
+      padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%;
     }
-    .send:hover{ filter:brightness(1.1); }
-    .empty{
-      text-align:center; padding:28px; color:var(--ink); opacity:.75;
-    }
+    .disabled{ opacity:.5; pointer-events:none }
   </style>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <header>
-    <a class="back" href="./inbox.html">← Inbox</a>
-    <div class="title">
-      <div class="tiny-pfp" id="otherPfp"></div>
-      <div class="other-name" id="otherName">Loading…</div>
-    </div>
-  </header>
 
-  <main class="wrap">
-    <div id="messages"></div>
-    <div id="noMsgs" class="empty" style="display:none;">No messages yet — say hi.</div>
-  </main>
-
-  <div class="composer">
-    <form id="composerForm" class="composer-inner">
-      <input id="msgInput" type="text" placeholder="Type a message…" autocomplete="off" />
-      <button class="send" type="submit">Send</button>
-    </form>
+  <div class="topbar">
+    <a class="chip" href="inbox.html">← Inbox</a>
+    <span class="note" id="whoami"></span>
   </div>
 
+  <div class="chat-box" id="chat">
+    <div class="empty" id="empty">No messages yet. Say hi 👋</div>
+  </div>
+
+  <!-- typing indicator row -->
+  <div class="typing-row">
+    <div id="typing-indicator" class="note"></div>
+  </div>
+
+  <form class="input-bar" id="chat-form" autocomplete="off">
+    <input id="message-input" placeholder="Say something…" />
+    <button id="send-btn" type="submit">Send</button>
+  </form>
+
+  <div id="err" class="err"></div>
+
+  <!-- Supabase client -->
+  <script src="https://unpkg.com/@supabase/supabase-js"></script>
   <script>
-    // --- Supabase init ---
-    const sb = supabase.createClient(
-      "https://tuqvpcevrhciursxrgav.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
-    );
+    /************ Supabase config (yours) ************/
+    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // --- Elements ---
-    const messagesEl = document.getElementById('messages');
-    const noMsgsEl = document.getElementById('noMsgs');
-    const inputEl = document.getElementById('msgInput');
-    const formEl = document.getElementById('composerForm');
-    const otherNameEl = document.getElementById('otherName');
-    const otherPfpEl = document.getElementById('otherPfp');
+    /************ Resolve room/thread id from URL ************/
+    // Accept both ?thread=<id> (new inbox) or ?dm=<id> (legacy)
+    const sp = new URLSearchParams(location.search);
+    const THREAD_ID = sp.get("thread") || sp.get("dm") || "global";
 
-    // --- URL param: thread ---
-    const url = new URL(location.href);
-    const threadId = url.searchParams.get('thread');
+    // This page uses the messages table with a room_id.
+    // We map room_id = THREAD_ID so both URL styles work.
+    const ROOM_ID = THREAD_ID;
 
-    // Guard: if no thread provided, bounce back.
-    if(!threadId){
-      alert('Missing thread id');
-      location.href = './inbox.html';
+    /************ Unread marker (for inbox glow) ************/
+    const lastReadKey = `dm_last_read_${THREAD_ID}`;
+    function markThreadRead(){ localStorage.setItem(lastReadKey, Date.now()); }
+
+    /************ DOM refs ************/
+    const chatBox = document.getElementById("chat");
+    const form = document.getElementById("chat-form");
+    const input = document.getElementById("message-input");
+    const sendBtn = document.getElementById("send-btn");
+    const emptyState = document.getElementById("empty");
+    const whoami = document.getElementById("whoami");
+    const errBox = document.getElementById("err");
+    const typingEl = document.getElementById("typing-indicator");
+    const renderedIds = new Set();
+
+    function showError(msg){
+      errBox.textContent = msg;
+      errBox.style.display = "block";
+      clearTimeout(showError._t);
+      showError._t = setTimeout(()=> errBox.style.display="none", 2500);
     }
 
-    // Key used by inbox unread logic
-    const lastReadKey = `dm_last_read_${threadId}`;
-
-    let me = null;
-    let thread = null;
-    let otherProfile = null;
-    let sub = null;
-
-    function markThreadRead(){
-      // Store "last read" as *now* in ms since epoch
-      localStorage.setItem(lastReadKey, Date.now());
+    function deriveName(u){
+      if(!u) return null;
+      const m = u.user_metadata || {};
+      return m.username || m.full_name || u.email || ("user-" + (u.id || "").slice(0,6));
     }
 
-    function scrollToBottom(){
-      // After DOM update, scroll to bottom
-      requestAnimationFrame(() => {
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-      });
+    // Timestamp WITH seconds (local time)
+    function fmtTS(iso){
+      try{
+        const d = new Date(iso);
+        return d.toLocaleTimeString([], { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+      }catch(_){ return ""; }
     }
 
-    function msgRow(m){
-      const mine = m.sender === me.id;
-      const row = document.createElement('div');
-      row.className = 'row ' + (mine ? 'me' : 'them');
-      const time = new Date(m.created_at);
-      const hh = String(time.getHours()).padStart(2,'0');
-      const mm = String(time.getMinutes()).padStart(2,'0');
-      const ss = String(time.getSeconds()).padStart(2,'0');
+    function renderMessage(row){
+      if (!row || (row.id && renderedIds.has(row.id))) return;
+      if (emptyState && emptyState.parentNode) emptyState.remove();
 
-      row.innerHTML = `
-        <div class="bubble">
-          <div>${m.body ? m.body.replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''}</div>
-          <div class="meta-line">${hh}:${mm}:${ss}</div>
-        </div>
-      `;
-      return row;
-    }
+      const mine = row.sender_name === state.displayName;
 
-    async function loadThreadAndHeader(){
-      // load thread so we can figure out the "other" user id
-      const { data: t, error } = await sb
-        .from('dm_threads')
-        .select('id,a,b')
-        .eq('id', threadId)
-        .maybeSingle();
-      if(error || !t){ console.error(error); return; }
-      thread = t;
+      const div = document.createElement("div");
+      div.className = "msg " + (mine ? "me" : "them");
 
-      const otherId = (t.a === me.id) ? t.b : t.a;
-      const { data: p } = await sb
-        .from('profiles')
-        .select('id,display_name,username,avatar_url')
-        .eq('id', otherId)
-        .maybeSingle();
-      otherProfile = p;
+      const who = document.createElement("span");
+      who.className = "by";
+      who.textContent = `${row.sender_name}:`;
 
-      otherNameEl.textContent = p?.display_name || ('@' + (p?.username || 'user'));
-      if(p?.avatar_url){
-        otherPfpEl.innerHTML = `<img src="${p.avatar_url}" alt="">`;
-      } else {
-        otherPfpEl.innerHTML = '';
-      }
+      const text = document.createElement("span");
+      text.textContent = " " + row.content;
+
+      const ts = document.createElement("div");
+      ts.className = "ts";
+      ts.textContent = fmtTS(row.created_at);
+      ts.style.textAlign = mine ? "right" : "left";
+
+      div.appendChild(who);
+      div.appendChild(text);
+      div.appendChild(ts);
+
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+      if (row.id) renderedIds.add(row.id);
+
+      // We're actively viewing; keep it read
+      markThreadRead();
     }
 
     async function loadMessages(){
-      const { data: msgs, error } = await sb
-        .from('dm_messages')
-        .select('id,body,created_at,sender')
-        .eq('thread_id', threadId)
-        .order('created_at', { ascending:true });
-      if(error){ console.error(error); return; }
+      const { data, error } = await supabase
+        .from("messages")
+        .select("id, room_id, sender_name, content, created_at")
+        .eq("room_id", ROOM_ID)
+        .order("created_at", { ascending: true });
 
-      messagesEl.innerHTML = '';
-      if(!msgs || msgs.length === 0){
-        noMsgsEl.style.display = '';
+      if(error){ console.error("Load error:", error); showError("Load failed — " + (error.message || "check policies")); return; }
+      chatBox.innerHTML = "";
+      if (!data || data.length === 0) chatBox.appendChild(emptyState);
+      data.forEach(renderMessage);
+
+      // Mark read after initial load
+      markThreadRead();
+    }
+
+    const state = { user: null, displayName: null };
+
+    async function ensureAuthAndName(){
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) console.warn("auth.getUser error:", error);
+      state.user = user || null;
+      state.displayName = deriveName(user);
+
+      if (!user){
+        whoami.textContent = "• not signed in — please log in";
+        form.classList.add("disabled");
+        input.disabled = true; sendBtn.disabled = true;
       } else {
-        noMsgsEl.style.display = 'none';
-        for(const m of msgs){
-          messagesEl.appendChild(msgRow(m));
-        }
+        whoami.textContent = `• you are ${state.displayName}`;
+        form.classList.remove("disabled");
+        input.disabled = false; sendBtn.disabled = false;
       }
-      scrollToBottom();
+    }
 
-      // We’re viewing the thread -> mark read
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!state.user) { showError("Please log in to send messages"); return; }
+      const text = input.value.trim();
+      if(!text) return;
+      input.value = "";
+
+      const { data, error } = await supabase
+        .from("messages")
+        .insert([{ room_id: ROOM_ID, sender_name: state.displayName, content: text }])
+        .select()
+        .single();
+
+      if(error){ console.error("Insert error:", error); showError("Send failed — " + (error.message || "check RLS policies / keys")); return; }
+      renderMessage(data);
+      // After sending, we've seen the latest state
       markThreadRead();
+    });
+
+    /************ Realtime: new messages ************/
+    supabase
+      .channel("room_" + ROOM_ID)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${ROOM_ID}` },
+        (payload) => renderMessage(payload.new)
+      )
+      .subscribe();
+
+    /************ Realtime: typing indicator (broadcast) ************/
+    // throttle helper
+    function throttle(fn, ms){
+      let last = 0;
+      return (...args) => {
+        const now = Date.now();
+        if (now - last > ms){ last = now; fn(...args); }
+      };
     }
 
-    function setupRealtime(){
-      // Clean previous channel if any
-      if(sub){ sb.removeChannel(sub); sub = null; }
+    let typingHideTimer = null;
 
-      sub = sb.channel('dm_thread_' + threadId)
-        .on('postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'dm_messages', filter: `thread_id=eq.${threadId}` },
-          (payload) => {
-            const m = payload.new;
-            messagesEl.appendChild(msgRow(m));
-            scrollToBottom();
+    const typingChan = supabase.channel(`typing_${ROOM_ID}`, {
+      config: {
+        broadcast: { self: false },  // don't receive our own typing
+        presence:  { key: 'client' }
+      }
+    });
 
-            // We’re actively in this thread; count as read
-            markThreadRead();
-          }
-        )
-        .subscribe((status) => {
-          // optional: console.log('realtime status', status);
-        });
-    }
+    typingChan.on('broadcast', { event: 'typing' }, (payload) => {
+      const from = payload?.payload?.name || 'Someone';
+      if (from === state.displayName) return;
+      typingEl.textContent = `${from} is typing…`;
+      typingEl.style.display = 'block';
+      clearTimeout(typingHideTimer);
+      typingHideTimer = setTimeout(() => { typingEl.style.display = 'none'; }, 3000);
+    });
 
-    async function sendMessage(body){
-      if(!body.trim()) return;
-      const { error } = await sb
-        .from('dm_messages')
-        .insert({
-          thread_id: threadId,
-          sender: me.id,
-          body: body.trim()
-        });
-      if(error){ console.error(error); return; }
-      inputEl.value = '';
-      // After send, mark as read too (you’ve seen the latest state)
-      markThreadRead();
-    }
+    typingChan.subscribe();
 
-    async function boot(){
-      // Require auth
-      const { data: { session } } = await sb.auth.getSession();
-      if(!session){ location.href = './login.html'; return; }
-      me = session.user;
+    const sendTyping = throttle(() => {
+      if (!state.user) return;
+      typingChan.send({ type:'broadcast', event:'typing', payload:{ name: state.displayName } });
+    }, 1200);
 
-      await loadThreadAndHeader();
+    input.addEventListener('input', sendTyping);
+    input.addEventListener('focus', () => {
+      if (!state.user) return;
+      typingChan.send({ type:'broadcast', event:'typing', payload:{ name: state.displayName } });
+    });
+
+    /************ Init + keep-read hooks ************/
+    (async function init(){
+      await ensureAuthAndName();
       await loadMessages();
-      setupRealtime();
 
-      // Also mark read when user focuses/returns
+      // Keep read when returning to the tab/window
       window.addEventListener('focus', markThreadRead);
       document.addEventListener('visibilitychange', () => {
         if(document.visibilityState === 'visible') markThreadRead();
       });
-    }
 
-    formEl.addEventListener('submit', (e) => {
-      e.preventDefault();
-      sendMessage(inputEl.value);
-    });
-
-    document.addEventListener('DOMContentLoaded', boot);
-    // Defensive: mark read right away on initial open too
-    markThreadRead();
+      // Mark read immediately on first open, too
+      markThreadRead();
+    })();
   </script>
 </body>
 </html>
