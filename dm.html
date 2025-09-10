@@ -19,26 +19,18 @@
       -webkit-font-smoothing:antialiased;
       position: relative; overflow-x: hidden; /* for scanline overlay */
     }
-
-    /* If css.html fails to load, this is a fallback scanline layer (same intensity). */
     body::before{
-      content:"";
-      position: fixed; inset: 0;
+      content:""; position: fixed; inset: 0;
       background: repeating-linear-gradient(
         to bottom,
         rgba(57,255,20,0.1) 0px,
         rgba(57,255,20,0.1) 2px,
         transparent 5px
       );
-      pointer-events: none; z-index: 1;
-      animation: scrollScan 7s linear infinite;
+      pointer-events: none; z-index: 1; animation: scrollScan 7s linear infinite;
     }
-    @keyframes scrollScan{
-      from{ background-position: 0 0; }
-      to  { background-position: 0 100vh; }
-    }
+    @keyframes scrollScan{ from{ background-position: 0 0; } to{ background-position: 0 100vh; } }
 
-    /* Put chat UI ABOVE the overlay */
     .topbar, .chat-box, .typing-row, .input-bar, .err { position: relative; z-index: 2; }
 
     .topbar{
@@ -49,37 +41,28 @@
     .chip{ border:1px solid var(--border); padding:.25rem .6rem; border-radius:999px; }
     .note{ opacity:.7; font-size:.85rem }
 
-    .chat-box{
-      height:calc(100vh - 152px); /* leave room for typing + input bar */
-      overflow-y:auto; padding:1rem; display:flex; flex-direction:column;
-    }
+    /* extra: tiny pfp + other name if we can resolve from dm_threads */
+    .tiny-pfp{ width:26px; height:26px; border-radius:8px; overflow:hidden; border:1px solid var(--green); background:#111; }
+    .tiny-pfp img{ width:100%; height:100%; object-fit:cover; display:block; }
+    .otherName{ font-weight:800; letter-spacing:.2px; }
+
+    .chat-box{ height:calc(100vh - 152px); overflow-y:auto; padding:1rem; display:flex; flex-direction:column; }
     .msg{ margin:.25rem 0; padding:.6rem .75rem; border-radius:12px; max-width:78%; line-height:1.25; word-wrap:break-word; }
     .me{ align-self:flex-end; background:#0f0f0f; color:var(--green); }
-    .them{ align-self:flex-start; background:#171717; color:#e5ffe5; } /* safe fallback */
+    .them{ align-self:flex-start; background:#171717; color:#e5ffe5; }
     .by{ opacity:.85; font-size:.82rem; margin-right:.35rem }
     .ts{ opacity:.55; font-size:.72rem; margin-top:.25rem }
 
     .typing-row{ padding:0 1rem .25rem; min-height:1.25rem; }
     #typing-indicator{ opacity:.8; font-size:.85rem; display:none; }
 
-    .input-bar{
-      display:flex; gap:.5rem; padding:.6rem; border-top:1px solid var(--border);
-      position:sticky; bottom:0; background:#000;
-    }
-    input{
-      flex:1; background:#000; color:var(--green);
-      border:1px solid #2a2a2a; border-radius:10px; padding:.7rem .8rem;
-    }
-    button{
-      background:var(--green); color:#000; font-weight:800;
-      border:none; border-radius:10px; padding:0 1rem;
-    }
+    .input-bar{ display:flex; gap:.5rem; padding:.6rem; border-top:1px solid var(--border);
+      position:sticky; bottom:0; background:#000; }
+    input{ flex:1; background:#000; color:var(--green); border:1px solid #2a2a2a; border-radius:10px; padding:.7rem .8rem; }
+    button{ background:var(--green); color:#000; font-weight:800; border:none; border-radius:10px; padding:0 1rem; }
     .empty{ opacity:.6; font-size:.9rem; text-align:center; margin-top:20vh; }
-    .err{
-      position:fixed; left:50%; transform:translateX(-50%);
-      bottom:76px; background:#170000; color:#ff9b9b; border:1px solid #330;
-      padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%;
-    }
+    .err{ position:fixed; left:50%; transform:translateX(-50%); bottom:76px; background:#170000; color:#ff9b9b; border:1px solid #330;
+      padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%; }
     .disabled{ opacity:.5; pointer-events:none }
   </style>
 </head>
@@ -87,14 +70,15 @@
 
   <div class="topbar">
     <a class="chip" href="inbox.html">← Inbox</a>
-    <span class="note" id="whoami"></span>
+    <div class="tiny-pfp" id="otherPfp" style="display:none;"></div>
+    <span class="otherName" id="otherName" style="display:none;"></span>
+    <span class="note" id="whoami" style="margin-left:auto;"></span>
   </div>
 
   <div class="chat-box" id="chat">
     <div class="empty" id="empty">No messages yet. Say hi 👋</div>
   </div>
 
-  <!-- typing indicator row -->
   <div class="typing-row">
     <div id="typing-indicator" class="note"></div>
   </div>
@@ -106,28 +90,22 @@
 
   <div id="err" class="err"></div>
 
-  <!-- Supabase client -->
   <script src="https://unpkg.com/@supabase/supabase-js"></script>
   <script>
-    /************ Supabase config (yours) ************/
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    /************ Resolve room/thread id from URL ************/
-    // Accept both ?thread=<id> (new inbox) or ?dm=<id> (legacy)
+    // Accept both ?thread=<id> (inbox) or ?dm=<id> (legacy)
     const sp = new URLSearchParams(location.search);
     const THREAD_ID = sp.get("thread") || sp.get("dm") || "global";
+    const ROOM_ID = THREAD_ID; // map room to thread id
 
-    // This page uses the messages table with a room_id.
-    // We map room_id = THREAD_ID so both URL styles work.
-    const ROOM_ID = THREAD_ID;
-
-    /************ Unread marker (for inbox glow) ************/
+    // Unread marker used by inbox
     const lastReadKey = `dm_last_read_${THREAD_ID}`;
     function markThreadRead(){ localStorage.setItem(lastReadKey, Date.now()); }
 
-    /************ DOM refs ************/
+    // DOM
     const chatBox = document.getElementById("chat");
     const form = document.getElementById("chat-form");
     const input = document.getElementById("message-input");
@@ -136,6 +114,8 @@
     const whoami = document.getElementById("whoami");
     const errBox = document.getElementById("err");
     const typingEl = document.getElementById("typing-indicator");
+    const otherNameEl = document.getElementById("otherName");
+    const otherPfpEl = document.getElementById("otherPfp");
     const renderedIds = new Set();
 
     function showError(msg){
@@ -151,7 +131,33 @@
       return m.username || m.full_name || u.email || ("user-" + (u.id || "").slice(0,6));
     }
 
-    // Timestamp WITH seconds (local time)
+    // Try to resolve the OTHER user's profile (if THREAD_ID is from dm_threads)
+    async function loadOtherForHeader(meId){
+      try{
+        const { data: th } = await supabase
+          .from('dm_threads')
+          .select('id,a,b')
+          .eq('id', THREAD_ID)
+          .maybeSingle();
+        if(!th) return;
+        const otherId = (th.a === meId) ? th.b : th.a;
+        const { data: p } = await supabase
+          .from('profiles')
+          .select('id,username,display_name,avatar_url')
+          .eq('id', otherId)
+          .maybeSingle();
+        if(!p) return;
+        const name = p.display_name?.trim() || (p.username ? '@'+p.username.trim() : '@user-' + (p.id||'').slice(0,6));
+        otherNameEl.textContent = name;
+        otherNameEl.style.display = 'inline';
+        if(p.avatar_url){
+          otherPfpEl.innerHTML = `<img src="${p.avatar_url}" alt="">`;
+          otherPfpEl.style.display = 'block';
+        }
+      }catch(e){ /* no-op if table not used */ }
+    }
+
+    // Timestamp WITH seconds
     function fmtTS(iso){
       try{
         const d = new Date(iso);
@@ -188,7 +194,7 @@
       chatBox.scrollTop = chatBox.scrollHeight;
       if (row.id) renderedIds.add(row.id);
 
-      // We're actively viewing; keep it read
+      // seeing the latest = read
       markThreadRead();
     }
 
@@ -204,7 +210,6 @@
       if (!data || data.length === 0) chatBox.appendChild(emptyState);
       data.forEach(renderMessage);
 
-      // Mark read after initial load
       markThreadRead();
     }
 
@@ -224,6 +229,9 @@
         whoami.textContent = `• you are ${state.displayName}`;
         form.classList.remove("disabled");
         input.disabled = false; sendBtn.disabled = false;
+
+        // show other user in header if we can resolve it
+        loadOtherForHeader(user.id);
       }
     }
 
@@ -242,11 +250,10 @@
 
       if(error){ console.error("Insert error:", error); showError("Send failed — " + (error.message || "check RLS policies / keys")); return; }
       renderMessage(data);
-      // After sending, we've seen the latest state
       markThreadRead();
     });
 
-    /************ Realtime: new messages ************/
+    // Realtime: new messages
     supabase
       .channel("room_" + ROOM_ID)
       .on(
@@ -256,26 +263,11 @@
       )
       .subscribe();
 
-    /************ Realtime: typing indicator (broadcast) ************/
-    // throttle helper
-    function throttle(fn, ms){
-      let last = 0;
-      return (...args) => {
-        const now = Date.now();
-        if (now - last > ms){ last = now; fn(...args); }
-      };
-    }
-
+    // Realtime: typing indicator
+    function throttle(fn, ms){ let last=0; return (...a)=>{const n=Date.now(); if(n-last>ms){last=n; fn(...a);} }; }
     let typingHideTimer = null;
-
-    const typingChan = supabase.channel(`typing_${ROOM_ID}`, {
-      config: {
-        broadcast: { self: false },  // don't receive our own typing
-        presence:  { key: 'client' }
-      }
-    });
-
-    typingChan.on('broadcast', { event: 'typing' }, (payload) => {
+    const typingChan = supabase.channel(`typing_${ROOM_ID}`, { config: { broadcast:{ self:false }, presence:{ key:'client' } } });
+    typingChan.on('broadcast', { event:'typing' }, (payload) => {
       const from = payload?.payload?.name || 'Someone';
       if (from === state.displayName) return;
       typingEl.textContent = `${from} is typing…`;
@@ -283,33 +275,26 @@
       clearTimeout(typingHideTimer);
       typingHideTimer = setTimeout(() => { typingEl.style.display = 'none'; }, 3000);
     });
-
     typingChan.subscribe();
-
     const sendTyping = throttle(() => {
       if (!state.user) return;
       typingChan.send({ type:'broadcast', event:'typing', payload:{ name: state.displayName } });
     }, 1200);
-
     input.addEventListener('input', sendTyping);
     input.addEventListener('focus', () => {
       if (!state.user) return;
       typingChan.send({ type:'broadcast', event:'typing', payload:{ name: state.displayName } });
     });
 
-    /************ Init + keep-read hooks ************/
+    // Init + keep-read hooks
     (async function init(){
       await ensureAuthAndName();
       await loadMessages();
-
-      // Keep read when returning to the tab/window
       window.addEventListener('focus', markThreadRead);
       document.addEventListener('visibilitychange', () => {
         if(document.visibilityState === 'visible') markThreadRead();
       });
-
-      // Mark read immediately on first open, too
-      markThreadRead();
+      markThreadRead(); // immediate on first open
     })();
   </script>
 </body>
