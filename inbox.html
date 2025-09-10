@@ -10,15 +10,12 @@
     *{ box-sizing:border-box }
     html,body{ height:100% }
     body{ margin:0; background:#000; color:var(--green); font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased; }
-    header{ position:sticky; top:0; z-index:10; background:rgba(0,0,0,.7); backdrop-filter:blur(6px);
-      border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; gap:10px; }
+    header{ position:sticky; top:0; z-index:10; background:rgba(0,0,0,.7); backdrop-filter:blur(6px); border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; gap:10px; }
     a.back{ color:var(--green); text-decoration:none; border:1px solid var(--green); padding:6px 10px; border-radius:999px; font-weight:700; }
     a.back:hover{ background:rgba(57,255,20,.08); }
     .wrap{ max-width:940px; margin:0 auto; padding:16px; }
 
-    .thread{ position:relative; display:flex; gap:12px; padding:14px;
-      background:linear-gradient(180deg,#0a0a0a,#050505); border:1px solid var(--border);
-      border-radius:12px; margin:10px 0; text-decoration:none; color:var(--ink); align-items:center; transition:transform .15s ease; }
+    .thread{ position:relative; display:flex; gap:12px; padding:14px; background:linear-gradient(180deg,#0a0a0a,#050505); border:1px solid var(--border); border-radius:12px; margin:10px 0; text-decoration:none; color:var(--ink); align-items:center; transition:transform .15s ease; }
     .thread:hover{ outline:2px solid var(--green); transform:translateY(-1px); }
 
     .pfp{ width:48px; height:48px; border-radius:12px; background:#111; border:2px solid var(--green); overflow:hidden; flex:0 0 auto; }
@@ -28,23 +25,9 @@
     .name{ color:var(--green); font-weight:800; }
     .last{ color:var(--ink); opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 
-    /* RED UNREAD FLICKER */
-    .thread.unread{
-      border-color:rgba(255,0,51,.7);
-      box-shadow:0 0 16px rgba(255,0,51,.35), inset 0 0 10px rgba(255,0,51,.16);
-      animation:flicker-red 2.2s infinite ease-in-out;
-    }
-    .thread.unread::after{
-      content:''; position:absolute; right:10px; top:10px; width:10px; height:10px; border-radius:999px;
-      background:var(--red); box-shadow:0 0 10px rgba(255,0,51,.9), 0 0 20px rgba(255,0,51,.6);
-    }
-    @keyframes flicker-red{
-      0%,100%{ box-shadow:0 0 12px rgba(255,0,51,.25), inset 0 0 8px rgba(255,0,51,.12); }
-      10%{   box-shadow:0 0 22px rgba(255,0,51,.5), inset 0 0 14px rgba(255,0,51,.2); }
-      25%{   box-shadow:0 0 9px  rgba(255,0,51,.18), inset 0 0 6px  rgba(255,0,51,.1); }
-      55%{   box-shadow:0 0 24px rgba(255,0,51,.55), inset 0 0 16px rgba(255,0,51,.22); }
-      75%{   box-shadow:0 0 11px rgba(255,0,51,.22), inset 0 0 8px  rgba(255,0,51,.12); }
-    }
+    .thread.unread{ border-color:rgba(255,0,51,.7); box-shadow:0 0 16px rgba(255,0,51,.35), inset 0 0 10px rgba(255,0,51,.16); animation:flicker-red 2.2s infinite ease-in-out; }
+    .thread.unread::after{ content:''; position:absolute; right:10px; top:10px; width:10px; height:10px; border-radius:999px; background:var(--red); box-shadow:0 0 10px rgba(255,0,51,.9), 0 0 20px rgba(255,0,51,.6); }
+    @keyframes flicker-red{ 0%,100%{box-shadow:0 0 12px rgba(255,0,51,.25), inset 0 0 8px rgba(255,0,51,.12);} 10%{box-shadow:0 0 22px rgba(255,0,51,.5), inset 0 0 14px rgba(255,0,51,.2);} 25%{box-shadow:0 0 9px rgba(255,0,51,.18), inset 0 0 6px rgba(255,0,51,.1);} 55%{box-shadow:0 0 24px rgba(255,0,51,.55), inset 0 0 16px rgba(255,0,51,.22);} 75%{box-shadow:0 0 11px rgba(255,0,51,.22), inset 0 0 8px rgba(255,0,51,.12);} }
     @media (prefers-reduced-motion:reduce){ .thread.unread{ animation:none; } }
 
     .empty{ color:var(--ink); opacity:.7; text-align:center; padding:40px 0; }
@@ -72,20 +55,15 @@
     const empty = document.getElementById('empty');
     let me = null;
 
-    function safeName(profile, fallbackId){
-      if(profile){
-        if(profile.display_name && profile.display_name.trim()) return profile.display_name.trim();
-        if(profile.username && profile.username.trim()) return '@' + profile.username.trim();
-      }
-      const short = (fallbackId||'').slice(0,6) || 'user';
-      return '@user-' + short;
-    }
+    const safeName = (p, id) =>
+      (p?.display_name && p.display_name.trim()) ? p.display_name.trim()
+      : (p?.username && p.username.trim()) ? '@'+p.username.trim()
+      : '@user-'+(id||'').slice(0,6);
 
-    function threadRow(other, otherId, thread, lastMsg, isUnread, debugText){
+    function threadRow(other, otherId, thread, lastMsg, isUnread){
       const a = document.createElement('a');
       a.href = `./dm.html?thread=${thread.id}`;
       a.className = 'thread' + (isUnread ? ' unread' : '');
-      a.title = debugText; // long-press to see quick debug
       a.innerHTML = `
         <div class="pfp">${other?.avatar_url ? `<img src="${other.avatar_url}" alt="">` : ''}</div>
         <div class="meta">
@@ -107,22 +85,18 @@
         .select('id,a,b,created_at')
         .order('created_at', { ascending:false });
       if(error){ console.error(error); empty.textContent='Error loading conversations.'; empty.style.display=''; return; }
+
       if(!threads || threads.length===0){ empty.style.display=''; return; }
       empty.style.display='none';
-      console.log('threads:', threads);
 
       const otherIds = threads.map(t => t.a === me.id ? t.b : t.a);
-      const uniq = [...new Set(otherIds)];
-      let byId = {};
-      if(uniq.length){
-        const { data: others, error: e2 } = await sb
-          .from('profiles')
-          .select('id,username,display_name,avatar_url')
-          .in('id', uniq);
-        if(e2) console.warn('profiles select error:', e2);
-        byId = Object.fromEntries((others||[]).map(u => [u.id, u]));
-        console.log('profiles fetched:', others);
-      }
+      const uniqIds = [...new Set(otherIds)];
+      const { data: others } = await sb
+        .from('profiles')
+        .select('id,username,display_name,avatar_url')
+        .in('id', uniqIds);
+
+      const byId = Object.fromEntries((others||[]).map(u => [u.id, u]));
 
       for(const t of threads){
         const otherId = t.a === me.id ? t.b : t.a;
@@ -140,10 +114,7 @@
         const lastTime = last?.created_at ? new Date(last.created_at).getTime() : 0;
         const isUnread = !!(last && last.sender !== me.id && lastTime > lastRead);
 
-        const dbg = `otherId=${otherId.slice(0,8)} lastSender=${(last?.sender||'').slice(0,8)} lastTime=${lastTime} lastRead=${lastRead} unread=${isUnread}`;
-        console.log('row:', dbg);
-
-        list.appendChild(threadRow(byId[otherId], otherId, t, last, isUnread, dbg));
+        list.appendChild(threadRow(byId[otherId], otherId, t, last, isUnread));
       }
     }
 
