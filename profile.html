@@ -156,6 +156,23 @@
     .song-section{ margin:8px 0 16px }
     .song-section h3{ margin:0 0 8px; font-size:18px; text-shadow:0 0 10px var(--red) }
     .song-section audio{ width:100%; border:none; outline:none; background:transparent; box-shadow:none }
+
+    /* --- About / Links layout --- */
+    .about-grid{ display:grid; grid-template-columns:1fr; gap:12px; }
+    .title-row{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+    .display-name{ font-size:24px; font-weight:900; letter-spacing:.5px; margin:0; }
+    .handle{ color:#b9ffb9; opacity:.9; font-size:14px; }
+    .kv{ display:grid; grid-template-columns:120px 1fr; gap:8px; }
+    .kv .k{ color:#9dff9d; opacity:.85; font-size:12px; }
+    .kv .v{ color:var(--ink); }
+    .links{ display:flex; flex-wrap:wrap; gap:8px; }
+    .links a{ display:inline-flex; align-items:center; gap:8px; padding:4px 10px; border:1px solid var(--green); border-radius:999px; background:#010301; font-size:12px; color:var(--ink); text-decoration:none; }
+    .links a:hover{ text-decoration:underline; }
+    .meta{ color:#a2ffa2; opacity:.8; font-size:12px; margin-top:6px; }
+    .empty{ color:#a2ffa2; opacity:.6; font-style:italic; }
+    @media (max-width:560px){
+      .info-block{ margin-top:220px; }
+    }
   </style>
 
   <!-- Supabase -->
@@ -225,6 +242,29 @@
     </div>
 
     <main class="wrap">
+      <section class="card" id="aboutCard">
+        <div class="about-grid">
+          <div class="title-row">
+            <h3 class="display-name" id="displayName">Loading…</h3>
+            <span class="handle" id="handleText"></span>
+          </div>
+          <div class="kv">
+            <div class="k">City</div><div class="v" id="cityText" class="empty">—</div>
+          </div>
+          <div class="kv">
+            <div class="k">Bio</div><div class="v" id="bioText" class="empty">—</div>
+          </div>
+          <div class="kv">
+            <div class="k">Links</div>
+            <div class="v">
+              <div class="links" id="linksWrap"></div>
+              <div id="noLinks" class="empty">No links yet.</div>
+            </div>
+          </div>
+          <div class="meta" id="metaRow"></div>
+        </div>
+      </section>
+
       <div class="song-section">
         <h3>Theme Song</h3>
         <audio id="songPlayer" controls preload="none" style="display:none"></audio>
@@ -311,6 +351,14 @@
     const songPlayer = document.getElementById('songPlayer');
     const ytWrap = document.getElementById('ytWrap');
 
+    const displayNameEl = document.getElementById('displayName');
+    const handleText = document.getElementById('handleText');
+    const cityText = document.getElementById('cityText');
+    const bioText = document.getElementById('bioText');
+    const linksWrap = document.getElementById('linksWrap');
+    const noLinks = document.getElementById('noLinks');
+    const metaRow = document.getElementById('metaRow');
+
     // Auth + routing
     let me = null;
     let target = null;
@@ -326,11 +374,28 @@
       return `${target.id}/${folder}/${crypto.randomUUID()}.${ext}`;
     }
 
+    // Ensure row exists (id + updated_at)
     async function ensureProfileRow(userId) {
       const { error } = await sb.from('profiles')
         .upsert({ id: userId, updated_at: new Date().toISOString() }, { onConflict: 'id' });
       if (error) console.error('ensureProfileRow:', error);
     }
+
+    // >>> NEW: ensure display_name / username are saved from auth metadata
+    async function ensureIdentityFields(user){
+      if(!user) return;
+      const display_name = user.user_metadata?.full_name ?? null;
+      const username = user.user_metadata?.username ?? (user.email ? user.email.split('@')[0] : null);
+      // Only hit DB if we actually have something to write
+      if (display_name || username) {
+        const { error } = await sb.from('profiles').upsert(
+          { id: user.id, display_name, username, updated_at: new Date().toISOString() },
+          { onConflict: 'id' }
+        );
+        if (error) console.warn('ensureIdentityFields:', error);
+      }
+    }
+    // <<< NEW
 
     function setAvatarPlaceholder(){
       if(!avatarPreview) return;
@@ -534,6 +599,30 @@
     }
 
     /* ========= Load a profile ========= */
+    function setAbout(profile){
+      const name = profile.display_name || profile.full_name || profile.username || 'Unnamed User';
+      displayNameEl.textContent = name;
+      handleText.textContent = profile.username ? ('@' + profile.username) : ('id:' + profile.id.slice(0,6));
+      cityText.textContent = profile.city || '—';
+      bioText.textContent = profile.bio || '—';
+      if (bioText.textContent === '—') bioText.classList.add('empty');
+
+      const links = [];
+      if (profile.website)   links.push({ label:'Website', href: profile.website.startsWith('http') ? profile.website : ('https://' + profile.website) });
+      if (profile.instagram) links.push({ label:'Instagram', href:`https://instagram.com/${String(profile.instagram).replace(/^@/,'')}` });
+      if (profile.tiktok)    links.push({ label:'TikTok', href:`https://tiktok.com/@${String(profile.tiktok).replace(/^@/,'')}` });
+      if (profile.youtube)   links.push({ label:'YouTube', href: profile.youtube.startsWith('http') ? profile.youtube : `https://youtube.com/${profile.youtube}` });
+
+      linksWrap.innerHTML = links.map(l=>`<a target="_blank" rel="noopener noreferrer" href="${l.href}">🔗 ${l.label}</a>`).join('');
+      noLinks.style.display = links.length ? 'none' : '';
+
+      const created = profile.created_at ? new Date(profile.created_at) : null;
+      const updated = profile.updated_at ? new Date(profile.updated_at) : null;
+      metaRow.textContent =
+        (created ? `Joined ${created.toLocaleDateString()}` : '') +
+        (updated ? ` • Updated ${updated.toLocaleDateString()}` : '');
+    }
+
     async function loadProfileBy(idOrUsername, useCache=false){
       if (useCache && CACHE_UID) {
         const cached = cache.get(CACHE_UID);
@@ -552,10 +641,15 @@
       const { data, error } = await q.maybeSingle();
       if(error || !data){
         console.error(error||'Profile not found');
+        displayNameEl.textContent = 'Profile not found';
+        handleText.textContent = '';
+        cityText.textContent = '—';
+        bioText.textContent = '—'; bioText.classList.add('empty');
+        linksWrap.innerHTML = ''; noLinks.style.display = '';
+        metaRow.textContent = '';
         return null;
       }
 
-      // Identity lines
       pronounsText.textContent = data.pronouns || '';
       sunText.textContent      = data.sun || '';
       moonText.textContent     = data.moon || '';
@@ -564,6 +658,7 @@
       skillsText.textContent   = Array.isArray(data.skills) ? data.skills.join(", ") : (data.skills || '');
       voidMsgText.textContent  = data.void_message || '';
       funnyStoryText.textContent = data.funny_story || '';
+      setAbout(data);
 
       // Theme song
       const s = data.song_url || null;
@@ -656,6 +751,12 @@
         const { data:{ session } } = await sb.auth.getSession();
         me = session?.user || null;
 
+        // NEW: if signed in, make sure identity fields exist on profiles
+        if (me) {
+          await ensureProfileRow(me.id);
+          await ensureIdentityFields(me);
+        }
+
         const qs = new URLSearchParams(location.search);
         const qUsername = (qs.get('u')||'').trim();
         const qUid = (qs.get('uid')||'').trim();
@@ -691,12 +792,18 @@
           dmButton.onclick = (e)=>{ e.preventDefault(); openOrCreateDM(target.id); };
         }
 
-        if(viewingOwn && me) await ensureProfileRow(me.id);
-
         if(me) updateInboxBadge().catch(console.error);
         showToastIfSaved();
       }catch(e){
         console.error('Boot error:', e);
+      }
+    });
+
+    // Also update identity fields immediately when auth state changes (e.g., after login)
+    sb.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        await ensureProfileRow(session.user.id);
+        await ensureIdentityFields(session.user);
       }
     });
   </script>
