@@ -3,73 +3,93 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Rage Space — Profile (diag)</title>
+  <title>Rage Space — Profile</title>
   <meta name="color-scheme" content="dark" />
   <link rel="stylesheet" href="./style.css" />
 
   <style>
-    :root{ --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --border:#103010; }
-    *{ box-sizing:border-box }
-    html,body{ height:100% }
+    :root{ --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --muted:#8aff8a; --card:#070707; --border:#103010; }
+    *{ box-sizing:border-box } html,body{ height:100% }
     body{ margin:0; background:#000; color:var(--green); font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased; }
+    .toast{ display:none !important; }
+
+    /* background */
     .profile-bg{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
-    .profile-bg img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    .profile-bg img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:none; pointer-events:none; }
     .bg-camera{ position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); width:44px; height:44px; border-radius:50%;
-      display:inline-flex; align-items:center; justify-content:center; border:2px solid var(--green); background:var(--green); color:#000; cursor:pointer; box-shadow:0 0 18px rgba(57,255,20,.6); z-index:9999; pointer-events:auto; }
+      display:inline-flex; align-items:center; justify-content:center; border:2px solid var(--green); background:var(--green); color:#000; cursor:pointer;
+      box-shadow:0 0 18px rgba(57,255,20,.6); z-index:9999; pointer-events:auto; }
     .bg-camera:hover{ background:#000; color:var(--green) }
     .profile-scope{ position:relative; z-index:2; }
 
+    /* shields */
+    .profile-scope .avatar, .profile-scope .avatar > img{ border-radius:16px !important; }
+    .profile-scope .avatar > img{ display:block; width:100%; height:100%; object-fit:cover; }
+    .profile-scope button::before, .profile-scope button::after, .profile-scope .back-chip::before, .profile-scope .back-chip::after{ content:none !important; display:none !important; }
+    .profile-scope .banner{ position:relative !important; }
+    .profile-scope .avatar-wrap{ position:absolute !important; }
+
+    .profile-scope .avatar-camera, .profile-scope .banner-camera{
+      position:absolute !important; left:auto !important; top:auto !important; transform:none !important; z-index:6 !important; color:#000 !important;
+      width:44px; height:44px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+      border:2px solid var(--green); background:var(--green); box-shadow:0 0 18px rgba(57,255,20,.6);
+    }
+    .profile-scope .banner-camera{ right:14px !important; bottom:14px !important; }
+    .profile-scope .avatar-camera{ right:-6px !important; bottom:-6px !important; }
+    .profile-scope .avatar-camera svg, .profile-scope .banner-camera svg, .bg-camera svg{ display:block !important; width:22px; height:22px; color:#000 !important; }
+    .profile-scope .cam-glyph, .bg-camera .cam-glyph{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1; color:#000 !important; opacity:1 !important; filter:none !important; z-index:3; pointer-events:none; }
+    .profile-scope .avatar-camera:hover .cam-glyph, .profile-scope .banner-camera:hover .cam-glyph, .bg-camera:hover .cam-glyph{ color:var(--green) !important; }
+
+    /* page chrome */
     .banner{ position:relative; height:260px; overflow:visible; border-bottom:1px solid var(--border);
       background:radial-gradient(900px 600px at 70% -10%, rgba(57,255,20,0.08), transparent 60%), #050505; }
     .banner img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
-    .banner::after{ content:""; position:absolute; inset:0;
-      background:linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,.70) 100%); z-index:1; pointer-events:none; }
+    .banner::after{ content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,.70) 100%); z-index:1; pointer-events:none; }
     .back-chip{ position:absolute; z-index:5; top:14px; left:14px; text-decoration:none; display:inline-flex; align-items:center; gap:8px;
       padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px; color:var(--green); border:1.5px solid var(--green);
       background:rgba(0,0,0,.55); backdrop-filter: blur(4px); box-shadow:0 0 14px rgba(57,255,20,.35); }
 
     .top-right{ position:absolute; top:14px; right:14px; z-index:6; display:flex; gap:8px; }
-    .chip{ text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px;
-      color:#000; background:var(--green); border:1.5px solid var(--green); box-shadow:0 0 14px rgba(57,255,20,.35); }
+    .chip{ text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px; color:#000; background:var(--green); border:1.5px solid var(--green); box-shadow:0 0 14px rgba(57,255,20,.35); }
+    .chip.ghost{ background:rgba(0,0,0,.55); color:var(--green); }
 
-    .avatar-wrap{ z-index:5; left:20px; bottom:-120px; display:flex; flex-direction:column; align-items:center; gap:14px; position:absolute; }
-    .avatar{ display:flex; justify-content:center; align-items:center; width:180px; height:180px; border-radius:16px; border:5px solid var(--green);
-      background:#0a0a0a; box-shadow:0 0 25px rgba(57,255,20,.75); color:var(--green); font-weight:900; font-size:40px; text-shadow:0 0 8px rgba(255,0,51,.6); overflow:hidden; user-select:none; }
+    .avatar-wrap{ z-index:5; left:20px; bottom:-120px; display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .avatar{ display:flex; justify-content:center; align-items:center; width:180px; height:180px; border-radius:16px; border:5px solid var(--green); background:#0a0a0a; box-shadow:0 0 25px rgba(57,255,20,.75); color:var(--green); font-weight:900; font-size:40px; text-shadow:0 0 8px rgba(255,0,51,.6); overflow:hidden; user-select:none; }
     .avatar.is-blank{ background: radial-gradient(45% 45% at 50% 35%, rgba(57,255,20,.22), transparent 60%), #0a0a0a; }
 
-    .avatar-camera, .banner-camera{ position:absolute; width:44px; height:44px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
-      border:2px solid var(--green); background:var(--green); color:#000; box-shadow:0 0 18px rgba(57,255,20,.6); z-index:6; }
-    .banner-camera{ right:14px; bottom:14px; }
-    .avatar-camera{ right:-6px; bottom:-6px; }
-    .avatar-camera .cam-glyph, .banner-camera .cam-glyph, .bg-camera .cam-glyph{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:18px; }
-
-    .edit-pill{ font-size:15px; font-weight:800; letter-spacing:.2px; padding:12px 20px; border-radius:24px; border:2px solid var(--green); color:#000; background:var(--green);
-      box-shadow:0 0 22px rgba(57,255,20,.7); cursor:pointer; position:relative; top:45px; text-decoration:none; display:inline-block; }
+    .edit-pill{ font-size:15px; font-weight:800; letter-spacing:.2px; padding:12px 20px; border-radius:24px; border:2px solid var(--green); color:#000; background:var(--green); box-shadow:0 0 22px rgba(57,255,20,.7); cursor:pointer; position:relative; top:45px; text-decoration:none; display:inline-block; }
     .edit-pill:hover{ background:#000; color:var(--green) }
 
     .info-block{ max-width:940px; margin:205px auto 0; padding:0 16px; }
     .line{ margin:6px 0; font-size:16px; color:var(--ink) }
     .label{ color:var(--green); font-weight:700; margin-right:6px }
+
     .wrap{ max-width:940px; margin:18px auto 28px; padding:0 16px; }
     section.card{ background:linear-gradient(180deg,#090909,#050505); border:1px solid var(--green); border-radius:16px; padding:16px; box-shadow:0 0 20px rgba(57,255,20,.12); }
     section.card + section.card{ margin-top:16px }
     h3{ margin:0 0 10px; font-size:18px; text-shadow:0 0 10px var(--red) }
-    p,.text{ color:var(--ink) }
+    p, .text{ color:var(--ink) }
 
-    /* Debug panel */
-    #diag{
-      position:fixed; left:8px; bottom:8px; right:8px; z-index:99999;
-      background:#050905; border:1px dashed var(--green); border-radius:10px; padding:8px 10px; font-size:12px; color:var(--ink);
-      display:none;
+    .song-section{ margin:8px 0 16px }
+    .song-section h3{ margin:0 0 8px; font-size:18px; text-shadow:0 0 10px var(--red) }
+    .song-section audio{ width:100%; border:none; outline:none; background:transparent; box-shadow:none }
+
+    /* Unmute overlay */
+    .yt-overlay{
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      font-weight:800; letter-spacing:.3px; text-transform:uppercase;
+      background:linear-gradient(180deg, rgba(0,0,0,.25), rgba(0,0,0,.35));
+      border:2px dashed var(--green); border-radius:12px;
+      color:var(--green); text-shadow:0 0 8px rgba(255,0,51,.6);
+      pointer-events:none; opacity:0; transition:opacity .25s ease;
     }
-    #diag b{ color:var(--green) }
-    #errbox{ position:fixed; left:50%; transform:translateX(-50%); bottom:76px; background:#170000; color:#ff9b9b; border:1px solid #330; padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%; white-space:pre-wrap; z-index:9999; }
+    .yt-overlay.show{ opacity:1; }
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-
+  <!-- BG -->
   <div class="profile-bg"><img id="bgPreview" alt=""></div>
   <button id="bgCameraBtn" class="bg-camera" title="Change background" aria-label="Change background">
     <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/></svg>
@@ -78,6 +98,7 @@
   <input id="bgQuickFile" type="file" accept="image/*" style="display:none" />
 
   <div class="profile-scope">
+    <!-- Banner -->
     <header class="banner">
       <img id="bannerPreview" alt="">
       <a class="back-chip" href="./menu.html">← Menu</a>
@@ -102,15 +123,19 @@
           <span class="cam-glyph" aria-hidden="true">📷</span>
         </button>
         <input id="avatarQuickFile" type="file" accept="image/*" style="display:none" />
+
         <a href="#" class="edit-pill" id="editProfileLink">Edit Profile</a>
         <a href="#" class="edit-pill" id="dmButton" style="display:none">Message privately</a>
       </div>
     </header>
 
+    <!-- Identity lines -->
     <div class="info-block">
       <div class="line"><span class="label">Pronouns:</span><span id="pronounsText"></span></div>
       <div class="line"><span class="label">Astrology:</span>
-        <span id="sunText"></span> ☉ / <span id="moonText"></span> ☽ / <span id="risingText"></span> ↑
+        <span id="sunText"></span> ☉ /
+        <span id="moonText"></span> ☽ /
+        <span id="risingText"></span> ↑
       </div>
       <div class="line"><span class="label">Love language:</span><span id="loveLangText"></span></div>
     </div>
@@ -119,8 +144,9 @@
       <div class="song-section">
         <h3>Theme Song</h3>
         <audio id="songPlayer" controls preload="none" style="display:none"></audio>
-        <div id="ytWrap" style="display:none">
+        <div id="ytWrap" style="display:none; position:relative;">
           <div id="ytPlayer" style="width:100%; aspect-ratio:16/9;"></div>
+          <div id="ytOverlay" class="yt-overlay">Tap to unmute</div>
         </div>
       </div>
 
@@ -139,349 +165,385 @@
         <p id="skillsText" class="text"></p>
       </section>
     </main>
-  </div>
-
-  <!-- Debug panel & error box -->
-  <div id="diag"></div>
-  <div id="errbox"></div>
+  </div><!-- /profile-scope -->
 
   <script>
-    // --- CONFIG ---
-    const AVATAR_BUCKET = 'avatars';
-    const BANNER_BUCKET = 'banners';
-    const BG_BUCKET     = 'banners';
+    // buckets
+    const AVATAR_BUCKET='avatars', BANNER_BUCKET='banners', BG_BUCKET='banners';
 
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
-    // --- helpers ---
-    const qs = new URLSearchParams(location.search);
-    const DEBUG = qs.get('debug') === '1';
-    const bust = (url, ver=Date.now()) => url ? (url + (url.includes('?') ? '&' : '?') + 'v=' + ver) : url;
+    const bust=(url,ver=Date.now())=>url?(url+(url.includes('?')?'&':'?')+'v='+ver):url;
 
-    const $ = (id)=>document.getElementById(id);
-    const diagEl = $("diag");
-    const errEl = $("errbox");
+    // cache
+    let CACHE_UID=null;
+    const cache={ key:u=>`profile_cache_${u}`, set(u,p){ if(!u) return; const k=this.key(u); const prev=JSON.parse(localStorage.getItem(k)||"{}"); localStorage.setItem(k,JSON.stringify({...prev,...p})); }, get(u){ if(!u) return {}; try{ return JSON.parse(localStorage.getItem(this.key(u))||"{}"); }catch{ return {}; } }, clear(u){ if(u) localStorage.removeItem(this.key(u)); } };
 
-    function toast(msg, isErr=false){
-      errEl.textContent = msg;
-      errEl.style.display = 'block';
-      errEl.style.background = isErr ? '#170000' : '#001700';
-      errEl.style.color = isErr ? '#ff9b9b' : '#9bff9b';
-      clearTimeout(toast._t);
-      toast._t = setTimeout(()=> errEl.style.display='none', 4000);
-      if(isErr) console.error(msg); else console.log(msg);
+    // refs
+    const pronounsText = document.getElementById("pronounsText");
+    const sunText = document.getElementById("sunText");
+    const moonText = document.getElementById("moonText");
+    const risingText = document.getElementById("risingText");
+    const loveLangText = document.getElementById("loveLangText");
+    const skillsText = document.getElementById("skillsText");
+    const voidMsgText = document.getElementById("voidMsgText");
+    const funnyStoryText = document.getElementById("funnyStoryText");
+    const avatarPreview = document.getElementById("avatarPreview");
+    const bannerPreview = document.getElementById("bannerPreview") || document.querySelector(".banner img");
+    const bgPreview = document.getElementById("bgPreview");
+    const editProfileLink = document.getElementById('editProfileLink');
+
+    const bannerCameraBtn = document.getElementById('bannerCameraBtn');
+    const bannerQuickFile = document.getElementById('bannerQuickFile');
+    const avatarCameraBtn = document.getElementById('avatarCameraBtn');
+    const avatarQuickFile = document.getElementById('avatarQuickFile');
+    const bgCameraBtn = document.getElementById('bgCameraBtn');
+    const bgQuickFile = document.getElementById('bgQuickFile');
+
+    const inboxBtn   = document.getElementById('inboxBtn');
+    const inboxBadge = document.getElementById('inboxBadge');
+    const dmButton   = document.getElementById('dmButton');
+
+    const songPlayer = document.getElementById('songPlayer');
+    const ytWrap = document.getElementById('ytWrap');
+    const ytOverlay = document.getElementById('ytOverlay');
+
+    // auth + player state
+    let me=null, target=null, viewingOwn=false;
+    let ytPlayer=null, ytVideoId=null, unmutedOnce=false;
+
+    // paths
+    function pathFor(kind,file){
+      const ext=(file.name.split('.').pop()||'bin').toLowerCase();
+      const folder=(kind==='banner')?'banner':(kind==='bg'?'bg':'misc');
+      return `${target.id}/${folder}/${crypto.randomUUID()}.${ext}`;
     }
-    function diag(obj){
-      if(!DEBUG) return;
-      diagEl.style.display = 'block';
-      diagEl.innerHTML = '<b>Debug</b> ' + new Date().toLocaleTimeString() +
-        '<pre style="white-space:pre-wrap;margin:4px 0 0 0">'+
-        (typeof obj==='string'?obj:JSON.stringify(obj,null,2))+'</pre>';
-      console.log('[diag]', obj);
-    }
 
-    // DOM refs
-    const pronounsText = $("pronounsText");
-    const sunText = $("sunText");
-    const moonText = $("moonText");
-    const risingText = $("risingText");
-    const loveLangText = $("loveLangText");
-    const skillsText = $("skillsText");
-    const voidMsgText = $("voidMsgText");
-    const funnyStoryText = $("funnyStoryText");
-
-    const avatarPreview = $("avatarPreview");
-    const bannerPreview = $("bannerPreview") || document.querySelector(".banner img");
-    const bgPreview = $("bgPreview");
-
-    const bannerCameraBtn = $("bannerCameraBtn");
-    const bannerQuickFile = $("bannerQuickFile");
-    const avatarCameraBtn = $("avatarCameraBtn");
-    const avatarQuickFile = $("avatarQuickFile");
-    const bgCameraBtn = $("bgCameraBtn");
-    const bgQuickFile = $("bgQuickFile");
-
-    const inboxBtn   = $("inboxBtn");
-    const inboxBadge = $("inboxBadge");
-    const dmButton   = $("dmButton");
-
-    const songPlayer = $("songPlayer");
-    const ytWrap = $("ytWrap");
-
-    // state
-    let me = null, target = null, viewingOwn = false;
-    let ytPlayer = null, ytVideoId = null;
-    let CACHE_UID = null;
-
-    const cache = {
-      key(uid){ return `profile_cache_${uid}`; },
-      set(uid, partial){ if(!uid) return; const k=this.key(uid); const prev=JSON.parse(localStorage.getItem(k)||"{}"); localStorage.setItem(k, JSON.stringify({ ...prev, ...partial })); },
-      get(uid){ if(!uid) return {}; try{ return JSON.parse(localStorage.getItem(this.key(uid))||"{}"); }catch{ return {}; } },
-      clear(uid){ if(uid) localStorage.removeItem(this.key(uid)); }
-    };
-
-    // identity helpers
-    async function ensureProfileRow(userId) {
-      const { error } = await sb.from('profiles').upsert({ id: userId, updated_at: new Date().toISOString() }, { onConflict: 'id' });
-      if(error) toast('ensureProfileRow: '+error.message, true);
-    }
-    async function ensureIdentityFields(user){
+    // ---------- NEVER use email for username ----------
+    async function ensureProfileRow(userId){
+      const { data:{ user } } = await sb.auth.getUser();
       if(!user) return;
-      const display_name = user.user_metadata?.full_name ?? null;
-      const username = user.user_metadata?.username ?? (user.email ? user.email.split('@')[0] : null);
-      const payload = { id:user.id, updated_at:new Date().toISOString() };
-      if(display_name !== null) payload.display_name = display_name;
-      if(username !== null) payload.username = username;
-      const { error } = await sb.from('profiles').upsert(payload, { onConflict:'id' });
-      if(error) toast('ensureIdentityFields: '+error.message, true);
+
+      // keep existing row if present
+      let existing=null;
+      try{
+        const { data: row } = await sb.from('profiles').select('username,display_name').eq('id', userId).maybeSingle();
+        existing = row || null;
+      }catch{}
+
+      const uid6 = (user.id||'').replace(/-/g,'').slice(0,6);
+      const metaUsername = user.user_metadata?.username || user.user_metadata?.preferred_username || null;
+      const nameSlug = user.user_metadata?.full_name ? user.user_metadata.full_name.trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9_-]/g,'') : null;
+
+      const username = existing?.username || metaUsername || nameSlug || `user-${uid6}`;
+      const display_name = existing?.display_name || user.user_metadata?.full_name || username;
+
+      const { error } = await sb.from('profiles').upsert(
+        { id:userId, username, display_name, updated_at:new Date().toISOString() },
+        { onConflict:'id' }
+      );
+      if(error) console.error('ensureProfileRow:', error);
     }
 
-    function setAvatarPlaceholder(){ avatarPreview.classList.add('is-blank'); avatarPreview.innerHTML='PFP'; }
-    function setAvatar(url){ avatarPreview.classList.remove('is-blank'); avatarPreview.innerHTML = `<img src="${url}" alt="Profile photo">`; }
+    // avatar helpers
+    function setAvatarPlaceholder(){ if(!avatarPreview) return; avatarPreview.classList.add('is-blank'); avatarPreview.innerHTML='PFP'; }
+    function setAvatar(url){ if(!avatarPreview) return; avatarPreview.classList.remove('is-blank'); avatarPreview.innerHTML=`<img src="${url}" alt="Profile photo">`; }
 
-    function isYouTubeUrl(u){ return /youtu\.?be|youtube\.com/i.test(u||''); }
-    function isYouTubeId(s){ return /^[A-Za-z0-9_-]{11}$/.test(s||''); }
+    async function uploadToBucket(bucket,file,kind){
+      const path=pathFor(kind,file);
+      const { error } = await sb.storage.from(bucket).upload(path,file,{ upsert:false });
+      if(error) throw error;
+      const { data } = sb.storage.from(bucket).getPublicUrl(path);
+      return data.publicUrl;
+    }
+
+    /* ========= YouTube helpers ========= */
+    const isYouTubeUrl=u=>/youtu\.?be|youtube\.com/i.test(u||'');
+    const isYouTubeId=s=>/^[A-Za-z0-9_-]{11}$/.test(s||'');
     function extractYouTubeIdStrict(input){
-      if (!input) return null;
-      const s = String(input).trim();
-      if (isYouTubeId(s)) return s;
+      if(!input) return null;
+      const s=String(input).trim(); if(isYouTubeId(s)) return s;
       try{
-        const u = new URL(s, location.href);
-        if (/\byoutu\.be$/i.test(u.hostname)) {
-          const id = u.pathname.split('/').filter(Boolean)[0];
-          if (isYouTubeId(id)) return id;
-        }
-        if (/\byoutube\.com$/i.test(u.hostname)) {
-          const v = u.searchParams.get('v'); if (isYouTubeId(v)) return v;
-          const parts = u.pathname.split('/').filter(Boolean);
-          if (parts.length >= 2 && ['embed','shorts','live'].includes(parts[0])) {
-            const id = parts[1]; if (isYouTubeId(id)) return id;
-          }
+        const u=new URL(s,location.href);
+        if(/\byoutu\.be$/i.test(u.hostname)){ const id=u.pathname.split('/').filter(Boolean)[0]; if(isYouTubeId(id)) return id; }
+        if(/\byoutube\.com$/i.test(u.hostname)){
+          const v=u.searchParams.get('v'); if(isYouTubeId(v)) return v;
+          const parts=u.pathname.split('/').filter(Boolean);
+          if(parts.length>=2 && ['embed','shorts','live'].includes(parts[0])){ const id=parts[1]; if(isYouTubeId(id)) return id; }
         }
       }catch{}
-      const m = s.match(/([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/);
-      return m ? m[1] : null;
+      const m=s.match(/([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/);
+      return m?m[1]:null;
+    }
+
+    function showOverlay(show){ if(ytOverlay) ytOverlay.classList.toggle('show', !!show); }
+
+    // Global one-shot unmute handler
+    function addGlobalUnmuteOnce(){
+      if(unmutedOnce) return;
+      const unmute = ()=>{
+        unmutedOnce = true;
+        try{ ytPlayer?.unMute?.(); ytPlayer?.playVideo?.(); }catch{}
+        showOverlay(false);
+        const evts=['click','pointerdown','touchstart','keydown','wheel','scroll'];
+        evts.forEach(e=>{ document.removeEventListener(e,unmute,true); window.removeEventListener(e,unmute,true); });
+      };
+      showOverlay(true);
+      const opts={ once:true, capture:true };
+      const passive={ once:true, capture:true, passive:true };
+      document.addEventListener('click',unmute,opts);
+      document.addEventListener('pointerdown',unmute,opts);
+      document.addEventListener('touchstart',unmute,opts);
+      document.addEventListener('keydown',unmute,opts);
+      window.addEventListener('wheel',unmute,passive);
+      window.addEventListener('scroll',unmute,passive);
     }
 
     function makeOrUpdateYTPlayer(){
       if(!ytVideoId) return;
       if(songPlayer){ songPlayer.pause(); songPlayer.style.display='none'; }
       if(ytWrap){ ytWrap.style.display='block'; }
-      if(ytPlayer){ try{ ytPlayer.loadVideoById(ytVideoId); ytPlayer.mute(); return; }catch{} }
-      ytPlayer = new YT.Player('ytPlayer', {
+
+      if(ytPlayer){
+        try{
+          ytPlayer.loadVideoById(ytVideoId);
+          ytPlayer.mute();
+          ytPlayer.playVideo();        // autoplay muted
+          unmutedOnce = false;
+          addGlobalUnmuteOnce();       // first gesture unmutes
+          return;
+        }catch{}
+      }
+
+      ytPlayer = new YT.Player('ytPlayer',{
         videoId: ytVideoId,
-        playerVars: { autoplay: 1, mute: 1, playsinline: 1, rel: 0, modestbranding: 1, controls: 1 },
-        events: { onReady: ()=>{ const unmuteOnce=()=>{ try{ if(ytPlayer && ytPlayer.isMuted()) ytPlayer.unMute(); }catch{} document.removeEventListener('click',unmuteOnce,true); document.removeEventListener('touchstart',unmuteOnce,true); }; document.addEventListener('click',unmuteOnce,true); document.addEventListener('touchstart',unmuteOnce,true); } }
+        playerVars:{ autoplay:1, mute:1, playsinline:1, rel:0, modestbranding:1, controls:1 },
+        events:{
+          onReady: ()=>{
+            try{ ytPlayer.mute(); ytPlayer.playVideo(); }catch{}
+            unmutedOnce = false;
+            addGlobalUnmuteOnce();
+          }
+        }
       });
     }
-    window.onYouTubeIframeAPIReady = ()=>{ diag('YT API ready'); makeOrUpdateYTPlayer(); };
-    (function(){ const s=document.createElement('script'); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s); })();
 
-    function pathFor(kind, file){
-      const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
-      const folder = (kind === 'banner') ? 'banner' : (kind === 'bg' ? 'bg' : 'misc');
-      return `${target.id}/${folder}/${crypto.randomUUID()}.${ext}`;
-    }
-
-    async function uploadToBucket(bucket, file, kind){
-      const path = pathFor(kind, file);
-      const { error } = await sb.storage.from(bucket).upload(path, file, { upsert:false });
-      if(error){ toast(`Upload ${bucket}/${path} failed: `+error.message, true); throw error; }
-      const { data } = sb.storage.from(bucket).getPublicUrl(path);
-      return data.publicUrl;
-    }
-
+    /* ========= Upload buttons ========= */
     function wireUploads(){
-      const enabled = viewingOwn || DEBUG; // force-on in debug
-      [bannerCameraBtn, avatarCameraBtn, bgCameraBtn].forEach(btn => btn.style.display = enabled ? '' : 'none');
+      const enabled=viewingOwn;
 
-      if(enabled){
-        bannerCameraBtn.onclick = ()=> bannerQuickFile.click();
-        bannerQuickFile.onchange = async ()=>{
-          const f = bannerQuickFile.files[0]; if(!f) return;
-          try{
-            const raw = await uploadToBucket(BANNER_BUCKET, f, 'banner');
-            const ver = Date.now();
-            if (bannerPreview) bannerPreview.src = bust(raw, ver);
-            if (CACHE_UID) cache.set(CACHE_UID, { banner_url: bust(raw,ver) });
-            const { error } = await sb.from('profiles').upsert({ id:target.id, banner_url: raw, updated_at:new Date().toISOString() }, { onConflict:'id' });
-            if(error) toast('Save banner_url: '+error.message, true);
-          }finally{ bannerQuickFile.value = ""; }
-        };
+      if(bannerCameraBtn && bannerQuickFile){
+        bannerCameraBtn.style.display = enabled ? '' : 'none';
+        if(enabled){
+          bannerCameraBtn.onclick=()=>bannerQuickFile.click();
+          bannerQuickFile.onchange=async()=>{
+            if(!bannerQuickFile.files[0]) return;
+            try{
+              const raw=await uploadToBucket(BANNER_BUCKET,bannerQuickFile.files[0],'banner');
+              const ver=Date.now(); if(bannerPreview) bannerPreview.src=bust(raw,ver);
+              if(CACHE_UID) cache.set(CACHE_UID,{ banner_url:bust(raw,ver) });
+              await sb.from('profiles').upsert({ id:target.id, banner_url:raw, updated_at:new Date().toISOString() },{ onConflict:'id' });
+            }catch(e){ console.error('Banner upload failed:',e); alert('Banner upload failed: '+(e?.message||'unknown error')); }
+            finally{ bannerQuickFile.value=""; }
+          };
+        }else{ bannerCameraBtn.onclick=null; bannerQuickFile.onchange=null; }
+      }
 
-        avatarCameraBtn.onclick = ()=> avatarQuickFile.click();
-        avatarQuickFile.onchange = async ()=>{
-          const f = avatarQuickFile.files[0]; if(!f) return;
-          try{
-            const raw = await uploadToBucket(AVATAR_BUCKET, f, 'avatar');
-            const ver = Date.now();
-            setAvatar(bust(raw, ver));
-            if (CACHE_UID) cache.set(CACHE_UID, { avatar_url: bust(raw,ver) });
-            const { error } = await sb.from('profiles').upsert({ id:target.id, avatar_url: raw, updated_at:new Date().toISOString() }, { onConflict:'id' });
-            if(error) toast('Save avatar_url: '+error.message, true);
-          }finally{ avatarQuickFile.value = ""; }
-        };
+      if(avatarCameraBtn && avatarQuickFile){
+        avatarCameraBtn.style.display = enabled ? '' : 'none';
+        if(enabled){
+          avatarCameraBtn.onclick=()=>avatarQuickFile.click();
+          avatarQuickFile.onchange=async()=>{
+            if(!avatarQuickFile.files[0]) return;
+            try{
+              const raw=await uploadToBucket(AVATAR_BUCKET,avatarQuickFile.files[0],'avatar');
+              const ver=Date.now(); setAvatar(bust(raw,ver));
+              if(CACHE_UID) cache.set(CACHE_UID,{ avatar_url:bust(raw,ver) });
+              await sb.from('profiles').upsert({ id:target.id, avatar_url:raw, updated_at:new Date().toISOString() },{ onConflict:'id' });
+            }catch(e){ console.error('Avatar upload failed:',e); alert('Avatar upload failed: '+(e?.message||'unknown error')); }
+            finally{ avatarQuickFile.value=""; }
+          };
+        }else{ avatarCameraBtn.onclick=null; avatarQuickFile.onchange=null; }
+      }
 
-        bgCameraBtn.onclick = ()=> bgQuickFile.click();
-        bgQuickFile.onchange = async ()=>{
-          const f = bgQuickFile.files[0]; if(!f) return;
-          try{
-            if (bgPreview) bgPreview.src = URL.createObjectURL(f);
-            const raw = await uploadToBucket(BG_BUCKET, f, 'bg');
-            const ver = Date.now();
-            if (bgPreview) bgPreview.src = bust(raw, ver);
-            if (CACHE_UID) cache.set(CACHE_UID, { bg_url: bust(raw,ver) });
-            const { error } = await sb.from('profiles').upsert({ id:target.id, bg_url: raw, updated_at:new Date().toISOString() }, { onConflict:'id' });
-            if(error) toast('Save bg_url: '+error.message, true);
-          }finally{ bgQuickFile.value = ""; }
-        };
-      } else {
-        bannerCameraBtn.onclick = avatarCameraBtn.onclick = bgCameraBtn.onclick = null;
+      if(bgCameraBtn && bgQuickFile){
+        bgCameraBtn.style.display = enabled ? '' : 'none';
+        if(enabled){
+          bgCameraBtn.onclick=()=>bgQuickFile.click();
+          bgQuickFile.onchange=async()=>{
+            const file=bgQuickFile.files[0]; if(!file) return;
+            try{
+              if(bgPreview) bgPreview.src=URL.createObjectURL(file);
+              const raw=await uploadToBucket(BG_BUCKET,file,'bg');
+              const ver=Date.now(); if(bgPreview) bgPreview.src=bust(raw,ver);
+              if(CACHE_UID) cache.set(CACHE_UID,{ bg_url:bust(raw,ver) });
+              await sb.from('profiles').upsert({ id:target.id, bg_url:raw, updated_at:new Date().toISOString() },{ onConflict:'id' });
+            }catch(e){ console.error('Background upload failed:',e); alert('Background upload failed: '+(e?.message||'unknown error')); }
+            finally{ bgQuickFile.value=""; }
+          };
+        }else{ bgCameraBtn.onclick=null; bgQuickFile.onchange=null; }
       }
     }
 
+    function isLocalProtocol(){ return location.protocol==='file:' || location.protocol==='content:'; }
     function wireEditProfileLink(){
-      const edit = $("editProfileLink");
-      if(!edit) return;
-      if(!viewingOwn && !DEBUG){ edit.style.display = 'none'; return; }
-      let href = 'editprofile.html';
-      const url = new URL(href, location.href);
-      url.searchParams.set('return','profile.html');
-      url.searchParams.set('v', Date.now().toString());
-      if(DEBUG) url.searchParams.set('debug','1');
-      edit.href = url.toString();
+      if(!editProfileLink) return;
+      if(!viewingOwn){ editProfileLink.style.display='none'; return; }
+      let href='editprofile.html';
+      if(!isLocalProtocol()){
+        const url=new URL(href,location.href);
+        url.searchParams.set('return','profile.html');
+        url.searchParams.set('v',Date.now().toString());
+        href=url.toString();
+      }
+      editProfileLink.href=href;
     }
 
-    async function loadProfileBy(selector, useCache=false){
-      if (useCache && CACHE_UID) {
-        const cached = cache.get(CACHE_UID);
-        if (cached.avatar_url) setAvatar(cached.avatar_url); else setAvatarPlaceholder();
-        if (cached.banner_url && bannerPreview) bannerPreview.src = cached.banner_url;
-        if (cached.bg_url && bgPreview) bgPreview.src = cached.bg_url;
-      } else {
-        setAvatarPlaceholder(); if (bannerPreview) bannerPreview.removeAttribute('src'); if (bgPreview) bgPreview.removeAttribute('src');
+    /* small toast */
+    function showToast(msg){
+      const d=document.createElement('div');
+      d.textContent=msg||'Saved!';
+      Object.assign(d.style,{position:'fixed',top:'12px',right:'12px',zIndex:'99999',padding:'6px 10px',border:'2px solid var(--green)',borderRadius:'8px',background:'#050905',color:'#e5ffe5',fontWeight:'800',fontSize:'0.9rem',whiteSpace:'nowrap',boxShadow:'0 0 12px rgba(57,255,20,.35)',pointerEvents:'none'});
+      document.body.appendChild(d); setTimeout(()=>d.remove(),2500);
+    }
+    function showToastIfSaved(){
+      const p=new URLSearchParams(location.search);
+      if(p.get('saved')==='1'){
+        showToast('Saved!');
+        if(history.replaceState){
+          p.delete('saved');
+          const clean=location.pathname+(p.toString()?('?'+p.toString()):'')+location.hash;
+          history.replaceState(null,'',clean);
+        }
+      }
+    }
+
+    /* load a profile */
+    async function loadProfileBy(idOrUsername, useCache=false){
+      if(useCache && CACHE_UID){
+        const cached=cache.get(CACHE_UID);
+        if(cached.avatar_url) setAvatar(cached.avatar_url); else setAvatarPlaceholder();
+        if(cached.banner_url && bannerPreview) bannerPreview.src=cached.banner_url;
+        if(cached.bg_url && bgPreview) bgPreview.src=cached.bg_url;
+      }else{
+        setAvatarPlaceholder(); bannerPreview?.removeAttribute('src'); bgPreview?.removeAttribute('src');
       }
 
-      let q = sb.from("profiles").select("*").limit(1);
-      if (selector.kind === 'id') q = q.eq("id", selector.value); else q = q.ilike("username", selector.value);
+      let q=sb.from("profiles").select("*").limit(1);
+      if(idOrUsername.kind==='id') q=q.eq("id", idOrUsername.value); else q=q.ilike("username", idOrUsername.value);
       const { data, error } = await q.maybeSingle();
-      if(error || !data){ toast('Profile not found / error: '+(error?.message||'none'), true); return null; }
+      if(error || !data){ console.error(error||'Profile not found'); return null; }
 
       pronounsText.textContent = data.pronouns || '';
-      sunText.textContent = data.sun || '';
-      moonText.textContent = data.moon || '';
-      risingText.textContent = data.rising || '';
+      sunText.textContent      = data.sun || '';
+      moonText.textContent     = data.moon || '';
+      risingText.textContent   = data.rising || '';
       loveLangText.textContent = data.love_language || '';
-      skillsText.textContent = Array.isArray(data.skills) ? data.skills.join(", ") : (data.skills || '');
-      voidMsgText.textContent = data.void_message || '';
+      skillsText.textContent   = Array.isArray(data.skills) ? data.skills.join(", ") : (data.skills || '');
+      voidMsgText.textContent  = data.void_message || '';
       funnyStoryText.textContent = data.funny_story || '';
 
-      const s = data.song_url || null;
-      let asId = null; if (isYouTubeId(s)) asId = s; else if (isYouTubeUrl(s)) asId = extractYouTubeIdStrict(s);
-      if (asId){ ytVideoId = asId; makeOrUpdateYTPlayer(); } else if (s){ songPlayer.src = s; songPlayer.style.display='block'; ytWrap.style.display='none'; }
-      else { songPlayer.removeAttribute('src'); songPlayer.style.display='none'; ytWrap.style.display='none'; }
+      const s=data.song_url||null;
+      let asId=null; if(isYouTubeId(s)) asId=s; else if(isYouTubeUrl(s)) asId=extractYouTubeIdStrict(s);
 
-      const ver = data.updated_at ? new Date(data.updated_at).getTime() : Date.now();
-      if(data.avatar_url) setAvatar(bust(data.avatar_url, ver)); else setAvatarPlaceholder();
-      if(data.banner_url && bannerPreview) bannerPreview.src = bust(data.banner_url, ver);
-      if(data.bg_url && bgPreview) bgPreview.src = bust(data.bg_url, ver);
+      if(asId){
+        ytVideoId=asId;
+        ytWrap.style.display='block';
+        songPlayer.style.display='none';
+        makeOrUpdateYTPlayer();
+      } else if (s){
+        songPlayer.src=s; songPlayer.style.display='block';
+        ytWrap.style.display='none';
+      } else {
+        songPlayer.removeAttribute('src'); songPlayer.style.display='none';
+        ytWrap.style.display='none';
+      }
+
+      const ver=data.updated_at ? new Date(data.updated_at).getTime() : Date.now();
+      if(data.avatar_url){ setAvatar(bust(data.avatar_url,ver)); if(useCache && CACHE_UID) cache.set(CACHE_UID,{ avatar_url:bust(data.avatar_url,ver) }); } else setAvatarPlaceholder();
+      if(data.banner_url && bannerPreview){ bannerPreview.src=bust(data.banner_url,ver); if(useCache && CACHE_UID) cache.set(CACHE_UID,{ banner_url:bust(data.banner_url,ver) }); }
+      if(data.bg_url && bgPreview){ bgPreview.src=bust(data.bg_url,ver); if(useCache && CACHE_UID) cache.set(CACHE_UID,{ bg_url:bust(data.bg_url,ver) }); }
 
       return data;
     }
 
+    /* DM helper */
     async function openOrCreateDM(otherId){
-      if(!me){ location.href = './login.html'; return; }
-      const a = me.id, b = otherId;
-      const least = a < b ? a : b, greatest = a < b ? b : a;
+      if(!me){ location.href='./login.html'; return; }
+      const a=me.id, b=otherId; const least=a<b?a:b, greatest=a<b?b:a;
+      let { data: thread } = await sb.from('dm_threads').select('id,a,b')
+        .or(`and(a.eq.${least},b.eq.${greatest}),and(a.eq.${greatest},b.eq.${least})`).maybeSingle();
 
-      let { data: thread, error } = await sb
-        .from('dm_threads')
-        .select('id,a,b')
-        .or(`and(a.eq.${least},b.eq.${greatest}),and(a.eq.${greatest},b.eq.${least})`)
-        .maybeSingle();
-      if(error) toast('Lookup DM thread: '+error.message, true);
       if(!thread){
-        const ins = await sb.from('dm_threads').insert({ a, b }).select('id').single();
-        if(ins.error){ toast('Create DM thread: '+ins.error.message, true); return; }
-        thread = ins.data;
+        const { data: created, error: insertErr } = await sb.from('dm_threads').insert({ a,b }).select('id').single();
+        if(insertErr){ alert('Could not start DM'); return; }
+        thread = created;
       }
       location.href = `./dm.html?thread=${thread.id}`;
     }
 
+    /* unread badge */
     async function updateInboxBadge(){
       if(!me || !inboxBadge) return;
-      const { data: threads, error } = await sb
-        .from('dm_threads').select('id,a,b,created_at').order('created_at', { ascending:false });
-      if(error){ diag({inboxBadgeError: error.message}); return; }
+      const { data: threads } = await sb.from('dm_threads').select('id,a,b,created_at').order('created_at',{ ascending:false });
       if(!threads || threads.length===0){ inboxBadge.style.display='none'; return; }
-
-      let count = 0;
+      let count=0;
       for(const t of threads){
-        const { data: last } = await sb.from('dm_messages')
-          .select('sender,created_at').eq('thread_id', t.id)
-          .order('created_at', { ascending:false }).limit(1).maybeSingle();
+        const { data:last } = await sb.from('dm_messages').select('sender,created_at').eq('thread_id',t.id).order('created_at',{ ascending:false }).limit(1).maybeSingle();
         if(last && last.sender !== me.id) count++;
       }
-      if(count>0){ inboxBadge.textContent = count; inboxBadge.style.display=''; }
-      else { inboxBadge.style.display='none'; }
+      if(count>0){ inboxBadge.textContent=count; inboxBadge.style.display=''; } else inboxBadge.style.display='none';
     }
 
-    (async function boot(){
+    /* boot */
+    document.addEventListener("DOMContentLoaded", async ()=>{
       try{
-        const { data:{ session }, error: sessErr } = await sb.auth.getSession();
-        if(sessErr) toast('auth.getSession: '+sessErr.message, true);
+        const { data:{ session } } = await sb.auth.getSession();
         me = session?.user || null;
 
-        if(me){
-          await ensureProfileRow(me.id);
-          await ensureIdentityFields(me);
-        }
-
-        const qUsername = (qs.get('u')||'').trim();
-        const qUid = (qs.get('uid')||'').trim();
+        const qs=new URLSearchParams(location.search);
+        const qUsername=(qs.get('u')||'').trim();
+        const qUid=(qs.get('uid')||'').trim();
 
         let selector, useCache=false;
         if(!qUsername && !qUid){
-          if(!me){ toast('Not signed in — redirecting to login', true); location.href="./login.html"; return; }
-          viewingOwn = true; CACHE_UID = me.id; selector = { kind:'id', value: me.id }; useCache = true;
-        } else {
+          if(!me){ location.href="./login.html"; return; }
+          viewingOwn=true; CACHE_UID=me.id; selector={ kind:'id', value:me.id }; useCache=true;
+        }else{
           selector = qUid ? { kind:'id', value:qUid } : { kind:'username', value:qUsername };
-          viewingOwn = !!(me && qUid && me.id === qUid);
-          CACHE_UID = viewingOwn ? me.id : null; useCache = viewingOwn;
+          viewingOwn = !!(me && qUid && me.id===qUid);
+          CACHE_UID = viewingOwn ? me.id : null;
+          useCache = viewingOwn;
         }
 
         target = await loadProfileBy(selector, useCache);
         if(!target){
-          if (viewingOwn && me){ await ensureProfileRow(me.id); target = { id: me.id }; }
-          else { toast('Profile not found', true); return; }
+          if(viewingOwn && me){ await ensureProfileRow(me.id); target={ id:me.id }; }
+          else { alert('Profile not found'); return; }
         }
-        if(me && target && target.id) viewingOwn = (me.id === target.id);
-        if(!viewingOwn) CACHE_UID = null;
+        if(me && target?.id) viewingOwn = (me.id===target.id);
+        if(!viewingOwn) CACHE_UID=null;
 
         if(inboxBtn) inboxBtn.style.display = me ? '' : 'none';
-        if(dmButton){ dmButton.style.display = viewingOwn ? 'none' : ''; dmButton.onclick = (e)=>{ e.preventDefault(); openOrCreateDM(target.id); }; }
 
         wireEditProfileLink();
         wireUploads();
-        if(me) updateInboxBadge().catch(console.error);
+        if(dmButton){ dmButton.style.display = viewingOwn ? 'none' : ''; dmButton.onclick=e=>{ e.preventDefault(); openOrCreateDM(target.id); }; }
 
-        // Show debug info
-        diag({
-          sessionPresent: !!me,
-          userId: me?.id || null,
-          viewingOwn,
-          targetId: target?.id || null,
-          usernameSavedFromAuth: me?.user_metadata?.username || null,
-          displayNameFromAuth: me?.user_metadata?.full_name || null,
-          debugForcedCameras: DEBUG
-        });
-      }catch(e){
-        toast('Boot error: '+(e?.message||e), true);
-      }
-    })();
+        if(viewingOwn && me) await ensureProfileRow(me.id);
+        if(me) updateInboxBadge().catch(console.error);
+        showToastIfSaved();
+      }catch(e){ console.error('Boot error:', e); }
+    });
+  </script>
+
+  <!-- YouTube API -->
+  <script>
+    (function(){ const s=document.createElement('script'); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s); })();
+    function onYouTubeIframeAPIReady(){ if(typeof makeOrUpdateYTPlayer==='function') makeOrUpdateYTPlayer(); }
   </script>
 </body>
 </html>
