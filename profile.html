@@ -8,56 +8,135 @@
   <link rel="stylesheet" href="./style.css" />
 
   <style>
-    :root{ --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --muted:#8aff8a; --card:#070707; --border:#103010; }
-    *{ box-sizing:border-box } html,body{ height:100% }
-    body{ margin:0; background:#000; color:var(--green); font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased; }
+    :root{
+      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --muted:#8aff8a;
+      --card:#070707; --border:#103010;
+    }
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{
+      margin:0; background:#000; color:var(--green);
+      font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+
     .toast{ display:none !important; }
 
-    /* background */
+    /* ===== page-wide background image layer (click-through) ===== */
     .profile-bg{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
-    .profile-bg img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:none; pointer-events:none; }
-    .bg-camera{ position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); width:44px; height:44px; border-radius:50%;
-      display:inline-flex; align-items:center; justify-content:center; border:2px solid var(--green); background:var(--green); color:#000; cursor:pointer;
-      box-shadow:0 0 18px rgba(57,255,20,.6); z-index:9999; pointer-events:auto; }
+    .profile-bg img{
+      position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+      filter:none; pointer-events:none;
+    }
+    .bg-camera{
+      position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom));
+      width:44px; height:44px; border-radius:50%;
+      display:inline-flex; align-items:center; justify-content:center;
+      border:2px solid var(--green); background:var(--green); color:#000; cursor:pointer;
+      box-shadow:0 0 18px rgba(57,255,20,.6); z-index:9999; pointer-events:auto;
+    }
     .bg-camera:hover{ background:#000; color:var(--green) }
     .profile-scope{ position:relative; z-index:2; }
 
-    /* shields */
-    .profile-scope .avatar, .profile-scope .avatar > img{ border-radius:16px !important; }
+    /* ===================== Scoped shields ===================== */
+    .profile-scope .avatar,
+    .profile-scope .avatar > img{ border-radius:16px !important; }
     .profile-scope .avatar > img{ display:block; width:100%; height:100%; object-fit:cover; }
-    .profile-scope button::before, .profile-scope button::after, .profile-scope .back-chip::before, .profile-scope .back-chip::after{ content:none !important; display:none !important; }
+
+    .profile-scope button::before,
+    .profile-scope button::after,
+    .profile-scope .back-chip::before,
+    .profile-scope .back-chip::after{ content:none !important; display:none !important; }
+
     .profile-scope .banner{ position:relative !important; }
     .profile-scope .avatar-wrap{ position:absolute !important; }
 
-    .profile-scope .avatar-camera, .profile-scope .banner-camera{
-      position:absolute !important; left:auto !important; top:auto !important; transform:none !important; z-index:6 !important; color:#000 !important;
-      width:44px; height:44px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+    .profile-scope .avatar-camera,
+    .profile-scope .banner-camera{
+      position:absolute !important; left:auto !important; top:auto !important;
+      transform:none !important; z-index:6 !important; color:#000 !important;
+      width:44px; height:44px; border-radius:50%;
+      display:inline-flex; align-items:center; justify-content:center;
       border:2px solid var(--green); background:var(--green); box-shadow:0 0 18px rgba(57,255,20,.6);
     }
     .profile-scope .banner-camera{ right:14px !important; bottom:14px !important; }
     .profile-scope .avatar-camera{ right:-6px !important; bottom:-6px !important; }
-    .profile-scope .avatar-camera svg, .profile-scope .banner-camera svg, .bg-camera svg{ display:block !important; width:22px; height:22px; color:#000 !important; }
-    .profile-scope .cam-glyph, .bg-camera .cam-glyph{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1; color:#000 !important; opacity:1 !important; filter:none !important; z-index:3; pointer-events:none; }
-    .profile-scope .avatar-camera:hover .cam-glyph, .profile-scope .banner-camera:hover .cam-glyph, .bg-camera:hover .cam-glyph{ color:var(--green) !important; }
 
-    /* page chrome */
-    .banner{ position:relative; height:260px; overflow:visible; border-bottom:1px solid var(--border);
-      background:radial-gradient(900px 600px at 70% -10%, rgba(57,255,20,0.08), transparent 60%), #050505; }
+    .profile-scope .avatar-camera svg,
+    .profile-scope .banner-camera svg,
+    .bg-camera svg{
+      display:block !important; width:22px; height:22px; color:#000 !important;
+    }
+
+    .profile-scope .cam-glyph,
+    .bg-camera .cam-glyph{
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      font-size:18px; line-height:1; color:#000 !important; opacity:1 !important;
+      filter:none !important; z-index:3; pointer-events:none;
+    }
+    .profile-scope .avatar-camera:hover .cam-glyph,
+    .profile-scope .banner-camera:hover .cam-glyph,
+    .bg-camera:hover .cam-glyph{ color:var(--green) !important; }
+
+    /* ===================== Page styles ===================== */
+    .banner{
+      position:relative; height:260px; overflow:visible;
+      border-bottom:1px solid var(--border);
+      background:radial-gradient(900px 600px at 70% -10%, rgba(57,255,20,0.08), transparent 60%), #050505;
+    }
     .banner img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
-    .banner::after{ content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,.70) 100%); z-index:1; pointer-events:none; }
-    .back-chip{ position:absolute; z-index:5; top:14px; left:14px; text-decoration:none; display:inline-flex; align-items:center; gap:8px;
-      padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px; color:var(--green); border:1.5px solid var(--green);
-      background:rgba(0,0,0,.55); backdrop-filter: blur(4px); box-shadow:0 0 14px rgba(57,255,20,.35); }
+    .banner::after{
+      content:""; position:absolute; inset:0;
+      background:linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,.70) 100%);
+      z-index:1; pointer-events:none;
+    }
+    .back-chip{
+      position:absolute; z-index:5; top:14px; left:14px;
+      text-decoration:none; display:inline-flex; align-items:center; gap:8px;
+      padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px;
+      color:var(--green); border:1.5px solid var(--green); background:rgba(0,0,0,.55);
+      backdrop-filter: blur(4px); box-shadow:0 0 14px rgba(57,255,20,.35);
+    }
 
-    .top-right{ position:absolute; top:14px; right:14px; z-index:6; display:flex; gap:8px; }
-    .chip{ text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px; color:#000; background:var(--green); border:1.5px solid var(--green); box-shadow:0 0 14px rgba(57,255,20,.35); }
+    .top-right{
+      position:absolute; top:14px; right:14px; z-index:6; display:flex; gap:8px;
+    }
+    .chip{
+      text-decoration:none; display:inline-flex; align-items:center; gap:8px;
+      padding:8px 12px; border-radius:999px; font-weight:700; font-size:13px;
+      color:#000; background:var(--green); border:1.5px solid var(--green);
+      box-shadow:0 0 14px rgba(57,255,20,.35);
+    }
     .chip.ghost{ background:rgba(0,0,0,.55); color:var(--green); }
 
-    .avatar-wrap{ z-index:5; left:20px; bottom:-120px; display:flex; flex-direction:column; align-items:center; gap:14px; }
-    .avatar{ display:flex; justify-content:center; align-items:center; width:180px; height:180px; border-radius:16px; border:5px solid var(--green); background:#0a0a0a; box-shadow:0 0 25px rgba(57,255,20,.75); color:var(--green); font-weight:900; font-size:40px; text-shadow:0 0 8px rgba(255,0,51,.6); overflow:hidden; user-select:none; }
-    .avatar.is-blank{ background: radial-gradient(45% 45% at 50% 35%, rgba(57,255,20,.22), transparent 60%), #0a0a0a; }
+    .avatar-wrap{
+      z-index:5; left:20px; bottom:-120px;
+      display:flex; flex-direction:column; align-items:center; gap:14px;
+    }
+    .avatar{
+      display:flex; justify-content:center; align-items:center;
+      width:180px; height:180px; border-radius:16px;
+      border:5px solid var(--green);
+      background:#0a0a0a;
+      box-shadow:0 0 25px rgba(57,255,20,.75);
+      color:var(--green); font-weight:900; font-size:40px;
+      text-shadow:0 0 8px rgba(255,0,51,.6);
+      overflow:hidden; user-select:none;
+    }
+    .avatar.is-blank{
+      background:
+        radial-gradient(45% 45% at 50% 35%, rgba(57,255,20,.22), transparent 60%),
+        #0a0a0a;
+    }
 
-    .edit-pill{ font-size:15px; font-weight:800; letter-spacing:.2px; padding:12px 20px; border-radius:24px; border:2px solid var(--green); color:#000; background:var(--green); box-shadow:0 0 22px rgba(57,255,20,.7); cursor:pointer; position:relative; top:45px; text-decoration:none; display:inline-block; }
+    .edit-pill{
+      font-size:15px; font-weight:800; letter-spacing:.2px;
+      padding:12px 20px; border-radius:24px;
+      border:2px solid var(--green); color:#000; background:var(--green);
+      box-shadow:0 0 22px rgba(57,255,20,.7); cursor:pointer;
+      position:relative; top:45px; text-decoration:none;
+      display:inline-block;
+    }
     .edit-pill:hover{ background:#000; color:var(--green) }
 
     .info-block{ max-width:940px; margin:205px auto 0; padding:0 16px; }
@@ -65,7 +144,11 @@
     .label{ color:var(--green); font-weight:700; margin-right:6px }
 
     .wrap{ max-width:940px; margin:18px auto 28px; padding:0 16px; }
-    section.card{ background:linear-gradient(180deg,#090909,#050505); border:1px solid var(--green); border-radius:16px; padding:16px; box-shadow:0 0 20px rgba(57,255,20,.12); }
+    section.card{
+      background:linear-gradient(180deg,#090909,#050505);
+      border:1px solid var(--green); border-radius:16px; padding:16px;
+      box-shadow:0 0 20px rgba(57,255,20,.12);
+    }
     section.card + section.card{ margin-top:16px }
     h3{ margin:0 0 10px; font-size:18px; text-shadow:0 0 10px var(--red) }
     p, .text{ color:var(--ink) }
@@ -74,7 +157,7 @@
     .song-section h3{ margin:0 0 8px; font-size:18px; text-shadow:0 0 10px var(--red) }
     .song-section audio{ width:100%; border:none; outline:none; background:transparent; box-shadow:none }
 
-    /* Unmute overlay */
+    /* overlay to hint unmute */
     .yt-overlay{
       position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
       font-weight:800; letter-spacing:.3px; text-transform:uppercase;
@@ -83,22 +166,30 @@
       color:var(--green); text-shadow:0 0 8px rgba(255,0,51,.6);
       pointer-events:none; opacity:0; transition:opacity .25s ease;
     }
-    .yt-overlay.show{ opacity:1; }
+    /* clickable when visible so tap is captured above the iframe */
+    .yt-overlay.show{ opacity:1; pointer-events:auto; }
   </style>
 
+  <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <!-- BG -->
-  <div class="profile-bg"><img id="bgPreview" alt=""></div>
+
+  <!-- ===== page background with camera ===== -->
+  <div class="profile-bg">
+    <img id="bgPreview" alt="">
+  </div>
   <button id="bgCameraBtn" class="bg-camera" title="Change background" aria-label="Change background">
-    <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/></svg>
+    <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
+    </svg>
     <span class="cam-glyph" aria-hidden="true">📷</span>
   </button>
   <input id="bgQuickFile" type="file" accept="image/*" style="display:none" />
 
   <div class="profile-scope">
-    <!-- Banner -->
+
+    <!-- ===== Banner ===== -->
     <header class="banner">
       <img id="bannerPreview" alt="">
       <a class="back-chip" href="./menu.html">← Menu</a>
@@ -111,15 +202,20 @@
       </div>
 
       <button id="bannerCameraBtn" class="banner-camera" title="Change banner" aria-label="Change banner">
-        <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/></svg>
+        <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
+        </svg>
         <span class="cam-glyph" aria-hidden="true">📷</span>
       </button>
       <input id="bannerQuickFile" type="file" accept="image/*" style="display:none" />
 
       <div class="avatar-wrap">
         <div id="avatarPreview" class="avatar is-blank">PFP</div>
+
         <button id="avatarCameraBtn" class="avatar-camera" title="Change profile photo" aria-label="Change profile photo">
-          <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/></svg>
+          <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M9 4l1.5-2h3L15 4h3a3 3 0 013 3v10a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3zm3 5a5 5 0 100 10 5 5 0 000-10zm0 2a3 3 0 110 6 3 3 0 010-6z"/>
+          </svg>
           <span class="cam-glyph" aria-hidden="true">📷</span>
         </button>
         <input id="avatarQuickFile" type="file" accept="image/*" style="display:none" />
@@ -129,7 +225,7 @@
       </div>
     </header>
 
-    <!-- Identity lines -->
+    <!-- ===== Identity lines ===== -->
     <div class="info-block">
       <div class="line"><span class="label">Pronouns:</span><span id="pronounsText"></span></div>
       <div class="line"><span class="label">Astrology:</span>
@@ -165,24 +261,42 @@
         <p id="skillsText" class="text"></p>
       </section>
     </main>
+
   </div><!-- /profile-scope -->
 
   <script>
-    // buckets
-    const AVATAR_BUCKET='avatars', BANNER_BUCKET='banners', BG_BUCKET='banners';
+    // --- Buckets ---
+    const AVATAR_BUCKET = 'avatars';
+    const BANNER_BUCKET = 'banners';
+    const BG_BUCKET     = 'banners'; // reuse banner bucket for background
 
     const sb = supabase.createClient(
       "https://tuqvpcevrhciursxrgav.supabase.co",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
-    const bust=(url,ver=Date.now())=>url?(url+(url.includes('?')?'&':'?')+'v='+ver):url;
+    // --------- helpers ---------
+    const bust = (url, ver=Date.now()) => url ? (url + (url.includes('?') ? '&' : '?') + 'v=' + ver) : url;
 
-    // cache
-    let CACHE_UID=null;
-    const cache={ key:u=>`profile_cache_${u}`, set(u,p){ if(!u) return; const k=this.key(u); const prev=JSON.parse(localStorage.getItem(k)||"{}"); localStorage.setItem(k,JSON.stringify({...prev,...p})); }, get(u){ if(!u) return {}; try{ return JSON.parse(localStorage.getItem(this.key(u))||"{}"); }catch{ return {}; } }, clear(u){ if(u) localStorage.removeItem(this.key(u)); } };
+    // per-user cache (only for self)
+    let CACHE_UID = null;
+    const cache = {
+      key(uid){ return `profile_cache_${uid}`; },
+      set(uid, partial){
+        if(!uid) return;
+        const k = this.key(uid);
+        const prev = JSON.parse(localStorage.getItem(k) || "{}");
+        localStorage.setItem(k, JSON.stringify({ ...prev, ...partial }));
+      },
+      get(uid){
+        if(!uid) return {};
+        try { return JSON.parse(localStorage.getItem(this.key(uid)) || "{}"); }
+        catch { return {}; }
+      },
+      clear(uid){ if(uid) localStorage.removeItem(this.key(uid)); }
+    };
 
-    // refs
+    // Display refs
     const pronounsText = document.getElementById("pronounsText");
     const sunText = document.getElementById("sunText");
     const moonText = document.getElementById("moonText");
@@ -211,232 +325,352 @@
     const ytWrap = document.getElementById('ytWrap');
     const ytOverlay = document.getElementById('ytOverlay');
 
-    // auth + player state
-    let me=null, target=null, viewingOwn=false;
-    let ytPlayer=null, ytVideoId=null, unmutedOnce=false;
+    // Auth + routing
+    let me = null;
+    let target = null;
+    let viewingOwn = false;
 
-    // paths
-    function pathFor(kind,file){
-      const ext=(file.name.split('.').pop()||'bin').toLowerCase();
-      const folder=(kind==='banner')?'banner':(kind==='bg'?'bg':'misc');
+    let ytPlayer = null;
+    let ytVideoId = null;
+
+    // ---- path helpers (subfolders avoid logical collisions) ----
+    function pathFor(kind, file){
+      const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+      const folder = (kind === 'banner') ? 'banner' : (kind === 'bg' ? 'bg' : 'misc');
       return `${target.id}/${folder}/${crypto.randomUUID()}.${ext}`;
     }
 
-    // ---------- NEVER use email for username ----------
-    async function ensureProfileRow(userId){
+    // ========== PROFILE UPSERT (NO EMAIL FALLBACK) ==========
+    async function ensureProfileRow(userId) {
       const { data:{ user } } = await sb.auth.getUser();
-      if(!user) return;
+      if (!user) return;
 
-      // keep existing row if present
-      let existing=null;
-      try{
-        const { data: row } = await sb.from('profiles').select('username,display_name').eq('id', userId).maybeSingle();
-        existing = row || null;
-      }catch{}
+      // Pull any existing row so we DON'T overwrite a chosen username
+      const { data: existing } = await sb
+        .from('profiles')
+        .select('username, display_name')
+        .eq('id', userId)
+        .maybeSingle();
 
-      const uid6 = (user.id||'').replace(/-/g,'').slice(0,6);
-      const metaUsername = user.user_metadata?.username || user.user_metadata?.preferred_username || null;
-      const nameSlug = user.user_metadata?.full_name ? user.user_metadata.full_name.trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9_-]/g,'') : null;
+      // Only use metadata; do NOT derive from email
+      const metaUsername = user.user_metadata?.username || null;
+      const metaFullName = user.user_metadata?.full_name || null;
 
-      const username = existing?.username || metaUsername || nameSlug || `user-${uid6}`;
-      const display_name = existing?.display_name || user.user_metadata?.full_name || username;
+      const username = existing?.username || metaUsername || null;
+      const display_name = existing?.display_name || metaFullName || metaUsername || null;
 
-      const { error } = await sb.from('profiles').upsert(
-        { id:userId, username, display_name, updated_at:new Date().toISOString() },
-        { onConflict:'id' }
-      );
-      if(error) console.error('ensureProfileRow:', error);
+      const payload = {
+        id: userId,
+        username,
+        display_name,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await sb
+        .from("profiles")
+        .upsert(payload, { onConflict: "id" });
+
+      if (error) console.error("ensureProfileRow:", error);
     }
 
-    // avatar helpers
-    function setAvatarPlaceholder(){ if(!avatarPreview) return; avatarPreview.classList.add('is-blank'); avatarPreview.innerHTML='PFP'; }
-    function setAvatar(url){ if(!avatarPreview) return; avatarPreview.classList.remove('is-blank'); avatarPreview.innerHTML=`<img src="${url}" alt="Profile photo">`; }
+    function setAvatarPlaceholder(){
+      if(!avatarPreview) return;
+      avatarPreview.classList.add('is-blank');
+      avatarPreview.innerHTML = 'PFP';
+    }
+    function setAvatar(url){
+      if(!avatarPreview) return;
+      avatarPreview.classList.remove('is-blank');
+      avatarPreview.innerHTML = `<img src="${url}" alt="Profile photo">`;
+    }
 
-    async function uploadToBucket(bucket,file,kind){
-      const path=pathFor(kind,file);
-      const { error } = await sb.storage.from(bucket).upload(path,file,{ upsert:false });
+    async function uploadToBucket(bucket, file, kind){
+      const path = pathFor(kind, file);
+      const { error } = await sb.storage.from(bucket).upload(path, file, { upsert:false });
       if(error) throw error;
       const { data } = sb.storage.from(bucket).getPublicUrl(path);
-      return data.publicUrl;
+      return data.publicUrl; // raw public URL
     }
 
     /* ========= YouTube helpers ========= */
-    const isYouTubeUrl=u=>/youtu\.?be|youtube\.com/i.test(u||'');
-    const isYouTubeId=s=>/^[A-Za-z0-9_-]{11}$/.test(s||'');
-    function extractYouTubeIdStrict(input){
-      if(!input) return null;
-      const s=String(input).trim(); if(isYouTubeId(s)) return s;
-      try{
-        const u=new URL(s,location.href);
-        if(/\byoutu\.be$/i.test(u.hostname)){ const id=u.pathname.split('/').filter(Boolean)[0]; if(isYouTubeId(id)) return id; }
-        if(/\byoutube\.com$/i.test(u.hostname)){
-          const v=u.searchParams.get('v'); if(isYouTubeId(v)) return v;
-          const parts=u.pathname.split('/').filter(Boolean);
-          if(parts.length>=2 && ['embed','shorts','live'].includes(parts[0])){ const id=parts[1]; if(isYouTubeId(id)) return id; }
+    const isYouTubeUrl = u => /youtu\.?be|youtube\.com/i.test(u||'');
+    const isYouTubeId  = s => /^[A-Za-z0-9_-]{11}$/.test(s||'');
+    function extractYouTubeIdStrict(input) {
+      if (!input) return null;
+      const s = String(input).trim();
+      if (isYouTubeId(s)) return s;
+      try {
+        const u = new URL(s, location.href);
+        if (/\byoutu\.be$/i.test(u.hostname)) {
+          const id = u.pathname.split('/').filter(Boolean)[0];
+          if (isYouTubeId(id)) return id;
         }
-      }catch{}
-      const m=s.match(/([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/);
-      return m?m[1]:null;
+        if (/\byoutube\.com$/i.test(u.hostname)) {
+          const v = u.searchParams.get('v');
+          if (isYouTubeId(v)) return v;
+          const parts = u.pathname.split('/').filter(Boolean);
+          if (parts.length >= 2 && ['embed','shorts','live'].includes(parts[0])) {
+            const id = parts[1];
+            if (isYouTubeId(id)) return id;
+          }
+        }
+      } catch {}
+      const m = s.match(/([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/);
+      return m ? m[1] : null;
     }
+
+    /* ====== Autoplay muted + first-gesture unmute (overlay captures tap) ====== */
+    let ytAutoplayTries = 0, ytWantUnmute = false, ytReady = false;
+    const YT_MAX_TRIES = 12;
 
     function showOverlay(show){ if(ytOverlay) ytOverlay.classList.toggle('show', !!show); }
 
-    // Global one-shot unmute handler
-    function addGlobalUnmuteOnce(){
-      if(unmutedOnce) return;
-      const unmute = ()=>{
-        unmutedOnce = true;
-        try{ ytPlayer?.unMute?.(); ytPlayer?.playVideo?.(); }catch{}
-        showOverlay(false);
-        const evts=['click','pointerdown','touchstart','keydown','wheel','scroll'];
-        evts.forEach(e=>{ document.removeEventListener(e,unmute,true); window.removeEventListener(e,unmute,true); });
-      };
-      showOverlay(true);
+    function doUnmuteNow(){
+      try { ytPlayer?.unMute?.(); ytPlayer?.playVideo?.(); } catch {}
+      showOverlay(false);
+      removeGlobalGestureListeners();
+      if (ytOverlay) ytOverlay.removeEventListener('click', overlayUnmuteHandler, true);
+    }
+
+    function overlayUnmuteHandler(ev){
+      ev.preventDefault();
+      ytWantUnmute = true;
+      if (ytReady) doUnmuteNow(); else showOverlay(true);
+    }
+
+    const _gestureOnce = ()=>{ ytWantUnmute = true; if (ytReady) doUnmuteNow(); };
+    function addGlobalGestureListeners(){
       const opts={ once:true, capture:true };
-      const passive={ once:true, capture:true, passive:true };
-      document.addEventListener('click',unmute,opts);
-      document.addEventListener('pointerdown',unmute,opts);
-      document.addEventListener('touchstart',unmute,opts);
-      document.addEventListener('keydown',unmute,opts);
-      window.addEventListener('wheel',unmute,passive);
-      window.addEventListener('scroll',unmute,passive);
+      const popt={ once:true, capture:true, passive:true };
+      document.addEventListener('click', _gestureOnce, opts);
+      document.addEventListener('pointerdown', _gestureOnce, opts);
+      document.addEventListener('touchstart', _gestureOnce, opts);
+      document.addEventListener('keydown', _gestureOnce, opts);
+      window.addEventListener('wheel', _gestureOnce, popt);
+      window.addEventListener('scroll', _gestureOnce, popt);
+    }
+    function removeGlobalGestureListeners(){
+      document.removeEventListener('click', _gestureOnce, true);
+      document.removeEventListener('pointerdown', _gestureOnce, true);
+      document.removeEventListener('touchstart', _gestureOnce, true);
+      document.removeEventListener('keydown', _gestureOnce, true);
+      window.removeEventListener('wheel', _gestureOnce, true);
+      window.removeEventListener('scroll', _gestureOnce, true);
+    }
+
+    function tryPlayMuted(){
+      if(!ytPlayer) return;
+      try { ytPlayer.mute(); ytPlayer.playVideo(); } catch {}
+      ytAutoplayTries++;
+      setTimeout(()=>{
+        let st=-2;
+        try { st = ytPlayer.getPlayerState?.() ?? -2; } catch {}
+        if((st===-1 || st===2 || st===5) && ytAutoplayTries < YT_MAX_TRIES){
+          try { ytPlayer.playVideo?.(); } catch {}
+          setTimeout(tryPlayMuted, 120);
+        }
+      }, 100);
     }
 
     function makeOrUpdateYTPlayer(){
       if(!ytVideoId) return;
-      if(songPlayer){ songPlayer.pause(); songPlayer.style.display='none'; }
-      if(ytWrap){ ytWrap.style.display='block'; }
+
+      if(songPlayer){ songPlayer.pause(); songPlayer.style.display = 'none'; }
+      if(ytWrap){ ytWrap.style.display = 'block'; }
+
+      // show overlay and wire up gesture capture
+      showOverlay(true);
+      if (ytOverlay){
+        ytOverlay.removeEventListener('click', overlayUnmuteHandler, true);
+        ytOverlay.addEventListener('click', overlayUnmuteHandler, { once:true, capture:true });
+      }
+      addGlobalGestureListeners();
+
+      ytAutoplayTries = 0; ytWantUnmute = false; ytReady = false;
 
       if(ytPlayer){
-        try{
-          ytPlayer.loadVideoById(ytVideoId);
-          ytPlayer.mute();
-          ytPlayer.playVideo();        // autoplay muted
-          unmutedOnce = false;
-          addGlobalUnmuteOnce();       // first gesture unmutes
-          return;
-        }catch{}
+        try{ ytPlayer.loadVideoById(ytVideoId); }catch{}
+        tryPlayMuted();
+        return;
       }
 
-      ytPlayer = new YT.Player('ytPlayer',{
+      ytPlayer = new YT.Player('ytPlayer', {
+        origin: location.origin,
         videoId: ytVideoId,
-        playerVars:{ autoplay:1, mute:1, playsinline:1, rel:0, modestbranding:1, controls:1 },
-        events:{
+        playerVars: { autoplay:1, mute:1, playsinline:1, rel:0, modestbranding:1, controls:1 },
+        events: {
           onReady: ()=>{
-            try{ ytPlayer.mute(); ytPlayer.playVideo(); }catch{}
-            unmutedOnce = false;
-            addGlobalUnmuteOnce();
+            ytReady = true;
+            tryPlayMuted();
+            if (ytWantUnmute) doUnmuteNow();
+          },
+          onStateChange: (e)=>{
+            if((e.data===-1 || e.data===2 || e.data===5) && ytAutoplayTries < YT_MAX_TRIES){
+              setTimeout(tryPlayMuted, 120);
+            }
           }
         }
       });
     }
 
-    /* ========= Upload buttons ========= */
-    function wireUploads(){
-      const enabled=viewingOwn;
+    // Tab-return nudge for autoplay
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState==='visible' && ytPlayer){
+        setTimeout(tryPlayMuted, 120);
+      }
+    });
 
+    /* ========= Quick upload cameras ========= */
+    function wireUploads(){
+      const enabled = viewingOwn;
+
+      // Banner
       if(bannerCameraBtn && bannerQuickFile){
         bannerCameraBtn.style.display = enabled ? '' : 'none';
         if(enabled){
-          bannerCameraBtn.onclick=()=>bannerQuickFile.click();
-          bannerQuickFile.onchange=async()=>{
+          bannerCameraBtn.onclick = ()=> bannerQuickFile.click();
+          bannerQuickFile.onchange = async ()=>{
             if(!bannerQuickFile.files[0]) return;
             try{
-              const raw=await uploadToBucket(BANNER_BUCKET,bannerQuickFile.files[0],'banner');
-              const ver=Date.now(); if(bannerPreview) bannerPreview.src=bust(raw,ver);
-              if(CACHE_UID) cache.set(CACHE_UID,{ banner_url:bust(raw,ver) });
-              await sb.from('profiles').upsert({ id:target.id, banner_url:raw, updated_at:new Date().toISOString() },{ onConflict:'id' });
-            }catch(e){ console.error('Banner upload failed:',e); alert('Banner upload failed: '+(e?.message||'unknown error')); }
-            finally{ bannerQuickFile.value=""; }
+              const raw = await uploadToBucket(BANNER_BUCKET, bannerQuickFile.files[0], 'banner');
+              const ver = Date.now();
+              if (bannerPreview) bannerPreview.src = bust(raw, ver);
+              if (CACHE_UID) cache.set(CACHE_UID, { banner_url: bust(raw,ver) });
+              await sb.from('profiles').upsert({ id:target.id, banner_url: raw, updated_at: new Date().toISOString() }, { onConflict:'id' });
+            }catch(e){
+              console.error('Banner upload failed:', e);
+              alert('Banner upload failed: ' + (e?.message || 'unknown error'));
+            } finally { bannerQuickFile.value = ""; }
           };
-        }else{ bannerCameraBtn.onclick=null; bannerQuickFile.onchange=null; }
+        } else {
+          bannerCameraBtn.onclick = null;
+          bannerQuickFile.onchange = null;
+        }
       }
 
+      // Avatar
       if(avatarCameraBtn && avatarQuickFile){
         avatarCameraBtn.style.display = enabled ? '' : 'none';
         if(enabled){
-          avatarCameraBtn.onclick=()=>avatarQuickFile.click();
-          avatarQuickFile.onchange=async()=>{
+          avatarCameraBtn.onclick = ()=> avatarQuickFile.click();
+          avatarQuickFile.onchange = async ()=>{
             if(!avatarQuickFile.files[0]) return;
             try{
-              const raw=await uploadToBucket(AVATAR_BUCKET,avatarQuickFile.files[0],'avatar');
-              const ver=Date.now(); setAvatar(bust(raw,ver));
-              if(CACHE_UID) cache.set(CACHE_UID,{ avatar_url:bust(raw,ver) });
-              await sb.from('profiles').upsert({ id:target.id, avatar_url:raw, updated_at:new Date().toISOString() },{ onConflict:'id' });
-            }catch(e){ console.error('Avatar upload failed:',e); alert('Avatar upload failed: '+(e?.message||'unknown error')); }
-            finally{ avatarQuickFile.value=""; }
+              const raw = await uploadToBucket(AVATAR_BUCKET, avatarQuickFile.files[0], 'avatar');
+              const ver = Date.now();
+              setAvatar(bust(raw, ver));
+              if (CACHE_UID) cache.set(CACHE_UID, { avatar_url: bust(raw,ver) });
+              await sb.from('profiles').upsert({ id:target.id, avatar_url: raw, updated_at: new Date().toISOString() }, { onConflict:'id' });
+            }catch(e){
+              console.error('Avatar upload failed:', e);
+              alert('Avatar upload failed: ' + (e?.message || 'unknown error'));
+            } finally { avatarQuickFile.value = ""; }
           };
-        }else{ avatarCameraBtn.onclick=null; avatarQuickFile.onchange=null; }
+        } else {
+          avatarCameraBtn.onclick = null;
+          avatarQuickFile.onchange = null;
+        }
       }
 
+      // Page BG
       if(bgCameraBtn && bgQuickFile){
         bgCameraBtn.style.display = enabled ? '' : 'none';
         if(enabled){
-          bgCameraBtn.onclick=()=>bgQuickFile.click();
-          bgQuickFile.onchange=async()=>{
-            const file=bgQuickFile.files[0]; if(!file) return;
+          bgCameraBtn.onclick = ()=> bgQuickFile.click();
+          bgQuickFile.onchange = async ()=>{
+            const file = bgQuickFile.files[0];
+            if(!file) return;
             try{
-              if(bgPreview) bgPreview.src=URL.createObjectURL(file);
-              const raw=await uploadToBucket(BG_BUCKET,file,'bg');
-              const ver=Date.now(); if(bgPreview) bgPreview.src=bust(raw,ver);
-              if(CACHE_UID) cache.set(CACHE_UID,{ bg_url:bust(raw,ver) });
-              await sb.from('profiles').upsert({ id:target.id, bg_url:raw, updated_at:new Date().toISOString() },{ onConflict:'id' });
-            }catch(e){ console.error('Background upload failed:',e); alert('Background upload failed: '+(e?.message||'unknown error')); }
-            finally{ bgQuickFile.value=""; }
+              if (bgPreview) bgPreview.src = URL.createObjectURL(file); // instant local preview
+              const raw = await uploadToBucket(BG_BUCKET, file, 'bg');
+              const ver = Date.now();
+              if (bgPreview) bgPreview.src = bust(raw, ver);
+              if (CACHE_UID) cache.set(CACHE_UID, { bg_url: bust(raw,ver) });
+              await sb.from('profiles').upsert(
+                { id:target.id, bg_url: raw, updated_at: new Date().toISOString() },
+                { onConflict:'id' }
+              );
+            }catch(e){
+              console.error('Background upload failed:', e);
+              alert('Background upload failed: ' + (e?.message || 'unknown error'));
+            } finally { bgQuickFile.value = ""; }
           };
-        }else{ bgCameraBtn.onclick=null; bgQuickFile.onchange=null; }
-      }
-    }
-
-    function isLocalProtocol(){ return location.protocol==='file:' || location.protocol==='content:'; }
-    function wireEditProfileLink(){
-      if(!editProfileLink) return;
-      if(!viewingOwn){ editProfileLink.style.display='none'; return; }
-      let href='editprofile.html';
-      if(!isLocalProtocol()){
-        const url=new URL(href,location.href);
-        url.searchParams.set('return','profile.html');
-        url.searchParams.set('v',Date.now().toString());
-        href=url.toString();
-      }
-      editProfileLink.href=href;
-    }
-
-    /* small toast */
-    function showToast(msg){
-      const d=document.createElement('div');
-      d.textContent=msg||'Saved!';
-      Object.assign(d.style,{position:'fixed',top:'12px',right:'12px',zIndex:'99999',padding:'6px 10px',border:'2px solid var(--green)',borderRadius:'8px',background:'#050905',color:'#e5ffe5',fontWeight:'800',fontSize:'0.9rem',whiteSpace:'nowrap',boxShadow:'0 0 12px rgba(57,255,20,.35)',pointerEvents:'none'});
-      document.body.appendChild(d); setTimeout(()=>d.remove(),2500);
-    }
-    function showToastIfSaved(){
-      const p=new URLSearchParams(location.search);
-      if(p.get('saved')==='1'){
-        showToast('Saved!');
-        if(history.replaceState){
-          p.delete('saved');
-          const clean=location.pathname+(p.toString()?('?'+p.toString()):'')+location.hash;
-          history.replaceState(null,'',clean);
+        } else {
+          bgCameraBtn.onclick = null;
+          bgQuickFile.onchange = null;
         }
       }
     }
 
-    /* load a profile */
+    /* ========= Edit link ========= */
+    function isLocalProtocol(){
+      return location.protocol === 'file:' || location.protocol === 'content:';
+    }
+    function wireEditProfileLink(){
+      if(!editProfileLink) return;
+      if(!viewingOwn){
+        editProfileLink.style.display = 'none';
+        return;
+      }
+      let href = 'editprofile.html';
+      if(!isLocalProtocol()){
+        const url = new URL(href, location.href);
+        url.searchParams.set('return','profile.html');
+        url.searchParams.set('v', Date.now().toString());
+        href = url.toString();
+      }
+      editProfileLink.href = href;
+    }
+
+    /* ========= Tiny toast ========= */
+    function showToast(msg){
+      const d = document.createElement('div');
+      d.textContent = msg || 'Saved!';
+      Object.assign(d.style, {
+        position:'fixed', top:'12px', right:'12px', zIndex:'99999',
+        padding:'6px 10px', border:'2px solid var(--green)', borderRadius:'8px',
+        background:'#050905', color:'#e5ffe5', fontWeight:'800',
+        fontSize:'0.9rem', whiteSpace:'nowrap', boxShadow:'0 0 12px rgba(57,255,20,.35)',
+        pointerEvents:'none'
+      });
+      document.body.appendChild(d);
+      setTimeout(()=> d.remove(), 2500);
+    }
+    function showToastIfSaved(){
+      const p = new URLSearchParams(location.search);
+      if(p.get('saved') === '1'){
+        showToast('Saved!');
+        if(history.replaceState){
+          p.delete('saved');
+          const clean = location.pathname + (p.toString()?('?'+p.toString()):'') + location.hash;
+          history.replaceState(null, '', clean);
+        }
+      }
+    }
+
+    /* ========= Load a profile ========= */
     async function loadProfileBy(idOrUsername, useCache=false){
-      if(useCache && CACHE_UID){
-        const cached=cache.get(CACHE_UID);
-        if(cached.avatar_url) setAvatar(cached.avatar_url); else setAvatarPlaceholder();
-        if(cached.banner_url && bannerPreview) bannerPreview.src=cached.banner_url;
-        if(cached.bg_url && bgPreview) bgPreview.src=cached.bg_url;
-      }else{
-        setAvatarPlaceholder(); bannerPreview?.removeAttribute('src'); bgPreview?.removeAttribute('src');
+      if (useCache && CACHE_UID) {
+        const cached = cache.get(CACHE_UID);
+        if (cached.avatar_url) setAvatar(cached.avatar_url); else setAvatarPlaceholder();
+        if (cached.banner_url && bannerPreview) bannerPreview.src = cached.banner_url;
+        if (cached.bg_url && bgPreview)         bgPreview.src     = cached.bg_url;
+      } else {
+        setAvatarPlaceholder();
+        if (bannerPreview) bannerPreview.removeAttribute('src');
+        if (bgPreview) bgPreview.removeAttribute('src');
       }
 
-      let q=sb.from("profiles").select("*").limit(1);
-      if(idOrUsername.kind==='id') q=q.eq("id", idOrUsername.value); else q=q.ilike("username", idOrUsername.value);
+      let q = sb.from("profiles").select("*").limit(1);
+      if (idOrUsername.kind === 'id') q = q.eq("id", idOrUsername.value);
+      else                             q = q.ilike("username", idOrUsername.value);
       const { data, error } = await q.maybeSingle();
-      if(error || !data){ console.error(error||'Profile not found'); return null; }
+      if(error || !data){
+        console.error(error||'Profile not found');
+        return null;
+      }
 
+      // Identity lines
       pronounsText.textContent = data.pronouns || '';
       sunText.textContent      = data.sun || '';
       moonText.textContent     = data.moon || '';
@@ -446,104 +680,152 @@
       voidMsgText.textContent  = data.void_message || '';
       funnyStoryText.textContent = data.funny_story || '';
 
-      const s=data.song_url||null;
-      let asId=null; if(isYouTubeId(s)) asId=s; else if(isYouTubeUrl(s)) asId=extractYouTubeIdStrict(s);
+      // Theme song
+      const s = data.song_url || null;
+      let asId = null;
+      if (isYouTubeId(s)) asId = s;
+      else if (isYouTubeUrl(s)) asId = extractYouTubeIdStrict(s);
 
-      if(asId){
-        ytVideoId=asId;
-        ytWrap.style.display='block';
-        songPlayer.style.display='none';
-        makeOrUpdateYTPlayer();
-      } else if (s){
-        songPlayer.src=s; songPlayer.style.display='block';
-        ytWrap.style.display='none';
+      if (asId) {
+        ytVideoId = asId;
+        if (ytWrap) ytWrap.style.display = 'block';
+        if (songPlayer) { songPlayer.pause(); songPlayer.style.display = 'none'; }
+        if (window.YT && window.YT.Player) makeOrUpdateYTPlayer();
+      } else if (s) {
+        if (songPlayer) { songPlayer.src = s; songPlayer.style.display = 'block'; }
+        if (ytWrap) ytWrap.style.display = 'none';
       } else {
-        songPlayer.removeAttribute('src'); songPlayer.style.display='none';
-        ytWrap.style.display='none';
+        if (songPlayer) { songPlayer.removeAttribute('src'); songPlayer.style.display = 'none'; }
+        if (ytWrap) ytWrap.style.display = 'none';
       }
 
-      const ver=data.updated_at ? new Date(data.updated_at).getTime() : Date.now();
-      if(data.avatar_url){ setAvatar(bust(data.avatar_url,ver)); if(useCache && CACHE_UID) cache.set(CACHE_UID,{ avatar_url:bust(data.avatar_url,ver) }); } else setAvatarPlaceholder();
-      if(data.banner_url && bannerPreview){ bannerPreview.src=bust(data.banner_url,ver); if(useCache && CACHE_UID) cache.set(CACHE_UID,{ banner_url:bust(data.banner_url,ver) }); }
-      if(data.bg_url && bgPreview){ bgPreview.src=bust(data.bg_url,ver); if(useCache && CACHE_UID) cache.set(CACHE_UID,{ bg_url:bust(data.bg_url,ver) }); }
+      // Media (use updated_at as version stamp)
+      const ver = data.updated_at ? new Date(data.updated_at).getTime() : Date.now();
+
+      if(data.avatar_url){ setAvatar(bust(data.avatar_url, ver)); if (useCache && CACHE_UID) cache.set(CACHE_UID, { avatar_url: bust(data.avatar_url, ver) }); }
+      else setAvatarPlaceholder();
+
+      if(data.banner_url && bannerPreview){ bannerPreview.src = bust(data.banner_url, ver); if (useCache && CACHE_UID) cache.set(CACHE_UID, { banner_url: bust(data.banner_url, ver) }); }
+      if(data.bg_url && bgPreview){ bgPreview.src = bust(data.bg_url, ver); if (useCache && CACHE_UID) cache.set(CACHE_UID, { bg_url: bust(data.bg_url, ver) }); }
 
       return data;
     }
 
-    /* DM helper */
+    /* ========= DM helper ========= */
     async function openOrCreateDM(otherId){
-      if(!me){ location.href='./login.html'; return; }
-      const a=me.id, b=otherId; const least=a<b?a:b, greatest=a<b?b:a;
-      let { data: thread } = await sb.from('dm_threads').select('id,a,b')
-        .or(`and(a.eq.${least},b.eq.${greatest}),and(a.eq.${greatest},b.eq.${least})`).maybeSingle();
+      if(!me){ location.href = './login.html'; return; }
+      const a = me.id;
+      const b = otherId;
+      const least = a < b ? a : b;
+      const greatest = a < b ? b : a;
+
+      let { data: thread } = await sb
+        .from('dm_threads')
+        .select('id,a,b')
+        .or(`and(a.eq.${least},b.eq.${greatest}),and(a.eq.${greatest},b.eq.${least})`)
+        .maybeSingle();
 
       if(!thread){
-        const { data: created, error: insertErr } = await sb.from('dm_threads').insert({ a,b }).select('id').single();
+        const { data: created, error: insertErr } = await sb
+          .from('dm_threads')
+          .insert({ a, b })
+          .select('id')
+          .single();
         if(insertErr){ alert('Could not start DM'); return; }
         thread = created;
       }
       location.href = `./dm.html?thread=${thread.id}`;
     }
 
-    /* unread badge */
+    /* ========= Unread-ish badge ========= */
     async function updateInboxBadge(){
       if(!me || !inboxBadge) return;
-      const { data: threads } = await sb.from('dm_threads').select('id,a,b,created_at').order('created_at',{ ascending:false });
-      if(!threads || threads.length===0){ inboxBadge.style.display='none'; return; }
-      let count=0;
+      const { data: threads } = await sb
+        .from('dm_threads')
+        .select('id,a,b,created_at')
+        .order('created_at', { ascending:false });
+
+      if(!threads || threads.length===0){
+        inboxBadge.style.display='none';
+        return;
+      }
+
+      let count = 0;
       for(const t of threads){
-        const { data:last } = await sb.from('dm_messages').select('sender,created_at').eq('thread_id',t.id).order('created_at',{ ascending:false }).limit(1).maybeSingle();
+        const { data: last } = await sb
+          .from('dm_messages')
+          .select('sender,created_at')
+          .eq('thread_id', t.id)
+          .order('created_at', { ascending:false })
+          .limit(1)
+          .maybeSingle();
         if(last && last.sender !== me.id) count++;
       }
-      if(count>0){ inboxBadge.textContent=count; inboxBadge.style.display=''; } else inboxBadge.style.display='none';
+      if(count>0){ inboxBadge.textContent = count; inboxBadge.style.display=''; }
+      else { inboxBadge.style.display='none'; }
     }
 
-    /* boot */
+    /* ========= Boot ========= */
     document.addEventListener("DOMContentLoaded", async ()=>{
       try{
         const { data:{ session } } = await sb.auth.getSession();
         me = session?.user || null;
 
-        const qs=new URLSearchParams(location.search);
-        const qUsername=(qs.get('u')||'').trim();
-        const qUid=(qs.get('uid')||'').trim();
+        const qs = new URLSearchParams(location.search);
+        const qUsername = (qs.get('u')||'').trim();
+        const qUid = (qs.get('uid')||'').trim();
 
         let selector, useCache=false;
         if(!qUsername && !qUid){
           if(!me){ location.href="./login.html"; return; }
-          viewingOwn=true; CACHE_UID=me.id; selector={ kind:'id', value:me.id }; useCache=true;
-        }else{
+          viewingOwn = true;
+          CACHE_UID = me.id;
+          selector = { kind:'id', value: me.id };
+          useCache = true;
+        } else {
           selector = qUid ? { kind:'id', value:qUid } : { kind:'username', value:qUsername };
-          viewingOwn = !!(me && qUid && me.id===qUid);
+          viewingOwn = !!(me && qUid && me.id === qUid);
           CACHE_UID = viewingOwn ? me.id : null;
           useCache = viewingOwn;
         }
 
         target = await loadProfileBy(selector, useCache);
         if(!target){
-          if(viewingOwn && me){ await ensureProfileRow(me.id); target={ id:me.id }; }
+          if (viewingOwn && me){ await ensureProfileRow(me.id); target = { id: me.id }; }
           else { alert('Profile not found'); return; }
         }
-        if(me && target?.id) viewingOwn = (me.id===target.id);
-        if(!viewingOwn) CACHE_UID=null;
+        if(me && target && target.id) viewingOwn = (me.id === target.id);
+        if(!viewingOwn) CACHE_UID = null;
 
         if(inboxBtn) inboxBtn.style.display = me ? '' : 'none';
 
         wireEditProfileLink();
         wireUploads();
-        if(dmButton){ dmButton.style.display = viewingOwn ? 'none' : ''; dmButton.onclick=e=>{ e.preventDefault(); openOrCreateDM(target.id); }; }
+        if(dmButton){
+          dmButton.style.display = viewingOwn ? 'none' : '';
+          dmButton.onclick = (e)=>{ e.preventDefault(); openOrCreateDM(target.id); };
+        }
 
         if(viewingOwn && me) await ensureProfileRow(me.id);
+
         if(me) updateInboxBadge().catch(console.error);
         showToastIfSaved();
-      }catch(e){ console.error('Boot error:', e); }
+      }catch(e){
+        console.error('Boot error:', e);
+      }
     });
   </script>
 
-  <!-- YouTube API -->
+  <!-- Load YouTube IFrame API once -->
   <script>
-    (function(){ const s=document.createElement('script'); s.src="https://www.youtube.com/iframe_api"; document.head.appendChild(s); })();
-    function onYouTubeIframeAPIReady(){ if(typeof makeOrUpdateYTPlayer==='function') makeOrUpdateYTPlayer(); }
+    (function(){
+      const s=document.createElement('script');
+      s.src="https://www.youtube.com/iframe_api";
+      document.head.appendChild(s);
+    })();
+    function onYouTubeIframeAPIReady(){
+      if(typeof makeOrUpdateYTPlayer==='function') makeOrUpdateYTPlayer();
+    }
   </script>
 </body>
 </html>
