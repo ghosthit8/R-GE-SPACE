@@ -332,6 +332,20 @@
       if (error) console.error('ensureProfileRow:', error);
     }
 
+    // NEW: store display_name / username from auth metadata
+    async function ensureIdentityFields(user){
+      if(!user) return;
+      const display_name = user.user_metadata?.full_name ?? null;
+      const username = user.user_metadata?.username ?? (user.email ? user.email.split('@')[0] : null);
+      if (display_name || username) {
+        const { error } = await sb.from('profiles').upsert(
+          { id: user.id, display_name, username, updated_at: new Date().toISOString() },
+          { onConflict: 'id' }
+        );
+        if (error) console.warn('ensureIdentityFields:', error);
+      }
+    }
+
     function setAvatarPlaceholder(){
       if(!avatarPreview) return;
       avatarPreview.classList.add('is-blank');
@@ -656,6 +670,12 @@
         const { data:{ session } } = await sb.auth.getSession();
         me = session?.user || null;
 
+        // Ensure base row + identity fields if signed in (NEW)
+        if (me) {
+          await ensureProfileRow(me.id);
+          await ensureIdentityFields(me);
+        }
+
         const qs = new URLSearchParams(location.search);
         const qUsername = (qs.get('u')||'').trim();
         const qUid = (qs.get('uid')||'').trim();
@@ -697,6 +717,14 @@
         showToastIfSaved();
       }catch(e){
         console.error('Boot error:', e);
+      }
+    });
+
+    // Keep identity in sync on auth changes (NEW)
+    sb.auth.onAuthStateChange(async (_evt, session) => {
+      if (session?.user) {
+        await ensureProfileRow(session.user.id);
+        await ensureIdentityFields(session.user);
       }
     });
   </script>
