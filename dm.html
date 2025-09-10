@@ -140,6 +140,7 @@
 
     /************ State ************/
     const state = { user:null, displayName:null };
+    let latestMs = 0;
 
     function renderMessage(row){
       if (!row || (row.id && renderedIds.has(row.id))) return;
@@ -165,7 +166,9 @@
       chatBox.scrollTop = chatBox.scrollHeight;
       if (row.id) renderedIds.add(row.id);
 
-      // actively seeing it -> mark as read
+      // track newest timestamp for polling + mark as read
+      const ms = Date.parse(row.created_at) || 0;
+      if (ms > latestMs) latestMs = ms;
       markThreadRead();
     }
 
@@ -178,6 +181,8 @@
 
       if(error){ showError("Load failed — check table/permissions.", JSON.stringify(error, null, 2)); return; }
       chatBox.innerHTML = "";
+      renderedIds.clear();
+      latestMs = 0;
       if (!data || data.length === 0) {
         if (!emptyState.parentNode) chatBox.appendChild(emptyState);
       } else {
@@ -186,39 +191,47 @@
       markThreadRead();
     }
 
+    // --- POLLING FALLBACK (every 3s) ---
+    async function pollNew(){
+      if (!latestMs) return;
+      const sinceISO = new Date(latestMs).toISOString();
+      const { data, error } = await sb
+        .from("dm_messages")
+        .select("id, thread_id, sender, body, created_at")
+        .eq("thread_id", THREAD_ID)
+        .gt("created_at", sinceISO)
+        .order("created_at", { ascending: true });
+      if(error){ console.warn('poll error', error); return; }
+      (data||[]).forEach(renderMessage);
+    }
+
     async function loadOtherHeader(meId){
       try{
-        const { data: t, error: te } = await sb
+        const { data: t } = await sb
           .from("dm_threads")
           .select("id,a,b")
           .eq("id", THREAD_ID)
           .maybeSingle();
-        if(te){ console.warn(te); return; }
         if(!t) return;
         const otherId = (t.a === meId) ? t.b : t.a;
-        const { data: p, error: pe } = await sb
+        const { data: p } = await sb
           .from("profiles")
           .select("id,username,display_name,avatar_url")
           .eq("id", otherId)
           .maybeSingle();
-        if(pe){ console.warn(pe); }
         otherNameEl.textContent = nameFromProfile(p) || ('@user-' + (otherId||'').slice(0,6));
         otherNameEl.style.display = "inline";
         if(p?.avatar_url){
           otherPfpEl.innerHTML = `<img src="${p.avatar_url}" alt="">`;
           otherPfpEl.style.display = "block";
         }
-      }catch(e){
-        console.warn(e);
-      }
+      }catch(e){ /* ignore */ }
     }
 
     /************ Auth ************/
     async function ensureAuth(){
-      const { data: { user }, error } = await sb.auth.getUser();
-      if (error) console.warn("auth.getUser error:", error);
+      const { data: { user } } = await sb.auth.getUser();
       state.user = user || null;
-
       if (!user){
         whoami.textContent = "• not signed in — please log in";
         form.classList.add("disabled");
@@ -242,7 +255,6 @@
       if(!text) return;
       input.value = "";
 
-      // Insert into dm_messages (same table inbox reads)
       const { data, error } = await sb
         .from("dm_messages")
         .insert({ thread_id: THREAD_ID, sender: state.user.id, body: text })
@@ -253,9 +265,7 @@
         showError("Send failed — likely RLS/policy or column mismatch.", JSON.stringify(error, null, 2));
         return;
       }
-
-      // Render immediately (don’t wait for realtime)
-      renderMessage(data);
+      renderMessage(data); // render immediately even if realtime is off
     });
 
     /************ Realtime: new messages in this thread ************/
@@ -269,7 +279,7 @@
       .subscribe();
 
     /************ Realtime: typing indicator (broadcast) ************/
-    function throttle(fn, ms){ let last=0; return (...a)=>{const n=Date.now(); if(n-last>ms){last=n; fn(...a);} }; }
+    function throttle(fn, ms){ let last=0; return (...a)=>{ const n=Date.now(); if(n-last>ms){ last=n; fn(...a);} }; }
     let typingHideTimer = null;
 
     const typingChan = sb.channel(`typing_${THREAD_ID}`, {
@@ -303,12 +313,12 @@
       await loadOtherHeader(state.user.id);
       await loadMessages();
 
-      // keep read when returning to the tab/window
       window.addEventListener('focus', markThreadRead);
-      document.addEventListener('visibilitychange', () => {
-        if(document.visibilityState === 'visible') markThreadRead();
-      });
-      markThreadRead(); // immediate on first open
+      document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') markThreadRead(); });
+      markThreadRead(); // immediate
+
+      // Poll every 3s as a fallback in case Realtime isn't configured
+      setInterval(pollNew, 3000);
     })();
   </script>
 </body>
