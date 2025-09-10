@@ -23,6 +23,7 @@
 
     .pfp{ width:48px; height:48px; border-radius:12px; background:#111; border:2px solid var(--green); overflow:hidden; flex:0 0 auto; }
     .pfp img{ width:100%; height:100%; object-fit:cover; display:block; }
+
     .meta{ display:flex; flex-direction:column; min-width:0 }
     .name{ color:var(--green); font-weight:800; }
     .last{ color:var(--ink); opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
@@ -71,23 +72,24 @@
     const empty = document.getElementById('empty');
     let me = null;
 
-    // Robust name fallback if profile lacks username/display_name
-    function displayName(u){
-      if(!u) return '@user';
-      if(u.display_name && u.display_name.trim()) return u.display_name;
-      if(u.username && u.username.trim()) return '@' + u.username.trim();
-      const short = (u.id || '').slice(0,6);
-      return short ? ('@user-' + short) : '@user';
+    function safeName(profile, fallbackId){
+      if(profile){
+        if(profile.display_name && profile.display_name.trim()) return profile.display_name.trim();
+        if(profile.username && profile.username.trim()) return '@' + profile.username.trim();
+      }
+      const short = (fallbackId||'').slice(0,6) || 'user';
+      return '@user-' + short;
     }
 
-    function threadRow(other, thread, lastMsg, isUnread){
+    function threadRow(other, otherId, thread, lastMsg, isUnread, debugText){
       const a = document.createElement('a');
       a.href = `./dm.html?thread=${thread.id}`;
       a.className = 'thread' + (isUnread ? ' unread' : '');
+      a.title = debugText; // long-press to see quick debug
       a.innerHTML = `
         <div class="pfp">${other?.avatar_url ? `<img src="${other.avatar_url}" alt="">` : ''}</div>
         <div class="meta">
-          <div class="name">${displayName(other)}</div>
+          <div class="name">${safeName(other, otherId)}</div>
           <div class="last">${lastMsg?.body ? lastMsg.body : 'No messages yet'}</div>
         </div>
       `;
@@ -100,28 +102,31 @@
       if(!session){ location.href = './login.html'; return; }
       me = session.user;
 
-      // 1) threads
       const { data: threads, error } = await sb
         .from('dm_threads')
         .select('id,a,b,created_at')
         .order('created_at', { ascending:false });
       if(error){ console.error(error); empty.textContent='Error loading conversations.'; empty.style.display=''; return; }
-
       if(!threads || threads.length===0){ empty.style.display=''; return; }
       empty.style.display='none';
+      console.log('threads:', threads);
 
-      // 2) other users
       const otherIds = threads.map(t => t.a === me.id ? t.b : t.a);
-      const uniqIds = [...new Set(otherIds)];
-      const { data: others } = await sb
-        .from('profiles')
-        .select('id,username,display_name,avatar_url')
-        .in('id', uniqIds);
-      const byId = Object.fromEntries((others||[]).map(u => [u.id, u]));
+      const uniq = [...new Set(otherIds)];
+      let byId = {};
+      if(uniq.length){
+        const { data: others, error: e2 } = await sb
+          .from('profiles')
+          .select('id,username,display_name,avatar_url')
+          .in('id', uniq);
+        if(e2) console.warn('profiles select error:', e2);
+        byId = Object.fromEntries((others||[]).map(u => [u.id, u]));
+        console.log('profiles fetched:', others);
+      }
 
-      // 3) last message per thread + unread calc
       for(const t of threads){
         const otherId = t.a === me.id ? t.b : t.a;
+
         const { data: last } = await sb
           .from('dm_messages')
           .select('id,body,created_at,sender')
@@ -130,15 +135,15 @@
           .limit(1)
           .maybeSingle();
 
-        // localStorage key used by dm.html
         const lastReadKey = `dm_last_read_${t.id}`;
         const lastRead = Number(localStorage.getItem(lastReadKey) || 0);
         const lastTime = last?.created_at ? new Date(last.created_at).getTime() : 0;
-
-        // Unread only if the latest msg is FROM THEM and newer than our last-read
         const isUnread = !!(last && last.sender !== me.id && lastTime > lastRead);
 
-        list.appendChild(threadRow(byId[otherId], t, last, isUnread));
+        const dbg = `otherId=${otherId.slice(0,8)} lastSender=${(last?.sender||'').slice(0,8)} lastTime=${lastTime} lastRead=${lastRead} unread=${isUnread}`;
+        console.log('row:', dbg);
+
+        list.appendChild(threadRow(byId[otherId], otherId, t, last, isUnread, dbg));
       }
     }
 
