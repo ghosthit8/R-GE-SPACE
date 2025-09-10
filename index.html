@@ -49,15 +49,9 @@
       max-width:780px; margin:20px auto 0; text-shadow:0 0 10px rgba(57,255,20,.45), 0 0 6px rgba(255,0,51,.6);
     }
 
-    /* ==== ENTER MESSAGE ==== */
     .enter-msg{
-      margin: 100px auto 0;
-      font-size: 16px;
-      color: var(--ink);
-      text-align: center;
-      opacity: .95;
-      min-height: 1.6em;
-      will-change: opacity, text-shadow, filter;
+      margin: 100px auto 0; font-size: 16px; color: var(--ink); text-align: center;
+      opacity: .95; min-height: 1.6em;
     }
     @keyframes hardFlicker {
       0%, 5%, 7%, 9%, 11%, 100% { opacity:1; text-shadow:0 0 10px var(--green), 0 0 18px var(--red); filter:none; }
@@ -98,7 +92,6 @@
 
     .top-login{ position:fixed; top:28px; right:18px; z-index:3; }
 
-    /* NEW: top-left profile icon */
     .top-profile{ position:fixed; top:28px; left:18px; z-index:3; display:none; }
     .profile-chip{
       display:inline-flex; align-items:center; gap:10px; text-decoration:none;
@@ -123,7 +116,6 @@
 </head>
 <body>
   <div class="wrap">
-    <!-- NEW: Profile button -->
     <div class="top-profile">
       <a id="profileLink" class="profile-chip" href="./profile.html" aria-label="Profile">
         <span class="profile-ico"></span>
@@ -155,87 +147,93 @@
   </div>
 
   <script>
-    const sb = supabase.createClient(
-      "https://tuqvpcevrhciursxrgav.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
-    );
-
-    const authBtn     = document.getElementById("authBtn");
-    const enterBtn    = document.getElementById("enterBtn");
-    const signupBtn   = document.getElementById("signupBtn");
-    const enterMsg    = document.getElementById("enterMsg");
-    const topProfile  = document.querySelector(".top-profile");
+  document.addEventListener("DOMContentLoaded", () => {
+    const authBtn    = document.getElementById("authBtn");
+    const enterBtn   = document.getElementById("enterBtn");
+    const signupBtn  = document.getElementById("signupBtn");
+    const enterMsg   = document.getElementById("enterMsg");
+    const topProfile = document.querySelector(".top-profile");
 
     let isLoggedIn = false;
+    let sb = null;
+
+    const safe = (fn) => (...args) => { try{ return fn(...args); } catch(e){ console.error(e); } };
 
     function usernameFromSession(session){
       const u = session?.user;
       return u?.user_metadata?.username || u?.email || "user";
     }
-
     function setEnterMsgState(state){
       enterMsg.classList.remove('logged-in','logged-out');
       if(state === 'logged-in') enterMsg.classList.add('logged-in');
       if(state === 'logged-out') enterMsg.classList.add('logged-out');
     }
-
     function renderLoggedOut(){
+      if (!authBtn) return;
       authBtn.textContent = "Login";
       authBtn.className = "btn ghost";
       authBtn.setAttribute("href","./login.html");
       authBtn.onclick = null;
-      signupBtn.style.display = "";
-      enterMsg.textContent = "";
-      setEnterMsgState('logged-out');
-      topProfile.style.display = "none";
+      if (signupBtn) signupBtn.style.display = "";
+      if (enterMsg) { enterMsg.textContent = ""; setEnterMsgState('logged-out'); }
+      if (topProfile) topProfile.style.display = "none";
+      isLoggedIn = false;
     }
-
     function renderLoggedIn(session){
+      if (!authBtn) return;
       authBtn.textContent = "Logout";
       authBtn.className = "btn ghost-red";
       authBtn.setAttribute("href","#");
-      authBtn.onclick = async(e)=>{ e.preventDefault(); const {error}=await sb.auth.signOut(); if(error)console.error(error); };
-      signupBtn.style.display = "none";
+      authBtn.onclick = safe(async (e)=>{
+        e.preventDefault();
+        if(!sb) return;
+        const { error } = await sb.auth.signOut();
+        if (error) console.error(error);
+      });
+      if (signupBtn) signupBtn.style.display = "none";
       const name = usernameFromSession(session);
-      enterMsg.textContent = `Welcome, ${name}`;
-      setEnterMsgState('logged-in');
-      topProfile.style.display = "block";   // show Profile button when logged in
+      if (enterMsg){ enterMsg.textContent = `Welcome, ${name}`; setEnterMsgState('logged-in'); }
+      if (topProfile) topProfile.style.display = "block";
+      isLoggedIn = true;
     }
 
-    async function detectAndRenderAuth(){
-      const { data: sessionRes } = await sb.auth.getSession();
-      const session = sessionRes?.session;
-      isLoggedIn = !!session;
-      if (isLoggedIn){
-        renderLoggedIn(session);
-        enterBtn.classList.remove("locked");
-        enterBtn.removeAttribute("aria-disabled");
-      } else {
-        renderLoggedOut();
-      }
-    }
-
-    enterBtn.addEventListener("click",(e)=>{
+    // Buttons ALWAYS wired, even if auth fails
+    if (enterBtn) enterBtn.addEventListener("click", (e)=>{
       if (!isLoggedIn){
         e.preventDefault();
         enterBtn.classList.add("locked");
         enterBtn.setAttribute("aria-disabled","true");
-        enterMsg.textContent = 'login to follow the white rabbit...';
-        setEnterMsgState('logged-out');
+        if (enterMsg){ enterMsg.textContent = 'login to follow the white rabbit...'; setEnterMsgState('logged-out'); }
         return;
       }
       location.href="./menu.html";
     });
+    if (signupBtn) signupBtn.addEventListener("click", ()=> location.href="./signup.html");
 
-    signupBtn.addEventListener("click",()=>{ location.href="./signup.html"; });
+    // Init Supabase defensively
+    try{
+      sb = supabase.createClient(
+        "https://tuqvpcevrhciursxrgav.supabase.co",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
+      );
+    }catch(e){
+      console.error("Supabase init failed:", e);
+      renderLoggedOut(); // graceful fallback
+      return;
+    }
 
-    document.addEventListener("DOMContentLoaded",async()=>{
-      await detectAndRenderAuth();
-      sb.auth.onAuthStateChange((_e,session)=>{
-        isLoggedIn = !!session;
-        if (isLoggedIn) renderLoggedIn(session); else renderLoggedOut();
+    // Detect session (with guards)
+    safe(async ()=>{
+      const { data: sessionRes, error } = await sb.auth.getSession();
+      if (error) { console.error(error); renderLoggedOut(); return; }
+      const session = sessionRes?.session || null;
+      if (session) renderLoggedIn(session); else renderLoggedOut();
+
+      sb.auth.onAuthStateChange((_e, newSession)=>{
+        if (newSession) renderLoggedIn(newSession); else renderLoggedOut();
       });
-    });
+    })();
+  });
   </script>
 </body>
 </html>
