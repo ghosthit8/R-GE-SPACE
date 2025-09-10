@@ -153,17 +153,17 @@
         <div class="meta">
           <span class="statusline">
             <span id="realtimeDot" class="dot"></span>
-            <span id="statusText">Connecting…</span>
+            <span id="statusText">Pick a room and press Join</span>
           </span>
         </div>
 
         <div id="messages" class="messages" aria-live="polite" aria-busy="true"></div>
 
         <div class="composer">
-          <input id="messageInput" maxlength="800" placeholder="Type your message… (Enter to send, Shift+Enter = newline)" />
-          <button id="sendBtn">Send</button>
+          <input id="messageInput" maxlength="800" placeholder="Join a room to chat…" disabled />
+          <button id="sendBtn" disabled>Send</button>
         </div>
-        <div class="hint">Tips: whats going down in your city// no nazis/alt right, no cp</div>
+        <div class="hint">Tips: whats going down in your city // no nazis/alt right, no cp</div>
       </section>
 
       <aside class="panel sidebar">
@@ -172,7 +172,7 @@
 
         <h2>Room</h2>
         <div id="roomInfo" class="card">
-          <div><strong>Current:</strong> <span id="roomName">Dallas</span></div>
+          <div><strong>Current:</strong> <span id="roomName">—</span></div>
           <div><strong>Messages:</strong> <span id="count">–</span></div>
         </div>
 
@@ -235,10 +235,11 @@
 
     let session=null;
     let me={ id:null, username:null };
-    let currentRoom="Dallas";
+    let currentRoom=null;
     let channel=null;
     let rateLimit={ last:0, ms:650 };
     let presence=new Map(); // uid -> { username, ts }
+    let joined=false;       // <<< NEW: hard gate for sending
 
     const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
     const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
@@ -255,6 +256,20 @@
       return e;
     }
     const profileHref = (uid)=> `profile.html?uid=${encodeURIComponent(uid)}`;
+
+    // enable/disable the composer UI
+    function setComposerEnabled(on){
+      joined = !!on;
+      inputEl.disabled = !on;
+      sendBtn.disabled = !on;
+      if(on){
+        inputEl.placeholder = "Type your message… (Enter to send, Shift+Enter = newline)";
+        status("Live in #" + currentRoom, true);
+      }else{
+        inputEl.placeholder = "Join a room to chat…";
+        status("Pick a room and press Join", false);
+      }
+    }
 
     async function requireSession(){
       const { data:{ session:s } } = await supabase.auth.getSession();
@@ -352,6 +367,9 @@
 
       // Touch again after load (safe no-op if already present)
       touchPresence(me.id, me.username);
+
+      // enable composer now that we're in
+      setComposerEnabled(true);
     }
 
     async function subscribeRealtime(room){
@@ -378,6 +396,12 @@
     function status(text, ok=true){ statusText.textContent=text; rtDot.classList.toggle("ok", !!ok); }
 
     async function send(){
+      // HARD GATE: not joined? block.
+      if(!joined || !currentRoom){
+        status("Join a room first", false);
+        return;
+      }
+
       const now=Date.now();
       if(now-rateLimit.last<rateLimit.ms){ status(`Whoa tiger… ${Math.ceil((rateLimit.ms-(now-rateLimit.last))/1000)}s`, false); return; }
       const raw=inputEl.value;
@@ -395,7 +419,13 @@
     }
 
     sendBtn.addEventListener("click", send);
-    inputEl.addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } });
+    inputEl.addEventListener("keydown", e=>{
+      if(e.key==="Enter" && !e.shiftKey){
+        // If disabled, prevent any sneaky submits
+        if(!joined){ e.preventDefault(); status("Join a room first", false); return; }
+        e.preventDefault(); send();
+      }
+    });
 
     // Join: immediate presence + room switch
     joinBtn.addEventListener("click", ()=>{
@@ -405,21 +435,29 @@
       customRoom.value="";
     });
 
-    // Leave: instant removal
+    // Leave: instant removal + LOCK composer
     leaveBtn.addEventListener("click", async ()=>{
       if(channel){ try{ await supabase.removeChannel(channel); }catch{} }
       channel = null;
       presence.delete(me.id);
       drawPresence();
-      status("Disconnected", false);
+      setComposerEnabled(false);
+      currentRoom=null;
+      roomNameEl.textContent="—";
+      clearMessages();
+      msgEl.removeAttribute("aria-busy");
     });
 
     logoutBtn.addEventListener("click", async ()=>{ await supabase.auth.signOut(); window.location.href="login.html"; });
 
     await requireSession();
-    await joinRoom(currentRoom);
 
+    // START LOCKED — user must press Join
+    setComposerEnabled(false);
+
+    // message count refresher (only when joined)
     setInterval(async ()=>{
+      if(!joined || !currentRoom) return;
       const { count } = await supabase.from("messages").select("*",{ count:"exact", head:true }).eq("room", currentRoom);
       if(typeof count==="number") countEl.textContent=count.toString();
     }, 20000);
