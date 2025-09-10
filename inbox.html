@@ -2,94 +2,78 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Rage Space — Inbox</title>
   <meta name="color-scheme" content="dark" />
+
+  <!-- If you have a shared stylesheet, keep it + bump ?v= when you change CSS -->
+  <link rel="stylesheet" href="./style.css?v=4" />
+
   <style>
-    :root{
-      --green:#39ff14; --ink:#e5ffe5; --card:#0a0a0a; --border:#103010;
-      --red:#ff0033; --redGlow: rgba(255,0,51,.55);
-    }
+    :root{ --green:#39ff14; --ink:#e5ffe5; --card:#0a0a0a; --border:#103010; --red:#ff0033; }
     *{ box-sizing:border-box }
     html,body{ height:100% }
-    body{
-      margin:0; background:#000; color:var(--green);
-      font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
-    }
+    body{ margin:0; background:#000; color:var(--green); font-family:ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; }
 
     header{
-      position:sticky; top:0; z-index:10;
-      background:rgba(0,0,0,.7); backdrop-filter:blur(6px);
-      border-bottom:1px solid var(--border);
-      padding:12px 16px; display:flex; align-items:center; gap:10px;
+      position:sticky; top:0; z-index:10; background:rgba(0,0,0,.7); backdrop-filter:blur(6px);
+      border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; gap:10px;
     }
     a.back{
       color:var(--green); text-decoration:none; border:1px solid var(--green);
-      padding:6px 10px; border-radius:999px; font-weight:700;
+      padding:6px 12px; border-radius:999px; font-weight:800;
     }
-    .wrap{ max-width:940px; margin:0 auto; padding:16px; }
 
+    .wrap{ max-width:940px; margin:0 auto; padding:16px; }
     .thread{
       display:flex; gap:12px; padding:14px;
       background:linear-gradient(180deg,#0a0a0a,#050505);
-      border:1px solid var(--border); border-radius:12px; margin:10px 0;
-      text-decoration:none; color:var(--ink); align-items:center;
+      border:1px solid var(--border); border-radius:12px;
+      margin:10px 0; text-decoration:none; color:var(--ink); align-items:center;
+      transition:border-color .2s ease, box-shadow .2s ease, transform .08s ease;
       position:relative;
     }
+    .thread:active{ transform:translateY(1px) }
     .thread:hover{ outline:2px solid var(--green); }
-    .pfp{
-      width:48px; height:48px; border-radius:12px; background:#111;
-      border:2px solid var(--green); overflow:hidden; flex:0 0 auto;
-    }
+
+    .pfp{ width:48px; height:48px; border-radius:12px; background:#111; border:2px solid var(--green); overflow:hidden; flex:0 0 auto; }
     .pfp img{ width:100%; height:100%; object-fit:cover; display:block; }
 
-    .meta{ display:flex; flex-direction:column; min-width:0; flex:1; }
-    .row1{ display:flex; align-items:center; gap:8px; }
+    .meta{ display:flex; flex-direction:column; min-width:0 }
     .name{ color:var(--green); font-weight:800; }
-    .time{ margin-left:auto; color:var(--ink); opacity:.6; font-size:12px; }
-    .last{ color:var(--ink); opacity:.85; white-space:nowrap; overflow:hidden;
-      text-overflow:ellipsis; max-width:100%; }
+    .last{ color:var(--ink); opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 
     .empty{ color:var(--ink); opacity:.7; text-align:center; padding:40px 0; }
 
-    /* ===== unread glow ===== */
-    @keyframes redFlicker {
-      0%   { box-shadow:0 0 0 rgba(0,0,0,0), inset 0 0 0 rgba(0,0,0,0); }
-      40%  { box-shadow:0 0 22px var(--redGlow); }
-      50%  { box-shadow:0 0 6px rgba(255,0,51,.25); }
-      70%  { box-shadow:0 0 18px var(--redGlow), inset 0 0 10px rgba(255,0,51,.15); }
-      100% { box-shadow:0 0 10px rgba(255,0,51,.25); }
+    /* 🔴 Unread flicker — inline so it won’t be stale-cached */
+    @keyframes redPulse {
+      0%, 100% { box-shadow: 0 0 0 rgba(255,0,51,0), inset 0 0 0 rgba(255,0,51,0); }
+      50%      { box-shadow: 0 0 14px rgba(255,0,51,.75), 0 0 34px rgba(255,0,51,.35);
+                 outline: 2px solid rgba(255,0,51,.55); }
     }
     .thread.unread{
       border-color: var(--red);
-      animation: redFlicker 1.4s infinite;
+      animation: redPulse 1.4s ease-in-out infinite;
+      will-change: box-shadow, outline;
     }
-
-    /* tiny toast for errors */
-    .toast{
-      position:fixed; left:50%; transform:translateX(-50%);
-      bottom:18px; background:#170000; color:#ffbcbc;
-      border:1px solid #330; border-radius:10px;
-      padding:8px 10px; font-size:.92rem; display:none; z-index:9999;
-      white-space:pre-wrap;
+    @media (prefers-reduced-motion: reduce){
+      .thread.unread{ animation:none; box-shadow:0 0 10px rgba(255,0,51,.6); }
     }
   </style>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <header>
+    <!-- Per your requirement: “Home” → “Back” and go to profile.html -->
     <a class="back" href="./profile.html">← Back</a>
     <h1 style="margin:0;font-size:18px;letter-spacing:.5px;">Direct Messages</h1>
   </header>
 
   <main class="wrap">
     <div id="list"></div>
-    <div id="empty" class="empty" style="display:none;">
-      No conversations yet. Find a profile and hit <b>Message privately</b>.
-    </div>
+    <div id="empty" class="empty" style="display:none;">No conversations yet. Find a profile and hit <b>Message privately</b>.</div>
   </main>
-
-  <div id="toast" class="toast"></div>
 
   <script>
     const sb = supabase.createClient(
@@ -99,96 +83,63 @@
 
     const list  = document.getElementById('list');
     const empty = document.getElementById('empty');
-    const toast = document.getElementById('toast');
-
     let me = null;
-    const profileCache = new Map();
 
-    function showError(msg, extra){
-      toast.textContent = extra ? `${msg}\n${extra}` : msg;
-      toast.style.display = 'block';
-      clearTimeout(showError._t);
-      showError._t = setTimeout(()=> toast.style.display='none', 3500);
-      console.error(msg, extra||'');
+    function lastReadKey(threadId){ return `dm_last_read_${threadId}`; }
+    function getLastRead(threadId){
+      const v = localStorage.getItem(lastReadKey(threadId));
+      return v ? parseInt(v, 10) : 0;
     }
 
-    function displayNameForProfile(p){
-      if(!p) return '@user-????';
-      const uname = (p.username||'').trim();
-      if (uname) return '@' + uname;
-      const id = (p.id||'').slice(0,6);
-      return '@user-' + id;
-    }
-
-    function fmtTime(iso){
-      try{
-        const d = new Date(iso);
-        return d.toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
-      }catch(_){ return ''; }
-    }
-
-    function lastReadMs(threadId){
-      const v = localStorage.getItem(`dm_last_read_${threadId}`);
-      return v ? parseInt(v,10) : 0;
-    }
-
-    function rowElement(other, thread, lastMsg, isUnread){
+    function threadRow(other, thread, lastMsg, unread){
       const a = document.createElement('a');
       a.href = `./dm.html?thread=${thread.id}`;
-      a.className = 'thread' + (isUnread ? ' unread' : '');
-
+      a.className = 'thread' + (unread ? ' unread' : '');
       a.innerHTML = `
         <div class="pfp">${other?.avatar_url ? `<img src="${other.avatar_url}" alt="">` : ''}</div>
         <div class="meta">
-          <div class="row1">
-            <div class="name">${displayNameForProfile(other)}</div>
-            ${lastMsg ? `<div class="time">${fmtTime(lastMsg.created_at)}</div>` : ''}
-          </div>
+          <div class="name">${other?.display_name?.trim()
+            || (other?.username ? '@'+other.username.trim() : '@user-' + (other?.id||'').slice(0,6))}</div>
           <div class="last">${lastMsg?.body ? lastMsg.body : 'No messages yet'}</div>
         </div>
       `;
       return a;
     }
 
-    async function fetchProfiles(ids){
-      const need = ids.filter(id => !profileCache.has(id));
-      if(need.length===0) return;
-      const { data, error } = await sb
-        .from('profiles')
-        .select('id,username,avatar_url')   // no display_name needed
-        .in('id', need);
-      if(error){ showError('Failed to load profiles', error.message); return; }
-      (data||[]).forEach(p => profileCache.set(p.id, p));
-    }
-
     async function loadInbox(){
       list.innerHTML = '';
-
       const { data: { session } } = await sb.auth.getSession();
       if(!session){ location.href = './login.html'; return; }
       me = session.user;
 
-      // 1) fetch my threads
-      const { data: threads, error } = await sb
+      // 1) My threads (RLS should scope these)
+      const { data: threads, error: tErr } = await sb
         .from('dm_threads')
         .select('id,a,b,created_at')
         .order('created_at', { ascending:false });
 
-      if(error){ showError('Failed to load threads', error.message); return; }
+      if(tErr){ console.error(tErr); return; }
 
       if(!threads || threads.length===0){ empty.style.display = ''; return; }
       empty.style.display = 'none';
 
-      // 2) fetch others' profiles in one go
+      // 2) Others’ profiles
       const otherIds = threads.map(t => t.a === me.id ? t.b : t.a);
-      const uniq = [...new Set(otherIds)];
-      await fetchProfiles(uniq);
+      const uniqIds = [...new Set(otherIds)];
+      const { data: others, error: oErr } = await sb
+        .from('profiles')
+        .select('id,username,display_name,avatar_url')
+        .in('id', uniqIds);
 
-      // 3) for each thread, get last message & render
+      if(oErr){ console.warn(oErr); }
+
+      const byId = Object.fromEntries((others||[]).map(u => [u.id, u]));
+
+      // 3) Last msg per thread + unread calc
       for(const t of threads){
         const otherId = t.a === me.id ? t.b : t.a;
 
-        const { data: last, error: e2 } = await sb
+        const { data: last } = await sb
           .from('dm_messages')
           .select('id,body,created_at,sender')
           .eq('thread_id', t.id)
@@ -196,16 +147,27 @@
           .limit(1)
           .maybeSingle();
 
-        if(e2){ console.warn(e2); }
+        const lastTs = last?.created_at ? Date.parse(last.created_at) : 0;
+        const lastReadTs = getLastRead(t.id);
+        const isUnread = !!(last && last.sender !== me.id && lastTs > lastReadTs);
 
-        // unread if last message exists, is from OTHER, and newer than our lastRead
-        let unread = false;
-        if(last && last.sender !== me.id){
-          const lastMs = new Date(last.created_at).getTime();
-          unread = lastMs > lastReadMs(t.id);
-        }
+        list.appendChild(threadRow(byId[otherId], t, last, isUnread));
 
-        list.appendChild(rowElement(profileCache.get(otherId), t, last, unread));
+        // Realtime updates for each thread (so glow flips on without reload)
+        sb.channel(`dm_thread_${t.id}`)
+          .on('postgres_changes',
+              { event:'INSERT', schema:'public', table:'dm_messages', filter:`thread_id=eq.${t.id}` },
+              (payload)=>{
+                const newMsg = payload.new;
+                // Only mark unread if it's from the other user
+                if(newMsg.sender !== me.id){
+                  // find the row and add .unread
+                  const row = [...list.querySelectorAll('a.thread')]
+                    .find(el => el.getAttribute('href')?.includes(`thread=${t.id}`));
+                  if(row) row.classList.add('unread');
+                }
+              }
+          ).subscribe();
       }
     }
 
