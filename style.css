@@ -209,24 +209,3 @@ body::before {
 @media (max-width:560px){
   #toast.toast{ right:50% !important; transform:translateX(50%) !important; }
 }
-
-/* === Global fullscreen toggle FAB === */
-.btn.fs-fab {
-  position: fixed;
-  right: calc(env(safe-area-inset-right, 0px) + 14px);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
-  z-index: 9999;
-  padding: 8px 10px;
-  font-size: 14px;
-  line-height: 1;
-  border-radius: 999px;
-  width: auto;
-  min-width: auto;
-  background: transparent;
-  color: var(--green);
-  border: 2px solid var(--green);
-  box-shadow: 0 0 24px rgba(57,255,20,.45);
-}
-.btn.fs-fab:active {
-  transform: translateY(1px) scale(.98);
-}
