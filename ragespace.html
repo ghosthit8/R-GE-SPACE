@@ -38,8 +38,7 @@
     box-shadow: 0 0 0 1px rgba(57,255,20,0.08), 0 8px 30px rgba(255,0,51,0.12) inset;
     transition: opacity .18s ease;
   }
-  /* Spacer occupies the header's height in the flow so content never slides under */
-  #header-spacer{ height:140px; } /* JS overwrites this with the exact height */
+  #header-spacer{ height:140px; } /* JS overwrites with exact height */
 
   .wrap{ max-width:var(--maxw); margin:0 auto 40px; padding:0 16px 16px; }
 
@@ -239,7 +238,8 @@
     let channel=null;
     let rateLimit={ last:0, ms:650 };
     let presence=new Map(); // uid -> { username, ts }
-    let joined=false;       // <<< NEW: hard gate for sending
+    let joined=false;       // gate for sending
+    let sending=false;      // prevents fast double taps
 
     const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
     const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
@@ -305,22 +305,6 @@
 
       row.append(meta, txt, ops);
       msgEl.appendChild(row);
-    }
-
-    function renderGhost(content){
-      const row = el("div", { class:"msg ghost me" });
-      const nameNode = el("a", { class:"who", href: profileHref(me.id), title:`View ${me.username}'s profile` }, me.username);
-      const time = el("div", { class:"time" }, fmtTime(Date.now()));
-      const txt  = el("div", { class:"txt" }, content);
-      const meta = el("div", { style:"display:flex;flex-direction:column;gap:2px;min-width:94px;" }, nameNode, time);
-      row.append(meta, txt);
-      msgEl.appendChild(row);
-      return row;
-    }
-
-    async function deleteMessage(id){
-      const { error } = await supabase.from("messages").delete().eq("id", id).eq("user_id", me.id);
-      if(error) alert("Delete failed: " + error.message);
     }
 
     function clearMessages(){ msgEl.innerHTML=""; msgEl.setAttribute("aria-busy","true"); }
@@ -395,47 +379,59 @@
 
     function status(text, ok=true){ statusText.textContent=text; rtDot.classList.toggle("ok", !!ok); }
 
+    // SINGLE-SEND, no optimistic echo
     async function send(){
-      // HARD GATE: not joined? block.
-      if(!joined || !currentRoom){
-        status("Join a room first", false);
+      if(!joined || !currentRoom){ status("Join a room first", false); return; }
+      if(sending) return; // fast double-tap guard
+
+      const now=Date.now();
+      if(now-rateLimit.last<rateLimit.ms){
+        status(`Whoa tiger… ${Math.ceil((rateLimit.ms-(now-rateLimit.last))/1000)}s`, false);
         return;
       }
 
-      const now=Date.now();
-      if(now-rateLimit.last<rateLimit.ms){ status(`Whoa tiger… ${Math.ceil((rateLimit.ms-(now-rateLimit.last))/1000)}s`, false); return; }
       const raw=inputEl.value;
-      const content=raw.replace(/\s+$/,''); if(!content) return;
+      const content=raw.replace(/\s+$/,'');
+      if(!content) return;
+
+      sending = true;
+      sendBtn.disabled = true;
 
       rateLimit.last=now;
       inputEl.value="";
-      const ghost=renderGhost(content);
-      autoscroll();
 
       const row={ content, room:currentRoom, user_id:me.id, username:me.username };
       const { error } = await supabase.from("messages").insert(row);
-      if(error){ ghost.style.opacity=.5; ghost.style.borderColor="rgba(255,0,51,0.6)"; status("Send failed: "+error.message,false); inputEl.value=content; }
-      else status("Sent ✓", true);
+
+      if(error){
+        inputEl.value=content;                 // put it back for retry
+        status("Send failed: "+error.message,false);
+      }else{
+        status("Sent ✓", true);
+        setTimeout(autoscroll, 80);           // realtime INSERT will render it
+      }
+
+      sending = false;
+      sendBtn.disabled = !joined;
     }
 
     sendBtn.addEventListener("click", send);
     inputEl.addEventListener("keydown", e=>{
       if(e.key==="Enter" && !e.shiftKey){
-        // If disabled, prevent any sneaky submits
         if(!joined){ e.preventDefault(); status("Join a room first", false); return; }
         e.preventDefault(); send();
       }
     });
 
-    // Join: immediate presence + room switch
+    // Join: set presence + switch room
     joinBtn.addEventListener("click", ()=>{
       const choice=customRoom.value.trim()||roomSelect.value;
-      touchPresence(me.id, me.username);   // instant “who’s here” update
+      touchPresence(me.id, me.username);
       joinRoom(choice);
       customRoom.value="";
     });
 
-    // Leave: instant removal + LOCK composer
+    // Leave: remove presence + lock composer
     leaveBtn.addEventListener("click", async ()=>{
       if(channel){ try{ await supabase.removeChannel(channel); }catch{} }
       channel = null;
@@ -451,9 +447,7 @@
     logoutBtn.addEventListener("click", async ()=>{ await supabase.auth.signOut(); window.location.href="login.html"; });
 
     await requireSession();
-
-    // START LOCKED — user must press Join
-    setComposerEnabled(false);
+    setComposerEnabled(false); // start locked
 
     // message count refresher (only when joined)
     setInterval(async ()=>{
