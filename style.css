@@ -123,13 +123,11 @@ input, textarea {
 }
 .meta { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
 
-/* ---------- Toasts ---------- */
-/* Neutral base (won't center or stretch on any page) */
-.toast{
-  position:fixed;
-  padding:8px 12px;
-  border-radius:10px;
-  display:none;
+/* Default toast (used on some pages) */
+.toast {
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:18px; background:var(--panel); border:1px solid var(--green);
+  padding:10px 14px; border-radius:10px; display:none;
 }
 
 /* === Darker high-contrast neon green scan-line effect === */
@@ -168,7 +166,6 @@ body::before {
 /* === Force-compact toast override for the profile page's #toast === */
 #toast.toast{
   position: fixed !important;
-  z-index: 99999 !important;
   top: 12px !important;
   right: 12px !important;
   bottom: auto !important;
@@ -195,12 +192,10 @@ body::before {
   border: 2px solid var(--green) !important;
   border-radius: 10px !important;
   background: #050905 !important;
-  color: #e5ffe5 !important;
+  color: #e5ffe5 !important; /* matches inline CSS var(--ink) from page */
   box-shadow: 0 0 16px rgba(57,255,20,.35) !important;
   font-weight: 800 !important;
   box-sizing: border-box !important;
-
-  pointer-events: none !important; /* never block UI */
 }
 
 /* kill any pseudo-elements that might stretch it */
@@ -210,7 +205,28 @@ body::before {
   display: none !important;
 }
 
-/* Optional: center horizontally on tiny screens */
+/* Optional: center the toast horizontally on very small screens */
 @media (max-width:560px){
   #toast.toast{ right:50% !important; transform:translateX(50%) !important; }
+}
+
+/* === Global fullscreen toggle FAB === */
+.btn.fs-fab {
+  position: fixed;
+  right: calc(env(safe-area-inset-right, 0px) + 14px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  z-index: 9999;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 999px;
+  width: auto;
+  min-width: auto;
+  background: transparent;
+  color: var(--green);
+  border: 2px solid var(--green);
+  box-shadow: 0 0 24px rgba(57,255,20,.45);
+}
+.btn.fs-fab:active {
+  transform: translateY(1px) scale(.98);
 }
