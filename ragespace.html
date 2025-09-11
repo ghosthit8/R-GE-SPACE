@@ -394,7 +394,6 @@
     }
     fsBtn.addEventListener('click', toggleFullscreen);
     fsExit.addEventListener('click', toggleFullscreen);
-    // Also exit CSS mode if user exits OS fullscreen (back button / ESC)
     document.addEventListener('fullscreenchange', ()=>{
       if(!document.fullscreenElement){
         document.body.classList.remove('fs');
@@ -428,6 +427,8 @@
         if(!error && prof?.username) me.username = prof.username;
       }
       me.username ??= "user-" + s.user.id.slice(0,6);
+      // 👇 Debug: confirm auth
+      console.log("Auth session user:", s.user?.id);
       // show self in sidebar
       document.getElementById("meCard").textContent = me.username + " · " + me.id.slice(0,6);
       return s;
@@ -513,10 +514,7 @@
       msgEl.removeAttribute("aria-busy");
       autoscroll();
 
-      // Touch again after load (safe no-op if already present)
       touchPresence(me.id, me.username);
-
-      // enable composer now that we're in
       setComposerEnabled(true);
     }
 
@@ -609,6 +607,7 @@
       if(file){ pickFile(file); const dt = new DataTransfer(); dt.items.add(file); fileInput.files = dt.files; }
     });
 
+    // ✅ DEBUGGABLE upload: prints full error to console and sets contentType/cacheControl
     async function uploadFile(file) {
       const ext = (file.name.split(".").pop() || "").toLowerCase();
       const safeExt = ext || (file.type.startsWith("image/") ? "png" : "mp4");
@@ -616,9 +615,17 @@
 
       const { error } = await supabase.storage
         .from("chat-media")
-        .upload(path, file, { upsert: true });
+        .upload(path, file, {
+          upsert: true,
+          cacheControl: "3600",
+          contentType: file.type || "application/octet-stream"
+        });
 
-      if (error) { status("Upload failed: " + error.message, false); return null; }
+      if (error) {
+        console.error("Storage upload error:", error);   //  ← see exact reason in DevTools
+        status("Upload failed: " + (error.message || "unknown error"), false);
+        return null;
+      }
 
       const { data } = supabase.storage.from("chat-media").getPublicUrl(path);
       const type = file.type.startsWith("video") ? "video" : "image";
