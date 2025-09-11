@@ -111,25 +111,6 @@
     }
 
     .version{ position:fixed; bottom:20px; left:0; right:0; text-align:center; color:var(--muted); font-size:14px; opacity:.9; z-index:3; }
-
-    /* === Fullscreen FAB bottom-right (small) === */
-    .btn.fs-fab{
-      position:fixed;
-      right:calc(env(safe-area-inset-right,0px) + 14px);
-      bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
-      z-index:5;
-      padding:8px 10px;
-      font-size:14px;
-      line-height:1;
-      border-radius:999px;
-      width:auto;
-      min-width:auto;
-    }
-    .btn.fs-fab:active{ transform:translateY(1px) scale(.98); }
-
-    /* CSS fallback when OS fullscreen is unavailable */
-    body.fs .wrap{ max-width:100%; padding:0 8px; }
-    body.fs .hero{ min-height:100vh; padding-top:12vh; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -165,9 +146,6 @@
     <div class="version">v0.0.1 • prototype</div>
   </div>
 
-  <!-- Tiny fullscreen toggle (bottom-right) -->
-  <button id="fsAppBtn" class="btn ghost fs-fab" type="button" aria-label="Toggle full screen" title="Toggle full screen">⛶</button>
-
   <script>
   document.addEventListener("DOMContentLoaded", () => {
     const authBtn    = document.getElementById("authBtn");
@@ -175,47 +153,12 @@
     const signupBtn  = document.getElementById("signupBtn");
     const enterMsg   = document.getElementById("enterMsg");
     const topProfile = document.querySelector(".top-profile");
-    const fsBtn      = document.getElementById("fsAppBtn");
 
     let isLoggedIn = false;
     let sb = null;
 
     const safe = (fn) => (...args) => { try{ return fn(...args); } catch(e){ console.error(e); } };
 
-    /* === GLOBAL FULLSCREEN HELPERS === */
-    async function enterTrueFullscreen(){
-      const el = document.documentElement;
-      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-      if (req) { try{ await req.call(el); }catch(_){} }
-    }
-    async function exitTrueFullscreen(){
-      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-      if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement){
-        if (exit) { try{ await exit.call(document); }catch(_){} }
-      }
-    }
-    async function toggleFullscreen(){
-      const goingOn = !document.body.classList.contains('fs');
-      if (goingOn){
-        document.body.classList.add('fs');     // CSS fallback first
-        fsBtn.textContent = '✕';
-        await enterTrueFullscreen();           // no-op if blocked
-        window.scrollTo(0,0);
-      }else{
-        document.body.classList.remove('fs');
-        fsBtn.textContent = '⛶';
-        await exitTrueFullscreen();
-      }
-    }
-    fsBtn.addEventListener('click', toggleFullscreen);
-    document.addEventListener('fullscreenchange', ()=>{
-      if (!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement)){
-        document.body.classList.remove('fs');
-        fsBtn.textContent = '⛶';
-      }
-    });
-
-    /* === Auth / UI === */
     function usernameFromSession(session){
       const u = session?.user;
       return u?.user_metadata?.username || u?.email || "user";
@@ -265,7 +208,7 @@
       }
       location.href="./menu.html";
     });
-    if (signupBtn) signupBtn.addEventListener("click", ()=> location.href="./signup.html"); /* <-- fixed: removed extra ')' */
+    if (signupBtn) signupBtn.addEventListener("click", ()=> location.href="./signup.html");
 
     // Init Supabase defensively
     try{
