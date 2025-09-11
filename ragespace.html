@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Rage Space — City Chat</title>
 <meta name="color-scheme" content="dark" />
+
+<!-- ✅ Global theme & scanlines -->
+<link rel="stylesheet" href="./style.css?v=1" />
+
 <style>
   :root{
     --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5;
@@ -13,13 +17,20 @@
   }
   *{ box-sizing:border-box; }
   html,body{ height:100%; }
+
+  /* ✅ Keep your page bg, but ensure the global scanline ::before shows properly */
   body{
     margin:0;
     background: radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.12), transparent 60%), #000;
     color:var(--green);
     font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
     letter-spacing:.2px;
+
+    /* added to cooperate with global scanlines (body::before) */
+    position: relative;
+    overflow-x: hidden;
   }
+
   a{ color:var(--muted); text-decoration:none; }
   a:hover{ text-decoration:underline; }
 
@@ -114,7 +125,6 @@
   .footer{ margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; color:#b9ffb9; opacity:.85; font-size:12px; }
 
   /* ===== FULLSCREEN MODE ===== */
-  /* CSS fallback layout when body has .fs (also applied while in true fullscreen) */
   body.fs header{ display:none; }
   body.fs #header-spacer{ display:none; height:0 !important; }
   body.fs .wrap{ max-width:100%; padding:0; margin:0; }
@@ -122,7 +132,6 @@
   body.fs .panel{ border-radius:0; border-left:none; border-right:none; padding:8px; }
   body.fs .chat{ height:100vh; min-height:100vh; }
   body.fs .messages{ border:none; border-radius:0; padding:14px 12px calc(16px + env(safe-area-inset-bottom,0px)); }
-  /* floating exit pill for fullscreen */
   .fs-exit{
     position:fixed;
     top:calc(env(safe-area-inset-top,0px) + 8px);
