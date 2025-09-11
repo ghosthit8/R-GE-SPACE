@@ -90,8 +90,7 @@
       box-shadow:0 0 28px rgba(255,0,51,.8), 0 0 90px rgba(255,0,51,.5) inset; cursor:not-allowed;
     }
 
-    /* Right-side action cluster (Login + Fullscreen) */
-    .top-actions{ position:fixed; top:28px; right:18px; z-index:3; display:flex; gap:10px; }
+    .top-login{ position:fixed; top:28px; right:18px; z-index:3; }
 
     .top-profile{ position:fixed; top:28px; left:18px; z-index:3; display:none; }
     .profile-chip{
@@ -113,10 +112,25 @@
 
     .version{ position:fixed; bottom:20px; left:0; right:0; text-align:center; color:var(--muted); font-size:14px; opacity:.9; z-index:3; }
 
-    /* ===== Fullscreen fallback tweaks (works even if browser blocks true fullscreen) */
-    body.fs .wrap{ max-width:100%; padding:0 0 env(safe-area-inset-bottom,0); }
-    body.fs .hero{ min-height:100dvh; padding-top:12vh; }
-    body.fs .version{ opacity:.6; }
+    /* === Fullscreen: small floating button bottom-right, safe-area aware === */
+    .btn.fs-fab{
+      position:fixed;
+      right:calc(env(safe-area-inset-right,0px) + 14px);
+      bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+      z-index:5;
+      padding:8px 10px;          /* much smaller */
+      font-size:14px;
+      line-height:1;
+      border-radius:999px;
+      width:auto;
+      min-width:auto;
+    }
+    /* Optional visual nudge while pressed */
+    .btn.fs-fab:active{ transform:translateY(1px) scale(.98); }
+
+    /* CSS fallback when OS fullscreen is unavailable */
+    body.fs .wrap{ max-width:100%; padding:0 8px 0 8px; }
+    body.fs .hero{ min-height:100vh; padding-top:12vh; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -129,10 +143,8 @@
       </a>
     </div>
 
-    <!-- Right-side actions: Login/Logout + Fullscreen (same ghost style) -->
-    <div class="top-actions">
+    <div class="top-login">
       <a id="authBtn" class="btn ghost" href="./login.html" role="button">Login</a>
-      <button id="fsBtn" class="btn ghost" title="Toggle full screen">Full screen</button>
     </div>
 
     <main class="hero">
@@ -154,6 +166,9 @@
     <div class="version">v0.0.1 • prototype</div>
   </div>
 
+  <!-- NEW: tiny fullscreen toggle (bottom-right) -->
+  <button id="fsAppBtn" class="btn ghost fs-fab" aria-label="Toggle full screen" title="Toggle full screen">⛶</button>
+
   <script>
   document.addEventListener("DOMContentLoaded", () => {
     const authBtn    = document.getElementById("authBtn");
@@ -161,48 +176,46 @@
     const signupBtn  = document.getElementById("signupBtn");
     const enterMsg   = document.getElementById("enterMsg");
     const topProfile = document.querySelector(".top-profile");
-    const fsBtn      = document.getElementById("fsBtn");
+    const fsBtn      = document.getElementById("fsAppBtn");
 
     let isLoggedIn = false;
     let sb = null;
 
     const safe = (fn) => (...args) => { try{ return fn(...args); } catch(e){ console.error(e); } };
 
-    /* ===== GLOBAL FULLSCREEN HELPERS (copy these to any page to reuse) ===== */
+    /* === GLOBAL FULLSCREEN HELPERS (reuse on any page) === */
     async function enterTrueFullscreen(){
       const el = document.documentElement;
-      if (el.requestFullscreen) {
-        try{ await el.requestFullscreen(); } catch(_) {}
-      }
+      if (el.requestFullscreen) { try{ await el.requestFullscreen(); }catch(_){} }
     }
     async function exitTrueFullscreen(){
       if (document.fullscreenElement && document.exitFullscreen) {
-        try{ await document.exitFullscreen(); } catch(_) {}
+        try{ await document.exitFullscreen(); }catch(_) {}
       }
     }
     async function toggleFullscreen(){
       const goingOn = !document.body.classList.contains('fs');
       if (goingOn){
-        document.body.classList.add('fs');      // CSS fallback
-        fsBtn.textContent = 'Exit full';
-        await enterTrueFullscreen();            // ignore if blocked
+        document.body.classList.add('fs');     // CSS fallback
+        fsBtn.textContent = '✕';
+        await enterTrueFullscreen();           // ignores if blocked
         window.scrollTo(0,0);
       }else{
         document.body.classList.remove('fs');
-        fsBtn.textContent = 'Full screen';
+        fsBtn.textContent = '⛶';
         await exitTrueFullscreen();
       }
     }
     fsBtn.addEventListener('click', toggleFullscreen);
-    // Keep CSS state in sync if user leaves OS fullscreen (ESC / back)
+    // If user exits OS fullscreen via ESC/back, keep CSS state in sync
     document.addEventListener('fullscreenchange', ()=>{
       if (!document.fullscreenElement){
         document.body.classList.remove('fs');
-        fsBtn.textContent = 'Full screen';
+        fsBtn.textContent = '⛶';
       }
     });
 
-    /* ===== Auth / UI from your original file ===== */
+    /* === Your existing auth/UI wiring === */
     function usernameFromSession(session){
       const u = session?.user;
       return u?.user_metadata?.username || u?.email || "user";
@@ -241,6 +254,7 @@
       isLoggedIn = true;
     }
 
+    // Buttons ALWAYS wired, even if auth fails
     if (enterBtn) enterBtn.addEventListener("click", (e)=>{
       if (!isLoggedIn){
         e.preventDefault();
