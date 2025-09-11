@@ -622,7 +622,7 @@
         });
 
       if (error) {
-        console.error("Storage upload error:", error);   //  ← see exact reason in DevTools
+        console.error("Storage upload error:", error);   //  ← see exact reason in DevTools / overlay
         status("Upload failed: " + (error.message || "unknown error"), false);
         return null;
       }
@@ -747,6 +747,36 @@
       const { count } = await supabase.from("messages").select("*",{ count:"exact", head:true }).eq("room", currentRoom);
       if(typeof count==="number") countEl.textContent=count.toString();
     }, 20000);
+  </script>
+
+  <!-- 📜 Mobile console overlay -->
+  <script>
+  (function () {
+    const box = document.createElement('pre');
+    box.id = 'mobile-log';
+    box.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;max-height:40vh;overflow:auto;margin:0;padding:8px 10px;border:1px solid #2a2;border-radius:10px;background:rgba(0,0,0,.85);color:#9f9;font:12px/1.4 ui-monospace,monospace;z-index:99999';
+    box.textContent = '📜 Mobile console (tap to hide)\\n';
+    box.addEventListener('click',()=> box.remove());
+    document.addEventListener('keydown',e=>{ if(e.key==='Escape') box.remove(); });
+    document.body.appendChild(box);
+
+    const write = (...args) => {
+      const line = args.map(a => {
+        try { return typeof a === 'string' ? a : JSON.stringify(a); }
+        catch { return String(a); }
+      }).join(' ');
+      box.textContent += line + '\\n';
+      box.scrollTop = box.scrollHeight;
+    };
+
+    const oErr = console.error, oLog = console.log, oWarn = console.warn;
+    console.error = (...a) => { write('❌', ...a); oErr.apply(console, a); };
+    console.warn  = (...a) => { write('⚠️', ...a); oWarn.apply(console, a); };
+    console.log   = (...a) => { write('ℹ️', ...a); oLog.apply(console, a); };
+
+    window.addEventListener('error', e => write('💥', e.message, e.filename+':'+e.lineno));
+    window.addEventListener('unhandledrejection', e => write('🧨', e.reason?.message || e.reason));
+  })();
   </script>
 </body>
 </html>
