@@ -1,58 +1,100 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const fsBtn = document.getElementById("fsAppBtn");
-  if (!fsBtn) return;
-
-  async function enterTrueFullscreen(){
-    const el = document.documentElement;
-    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    if (req) return req.call(el);
-  }
-  async function exitTrueFullscreen(){
-    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-    if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement){
-      if (exit) return exit.call(document);
-    }
-  }
-
-  async function toggleFullscreen(){
-    const goingOn = !document.body.classList.contains('fs');
-    if (goingOn){
-      document.body.classList.add('fs');
-      localStorage.setItem('rs_fs','1');
-      fsBtn.textContent = '✕';
-      try{ await enterTrueFullscreen(); }catch{}
-      window.scrollTo(0,0);
+// fullscreen.js (robust auto-reenter)
+(function initFS(){
+  const ready = (fn) => {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", fn, { once: true });
     } else {
-      document.body.classList.remove('fs');
-      localStorage.removeItem('rs_fs');
-      fsBtn.textContent = '⛶';
-      try{ await exitTrueFullscreen(); }catch{}
+      fn();
     }
-  }
+  };
 
-  fsBtn.addEventListener('click', toggleFullscreen);
+  ready(() => {
+    const fsBtn = document.getElementById("fsAppBtn"); // optional but recommended
 
-  // Restore preference on page load
-  if (localStorage.getItem('rs_fs') === '1') {
-    document.body.classList.add('fs');
-    fsBtn.textContent = '✕';
-    enterTrueFullscreen().catch(()=>{
-      // If blocked, retry on first user gesture
-      const once = () => {
-        enterTrueFullscreen().finally(()=>window.removeEventListener('pointerdown', once));
+    async function enterTrueFullscreen(){
+      const el  = document.documentElement;
+      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      if (req) return req.call(el);
+      throw new Error("Fullscreen API not available");
+    }
+    async function exitTrueFullscreen(){
+      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+      const active = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+      if (active && exit) return exit.call(document);
+    }
+
+    function setBtn(on){
+      if (!fsBtn) return;
+      fsBtn.textContent = on ? "✕" : "⛶";
+    }
+
+    async function toggleFullscreen(){
+      const on = !document.body.classList.contains("fs");
+      if (on){
+        document.body.classList.add("fs");            // CSS fallback immediately
+        localStorage.setItem("rs_fs","1");            // remember pref
+        setBtn(true);
+        try { await enterTrueFullscreen(); } catch {/* ok, will auto-reenter on gesture */}
+        window.scrollTo(0,0);
+      } else {
+        document.body.classList.remove("fs");
+        localStorage.removeItem("rs_fs");
+        setBtn(false);
+        try { await exitTrueFullscreen(); } catch {}
+      }
+    }
+
+    // ——— Auto-reenter on first *any* gesture (capture so nothing can swallow it)
+    function primeAutoReenter(){
+      let done = false;
+      const tryEnter = () => {
+        if (done) return;
+        done = true;
+        remove();
+        enterTrueFullscreen().catch(()=>{/* ignore; user can tap FAB */});
       };
-      window.addEventListener('pointerdown', once, { once:true });
-    });
-  }
-
-  // Keep state in sync if user exits OS fullscreen via ESC/back
-  document.addEventListener('fullscreenchange', () => {
-    const active = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
-    if (!active && localStorage.getItem('rs_fs') !== '1') {
-      document.body.classList.remove('fs');
-      fsBtn.textContent = '⛶';
-    } else if (localStorage.getItem('rs_fs') === '1') {
-      fsBtn.textContent = '✕';
+      const opts = { capture:true, once:true, passive:true };
+      function remove(){
+        window.removeEventListener("pointerdown", tryEnter, opts);
+        window.removeEventListener("click",       tryEnter, opts);
+        window.removeEventListener("touchend",    tryEnter, opts);
+        window.removeEventListener("keydown",     tryEnter, opts);
+      }
+      window.addEventListener("pointerdown", tryEnter, opts);
+      window.addEventListener("click",       tryEnter, opts);
+      window.addEventListener("touchend",    tryEnter, opts);
+      window.addEventListener("keydown",     tryEnter, opts);
     }
+
+    // Wire FAB (if present)
+    if (fsBtn) {
+      fsBtn.type = "button";
+      fsBtn.addEventListener("click", toggleFullscreen);
+    }
+
+    // Restore preference on load
+    const wantFS = localStorage.getItem("rs_fs") === "1";
+    if (wantFS){
+      document.body.classList.add("fs");   // instant full-bleed
+      setBtn(true);
+      // Try immediately; if blocked by browser, re-enter on first gesture
+      enterTrueFullscreen().catch(primeAutoReenter);
+    } else {
+      setBtn(false);
+    }
+
+    // Keep UI in sync if user hits ESC/back to leave OS fullscreen
+    document.addEventListener("fullscreenchange", () => {
+      const active = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+      if (!active){
+        if (localStorage.getItem("rs_fs") === "1"){
+          // user prefers FS: keep CSS full-bleed; button stays "✕"
+          setBtn(true);
+        } else {
+          document.body.classList.remove("fs");
+          setBtn(false);
+        }
+      }
+    });
   });
-});
+})();
