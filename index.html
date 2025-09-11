@@ -112,24 +112,23 @@
 
     .version{ position:fixed; bottom:20px; left:0; right:0; text-align:center; color:var(--muted); font-size:14px; opacity:.9; z-index:3; }
 
-    /* === Fullscreen: small floating button bottom-right, safe-area aware === */
+    /* === Fullscreen FAB bottom-right (small) === */
     .btn.fs-fab{
       position:fixed;
       right:calc(env(safe-area-inset-right,0px) + 14px);
       bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
       z-index:5;
-      padding:8px 10px;          /* much smaller */
+      padding:8px 10px;
       font-size:14px;
       line-height:1;
       border-radius:999px;
       width:auto;
       min-width:auto;
     }
-    /* Optional visual nudge while pressed */
     .btn.fs-fab:active{ transform:translateY(1px) scale(.98); }
 
     /* CSS fallback when OS fullscreen is unavailable */
-    body.fs .wrap{ max-width:100%; padding:0 8px 0 8px; }
+    body.fs .wrap{ max-width:100%; padding:0 8px; }
     body.fs .hero{ min-height:100vh; padding-top:12vh; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -166,8 +165,8 @@
     <div class="version">v0.0.1 • prototype</div>
   </div>
 
-  <!-- NEW: tiny fullscreen toggle (bottom-right) -->
-  <button id="fsAppBtn" class="btn ghost fs-fab" aria-label="Toggle full screen" title="Toggle full screen">⛶</button>
+  <!-- Tiny fullscreen toggle (bottom-right) -->
+  <button id="fsAppBtn" class="btn ghost fs-fab" type="button" aria-label="Toggle full screen" title="Toggle full screen">⛶</button>
 
   <script>
   document.addEventListener("DOMContentLoaded", () => {
@@ -183,22 +182,24 @@
 
     const safe = (fn) => (...args) => { try{ return fn(...args); } catch(e){ console.error(e); } };
 
-    /* === GLOBAL FULLSCREEN HELPERS (reuse on any page) === */
+    /* === GLOBAL FULLSCREEN HELPERS === */
     async function enterTrueFullscreen(){
       const el = document.documentElement;
-      if (el.requestFullscreen) { try{ await el.requestFullscreen(); }catch(_){} }
+      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      if (req) { try{ await req.call(el); }catch(_){} }
     }
     async function exitTrueFullscreen(){
-      if (document.fullscreenElement && document.exitFullscreen) {
-        try{ await document.exitFullscreen(); }catch(_) {}
+      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+      if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement){
+        if (exit) { try{ await exit.call(document); }catch(_){} }
       }
     }
     async function toggleFullscreen(){
       const goingOn = !document.body.classList.contains('fs');
       if (goingOn){
-        document.body.classList.add('fs');     // CSS fallback
+        document.body.classList.add('fs');     // CSS fallback first
         fsBtn.textContent = '✕';
-        await enterTrueFullscreen();           // ignores if blocked
+        await enterTrueFullscreen();           // no-op if blocked
         window.scrollTo(0,0);
       }else{
         document.body.classList.remove('fs');
@@ -207,15 +208,14 @@
       }
     }
     fsBtn.addEventListener('click', toggleFullscreen);
-    // If user exits OS fullscreen via ESC/back, keep CSS state in sync
     document.addEventListener('fullscreenchange', ()=>{
-      if (!document.fullscreenElement){
+      if (!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement)){
         document.body.classList.remove('fs');
         fsBtn.textContent = '⛶';
       }
     });
 
-    /* === Your existing auth/UI wiring === */
+    /* === Auth / UI === */
     function usernameFromSession(session){
       const u = session?.user;
       return u?.user_metadata?.username || u?.email || "user";
@@ -265,7 +265,7 @@
       }
       location.href="./menu.html";
     });
-    if (signupBtn) signupBtn.addEventListener("click", ()=> location.href="./signup.html"));
+    if (signupBtn) signupBtn.addEventListener("click", ()=> location.href="./signup.html"); /* <-- fixed: removed extra ')' */
 
     // Init Supabase defensively
     try{
