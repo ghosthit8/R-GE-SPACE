@@ -26,7 +26,7 @@
     font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
     letter-spacing:.2px;
 
-    /* added to cooperate with global scanlines (body::before) */
+    /* cooperate with global scanlines (body::before) */
     position: relative;
     overflow-x: hidden;
   }
@@ -98,6 +98,7 @@
     border-radius:12px; background:repeating-linear-gradient(0deg, rgba(0,0,0,.7), rgba(0,0,0,.7) 28px, rgba(57,255,20,0.02) 29px);
     scroll-behavior:smooth;
   }
+
   .msg{
     background:#050805; border:1px solid rgba(57,255,20,0.25); border-left:3px solid var(--green);
     border-radius:12px; padding:8px 10px; margin:8px 0; box-shadow:0 1px 0 rgba(57,255,20,0.1) inset;
@@ -111,9 +112,35 @@
   .msg:hover .ops{ opacity:.9; }
   .msg .ops button{ border-color:rgba(57,255,20,0.35); padding:4px 6px; border-radius:8px; font-weight:700; font-size:11px; background:#041004; }
 
-  .composer{ display:flex; gap:8px; }
-  .composer input{ flex:1; height:44px; border-radius:14px; border-color:#0a260a; background:#020502; color:var(--ink); }
+  /* ===== Composer with media ===== */
+  .composer{ display:flex; gap:8px; align-items:center; }
+  .composer input[type="text"]{ flex:1; height:44px; border-radius:14px; border-color:#0a260a; background:#020502; color:var(--ink); }
   .hint{ color:#a2ffa2; opacity:.75; font-size:12px; margin:2px 4px 0; }
+
+  .file-wrap{ position:relative; }
+  #fileInput{ display:none; }
+  .file-btn{
+    display:inline-flex; align-items:center; gap:8px;
+    border:1px dashed rgba(57,255,20,0.45); background:#020402; border-radius:12px;
+    padding:10px 12px; font-weight:800; cursor:pointer; user-select:none;
+  }
+  .file-btn:after{ content:"⟲"; font-weight:900; opacity:.5; margin-left:4px; display:none; }
+  .file-btn.active:after{ display:inline; }
+
+  .preview{
+    display:flex; gap:8px; align-items:center; margin-top:4px; font-size:12px; color:#b9ffb9; opacity:.9;
+  }
+  .preview .thumb{
+    width:44px; height:44px; border-radius:8px; border:1px solid rgba(57,255,20,0.35); object-fit:cover;
+  }
+  .drop-hint{
+    font-size:12px; opacity:.7; color:#a2ffa2; margin-top:2px;
+  }
+  .messages.dragover{
+    outline:2px dashed var(--green);
+    outline-offset:-6px;
+    background:linear-gradient(180deg, rgba(57,255,20,0.08), rgba(57,255,20,0.03));
+  }
 
   .statusline{ font-size:12px; color:#a2ffa2; opacity:.85; display:flex; gap:10px; align-items:center; }
   .dot{ width:8px; height:8px; border-radius:50%; background:var(--red); box-shadow:0 0 8px var(--red); display:inline-block; }
@@ -123,6 +150,18 @@
   .kicker{ font-size:12px; color:#a2ffa2; opacity:.7; }
   .pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border:1px solid var(--green); border-radius:999px; font-size:12px; background:#010301; margin:4px 4px 0 0; }
   .footer{ margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; color:#b9ffb9; opacity:.85; font-size:12px; }
+
+  /* ===== Media inside messages ===== */
+  .msg .media{
+    margin-top:6px;
+    max-width:min(320px, 80vw);
+    border-radius:10px;
+    border:1px solid rgba(57,255,20,0.35);
+    box-shadow:0 0 0 1px rgba(57,255,20,0.08) inset;
+  }
+  .msg .media video, .msg .media img{
+    display:block; width:100%; height:auto; border-radius:10px;
+  }
 
   /* ===== FULLSCREEN MODE ===== */
   body.fs header{ display:none; }
@@ -195,11 +234,24 @@
 
         <div id="messages" class="messages" aria-live="polite" aria-busy="true"></div>
 
+        <!-- ✅ Composer w/ media -->
         <div class="composer">
-          <input id="messageInput" maxlength="800" placeholder="Join a room to chat…" disabled />
+          <input id="messageInput" type="text" maxlength="800" placeholder="Join a room to chat…" disabled />
+          <div class="file-wrap">
+            <input type="file" id="fileInput" accept="image/*,video/*" />
+            <label for="fileInput" id="fileBtn" class="file-btn" title="Attach image or video">Attach</label>
+          </div>
           <button id="sendBtn" disabled>Send</button>
         </div>
-        <div class="hint">Tips: whats going down in your city // no nazis/alt right, no cp</div>
+        <div id="mediaPreview" class="preview" hidden>
+          <img id="thumb" class="thumb" alt="" />
+          <div>
+            <div id="fileName">No file</div>
+            <div class="drop-hint">Tip: paste an image or drag & drop into the chat</div>
+          </div>
+        </div>
+
+        <div class="hint">Tips: what’s going down in your city // no nazis/alt right, no cp</div>
       </section>
 
       <aside class="panel sidebar">
@@ -275,6 +327,13 @@
     const fsBtn = document.getElementById("fsBtn");
     const fsExit = document.getElementById("fsExit");
 
+    // NEW: media picker
+    const fileInput = document.getElementById("fileInput");
+    const fileBtn = document.getElementById("fileBtn");
+    const mediaPreview = document.getElementById("mediaPreview");
+    const thumb = document.getElementById("thumb");
+    const fileNameEl = document.getElementById("fileName");
+
     let session=null;
     let me={ id:null, username:null };
     let currentRoom=null;
@@ -284,6 +343,9 @@
     let joined=false;       // gate for sending
     let sending=false;      // prevents fast double taps
 
+    const MAX_BYTES = 25 * 1024 * 1024; // 25 MB cap
+    const ACCEPTED = ["image/", "video/"];
+
     const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
     const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
     function fmtTime(ts){ const d=new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
@@ -292,6 +354,7 @@
       const e=document.createElement(tag);
       for(const [k,v] of Object.entries(attrs)){
         if(k==="class") e.className=v;
+        else if(k==="style") e.style.cssText=v;
         else if(k.startsWith("on") && typeof v==="function") e.addEventListener(k.slice(2), v);
         else e.setAttribute(k,v);
       }
@@ -341,12 +404,14 @@
       joined = !!on;
       inputEl.disabled = !on;
       sendBtn.disabled = !on;
+      fileBtn.classList.toggle('disabled', !on);
       if(on){
         inputEl.placeholder = "Type your message… (Enter to send, Shift+Enter = newline)";
         status("Live in #" + currentRoom, true);
       }else{
         inputEl.placeholder = "Join a room to chat…";
         status("Pick a room and press Join", false);
+        clearSelection();
       }
     }
 
@@ -359,30 +424,46 @@
         if(!error && prof?.username) me.username = prof.username;
       }
       me.username ??= "user-" + s.user.id.slice(0,6);
+      // show self in sidebar
+      document.getElementById("meCard").textContent = me.username + " · " + me.id.slice(0,6);
       return s;
+    }
+
+    function mediaNode(url, type){
+      const wrap = el("div", { class:"media" });
+      if((type||"").startsWith("video")){
+        const v = el("video", { src:url, controls:true, playsinline:true });
+        wrap.appendChild(v);
+      }else{
+        const img = el("img", { src:url, alt:"upload" });
+        wrap.appendChild(img);
+      }
+      return wrap;
     }
 
     function renderMessage(m){
       const mine = m.user_id === me.id;
       const row = el("div", { class:"msg" + (mine ? " me" : "") });
 
-      // clickable name → profile.html?uid=USER_ID
-      let nameNode;
       const label = m.username || "anon";
-      if (m.user_id) {
-        nameNode = el("a", { class:"who", href: profileHref(m.user_id), title:`View ${label}'s profile` }, label);
-      } else {
-        nameNode = el("div", { class:"who" }, label);
-      }
+      const nameNode = m.user_id
+        ? el("a", { class:"who", href: profileHref(m.user_id), title:`View ${label}'s profile` }, label)
+        : el("div", { class:"who" }, label);
 
       const time = el("div", { class:"time" }, fmtTime(m.created_at || Date.now()));
       const meta = el("div", { style:"display:flex;flex-direction:column;gap:2px;min-width:94px;" }, nameNode, time);
 
-      const txt  = el("div", { class:"txt" }, m.content || "");
+      const textContent = (m.content || "").trim();
+      const txt  = el("div", { class:"txt" }, textContent);
+
       const ops = el("div", { class:"ops" });
       if (mine) ops.appendChild(el("button", { onclick:()=>deleteMessage(m.id) }, "delete"));
 
-      row.append(meta, txt, ops);
+      row.append(meta);
+      if (textContent) row.append(txt);
+      if (m.media_url) row.append(mediaNode(m.media_url, m.media_type));
+      row.append(ops);
+
       msgEl.appendChild(row);
     }
 
@@ -458,6 +539,91 @@
 
     function status(text, ok=true){ statusText.textContent=text; rtDot.classList.toggle("ok", !!ok); }
 
+    // ====== MEDIA HELPERS ======
+    function clearSelection(){
+      fileInput.value = "";
+      mediaPreview.hidden = true;
+      fileBtn.classList.remove("active");
+      thumb.removeAttribute("src");
+      thumb.setAttribute("alt", "");
+      fileNameEl.textContent = "No file";
+    }
+
+    function pickFile(file){
+      if(!file) return clearSelection();
+      if(file.size > MAX_BYTES){ status("File too large (max 25 MB)", false); clearSelection(); return; }
+      if(!ACCEPTED.some(p=> file.type.startsWith(p))){
+        status("Only images and videos allowed", false); clearSelection(); return;
+      }
+      fileBtn.classList.add("active");
+      fileNameEl.textContent = `${file.name} · ${(file.size/1024/1024).toFixed(1)}MB`;
+      mediaPreview.hidden = false;
+
+      if(file.type.startsWith("image/")){
+        const url = URL.createObjectURL(file);
+        thumb.src = url;
+        thumb.alt = "preview";
+        thumb.style.display = "block";
+      }else{
+        // Show a generic video thumbnail block
+        thumb.removeAttribute("src");
+        thumb.alt = "video";
+        thumb.style.display = "none";
+      }
+    }
+
+    fileInput.addEventListener("change", (e)=> pickFile(e.target.files[0]));
+
+    // Paste image from clipboard (desktop)
+    document.addEventListener("paste", (e)=>{
+      if(!joined) return;
+      const item = [...(e.clipboardData?.items || [])].find(x=> x.kind==="file");
+      if(item){
+        const file = item.getAsFile();
+        pickFile(file);
+        // stash onto the hidden input so send() can read it
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+      }
+    });
+
+    // Drag & drop onto messages
+    ["dragenter","dragover"].forEach(ev=>{
+      msgEl.addEventListener(ev, e=>{
+        e.preventDefault(); e.stopPropagation();
+        if(!joined) return;
+        msgEl.classList.add("dragover");
+      });
+    });
+    ["dragleave","drop"].forEach(ev=>{
+      msgEl.addEventListener(ev, e=>{
+        e.preventDefault(); e.stopPropagation();
+        msgEl.classList.remove("dragover");
+      });
+    });
+    msgEl.addEventListener("drop", e=>{
+      if(!joined) return;
+      const file = e.dataTransfer?.files?.[0];
+      if(file){ pickFile(file); const dt = new DataTransfer(); dt.items.add(file); fileInput.files = dt.files; }
+    });
+
+    async function uploadFile(file) {
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      const safeExt = ext || (file.type.startsWith("image/") ? "png" : "mp4");
+      const path = `${me.id}/${Date.now()}.${safeExt}`;
+
+      const { error } = await supabase.storage
+        .from("chat-media")
+        .upload(path, file, { upsert: true });
+
+      if (error) { status("Upload failed: " + error.message, false); return null; }
+
+      const { data } = supabase.storage.from("chat-media").getPublicUrl(path);
+      const type = file.type.startsWith("video") ? "video" : "image";
+      return { url: data.publicUrl, type };
+    }
+
     // SINGLE-SEND, no optimistic echo
     async function send(){
       if(!joined || !currentRoom){ status("Join a room first", false); return; }
@@ -469,25 +635,46 @@
         return;
       }
 
-      const raw=inputEl.value;
-      const content=raw.replace(/\s+$/,'');
-      if(!content) return;
+      let content = inputEl.value.trim();
+      let media = null;
+
+      // Has a file selected?
+      if(fileInput.files.length > 0){
+        const file = fileInput.files[0];
+        if(file.size > MAX_BYTES){ status("File too large (max 25 MB)", false); return; }
+        if(!ACCEPTED.some(p=> file.type.startsWith(p))){ status("Only images and videos allowed", false); return; }
+
+        status("Uploading…", true);
+        media = await uploadFile(file);
+        if(!media){ return; }
+      }
+
+      if(!content && !media) return;
 
       sending = true;
       sendBtn.disabled = true;
 
       rateLimit.last=now;
       inputEl.value="";
+      clearSelection();
 
-      const row={ content, room:currentRoom, user_id:me.id, username:me.username };
+      const row={
+        content,
+        room:currentRoom,
+        user_id:me.id,
+        username:me.username,
+        media_url: media?.url ?? null,
+        media_type: media?.type ?? null
+      };
       const { error } = await supabase.from("messages").insert(row);
 
       if(error){
-        inputEl.value=content;                 // put it back for retry
         status("Send failed: "+error.message,false);
+        // Put caption back if it failed
+        inputEl.value = content;
       }else{
         status("Sent ✓", true);
-        setTimeout(autoscroll, 80);           // realtime INSERT will render it
+        setTimeout(autoscroll, 80); // realtime INSERT will render it
       }
 
       sending = false;
@@ -525,8 +712,18 @@
 
     logoutBtn.addEventListener("click", async ()=>{ await supabase.auth.signOut(); window.location.href="login.html"; });
 
+    // Optional: delete (owned) message
+    async function deleteMessage(id){
+      if(!id) return;
+      const { error } = await supabase.from("messages").delete().eq("id", id).eq("user_id", me.id);
+      if(error){ status("Delete failed: " + error.message, false); }
+    }
+
     await requireSession();
     setComposerEnabled(false); // start locked
+
+    // Load meCard (minimal)
+    document.getElementById("meCard").textContent = (me.username||"me") + " · " + (me.id||"").slice(0,6);
 
     // message count refresher (only when joined)
     setInterval(async ()=>{
