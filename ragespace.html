@@ -112,10 +112,36 @@
   .kicker{ font-size:12px; color:#a2ffa2; opacity:.7; }
   .pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border:1px solid var(--green); border-radius:999px; font-size:12px; background:#010301; margin:4px 4px 0 0; }
   .footer{ margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; color:#b9ffb9; opacity:.85; font-size:12px; }
+
+  /* ===== FULLSCREEN MODE ===== */
+  /* CSS fallback layout when body has .fs (also applied while in true fullscreen) */
+  body.fs header{ display:none; }
+  body.fs #header-spacer{ display:none; height:0 !important; }
+  body.fs .wrap{ max-width:100%; padding:0; margin:0; }
+  body.fs .grid{ grid-template-columns:1fr; gap:0; margin-top:0; }
+  body.fs .panel{ border-radius:0; border-left:none; border-right:none; padding:8px; }
+  body.fs .chat{ height:100vh; min-height:100vh; }
+  body.fs .messages{ border:none; border-radius:0; padding:14px 12px calc(16px + env(safe-area-inset-bottom,0px)); }
+  /* floating exit pill for fullscreen */
+  .fs-exit{
+    position:fixed;
+    top:calc(env(safe-area-inset-top,0px) + 8px);
+    right:8px;
+    z-index:1000;
+    padding:8px 12px;
+    border-radius:999px;
+    border:1px solid var(--green);
+    background:#020402;
+    font-weight:800;
+    box-shadow:0 0 0 1px rgba(57,255,20,0.45), 0 0 18px rgba(57,255,20,0.25) inset;
+  }
 </style>
 </head>
 
 <body>
+  <!-- FLOATING exit (hidden until fs mode) -->
+  <button id="fsExit" class="fs-exit" hidden>Exit full screen</button>
+
   <!-- FIXED header -->
   <header id="site-header">
     <div class="brand">
@@ -140,6 +166,8 @@
       <button id="joinBtn" title="Join room">Join</button>
       <button id="leaveBtn" class="btn-ghost" title="Leave room">Leave</button>
       <button id="logoutBtn" title="Sign out">Sign out</button>
+      <!-- NEW: fullscreen toggle -->
+      <button id="fsBtn" class="btn-ghost" title="Make chat full-screen">Full screen</button>
     </div>
   </header>
 
@@ -206,6 +234,10 @@
       window.addEventListener('orientationchange', measure);
       window.addEventListener('scroll', fade, { passive:true });
       setTimeout(measure, 400);
+
+      // Recalculate when entering/exiting fullscreen CSS mode
+      const ro = new ResizeObserver(()=>{ if(!document.body.classList.contains('fs')) measure(); });
+      ro.observe(header);
     })();
   </script>
 
@@ -231,6 +263,8 @@
     const joinBtn = document.getElementById("joinBtn");
     const leaveBtn = document.getElementById("leaveBtn");
     const logoutBtn = document.getElementById("logoutBtn");
+    const fsBtn = document.getElementById("fsBtn");
+    const fsExit = document.getElementById("fsExit");
 
     let session=null;
     let me={ id:null, username:null };
@@ -256,6 +290,42 @@
       return e;
     }
     const profileHref = (uid)=> `profile.html?uid=${encodeURIComponent(uid)}`;
+
+    // ===== Fullscreen helpers =====
+    async function enterTrueFullscreen(){
+      const el = document.documentElement;
+      if (el.requestFullscreen) await el.requestFullscreen().catch(()=>{});
+    }
+    async function exitTrueFullscreen(){
+      if (document.fullscreenElement && document.exitFullscreen) {
+        try{ await document.exitFullscreen(); }catch{}
+      }
+    }
+    async function toggleFullscreen(){
+      const on = !document.body.classList.contains('fs');
+      if(on){ // going full
+        document.body.classList.add('fs');
+        fsExit.hidden = false;
+        fsBtn.textContent = 'Exit full';
+        await enterTrueFullscreen(); // silently ignore if blocked
+        window.scrollTo(0,0); // ensure top
+      }else{
+        document.body.classList.remove('fs');
+        fsExit.hidden = true;
+        fsBtn.textContent = 'Full screen';
+        await exitTrueFullscreen();
+      }
+    }
+    fsBtn.addEventListener('click', toggleFullscreen);
+    fsExit.addEventListener('click', toggleFullscreen);
+    // Also exit CSS mode if user exits OS fullscreen (back button / ESC)
+    document.addEventListener('fullscreenchange', ()=>{
+      if(!document.fullscreenElement){
+        document.body.classList.remove('fs');
+        fsExit.hidden = true;
+        fsBtn.textContent = 'Full screen';
+      }
+    });
 
     // enable/disable the composer UI
     function setComposerEnabled(on){
