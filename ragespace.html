@@ -133,9 +133,7 @@
   .preview .thumb{
     width:44px; height:44px; border-radius:8px; border:1px solid rgba(57,255,20,0.35); object-fit:cover;
   }
-  .drop-hint{
-    font-size:12px; opacity:.7; color:#a2ffa2; margin-top:2px;
-  }
+  .drop-hint{ font-size:12px; opacity:.7; color:#a2ffa2; margin-top:2px; }
   .messages.dragover{
     outline:2px dashed var(--green);
     outline-offset:-6px;
@@ -171,6 +169,12 @@
   body.fs .panel{ border-radius:0; border-left:none; border-right:none; padding:8px; }
   body.fs .chat{ height:100vh; min-height:100vh; }
   body.fs .messages{ border:none; border-radius:0; padding:14px 12px calc(16px + env(safe-area-inset-bottom,0px)); }
+
+  /* Button should only show IN fullscreen */
+  .fs-exit{ display:none; }
+  body.fs .fs-exit{ display:inline-flex; }
+  .fs-exit[hidden]{ display:none !important; }
+
   .fs-exit{
     position:fixed;
     top:calc(env(safe-area-inset-top,0px) + 8px);
@@ -531,7 +535,6 @@
           rtDot.classList.toggle("ok", sub);
           if(sub){
             statusText.textContent = `Live in #${currentRoom}`;
-            // Ensure presence reflects you once live
             touchPresence(me.id, me.username);
           }
         });
@@ -565,7 +568,6 @@
         thumb.alt = "preview";
         thumb.style.display = "block";
       }else{
-        // Show a generic video thumbnail block
         thumb.removeAttribute("src");
         thumb.alt = "video";
         thumb.style.display = "none";
@@ -581,7 +583,6 @@
       if(item){
         const file = item.getAsFile();
         pickFile(file);
-        // stash onto the hidden input so send() can read it
         const dt = new DataTransfer();
         dt.items.add(file);
         fileInput.files = dt.files;
@@ -624,10 +625,10 @@
       return { url: data.publicUrl, type };
     }
 
-    // SINGLE-SEND, no optimistic echo
+    // ====== SAFER SINGLE-SEND (retries if media columns missing) ======
     async function send(){
       if(!joined || !currentRoom){ status("Join a room first", false); return; }
-      if(sending) return; // fast double-tap guard
+      if(sending) return;
 
       const now=Date.now();
       if(now-rateLimit.last<rateLimit.ms){
@@ -638,15 +639,13 @@
       let content = inputEl.value.trim();
       let media = null;
 
-      // Has a file selected?
       if(fileInput.files.length > 0){
         const file = fileInput.files[0];
         if(file.size > MAX_BYTES){ status("File too large (max 25 MB)", false); return; }
         if(!ACCEPTED.some(p=> file.type.startsWith(p))){ status("Only images and videos allowed", false); return; }
-
         status("Uploading…", true);
         media = await uploadFile(file);
-        if(!media){ return; }
+        if(!media){ status("Upload failed", false); return; }
       }
 
       if(!content && !media) return;
@@ -658,23 +657,33 @@
       inputEl.value="";
       clearSelection();
 
-      const row={
-        content,
-        room:currentRoom,
-        user_id:me.id,
-        username:me.username,
-        media_url: media?.url ?? null,
+      const base = { content, room:currentRoom, user_id:me.id, username:me.username };
+      const withMedia = Object.assign({}, base, {
+        media_url:  media?.url ?? null,
         media_type: media?.type ?? null
-      };
-      const { error } = await supabase.from("messages").insert(row);
+      });
+
+      // Try insert WITH media fields first
+      let { error } = await supabase.from("messages").insert(withMedia);
 
       if(error){
-        status("Send failed: "+error.message,false);
-        // Put caption back if it failed
-        inputEl.value = content;
+        const msg = String(error.message||"").toLowerCase();
+        const undefinedColumn = msg.includes("column") && msg.includes("does not exist");
+        if(undefinedColumn){
+          const retry = await supabase.from("messages").insert(base);
+          if(retry.error){
+            status("Send failed: "+retry.error.message, false);
+            inputEl.value = content;
+          }else{
+            status("Sent (add media columns to enable uploads)", true);
+          }
+        }else{
+          status("Send failed: "+error.message, false);
+          inputEl.value = content;
+        }
       }else{
         status("Sent ✓", true);
-        setTimeout(autoscroll, 80); // realtime INSERT will render it
+        setTimeout(autoscroll, 80);
       }
 
       sending = false;
