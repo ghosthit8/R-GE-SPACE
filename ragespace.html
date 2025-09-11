@@ -6,6 +6,7 @@
 <title>Rage Space — City Chat</title>
 <meta name="color-scheme" content="dark" />
 
+<!-- ✅ Global theme & scanlines -->
 <link rel="stylesheet" href="./style.css?v=1" />
 
 <style>
@@ -16,40 +17,53 @@
   }
   *{ box-sizing:border-box; }
   html,body{ height:100%; }
+
+  /* ✅ Keep your page bg, but ensure the global scanline ::before shows properly */
   body{
     margin:0;
     background: radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.12), transparent 60%), #000;
     color:var(--green);
     font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
     letter-spacing:.2px;
+
+    /* cooperate with global scanlines (body::before) */
     position: relative;
     overflow-x: hidden;
   }
+
   a{ color:var(--muted); text-decoration:none; }
   a:hover{ text-decoration:underline; }
 
   /* ===== HEADER (fixed) ===== */
   header{
-    position:fixed; top:calc(env(safe-area-inset-top,0px) + 8px);
-    left:0; right:0; margin:0 auto; max-width:var(--maxw); z-index:999;
+    position:fixed;
+    top:calc(env(safe-area-inset-top,0px) + 8px);
+    left:0; right:0; margin:0 auto;
+    max-width:var(--maxw);
+    z-index:999;
     display:flex; align-items:center; justify-content:space-between; gap:12px;
     background:linear-gradient(180deg, rgba(255,0,51,0.06), rgba(255,0,51,0));
     border:1px solid var(--border); border-radius:18px; padding:14px 16px;
-    -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
     box-shadow: 0 0 0 1px rgba(57,255,20,0.08), 0 8px 30px rgba(255,0,51,0.12) inset;
     transition: opacity .18s ease;
   }
-  #header-spacer{ height:140px; }
+  #header-spacer{ height:140px; } /* JS overwrites with exact height */
+
   .wrap{ max-width:var(--maxw); margin:0 auto 40px; padding:0 16px 16px; }
+
   .brand{ display:flex; align-items:center; gap:12px; user-select:none; }
   .badge{ font-size:12px; color:#111; background:var(--green); border-radius:999px; padding:2px 8px; font-weight:700; }
   h1{ margin:0; font-size:clamp(20px,2.4vw,28px); letter-spacing:2px; color:var(--green); text-shadow:0 0 6px rgba(255,0,51,0.55); }
   .glitch{ font-weight:900; display:inline-block; position:relative; }
   .glitch::before,.glitch::after{
-    content:attr(data-text); position:absolute; left:0; top:0; opacity:.7; mix-blend-mode:screen; filter:blur(.3px);
+    content:attr(data-text);
+    position:absolute; left:0; top:0; opacity:.7; mix-blend-mode:screen; filter:blur(.3px);
   }
   .glitch::before{ transform:translate(-1px,-0.5px); color:#f0f; clip-path:polygon(0 0,100% 0,100% 40%,0 30%); }
   .glitch::after{  transform:translate(1px, .5px);  color:#0ff; clip-path:polygon(0 60%,100% 70%,100% 100%,0 100%); }
+  .white-rabbit{ filter: drop-shadow(0 0 6px rgba(255,0,51,0.45)); }
 
   .controls{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   select,input,button{
@@ -69,6 +83,7 @@
   /* ===== LAYOUT ===== */
   .grid{ display:grid; grid-template-columns:1fr 310px; gap:14px; margin-top:12px; }
   @media (max-width:900px){ .grid{ grid-template-columns:1fr; } }
+
   .panel{
     background:linear-gradient(180deg, rgba(57,255,20,0.06), rgba(57,255,20,0.02));
     border:1px solid var(--border); border-radius:18px; padding:12px;
@@ -136,8 +151,10 @@
 
   /* ===== Media inside messages ===== */
   .msg .media{
-    margin-top:6px; max-width:min(320px, 80vw);
-    border-radius:10px; border:1px solid rgba(57,255,20,0.35);
+    margin-top:6px;
+    max-width:min(320px, 80vw);
+    border-radius:10px;
+    border:1px solid rgba(57,255,20,0.35);
     box-shadow:0 0 0 1px rgba(57,255,20,0.08) inset;
   }
   .msg .media video, .msg .media img{
@@ -153,20 +170,31 @@
   body.fs .chat{ height:100vh; min-height:100vh; }
   body.fs .messages{ border:none; border-radius:0; padding:14px 12px calc(16px + env(safe-area-inset-bottom,0px)); }
 
+  /* Button should only show IN fullscreen */
   .fs-exit{ display:none; }
   body.fs .fs-exit{ display:inline-flex; }
   .fs-exit[hidden]{ display:none !important; }
+
   .fs-exit{
-    position:fixed; top:calc(env(safe-area-inset-top,0px) + 8px); right:8px; z-index:1000;
-    padding:8px 12px; border-radius:999px; border:1px solid var(--green); background:#020402; font-weight:800;
+    position:fixed;
+    top:calc(env(safe-area-inset-top,0px) + 8px);
+    right:8px;
+    z-index:1000;
+    padding:8px 12px;
+    border-radius:999px;
+    border:1px solid var(--green);
+    background:#020402;
+    font-weight:800;
     box-shadow:0 0 0 1px rgba(57,255,20,0.45), 0 0 18px rgba(57,255,20,0.25) inset;
   }
 </style>
 </head>
 
 <body>
+  <!-- FLOATING exit (hidden until fs mode) -->
   <button id="fsExit" class="fs-exit" hidden>Exit full screen</button>
 
+  <!-- FIXED header -->
   <header id="site-header">
     <div class="brand">
       <span class="badge">18+</span>
@@ -190,10 +218,12 @@
       <button id="joinBtn" title="Join room">Join</button>
       <button id="leaveBtn" class="btn-ghost" title="Leave room">Leave</button>
       <button id="logoutBtn" title="Sign out">Sign out</button>
+      <!-- NEW: fullscreen toggle -->
       <button id="fsBtn" class="btn-ghost" title="Make chat full-screen">Full screen</button>
     </div>
   </header>
 
+  <!-- Spacer ensures nothing sits under the fixed header -->
   <div id="header-spacer"></div>
 
   <div class="wrap">
@@ -208,6 +238,7 @@
 
         <div id="messages" class="messages" aria-live="polite" aria-busy="true"></div>
 
+        <!-- ✅ Composer w/ media -->
         <div class="composer">
           <input id="messageInput" type="text" maxlength="800" placeholder="Join a room to chat…" disabled />
           <div class="file-wrap">
@@ -248,19 +279,28 @@
     </div>
   </div>
 
-  <!-- Layout script -->
+  <!-- Layout script: measure header, set spacer height, optional fade-on-scroll -->
   <script>
     (function(){
       const FADE_ON_SCROLL = true;
       const header = document.getElementById('site-header');
       const spacer = document.getElementById('header-spacer');
+
       function measure(){ spacer.style.height = (header.offsetHeight + 12) + 'px'; }
-      function fade(){ if(!FADE_ON_SCROLL) return; const y = window.scrollY; header.style.opacity = Math.max(0, 1 - (y/80)).toFixed(3); }
+      function fade(){
+        if(!FADE_ON_SCROLL) return;
+        const y = window.scrollY;
+        const min = 0.0, distance = 80;
+        header.style.opacity = Math.max(min, 1 - (y/distance)).toFixed(3);
+      }
+
       window.addEventListener('load', ()=>{ measure(); fade(); });
       window.addEventListener('resize', measure);
       window.addEventListener('orientationchange', measure);
       window.addEventListener('scroll', fade, { passive:true });
       setTimeout(measure, 400);
+
+      // Recalculate when entering/exiting fullscreen CSS mode
       const ro = new ResizeObserver(()=>{ if(!document.body.classList.contains('fs')) measure(); });
       ro.observe(header);
     })();
@@ -274,20 +314,6 @@
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // ===== DEBUG PROBES: auth + bucket existence =====
-    (async () => {
-      const { data: sess } = await supabase.auth.getSession();
-      console.log("[debug] auth session user id:", sess?.session?.user?.id || null);
-
-      const { data: bucketInfo, error: bucketErr } = await supabase.storage.getBucket("chat-media");
-      if (bucketErr) {
-        console.error("[debug] getBucket error:", bucketErr);
-        try { console.error("[debug] getBucket error JSON:", JSON.stringify(bucketErr, null, 2)); } catch {}
-      } else {
-        console.log("[debug] bucket chat-media exists:", bucketInfo);
-      }
-    })();
 
     const msgEl = document.getElementById("messages");
     const inputEl = document.getElementById("messageInput");
@@ -305,7 +331,7 @@
     const fsBtn = document.getElementById("fsBtn");
     const fsExit = document.getElementById("fsExit");
 
-    // Media UI
+    // NEW: media picker
     const fileInput = document.getElementById("fileInput");
     const fileBtn = document.getElementById("fileBtn");
     const mediaPreview = document.getElementById("mediaPreview");
@@ -317,14 +343,15 @@
     let currentRoom=null;
     let channel=null;
     let rateLimit={ last:0, ms:650 };
-    let presence=new Map();
-    let joined=false;
-    let sending=false;
+    let presence=new Map(); // uid -> { username, ts }
+    let joined=false;       // gate for sending
+    let sending=false;      // prevents fast double taps
 
-    const MAX_BYTES = 25 * 1024 * 1024;
+    const MAX_BYTES = 25 * 1024 * 1024; // 25 MB cap
     const ACCEPTED = ["image/", "video/"];
 
     const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+    const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
     function fmtTime(ts){ const d=new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
     function autoscroll(){ msgEl.scrollTop = msgEl.scrollHeight + 80; }
     function el(tag,attrs={},...kids){
@@ -341,30 +368,54 @@
     const profileHref = (uid)=> `profile.html?uid=${encodeURIComponent(uid)}`;
 
     // ===== Fullscreen helpers =====
-    async function enterTrueFullscreen(){ const el=document.documentElement; if(el.requestFullscreen) await el.requestFullscreen().catch(()=>{}); }
-    async function exitTrueFullscreen(){ if(document.fullscreenElement && document.exitFullscreen){ try{ await document.exitFullscreen(); }catch{} } }
+    async function enterTrueFullscreen(){
+      const el = document.documentElement;
+      if (el.requestFullscreen) await el.requestFullscreen().catch(()=>{});
+    }
+    async function exitTrueFullscreen(){
+      if (document.fullscreenElement && document.exitFullscreen) {
+        try{ await document.exitFullscreen(); }catch{}
+      }
+    }
     async function toggleFullscreen(){
       const on = !document.body.classList.contains('fs');
-      if(on){
-        document.body.classList.add('fs'); fsExit.hidden=false; fsBtn.textContent='Exit full';
-        await enterTrueFullscreen(); window.scrollTo(0,0);
+      if(on){ // going full
+        document.body.classList.add('fs');
+        fsExit.hidden = false;
+        fsBtn.textContent = 'Exit full';
+        await enterTrueFullscreen(); // silently ignore if blocked
+        window.scrollTo(0,0); // ensure top
       }else{
-        document.body.classList.remove('fs'); fsExit.hidden=true; fsBtn.textContent='Full screen'; await exitTrueFullscreen();
+        document.body.classList.remove('fs');
+        fsExit.hidden = true;
+        fsBtn.textContent = 'Full screen';
+        await exitTrueFullscreen();
       }
     }
     fsBtn.addEventListener('click', toggleFullscreen);
     fsExit.addEventListener('click', toggleFullscreen);
     document.addEventListener('fullscreenchange', ()=>{
-      if(!document.fullscreenElement){ document.body.classList.remove('fs'); fsExit.hidden=true; fsBtn.textContent='Full screen'; }
+      if(!document.fullscreenElement){
+        document.body.classList.remove('fs');
+        fsExit.hidden = true;
+        fsBtn.textContent = 'Full screen';
+      }
     });
 
+    // enable/disable the composer UI
     function setComposerEnabled(on){
       joined = !!on;
       inputEl.disabled = !on;
       sendBtn.disabled = !on;
       fileBtn.classList.toggle('disabled', !on);
-      if(on){ inputEl.placeholder = "Type your message… (Enter to send, Shift+Enter = newline)"; status("Live in #"+currentRoom, true); }
-      else{ inputEl.placeholder = "Join a room to chat…"; status("Pick a room and press Join", false); clearSelection(); }
+      if(on){
+        inputEl.placeholder = "Type your message… (Enter to send, Shift+Enter = newline)";
+        status("Live in #" + currentRoom, true);
+      }else{
+        inputEl.placeholder = "Join a room to chat…";
+        status("Pick a room and press Join", false);
+        clearSelection();
+      }
     }
 
     async function requireSession(){
@@ -376,28 +427,40 @@
         if(!error && prof?.username) me.username = prof.username;
       }
       me.username ??= "user-" + s.user.id.slice(0,6);
+      // 👇 Debug: confirm auth
       console.log("Auth session user:", s.user?.id);
+      // show self in sidebar
       document.getElementById("meCard").textContent = me.username + " · " + me.id.slice(0,6);
       return s;
     }
 
     function mediaNode(url, type){
       const wrap = el("div", { class:"media" });
-      if((type||"").startsWith("video")) wrap.appendChild(el("video", { src:url, controls:true, playsinline:true }));
-      else wrap.appendChild(el("img", { src:url, alt:"upload" }));
+      if((type||"").startsWith("video")){
+        const v = el("video", { src:url, controls:true, playsinline:true });
+        wrap.appendChild(v);
+      }else{
+        const img = el("img", { src:url, alt:"upload" });
+        wrap.appendChild(img);
+      }
       return wrap;
     }
 
     function renderMessage(m){
       const mine = m.user_id === me.id;
       const row = el("div", { class:"msg" + (mine ? " me" : "") });
+
       const label = m.username || "anon";
-      const nameNode = m.user_id ? el("a", { class:"who", href: profileHref(m.user_id), title:`View ${label}'s profile` }, label)
-                                 : el("div", { class:"who" }, label);
+      const nameNode = m.user_id
+        ? el("a", { class:"who", href: profileHref(m.user_id), title:`View ${label}'s profile` }, label)
+        : el("div", { class:"who" }, label);
+
       const time = el("div", { class:"time" }, fmtTime(m.created_at || Date.now()));
       const meta = el("div", { style:"display:flex;flex-direction:column;gap:2px;min-width:94px;" }, nameNode, time);
+
       const textContent = (m.content || "").trim();
       const txt  = el("div", { class:"txt" }, textContent);
+
       const ops = el("div", { class:"ops" });
       if (mine) ops.appendChild(el("button", { onclick:()=>deleteMessage(m.id) }, "delete"));
 
@@ -405,22 +468,28 @@
       if (textContent) row.append(txt);
       if (m.media_url) row.append(mediaNode(m.media_url, m.media_type));
       row.append(ops);
+
       msgEl.appendChild(row);
     }
 
     function clearMessages(){ msgEl.innerHTML=""; msgEl.setAttribute("aria-busy","true"); }
+
     function touchPresence(user_id, username){ presence.set(user_id,{username,ts:Date.now()}); drawPresence(); }
     function prunePresence(){ const now=Date.now(); for(const [uid,info] of presence){ if(now-info.ts>60000) presence.delete(uid); } drawPresence(); }
     function drawPresence(){
       presenceEl.innerHTML = "";
-      if(presence.size===0){ presenceEl.textContent="Nobody yet. Be the first to speak."; return; }
+      if(presence.size===0){
+        presenceEl.textContent="Nobody yet. Be the first to speak.";
+        return;
+      }
       const seen=new Set();
       for(const [uid,info] of presence){
         const label = info.username || "anon";
         if(seen.has(uid)) continue;
         seen.add(uid);
-        const pill = uid ? el("a", { class:"pill", href:profileHref(uid), title:`View ${label}'s profile` }, label)
-                         : el("span", { class:"pill" }, label);
+        const pill = uid
+          ? el("a", { class:"pill", href:profileHref(uid), title:`View ${label}'s profile` }, label)
+          : el("span", { class:"pill" }, label);
         presenceEl.appendChild(pill);
       }
     }
@@ -430,15 +499,21 @@
       currentRoom=(name||"Dallas").trim();
       roomNameEl.textContent=currentRoom;
       status("Loading messages…", false);
+
+      // Immediate presence as soon as you join a room
       touchPresence(me.id, me.username);
+
       await subscribeRealtime(currentRoom);
+
       clearMessages();
       const { data, error, count } = await supabase
         .from("messages").select("*",{ count:"exact" })
         .eq("room", currentRoom).order("created_at",{ ascending:true }).limit(400);
       if(error){ msgEl.appendChild(el("div",{}, "Error loading messages: " + error.message)); }
       else{ data.forEach(renderMessage); countEl.textContent = count ?? data.length; }
-      msgEl.removeAttribute("aria-busy"); autoscroll();
+      msgEl.removeAttribute("aria-busy");
+      autoscroll();
+
       touchPresence(me.id, me.username);
       setComposerEnabled(true);
     }
@@ -456,38 +531,75 @@
         .subscribe(status=>{
           const sub = status==="SUBSCRIBED";
           rtDot.classList.toggle("ok", sub);
-          if(sub){ statusText.textContent = `Live in #${currentRoom}`; touchPresence(me.id, me.username); }
+          if(sub){
+            statusText.textContent = `Live in #${currentRoom}`;
+            touchPresence(me.id, me.username);
+          }
         });
     }
 
     function status(text, ok=true){ statusText.textContent=text; rtDot.classList.toggle("ok", !!ok); }
 
-    // ===== MEDIA HELPERS =====
+    // ====== MEDIA HELPERS ======
     function clearSelection(){
-      fileInput.value = ""; mediaPreview.hidden = true; fileBtn.classList.remove("active");
-      thumb.removeAttribute("src"); thumb.setAttribute("alt", ""); fileNameEl.textContent = "No file";
+      fileInput.value = "";
+      mediaPreview.hidden = true;
+      fileBtn.classList.remove("active");
+      thumb.removeAttribute("src");
+      thumb.setAttribute("alt", "");
+      fileNameEl.textContent = "No file";
     }
+
     function pickFile(file){
       if(!file) return clearSelection();
       if(file.size > MAX_BYTES){ status("File too large (max 25 MB)", false); clearSelection(); return; }
-      if(!ACCEPTED.some(p=> file.type.startsWith(p))){ status("Only images and videos allowed", false); clearSelection(); return; }
+      if(!ACCEPTED.some(p=> file.type.startsWith(p))){
+        status("Only images and videos allowed", false); clearSelection(); return;
+      }
       fileBtn.classList.add("active");
       fileNameEl.textContent = `${file.name} · ${(file.size/1024/1024).toFixed(1)}MB`;
       mediaPreview.hidden = false;
-      if(file.type.startsWith("image/")){ const url = URL.createObjectURL(file); thumb.src = url; thumb.alt="preview"; thumb.style.display="block"; }
-      else { thumb.removeAttribute("src"); thumb.alt="video"; thumb.style.display="none"; }
+
+      if(file.type.startsWith("image/")){
+        const url = URL.createObjectURL(file);
+        thumb.src = url;
+        thumb.alt = "preview";
+        thumb.style.display = "block";
+      }else{
+        thumb.removeAttribute("src");
+        thumb.alt = "video";
+        thumb.style.display = "none";
+      }
     }
+
     fileInput.addEventListener("change", (e)=> pickFile(e.target.files[0]));
+
+    // Paste image from clipboard (desktop)
     document.addEventListener("paste", (e)=>{
       if(!joined) return;
       const item = [...(e.clipboardData?.items || [])].find(x=> x.kind==="file");
-      if(item){ const file = item.getAsFile(); pickFile(file); const dt = new DataTransfer(); dt.items.add(file); fileInput.files = dt.files; }
+      if(item){
+        const file = item.getAsFile();
+        pickFile(file);
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+      }
     });
+
+    // Drag & drop onto messages
     ["dragenter","dragover"].forEach(ev=>{
-      msgEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); if(!joined) return; msgEl.classList.add("dragover"); });
+      msgEl.addEventListener(ev, e=>{
+        e.preventDefault(); e.stopPropagation();
+        if(!joined) return;
+        msgEl.classList.add("dragover");
+      });
     });
     ["dragleave","drop"].forEach(ev=>{
-      msgEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); msgEl.classList.remove("dragover"); });
+      msgEl.addEventListener(ev, e=>{
+        e.preventDefault(); e.stopPropagation();
+        msgEl.classList.remove("dragover");
+      });
     });
     msgEl.addEventListener("drop", e=>{
       if(!joined) return;
@@ -495,49 +607,41 @@
       if(file){ pickFile(file); const dt = new DataTransfer(); dt.items.add(file); fileInput.files = dt.files; }
     });
 
-    // ===== SUPER-LOUD upload (try/catch + full JSON logs) =====
+    // ✅ DEBUGGABLE upload: prints full error to console and sets contentType/cacheControl
     async function uploadFile(file) {
       const ext = (file.name.split(".").pop() || "").toLowerCase();
       const safeExt = ext || (file.type.startsWith("image/") ? "png" : "mp4");
       const path = `${me.id}/${Date.now()}.${safeExt}`;
 
-      console.log("[upload] starting → bucket=chat-media path=", path, " type=", file.type, " size=", file.size);
+      const { error } = await supabase.storage
+        .from("chat-media")
+        .upload(path, file, {
+          upsert: true,
+          cacheControl: "3600",
+          contentType: file.type || "application/octet-stream"
+        });
 
-      try {
-        const { data, error } = await supabase.storage
-          .from("chat-media")
-          .upload(path, file, {
-            upsert: true,
-            cacheControl: "3600",
-            contentType: file.type || "application/octet-stream"
-          });
-
-        if (error) {
-          try { console.error("[upload] error object:", error); console.error("[upload] error JSON:", JSON.stringify(error, null, 2)); } catch {}
-          status("Upload failed: " + (error.message || error.name || "unknown error"), false);
-          return null;
-        }
-
-        console.log("[upload] success:", data);
-        const pub = supabase.storage.from("chat-media").getPublicUrl(path);
-        console.log("[upload] public URL:", pub);
-        const type = file.type.startsWith("video") ? "video" : "image";
-        return { url: pub.data.publicUrl, type };
-      } catch (e) {
-        console.error("[upload] exception:", e);
-        try { console.error("[upload] exception JSON:", JSON.stringify(e, null, 2)); } catch {}
-        status("Upload failed: exception — " + (e.message || e.name || "unknown"), false);
+      if (error) {
+        console.error("Storage upload error:", error);   //  ← see exact reason in DevTools
+        status("Upload failed: " + (error.message || "unknown error"), false);
         return null;
       }
+
+      const { data } = supabase.storage.from("chat-media").getPublicUrl(path);
+      const type = file.type.startsWith("video") ? "video" : "image";
+      return { url: data.publicUrl, type };
     }
 
-    // ===== Send message =====
+    // ====== SAFER SINGLE-SEND (retries if media columns missing) ======
     async function send(){
       if(!joined || !currentRoom){ status("Join a room first", false); return; }
       if(sending) return;
 
       const now=Date.now();
-      if(now-rateLimit.last<rateLimit.ms){ status(`Whoa tiger… ${Math.ceil((rateLimit.ms-(now-rateLimit.last))/1000)}s`, false); return; }
+      if(now-rateLimit.last<rateLimit.ms){
+        status(`Whoa tiger… ${Math.ceil((rateLimit.ms-(now-rateLimit.last))/1000)}s`, false);
+        return;
+      }
 
       let content = inputEl.value.trim();
       let media = null;
@@ -552,28 +656,45 @@
       }
 
       if(!content && !media) return;
-      sending = true; sendBtn.disabled = true;
-      rateLimit.last=now; inputEl.value=""; clearSelection();
+
+      sending = true;
+      sendBtn.disabled = true;
+
+      rateLimit.last=now;
+      inputEl.value="";
+      clearSelection();
 
       const base = { content, room:currentRoom, user_id:me.id, username:me.username };
-      const withMedia = Object.assign({}, base, { media_url: media?.url ?? null, media_type: media?.type ?? null });
+      const withMedia = Object.assign({}, base, {
+        media_url:  media?.url ?? null,
+        media_type: media?.type ?? null
+      });
 
+      // Try insert WITH media fields first
       let { error } = await supabase.from("messages").insert(withMedia);
+
       if(error){
         const msg = String(error.message||"").toLowerCase();
         const undefinedColumn = msg.includes("column") && msg.includes("does not exist");
         if(undefinedColumn){
           const retry = await supabase.from("messages").insert(base);
-          if(retry.error){ status("Send failed: "+retry.error.message, false); inputEl.value = content; }
-          else{ status("Sent (add media columns to enable uploads)", true); }
+          if(retry.error){
+            status("Send failed: "+retry.error.message, false);
+            inputEl.value = content;
+          }else{
+            status("Sent (add media columns to enable uploads)", true);
+          }
         }else{
-          status("Send failed: "+error.message, false); inputEl.value = content;
+          status("Send failed: "+error.message, false);
+          inputEl.value = content;
         }
       }else{
-        status("Sent ✓", true); setTimeout(autoscroll, 80);
+        status("Sent ✓", true);
+        setTimeout(autoscroll, 80);
       }
 
-      sending = false; sendBtn.disabled = !joined;
+      sending = false;
+      sendBtn.disabled = !joined;
     }
 
     sendBtn.addEventListener("click", send);
@@ -584,19 +705,30 @@
       }
     });
 
-    // Join / Leave
+    // Join: set presence + switch room
     joinBtn.addEventListener("click", ()=>{
       const choice=customRoom.value.trim()||roomSelect.value;
-      touchPresence(me.id, me.username); joinRoom(choice); customRoom.value="";
+      touchPresence(me.id, me.username);
+      joinRoom(choice);
+      customRoom.value="";
     });
+
+    // Leave: remove presence + lock composer
     leaveBtn.addEventListener("click", async ()=>{
-      if(channel){ try{ await supabase.removeChannel(channel); }catch{} } channel = null;
-      presence.delete(me.id); drawPresence(); setComposerEnabled(false);
-      currentRoom=null; roomNameEl.textContent="—"; clearMessages(); msgEl.removeAttribute("aria-busy");
+      if(channel){ try{ await supabase.removeChannel(channel); }catch{} }
+      channel = null;
+      presence.delete(me.id);
+      drawPresence();
+      setComposerEnabled(false);
+      currentRoom=null;
+      roomNameEl.textContent="—";
+      clearMessages();
+      msgEl.removeAttribute("aria-busy");
     });
 
     logoutBtn.addEventListener("click", async ()=>{ await supabase.auth.signOut(); window.location.href="login.html"; });
 
+    // Optional: delete (owned) message
     async function deleteMessage(id){
       if(!id) return;
       const { error } = await supabase.from("messages").delete().eq("id", id).eq("user_id", me.id);
@@ -604,40 +736,17 @@
     }
 
     await requireSession();
-    setComposerEnabled(false);
+    setComposerEnabled(false); // start locked
+
+    // Load meCard (minimal)
     document.getElementById("meCard").textContent = (me.username||"me") + " · " + (me.id||"").slice(0,6);
 
+    // message count refresher (only when joined)
     setInterval(async ()=>{
       if(!joined || !currentRoom) return;
       const { count } = await supabase.from("messages").select("*",{ count:"exact", head:true }).eq("room", currentRoom);
       if(typeof count==="number") countEl.textContent=count.toString();
     }, 20000);
-  </script>
-
-  <!-- 📜 Mobile console overlay (shows logs/errors on the phone) -->
-  <script>
-  (function () {
-    const box = document.createElement('pre');
-    box.id = 'mobile-log';
-    box.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;max-height:40vh;overflow:auto;margin:0;padding:8px 10px;border:1px solid #2a2;border-radius:10px;background:rgba(0,0,0,.85);color:#9f9;font:12px/1.4 ui-monospace,monospace;z-index:99999';
-    box.textContent = '📜 Mobile console (tap to hide)\\n';
-    box.addEventListener('click',()=> box.remove());
-    document.addEventListener('keydown',e=>{ if(e.key==='Escape') box.remove(); });
-    document.body.appendChild(box);
-
-    const write = (...args) => {
-      const line = args.map(a => { try { return typeof a === 'string' ? a : JSON.stringify(a); } catch { return String(a); } }).join(' ');
-      box.textContent += line + '\\n'; box.scrollTop = box.scrollHeight;
-    };
-
-    const oErr = console.error, oLog = console.log, oWarn = console.warn;
-    console.error = (...a) => { write('❌', ...a); oErr.apply(console, a); };
-    console.warn  = (...a) => { write('⚠️', ...a); oWarn.apply(console, a); };
-    console.log   = (...a) => { write('ℹ️', ...a); oLog.apply(console, a); };
-
-    window.addEventListener('error', e => write('💥', e.message, e.filename+':'+e.lineno));
-    window.addEventListener('unhandledrejection', e => write('🧨', e.reason?.message || e.reason));
-  })();
   </script>
 </body>
 </html>
