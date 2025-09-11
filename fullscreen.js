@@ -1,95 +1,116 @@
-// fullscreen.js (robust auto-reenter)
-(function initFS(){
-  const ready = (fn) => {
+// fullscreen.js — robust auto-reenter across pages
+(function(){
+  const onReady = (fn) => {
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", fn, { once: true });
-    } else {
-      fn();
-    }
+      document.addEventListener("DOMContentLoaded", fn, { once:true });
+    } else fn();
   };
 
-  ready(() => {
-    const fsBtn = document.getElementById("fsAppBtn"); // optional but recommended
+  onReady(() => {
+    const fsBtn = document.getElementById("fsAppBtn"); // optional but nice
+    const WANT_KEY = "rs_fs";
 
-    async function enterTrueFullscreen(){
+    const isActive = () =>
+      !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+
+    const setBtn = (on) => { if (fsBtn) fsBtn.textContent = on ? "✕" : "⛶"; };
+
+    function requestFSNow(){
       const el  = document.documentElement;
       const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-      if (req) return req.call(el);
-      throw new Error("Fullscreen API not available");
-    }
-    async function exitTrueFullscreen(){
-      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-      const active = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
-      if (active && exit) return exit.call(document);
+      if (!req) return false;
+      try {
+        const ret = req.call(el);                 // may be undefined (Safari)
+        if (ret && typeof ret.then === "function") {
+          ret.catch(()=>{});                      // avoid unhandled rejections
+        }
+        return true;
+      } catch { return false; }
     }
 
-    function setBtn(on){
-      if (!fsBtn) return;
-      fsBtn.textContent = on ? "✕" : "⛶";
+    function exitFSNow(){
+      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+      try { if (exit) exit.call(document); } catch {}
+    }
+
+    // Try to enter OS fullscreen; optionally re-check after a tick
+    function tryEnterFullscreen({ verify = false } = {}){
+      const invoked = requestFSNow();
+      if (!verify) return invoked;
+      // After a short tick, did it take?
+      setTimeout(() => {
+        if (!isActive()) armAutoReenter();        // fall back to gesture capture
+      }, 120);
+      return invoked;
+    }
+
+    // Capture-phase "first gesture anywhere" → enter fullscreen, then cleanup
+    function armAutoReenter(){
+      // Avoid re-arming multiple times
+      if (armAutoReenter._armed) return;
+      armAutoReenter._armed = true;
+
+      const opts = { capture:true, once:false };  // non-passive to be extra safe
+      const handler = () => {
+        // call synchronously inside the gesture
+        requestFSNow();
+        // give the browser a moment to switch
+        setTimeout(() => {
+          if (isActive()) cleanup();
+        }, 0);
+      };
+      function cleanup(){
+        ["pointerdown","touchend","click","keydown"].forEach(type =>
+          window.removeEventListener(type, handler, opts)
+        );
+        armAutoReenter._armed = false;
+      }
+      ["pointerdown","touchend","click","keydown"].forEach(type =>
+        window.addEventListener(type, handler, opts)
+      );
     }
 
     async function toggleFullscreen(){
-      const on = !document.body.classList.contains("fs");
-      if (on){
-        document.body.classList.add("fs");            // CSS fallback immediately
-        localStorage.setItem("rs_fs","1");            // remember pref
+      const goingOn = !document.body.classList.contains("fs");
+      if (goingOn){
+        document.body.classList.add("fs");
+        localStorage.setItem(WANT_KEY, "1");
         setBtn(true);
-        try { await enterTrueFullscreen(); } catch {/* ok, will auto-reenter on gesture */}
+        // Try immediately; if blocked, verification arms auto-gesture
+        tryEnterFullscreen({ verify:true });
         window.scrollTo(0,0);
       } else {
         document.body.classList.remove("fs");
-        localStorage.removeItem("rs_fs");
+        localStorage.removeItem(WANT_KEY);
         setBtn(false);
-        try { await exitTrueFullscreen(); } catch {}
+        exitFSNow();
       }
     }
 
-    // ——— Auto-reenter on first *any* gesture (capture so nothing can swallow it)
-    function primeAutoReenter(){
-      let done = false;
-      const tryEnter = () => {
-        if (done) return;
-        done = true;
-        remove();
-        enterTrueFullscreen().catch(()=>{/* ignore; user can tap FAB */});
-      };
-      const opts = { capture:true, once:true, passive:true };
-      function remove(){
-        window.removeEventListener("pointerdown", tryEnter, opts);
-        window.removeEventListener("click",       tryEnter, opts);
-        window.removeEventListener("touchend",    tryEnter, opts);
-        window.removeEventListener("keydown",     tryEnter, opts);
-      }
-      window.addEventListener("pointerdown", tryEnter, opts);
-      window.addEventListener("click",       tryEnter, opts);
-      window.addEventListener("touchend",    tryEnter, opts);
-      window.addEventListener("keydown",     tryEnter, opts);
-    }
-
-    // Wire FAB (if present)
-    if (fsBtn) {
+    if (fsBtn){
       fsBtn.type = "button";
       fsBtn.addEventListener("click", toggleFullscreen);
     }
 
     // Restore preference on load
-    const wantFS = localStorage.getItem("rs_fs") === "1";
-    if (wantFS){
-      document.body.classList.add("fs");   // instant full-bleed
+    const want = localStorage.getItem(WANT_KEY) === "1";
+    if (want){
+      document.body.classList.add("fs"); // instant full-bleed
       setBtn(true);
-      // Try immediately; if blocked by browser, re-enter on first gesture
-      enterTrueFullscreen().catch(primeAutoReenter);
+      // One immediate attempt; if it doesn't "take", we arm gesture capture
+      tryEnterFullscreen({ verify:true });
     } else {
       setBtn(false);
     }
 
-    // Keep UI in sync if user hits ESC/back to leave OS fullscreen
+    // Keep UI in sync if user ESC/back exits OS fullscreen
     document.addEventListener("fullscreenchange", () => {
-      const active = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
-      if (!active){
-        if (localStorage.getItem("rs_fs") === "1"){
-          // user prefers FS: keep CSS full-bleed; button stays "✕"
+      if (!isActive()){
+        if (localStorage.getItem(WANT_KEY) === "1"){
+          // They still want FS: keep CSS full-bleed; button stays ✕
           setBtn(true);
+          // If OS FS dropped (e.g., navigation, ESC), re-arm gesture capture
+          armAutoReenter();
         } else {
           document.body.classList.remove("fs");
           setBtn(false);
