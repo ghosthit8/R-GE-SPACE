@@ -215,10 +215,11 @@
         <option value="Berlin">Berlin</option>
         <option value="Tokyo">Tokyo</option>
       </select>
-      <input id="customRoom" placeholder="or type a room… (e.g., dallas-north)" />
+      <button id="cityTab" class="btn-ghost" title="Show city chats">City chats</button>
+      <button id="userTab" class="btn-ghost" title="Show user chats">User chats</button>
+      <button id="createRoomBtn" class="btn" title="Create a new room">Create room</button>
       <button id="joinBtn" title="Join room">Join</button>
       <button id="leaveBtn" class="btn-ghost" title="Leave room">Leave</button>
-      <button id="logoutBtn" title="Sign out">Sign out</button>
       <!-- NEW: fullscreen toggle -->
       <button id="fsBtn" class="btn-ghost" title="Make chat full-screen">Full screen</button>
     </div>
@@ -322,7 +323,8 @@
   </div>
 
   <!-- Layout script: measure header, set spacer height, optional fade-on-scroll -->
-  <script>
+  <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
+<script>
     (function(){
       const FADE_ON_SCROLL = true;
       const header = document.getElementById('site-header');
@@ -349,8 +351,7 @@
   </script>
 
   <!-- App logic -->
-  <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
-<script type="module">
+  <script type="module">
     const V = String(Date.now());
     const { createClient } = await import(`https://esm.sh/@supabase/supabase-js@2?v=${V}`);
 
@@ -366,51 +367,8 @@
     const roomNameEl = document.getElementById("roomName");
     const rtDot = document.getElementById("realtimeDot");
     const statusText = document.getElementById("statusText");
-    const roomSelect = document.getElementById("roomSelect");
-    const customRoom = document.getElementById("customRoom");
-    const joinBtn = document.getElementById("joinBtn");
-    const leaveBtn = document.getElementById("leaveBtn");
-    const logoutBtn = document.getElementById("logoutBtn");
-    const fsBtn = document.getElementById("fsBtn");
-    const fsExit = document.getElementById("fsExit");
-
-    // NEW: media picker
-    const fileInput = document.getElementById("fileInput");
-    const fileBtn = document.getElementById("fileBtn");
-    const mediaPreview = document.getElementById("mediaPreview");
-    const thumb = document.getElementById("thumb");
-    const fileNameEl = document.getElementById("fileName");
-
-    let session=null;
-    let me={ id:null, username:null };
-    let currentRoom=null;
-    let channel=null;
-    let rateLimit={ last:0, ms:650 };
-    let presence=new Map(); // uid -> { username, ts }
-    let joined=false;       // gate for sending
-    let sending=false;      // prevents fast double taps
-
-    const MAX_BYTES = 25 * 1024 * 1024; // 25 MB cap
-    const ACCEPTED = ["image/", "video/"];
-
-    const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
-    const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
-    function fmtTime(ts){ const d=new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
-    function autoscroll(){ msgEl.scrollTop = msgEl.scrollHeight + 80; }
-    function el(tag,attrs={},...kids){
-      const e=document.createElement(tag);
-      for(const [k,v] of Object.entries(attrs)){
-        if(k==="class") e.className=v;
-        else if(k==="style") e.style.cssText=v;
-        else if(k.startsWith("on") && typeof v==="function") e.addEventListener(k.slice(2), v);
-        else e.setAttribute(k,v);
-      }
-      kids.forEach(k=> typeof k==="string" ? e.appendChild(document.createTextNode(k)) : (k && e.appendChild(k)));
-      return e;
-    }
-    const profileHref = (uid)=> `profile.html?uid=${encodeURIComponent(uid)}`;
-
-    
+    const roomSelect = document.getElementById("roomSelect");    const joinBtn = document.getElementById("joinBtn");
+    const leaveBtn = document.getElement
     // ===== Rooms tabs + Create Room integration =====
     const cityTab = document.getElementById("cityTab");
     const userTab = document.getElementById("userTab");
@@ -531,10 +489,49 @@
       document.getElementById("jg-cancel").onclick = ()=>{ try{ joinGate.close(); }catch{} };
     }
 
-    // Ensure Join button invokes the gate-aware handler
+    // Wire Join to gate-aware handler
     joinBtn.onclick = null;
     joinBtn.addEventListener("click", ()=> handleJoinClick(null));
-// ===== Fullscreen helpers =====
+ById("leaveBtn");    const fsBtn = document.getElementById("fsBtn");
+    const fsExit = document.getElementById("fsExit");
+
+    // NEW: media picker
+    const fileInput = document.getElementById("fileInput");
+    const fileBtn = document.getElementById("fileBtn");
+    const mediaPreview = document.getElementById("mediaPreview");
+    const thumb = document.getElementById("thumb");
+    const fileNameEl = document.getElementById("fileName");
+
+    let session=null;
+    let me={ id:null, username:null };
+    let currentRoom=null;
+    let channel=null;
+    let rateLimit={ last:0, ms:650 };
+    let presence=new Map(); // uid -> { username, ts }
+    let joined=false;       // gate for sending
+    let sending=false;      // prevents fast double taps
+
+    const MAX_BYTES = 25 * 1024 * 1024; // 25 MB cap
+    const ACCEPTED = ["image/", "video/"];
+
+    const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+    const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
+    function fmtTime(ts){ const d=new Date(ts); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+    function autoscroll(){ msgEl.scrollTop = msgEl.scrollHeight + 80; }
+    function el(tag,attrs={},...kids){
+      const e=document.createElement(tag);
+      for(const [k,v] of Object.entries(attrs)){
+        if(k==="class") e.className=v;
+        else if(k==="style") e.style.cssText=v;
+        else if(k.startsWith("on") && typeof v==="function") e.addEventListener(k.slice(2), v);
+        else e.setAttribute(k,v);
+      }
+      kids.forEach(k=> typeof k==="string" ? e.appendChild(document.createTextNode(k)) : (k && e.appendChild(k)));
+      return e;
+    }
+    const profileHref = (uid)=> `profile.html?uid=${encodeURIComponent(uid)}`;
+
+    // ===== Fullscreen helpers =====
     async function enterTrueFullscreen(){
       const el = document.documentElement;
       if (el.requestFullscreen) await el.requestFullscreen().catch(()=>{});
@@ -831,7 +828,8 @@
       inputEl.value="";
       clearSelection();
 
-      const base = { content, room:currentRoom, user_id:me.id, username:me.username };
+      const safeName = me.username || (session?.user?.user_metadata?.username) || (session?.user?.email ? session.user.email.split("@")[0] : ("user-"+(me.id||"").slice(0,6)));
+      const base = { content, room:currentRoom, user_id:me.id, username: safeName };
       const withMedia = Object.assign({}, base, {
         media_url:  media?.url ?? null,
         media_type: media?.type ?? null
@@ -872,13 +870,8 @@
       }
     });
 
-    // Join: set presence + switch room
-    joinBtn.addEventListener("click", ()=>{
-      const choice=customRoom.value.trim()||roomSelect.value;
-      touchPresence(me.id, me.username);
-      joinRoom(choice);
-      customRoom.value="";
-    });
+    // Join: set presence + switch room (replaced by handleJoinClick)
+    joinBtn.addEventListener("click", ()=> handleJoinClick(null));
 
     // Leave: remove presence + lock composer
     leaveBtn.addEventListener("click", async ()=>{
@@ -903,6 +896,7 @@
     }
 
     await requireSession();
+    await loadRooms();
     setComposerEnabled(false); // start locked
 
     // Load meCard (minimal)
