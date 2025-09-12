@@ -382,7 +382,7 @@
     const joinGateForm = document.getElementById("joinGateForm");
     const jgRoomLabel = document.getElementById("jg-room");
     const jgError = document.getElementById("jg-error");
-    const leaveBtn = document.getElementById("leaveBtn");
+    const leaveBtn = document.getElement
     const logoutBtn = document.getElementById("logoutBtn");
     const fsBtn = document.getElementById("fsBtn");
     const fsExit = document.getElementById("fsExit");
@@ -645,7 +645,7 @@
       const mine = m.user_id === me.id;
       const row = el("div", { class:"msg" + (mine ? " me" : "") });
 
-      const label = m.username || "anon";
+      const label = (m.username && m.username.trim()) || (m.user_id === me.id ? (me.username || "anon") : "anon");
       const nameNode = m.user_id
         ? el("a", { class:"who", href: profileHref(m.user_id), title:`View ${label}'s profile` }, label)
         : el("div", { class:"who" }, label);
@@ -828,7 +828,19 @@
     }
 
     // ====== SAFER SINGLE-SEND (retries if media columns missing) ======
+    
+    async function ensureUsername(){
+      if(me.username) return me.username;
+      try{
+        const u = (await supabase.auth.getUser()).data.user;
+        if(u?.user_metadata?.username) { me.username = u.user_metadata.username; return me.username; }
+        const { data:prof } = await supabase.from("profiles").select("username").eq("id", me.id).maybeSingle();
+        if(prof?.username){ me.username = prof.username; return me.username; }
+      }catch(e){}
+      return me.username;
+    }
     async function send(){
+      await ensureUsername();
       if(!joined || !currentRoom){ status("Join a room first", false); return; }
       if(sending) return;
 
@@ -859,7 +871,12 @@
       inputEl.value="";
       clearSelection();
 
-      const safeName = me.username;
+      const safeName = (me.username && me.username.trim())
+        || (session?.user?.user_metadata?.username)
+        || (session?.user?.email ? session.user.email.split("@")[0] : null)
+        || (me.id ? ("user-" + me.id.slice(0,6))
+            : ("user-" + ((window.crypto?.getRandomValues?.(new Uint32Array(1))[0] || Math.floor(Math.random()*0xffffff)).toString(16).padStart(6,"0").slice(0,6))));
+
       const base = { content, room:currentRoom, user_id:me.id, username: safeName };
       const withMedia = Object.assign({}, base, {
         media_url:  media?.url ?? null,
