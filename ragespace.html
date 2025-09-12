@@ -483,13 +483,6 @@ const joinBtn = document.getElementById("joinBtn");
 
 
     // ===== Create Room modal wiring =====
-    const createModal = document.getElementById("createRoomModal");
-    const createForm = document.getElementById("createRoomForm");
-    const crPrivate = document.getElementById("cr-private");
-    const crPassWrap = document.getElementById("cr-pass-wrap");
-    const crError = document.getElementById("cr-error");
-    const createBtn = document.getElementById("createRoomBtn");
-
     function openCreate(){ try{ createModal.showModal(); }catch(e){ createModal.setAttribute("open",""); } }
     function closeCreate(){ try{ createModal.close(); }catch(e){ createModal.removeAttribute("open"); } }
 
