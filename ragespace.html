@@ -517,6 +517,20 @@
 
       closeCreate();
       await loadRooms();
+    try {
+      const saved = localStorage.getItem("lastRoom");
+      if (saved) {
+        // Choose tab based on where the room lives
+        const inCity = (typeof CITY_LIST !== "undefined") && CITY_LIST.includes(saved);
+        currentMode = inCity ? "city" : "user";
+        if (typeof updateTabUI === "function") updateTabUI();
+        if (typeof renderRoomDropdown === "function") renderRoomDropdown();
+        const rs = document.getElementById("roomSelect");
+        if (rs) rs.value = saved;
+        await joinRoom(saved);
+      }
+    } catch {}
+
       // switch to user tab so it shows up immediately
       currentMode = "user"; updateTabUI(); renderRoomDropdown();
       roomSelect.value = newRow.name;
@@ -932,7 +946,6 @@
       roomNameEl.textContent="—";
       clearMessages();
       msgEl.removeAttribute("aria-busy");
-      try{ localStorage.removeItem("lastRoom"); }catch{}
     });
 
     logoutBtn.addEventListener("click", async ()=>{ await supabase.auth.signOut(); window.location.href="login.html"; });
