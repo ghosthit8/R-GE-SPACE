@@ -645,8 +645,10 @@
       const mine = m.user_id === me.id;
       const row = el("div", { class:"msg" + (mine ? " me" : "") });
 
-      const label = m.username || "anon";
-      const nameNode = el("a", { class:"who", href: (m.user_id ? profileHref(m.user_id) : "profile.html"), title:`View ${label}'s profile` }, label);
+      const label = (m.username && m.username.trim()) || (m.user_id === me.id ? (me.username || "anon") : "anon");
+      const nameNode = m.user_id
+        ? el("a", { class:"who", href: profileHref(m.user_id), title:`View ${label}'s profile` }, label)
+        : el("div", { class:"who" }, label);
 
       const time = el("div", { class:"time" }, fmtTime(m.created_at || Date.now()));
       const meta = el("div", { style:"display:flex;flex-direction:column;gap:2px;min-width:94px;" }, nameNode, time);
@@ -680,7 +682,9 @@
         const label = info.username || "anon";
         if(seen.has(uid)) continue;
         seen.add(uid);
-        const pill = el("a", { class:"pill", href: (uid ? profileHref(uid) : "profile.html"), title:`View ${label}'s profile` }, label);
+        const pill = uid
+          ? el("a", { class:"pill", href:profileHref(uid), title:`View ${label}'s profile` }, label)
+          : el("span", { class:"pill" }, label);
         presenceEl.appendChild(pill);
       }
     }
@@ -824,7 +828,19 @@
     }
 
     // ====== SAFER SINGLE-SEND (retries if media columns missing) ======
+    
+    async function ensureUsername(){
+      if(me.username) return me.username;
+      try{
+        const u = (await supabase.auth.getUser()).data.user;
+        if(u?.user_metadata?.username) { me.username = u.user_metadata.username; return me.username; }
+        const { data:prof } = await supabase.from("profiles").select("username").eq("id", me.id).maybeSingle();
+        if(prof?.username){ me.username = prof.username; return me.username; }
+      }catch(e){}
+      return me.username;
+    }
     async function send(){
+      await ensureUsername();
       if(!joined || !currentRoom){ status("Join a room first", false); return; }
       if(sending) return;
 
