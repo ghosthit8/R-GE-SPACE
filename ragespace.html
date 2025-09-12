@@ -859,7 +859,11 @@
       inputEl.value="";
       clearSelection();
 
-      const safeName = me.username || (session?.user?.user_metadata?.username) || (session?.user?.email ? session.user.email.split("@")[0] : ("user-"+(me.id||"anon").slice(0,6)));
+      const safeName = me.username
+        || (session?.user?.user_metadata?.username)
+        || (session?.user?.email ? session.user.email.split("@")[0]
+            : ("user-" + (session?.user?.id || "000000").slice(0,6)));
+
       const base = { content, room:currentRoom, user_id:me.id, username: safeName };
       const withMedia = Object.assign({}, base, {
         media_url:  media?.url ?? null,
