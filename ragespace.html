@@ -215,7 +215,7 @@
         <option value="Berlin">Berlin</option>
         <option value="Tokyo">Tokyo</option>
       </select>
-            <button id="cityTab" class="btn-ghost" title="Show city chats">City chats</button>
+      <button id="cityTab" class="btn-ghost" title="Show city chats">City chats</button>
       <button id="userTab" class="btn-ghost" title="Show user chats">User chats</button>
       <button id="createRoomBtn" class="btn" title="Create a new room">Create room</button>
       <button id="joinBtn" title="Join room">Join</button>
@@ -368,6 +368,10 @@
     const rtDot = document.getElementById("realtimeDot");
     const statusText = document.getElementById("statusText");
     const roomSelect = document.getElementById("roomSelect");
+    const customRoom = document.getElementById("customRoom");
+    const joinBtn = document.getElementById("joinBtn");
+    const cityTab = document.getElementById("cityTab");
+    const userTab = document.getElementById("userTab");
     const createBtn = document.getElementById("createRoomBtn");
     const createModal = document.getElementById("createRoomModal");
     const createForm = document.getElementById("createRoomForm");
@@ -378,10 +382,9 @@
     const joinGateForm = document.getElementById("joinGateForm");
     const jgRoomLabel = document.getElementById("jg-room");
     const jgError = document.getElementById("jg-error");
-    const cityTab = document.getElementById("cityTab");
-    const userTab = document.getElementById("userTab");
-const joinBtn = document.getElementById("joinBtn");
-    const leaveBtn = document.getElementById("leaveBtn");    const fsBtn = document.getElementById("fsBtn");
+    const leaveBtn = document.getElementById("leaveBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const fsBtn = document.getElementById("fsBtn");
     const fsExit = document.getElementById("fsExit");
 
     // NEW: media picker
@@ -421,12 +424,21 @@ const joinBtn = document.getElementById("joinBtn");
     const profileHref = (uid)=> `profile.html?uid=${encodeURIComponent(uid)}`;
 
     
-    
     // ===== Rooms table integration (with tabs) =====
     const CITY_LIST = ["Dallas","Austin","Houston","San Antonio","El Paso","NYC","LA","Chicago","Seattle","Portland","Denver","Miami","Atlanta","Phoenix","Philly","Boston","London","Berlin","Tokyo"];
     let currentRoomsCache = new Map(); // nameLower -> row
     let userRooms = [];  // from DB
     let currentMode = "city"; // "city" | "user"
+
+    function updateTabUI(){
+      if(currentMode === "city"){
+        cityTab.classList.add("tab-active");
+        userTab.classList.remove("tab-active");
+      }else{
+        userTab.classList.add("tab-active");
+        cityTab.classList.remove("tab-active");
+      }
+    }
 
     function renderRoomDropdown() {
       roomSelect.innerHTML = "";
@@ -468,22 +480,11 @@ const joinBtn = document.getElementById("joinBtn");
       updateTabUI();
     }
 
-    function updateTabUI(){
-      if(currentMode === "city"){
-        cityTab.classList.add("tab-active");
-        userTab.classList.remove("tab-active");
-      }else{
-        userTab.classList.add("tab-active");
-        cityTab.classList.remove("tab-active");
-      }
-    }
-
     cityTab?.addEventListener("click", ()=>{ currentMode="city"; renderRoomDropdown(); updateTabUI(); });
     userTab?.addEventListener("click", ()=>{ currentMode="user"; renderRoomDropdown(); updateTabUI(); });
 
-
     // ===== Create Room modal wiring =====
-function openCreate(){ try{ createModal.showModal(); }catch(e){ createModal.setAttribute("open",""); } }
+    function openCreate(){ try{ createModal.showModal(); }catch(e){ createModal.setAttribute("open",""); } }
     function closeCreate(){ try{ createModal.close(); }catch(e){ createModal.removeAttribute("open"); } }
 
     crPrivate?.addEventListener("change", ()=>{ crPassWrap.style.display = crPrivate.checked ? "" : "none"; });
@@ -521,6 +522,7 @@ function openCreate(){ try{ createModal.showModal(); }catch(e){ createModal.setA
       roomSelect.value = newRow.name;
     });
 
+    // ===== Join with private gate =====
     async function verifyPasswordById(id, pass){
       const { data, error } = await supabase.from("rooms").select("password_hash").eq("id", id).single();
       if(error || !data?.password_hash) return false;
@@ -530,33 +532,25 @@ function openCreate(){ try{ createModal.showModal(); }catch(e){ createModal.setA
     async function handleJoinClick(knownPass){
       const selected = (roomSelect.value||"").trim();
       if(!selected){ alert("Pick a room first."); return; }
-
       if(currentMode === "city"){
-        // City chats are public
         return joinRoom(selected);
       }
-
       let meta = currentRoomsCache.get(selected.toLowerCase());
       if(!meta){
         const { data:row } = await supabase.from("rooms").select("id,name,is_private").ilike("name", selected).maybeSingle();
         if(row){ currentRoomsCache.set(row.name.toLowerCase(), row); meta=row; }
       }
-
       if(!meta || !meta.is_private){
         return joinRoom(selected);
       }
-
-      // Private room flow
       if(knownPass){
         const ok = await verifyPasswordById(meta.id, knownPass);
         if(ok) return joinRoom(selected);
       }
-
       jgRoomLabel.textContent = selected;
       jgError.style.display="none";
       document.getElementById("jg-pass").value="";
       joinGate.showModal();
-
       joinGateForm.onsubmit = async (ev)=>{
         ev.preventDefault();
         const pass = document.getElementById("jg-pass").value;
@@ -567,8 +561,8 @@ function openCreate(){ try{ createModal.showModal(); }catch(e){ createModal.setA
       };
       document.getElementById("jg-cancel").onclick = ()=>{ try{ joinGate.close(); }catch{} };
     }
-    
-// ===== Fullscreen helpers =====
+
+    // ===== Fullscreen helpers =====
     async function enterTrueFullscreen(){
       const el = document.documentElement;
       if (el.requestFullscreen) await el.requestFullscreen().catch(()=>{});
@@ -865,7 +859,8 @@ function openCreate(){ try{ createModal.showModal(); }catch(e){ createModal.setA
       inputEl.value="";
       clearSelection();
 
-      const base = { content, room:currentRoom, user_id:me.id, username:me.username };
+      const safeName = me.username || (session?.user?.user_metadata?.username) || (session?.user?.email ? session.user.email.split("@")[0] : ("user-"+(me.id||"anon").slice(0,6)));
+      const base = { content, room:currentRoom, user_id:me.id, username: safeName };
       const withMedia = Object.assign({}, base, {
         media_url:  media?.url ?? null,
         media_type: media?.type ?? null
