@@ -483,7 +483,7 @@ const joinBtn = document.getElementById("joinBtn");
 
 
     // ===== Create Room modal wiring =====
-    function openCreate(){ try{ createModal.showModal(); }catch(e){ createModal.setAttribute("open",""); } }
+function openCreate(){ try{ createModal.showModal(); }catch(e){ createModal.setAttribute("open",""); } }
     function closeCreate(){ try{ createModal.close(); }catch(e){ createModal.removeAttribute("open"); } }
 
     crPrivate?.addEventListener("change", ()=>{ crPassWrap.style.display = crPrivate.checked ? "" : "none"; });
@@ -520,6 +520,54 @@ const joinBtn = document.getElementById("joinBtn");
       currentMode = "user"; updateTabUI(); renderRoomDropdown();
       roomSelect.value = newRow.name;
     });
+
+    async function verifyPasswordById(id, pass){
+      const { data, error } = await supabase.from("rooms").select("password_hash").eq("id", id).single();
+      if(error || !data?.password_hash) return false;
+      try{ return bcrypt.compareSync(pass, data.password_hash); }catch{ return false; }
+    }
+
+    async function handleJoinClick(knownPass){
+      const selected = (roomSelect.value||"").trim();
+      if(!selected){ alert("Pick a room first."); return; }
+
+      if(currentMode === "city"){
+        // City chats are public
+        return joinRoom(selected);
+      }
+
+      let meta = currentRoomsCache.get(selected.toLowerCase());
+      if(!meta){
+        const { data:row } = await supabase.from("rooms").select("id,name,is_private").ilike("name", selected).maybeSingle();
+        if(row){ currentRoomsCache.set(row.name.toLowerCase(), row); meta=row; }
+      }
+
+      if(!meta || !meta.is_private){
+        return joinRoom(selected);
+      }
+
+      // Private room flow
+      if(knownPass){
+        const ok = await verifyPasswordById(meta.id, knownPass);
+        if(ok) return joinRoom(selected);
+      }
+
+      jgRoomLabel.textContent = selected;
+      jgError.style.display="none";
+      document.getElementById("jg-pass").value="";
+      joinGate.showModal();
+
+      joinGateForm.onsubmit = async (ev)=>{
+        ev.preventDefault();
+        const pass = document.getElementById("jg-pass").value;
+        const ok = await verifyPasswordById(meta.id, pass);
+        if(!ok){ jgError.textContent="Incorrect password."; jgError.style.display=""; return; }
+        try{ joinGate.close(); }catch{}
+        joinRoom(selected);
+      };
+      document.getElementById("jg-cancel").onclick = ()=>{ try{ joinGate.close(); }catch{} };
+    }
+    
 // ===== Fullscreen helpers =====
     async function enterTrueFullscreen(){
       const el = document.documentElement;
