@@ -79,6 +79,7 @@
   button:hover{ box-shadow:0 0 0 1px rgba(57,255,20,0.45), 0 0 18px rgba(57,255,20,0.25) inset; }
   button:active{ transform:translateY(1px) scale(.99); }
   .btn-ghost{ background:#020402; border:1px dashed rgba(57,255,20,0.35); }
+  .tab-active{ box-shadow:0 0 0 1px rgba(57,255,20,0.6), 0 0 18px rgba(57,255,20,0.25) inset; }
 
   /* ===== LAYOUT ===== */
   .grid{ display:grid; grid-template-columns:1fr 310px; gap:14px; margin-top:12px; }
@@ -214,10 +215,52 @@
         <option value="Berlin">Berlin</option>
         <option value="Tokyo">Tokyo</option>
       </select>
-      <input id="customRoom" placeholder="or type a room… (e.g., dallas-north)" />
+      <button id="cityTab" class="btn-ghost" title="Show city chats">City chats</button>
+      <button id="userTab" class="btn-ghost" title="Show user chats">User chats</button>
+      <button id="createRoomBtn" class="btn" title="Create a new room">Create room</button>
       <button id="joinBtn" title="Join room">Join</button>
-      <button id="leaveBtn" class="btn-ghost" title="Leave room">Leave</button>
-      <button id="logoutBtn" title="Sign out">Sign out</button>
+      
+      <!-- Create Room modal -->
+      <dialog id="createRoomModal" class="modal">
+        <form id="createRoomForm" method="dialog" class="card">
+          <h3>Create a room</h3>
+          <label class="field">
+            <span>Room name</span>
+            <input id="cr-name" name="name" type="text" minlength="2" maxlength="40" placeholder="e.g., glitch-dallas" required />
+          </label>
+          <label class="field row between">
+            <span>Private room</span>
+            <input id="cr-private" name="is_private" type="checkbox" />
+          </label>
+          <label class="field" id="cr-pass-wrap" style="display:none">
+            <span>Password</span>
+            <input id="cr-pass" name="password" type="password" minlength="4" placeholder="Min 4 chars" />
+          </label>
+          <div class="row gap end">
+            <button type="button" id="cr-cancel" class="btn btn-ghost">Cancel</button>
+            <button type="submit" class="btn">Create</button>
+          </div>
+          <p id="cr-error" class="error" style="display:none"></p>
+        </form>
+      </dialog>
+
+      <!-- Join gate (private rooms) -->
+      <dialog id="joinGate" class="modal">
+        <form id="joinGateForm" method="dialog" class="card">
+          <h3>Enter room password</h3>
+          <p id="jg-room" class="muted" style="margin-top:-6px"></p>
+          <label class="field">
+            <span>Password</span>
+            <input id="jg-pass" type="password" required />
+          </label>
+          <div class="row gap end">
+            <button type="button" id="jg-cancel" class="btn btn-ghost">Cancel</button>
+            <button type="submit" class="btn">Join</button>
+          </div>
+          <p id="jg-error" class="error" style="display:none"></p>
+        </form>
+      </dialog>
+<button id="leaveBtn" class="btn-ghost" title="Leave room">Leave</button>
       <!-- NEW: fullscreen toggle -->
       <button id="fsBtn" class="btn-ghost" title="Make chat full-screen">Full screen</button>
     </div>
@@ -280,7 +323,8 @@
   </div>
 
   <!-- Layout script: measure header, set spacer height, optional fade-on-scroll -->
-  <script>
+  <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
+<script>
     (function(){
       const FADE_ON_SCROLL = true;
       const header = document.getElementById('site-header');
@@ -323,12 +367,20 @@
     const roomNameEl = document.getElementById("roomName");
     const rtDot = document.getElementById("realtimeDot");
     const statusText = document.getElementById("statusText");
-    const roomSelect = document.getElementById("roomSelect");
-    const customRoom = document.getElementById("customRoom");
-    const joinBtn = document.getElementById("joinBtn");
-    const leaveBtn = document.getElementById("leaveBtn");
-    const logoutBtn = document.getElementById("logoutBtn");
-    const fsBtn = document.getElementById("fsBtn");
+    const roomSelect = document.getElementById("roomSelect");    const joinBtn = document.getElementById("joinBtn");
+    const cityTab = document.getElementById("cityTab");
+    const userTab = document.getElementById("userTab");
+    const createBtn = document.getElementById("createRoomBtn");
+    const createModal = document.getElementById("createRoomModal");
+    const createForm = document.getElementById("createRoomForm");
+    const crPrivate = document.getElementById("cr-private");
+    const crPassWrap = document.getElementById("cr-pass-wrap");
+    const crError = document.getElementById("cr-error");
+    const joinGate = document.getElementById("joinGate");
+    const joinGateForm = document.getElementById("joinGateForm");
+    const jgRoomLabel = document.getElementById("jg-room");
+    const jgError = document.getElementById("jg-error");
+    const leaveBtn = document.getElementById("leaveBtn");    const fsBtn = document.getElementById("fsBtn");
     const fsExit = document.getElementById("fsExit");
 
     // NEW: media picker
@@ -366,6 +418,145 @@
       return e;
     }
     const profileHref = (uid)=> `profile.html?uid=${encodeURIComponent(uid)}`;
+
+    
+    // ===== Rooms table integration (with tabs) =====
+    const CITY_LIST = ["Dallas","Austin","Houston","San Antonio","El Paso","NYC","LA","Chicago","Seattle","Portland","Denver","Miami","Atlanta","Phoenix","Philly","Boston","London","Berlin","Tokyo"];
+    let currentRoomsCache = new Map(); // nameLower -> row
+    let userRooms = [];  // from DB
+    let currentMode = "city"; // "city" | "user"
+
+    function updateTabUI(){
+      if(currentMode === "city"){
+        cityTab.classList.add("tab-active");
+        userTab.classList.remove("tab-active");
+      }else{
+        userTab.classList.add("tab-active");
+        cityTab.classList.remove("tab-active");
+      }
+    }
+
+    function renderRoomDropdown() {
+      roomSelect.innerHTML = "";
+      if (currentMode === "city") {
+        CITY_LIST.forEach(n => {
+          const opt = document.createElement("option");
+          opt.value = n;
+          opt.textContent = n;
+          roomSelect.appendChild(opt);
+        });
+      } else {
+        if (!userRooms || userRooms.length === 0) {
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = "No user chats yet";
+          roomSelect.appendChild(opt);
+        } else {
+          userRooms
+            .slice()
+            .sort((a,b) => a.name.localeCompare(b.name))
+            .forEach(r => {
+              const opt = document.createElement("option");
+              opt.value = r.name;
+              opt.textContent = r.is_private ? `${r.name} (private)` : r.name;
+              roomSelect.appendChild(opt);
+            });
+        }
+      }
+    }
+
+    async function loadRooms(){
+      const { data, error } = await supabase.from("rooms").select("id,name,is_private").order("name");
+      if(!error && data){ 
+        userRooms = data; 
+        currentRoomsCache.clear(); 
+        data.forEach(r => currentRoomsCache.set(r.name.toLowerCase(), r));
+      }
+      renderRoomDropdown();
+      updateTabUI();
+    }
+
+    cityTab?.addEventListener("click", ()=>{ currentMode="city"; renderRoomDropdown(); updateTabUI(); });
+    userTab?.addEventListener("click", ()=>{ currentMode="user"; renderRoomDropdown(); updateTabUI(); });
+
+    // ===== Create Room modal wiring =====
+    function openCreate(){ try{ createModal.showModal(); }catch(e){ createModal.setAttribute("open",""); } }
+    function closeCreate(){ try{ createModal.close(); }catch(e){ createModal.removeAttribute("open"); } }
+
+    crPrivate?.addEventListener("change", ()=>{ crPassWrap.style.display = crPrivate.checked ? "" : "none"; });
+    document.getElementById("cr-cancel")?.addEventListener("click", closeCreate);
+    createBtn?.addEventListener("click", openCreate);
+
+    createForm?.addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      crError.style.display="none";
+      const form = new FormData(createForm);
+      const name = (form.get("name")||"").toString().trim();
+      const is_private = !!form.get("is_private");
+      let password_hash = null;
+      if(is_private){
+        const pass = (form.get("password")||"").toString();
+        if(pass.length<4){ crError.textContent="Password must be at least 4 characters."; crError.style.display=""; return; }
+        const salt = bcrypt.genSaltSync(10);
+        password_hash = bcrypt.hashSync(pass, salt);
+      }
+      // uniqueness check
+      const { data:exists, error:checkErr } = await supabase.from("rooms").select("id").ilike("name", name).maybeSingle();
+      if(checkErr){ crError.textContent="Error checking name. Try again."; crError.style.display=""; return; }
+      if(exists){ crError.textContent="That room name is already taken."; crError.style.display=""; return; }
+
+      const u = (await supabase.auth.getUser()).data.user;
+      const { data:newRow, error:insErr } = await supabase.from("rooms")
+        .insert({ name, is_private, password_hash, owner_id: u?u.id:null })
+        .select("id,name,is_private").single();
+      if(insErr){ crError.textContent="Could not create room. Try again."; crError.style.display=""; return; }
+
+      closeCreate();
+      await loadRooms();
+      // switch to user tab so it shows up immediately
+      currentMode = "user"; updateTabUI(); renderRoomDropdown();
+      roomSelect.value = newRow.name;
+    });
+
+    // ===== Join with private gate =====
+    async function verifyPasswordById(id, pass){
+      const { data, error } = await supabase.from("rooms").select("password_hash").eq("id", id).single();
+      if(error || !data?.password_hash) return false;
+      try{ return bcrypt.compareSync(pass, data.password_hash); }catch{ return false; }
+    }
+
+    async function handleJoinClick(knownPass){
+      const selected = (roomSelect.value||"").trim();
+      if(!selected){ alert("Pick a room first."); return; }
+      if(currentMode === "city"){
+        return joinRoom(selected);
+      }
+      let meta = currentRoomsCache.get(selected.toLowerCase());
+      if(!meta){
+        const { data:row } = await supabase.from("rooms").select("id,name,is_private").ilike("name", selected).maybeSingle();
+        if(row){ currentRoomsCache.set(row.name.toLowerCase(), row); meta=row; }
+      }
+      if(!meta || !meta.is_private){
+        return joinRoom(selected);
+      }
+      if(knownPass){
+        const ok = await verifyPasswordById(meta.id, knownPass);
+        if(ok) return joinRoom(selected);
+      }
+      jgRoomLabel.textContent = selected;
+      jgError.style.display="none";
+      document.getElementById("jg-pass").value="";
+      joinGate.showModal();
+      joinGateForm.onsubmit = async (ev)=>{
+        ev.preventDefault();
+        const pass = document.getElementById("jg-pass").value;
+        const ok = await verifyPasswordById(meta.id, pass);
+        if(!ok){ jgError.textContent="Incorrect password."; jgError.style.display=""; return; }
+        try{ joinGate.close(); }catch{}
+        joinRoom(selected);
+      };
+      document.getElementById("jg-cancel").onclick = ()=>{ try{ joinGate.close(); }catch{} };
+    }
 
     // ===== Fullscreen helpers =====
     async function enterTrueFullscreen(){
@@ -420,34 +611,24 @@
 
     async function requireSession(){
       const { data:{ session:s } } = await supabase.auth.getSession();
-      if(!s){ window.location.href="login.html"; return; }
-
-      session = s;
-      me.id = s.user.id;
-
+      if(!s){ window.location.href="login.html"; return null; }
+      session=s;
+      me.id=s.user.id;
       // Prefer username from auth metadata
-      me.username = s.user.user_metadata?.username || null;
-
-      // Fallback to profiles table
+      me.username=s.user.user_metadata?.username ?? null;
+      // Fallback to profiles.username
       if(!me.username){
-        const { data:prof } = await supabase
-          .from("profiles")
-          .select("username")
-          .eq("id", me.id)
-          .maybeSingle();
-        if(prof?.username) me.username = prof.username;
+        const { data:prof, error } = await supabase.from("profiles").select("username").eq("id", me.id).maybeSingle();
+        if(!error && prof?.username) me.username = prof.username;
       }
-
-      // Final fallback: email prefix or user-xxxx
+      // Final fallback: email prefix or user-XXXX
       if(!me.username){
-        me.username = s.user.email
-          ? s.user.email.split("@")[0]
-          : ("user-" + (me.id||"").slice(0,6));
+        me.username = s.user.email ? s.user.email.split("@")[0] : ("user-" + s.user.id.slice(0,6));
       }
-
-      // reflect in UI if element exists
+      console.log("Auth session user:", s.user?.id);
       const meCard = document.getElementById("meCard");
       if(meCard) meCard.textContent = me.username;
+      return s;
     }
 } = await supabase.auth.getSession();
       if(!s){ window.location.href="login.html"; return null; }
@@ -694,8 +875,8 @@
       inputEl.value="";
       clearSelection();
 
-      const safeName = me.username || (session?.user?.user_metadata?.username) || (session?.user?.email ? session.user.email.split("@")[0] : ("user-" + (me.id||"anon").slice(0,6)));
-      const base = { content, room: currentRoom, user_id: me.id, username: safeName };
+      const safeName = me.username || (session?.user?.user_metadata?.username) || (session?.user?.email ? session.user.email.split("@")[0] : ("user-" + (me.id||"").slice(0,6)));
+      const base = { content, room:currentRoom, user_id:me.id, username: safeName };
       const withMedia = Object.assign({}, base, {
         media_url:  media?.url ?? null,
         media_type: media?.type ?? null
@@ -737,12 +918,7 @@
     });
 
     // Join: set presence + switch room
-    joinBtn.addEventListener("click", ()=>{
-      const choice=customRoom.value.trim()||roomSelect.value;
-      touchPresence(me.id, me.username);
-      joinRoom(choice);
-      customRoom.value="";
-    });
+    joinBtn.addEventListener("click", ()=>{ handleJoinClick(null); });
 
     // Leave: remove presence + lock composer
     leaveBtn.addEventListener("click", async ()=>{
@@ -767,6 +943,7 @@
     }
 
     await requireSession();
+    await loadRooms();
     setComposerEnabled(false); // start locked
 
     // Load meCard (minimal)
