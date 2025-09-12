@@ -261,7 +261,6 @@
         </form>
       </dialog>
 <button id="leaveBtn" class="btn-ghost" title="Leave room">Leave</button>
-      <button id="logoutBtn" title="Sign out">Sign out</button>
       <!-- NEW: fullscreen toggle -->
       <button id="fsBtn" class="btn-ghost" title="Make chat full-screen">Full screen</button>
     </div>
@@ -382,9 +381,7 @@
     const cityTab = document.getElementById("cityTab");
     const userTab = document.getElementById("userTab");
 const joinBtn = document.getElementById("joinBtn");
-    const leaveBtn = document.getElementById("leaveBtn");
-    const logoutBtn = document.getElementById("logoutBtn");
-    const fsBtn = document.getElementById("fsBtn");
+    const leaveBtn = document.getElementById("leaveBtn");    const fsBtn = document.getElementById("fsBtn");
     const fsExit = document.getElementById("fsExit");
 
     // NEW: media picker
@@ -484,6 +481,52 @@ const joinBtn = document.getElementById("joinBtn");
     cityTab?.addEventListener("click", ()=>{ currentMode="city"; renderRoomDropdown(); updateTabUI(); });
     userTab?.addEventListener("click", ()=>{ currentMode="user"; renderRoomDropdown(); updateTabUI(); });
 
+
+    // ===== Create Room modal wiring =====
+    const createModal = document.getElementById("createRoomModal");
+    const createForm = document.getElementById("createRoomForm");
+    const crPrivate = document.getElementById("cr-private");
+    const crPassWrap = document.getElementById("cr-pass-wrap");
+    const crError = document.getElementById("cr-error");
+    const createBtn = document.getElementById("createRoomBtn");
+
+    function openCreate(){ try{ createModal.showModal(); }catch(e){ createModal.setAttribute("open",""); } }
+    function closeCreate(){ try{ createModal.close(); }catch(e){ createModal.removeAttribute("open"); } }
+
+    crPrivate?.addEventListener("change", ()=>{ crPassWrap.style.display = crPrivate.checked ? "" : "none"; });
+    document.getElementById("cr-cancel")?.addEventListener("click", closeCreate);
+    createBtn?.addEventListener("click", openCreate);
+
+    createForm?.addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      crError.style.display="none";
+      const form = new FormData(createForm);
+      const name = (form.get("name")||"").toString().trim();
+      const is_private = !!form.get("is_private");
+      let password_hash = null;
+      if(is_private){
+        const pass = (form.get("password")||"").toString();
+        if(pass.length<4){ crError.textContent="Password must be at least 4 characters."; crError.style.display=""; return; }
+        const salt = bcrypt.genSaltSync(10);
+        password_hash = bcrypt.hashSync(pass, salt);
+      }
+      // uniqueness check
+      const { data:exists, error:checkErr } = await supabase.from("rooms").select("id").ilike("name", name).maybeSingle();
+      if(checkErr){ crError.textContent="Error checking name. Try again."; crError.style.display=""; return; }
+      if(exists){ crError.textContent="That room name is already taken."; crError.style.display=""; return; }
+
+      const u = (await supabase.auth.getUser()).data.user;
+      const { data:newRow, error:insErr } = await supabase.from("rooms")
+        .insert({ name, is_private, password_hash, owner_id: u?u.id:null })
+        .select("id,name,is_private").single();
+      if(insErr){ crError.textContent="Could not create room. Try again."; crError.style.display=""; return; }
+
+      closeCreate();
+      await loadRooms();
+      // switch to user tab so it shows up immediately
+      currentMode = "user"; updateTabUI(); renderRoomDropdown();
+      roomSelect.value = newRow.name;
+    });
 // ===== Fullscreen helpers =====
     async function enterTrueFullscreen(){
       const el = document.documentElement;
