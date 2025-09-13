@@ -382,7 +382,7 @@
     const joinGateForm = document.getElementById("joinGateForm");
     const jgRoomLabel = document.getElementById("jg-room");
     const jgError = document.getElementById("jg-error");
-    const leaveBtn = document.getElement
+    const leaveBtn = document.getElementById("leaveBtn");
     const logoutBtn = document.getElementById("logoutBtn");
     const fsBtn = document.getElementById("fsBtn");
     const fsExit = document.getElementById("fsExit");
@@ -707,6 +707,7 @@
 
       touchPresence(me.id, me.username);
       setComposerEnabled(true);
+      try{ localStorage.setItem("lastRoom", currentRoom); }catch{}
     }
 
     async function subscribeRealtime(room){
@@ -928,6 +929,7 @@
       roomNameEl.textContent="—";
       clearMessages();
       msgEl.removeAttribute("aria-busy");
+      try{ localStorage.removeItem("lastRoom"); }catch{}
     });
 
     logoutBtn.addEventListener("click", async ()=>{ await supabase.auth.signOut(); window.location.href="login.html"; });
@@ -942,7 +944,17 @@
     await requireSession();
     setComposerEnabled(false); // start locked
 
-    // Load meCard (minimal)
+    
+    // Auto-join last room if remembered
+    try{
+      const saved = localStorage.getItem("lastRoom");
+      if(saved){
+        const rs = document.getElementById("roomSelect");
+        if(rs) rs.value = saved;
+        await joinRoom(saved);
+      }
+    }catch{}
+// Load meCard (minimal)
     document.getElementById("meCard").textContent = (me.username || "me");
 
     // message count refresher (only when joined)
