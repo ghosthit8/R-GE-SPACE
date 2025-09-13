@@ -218,9 +218,8 @@
       <button id="cityTab" class="btn-ghost" title="Show city chats">City chats</button>
       <button id="userTab" class="btn-ghost" title="Show user chats">User chats</button>
       <button id="createRoomBtn" class="btn" title="Create a new room">Create room</button>
-      <button id="joinBtn" title="Join room">Join</button>
-      
-      <!-- Create Room modal -->
+      <!-- Join removed: auto-join enabled -->
+<!-- Create Room modal -->
       <dialog id="createRoomModal" class="modal">
         <form id="createRoomForm" method="dialog" class="card">
           <h3>Create a room</h3>
@@ -382,7 +381,7 @@
     const joinGateForm = document.getElementById("joinGateForm");
     const jgRoomLabel = document.getElementById("jg-room");
     const jgError = document.getElementById("jg-error");
-    const leaveBtn = document.getElementById("leaveBtn");
+    const leaveBtn = document.getElement
     const logoutBtn = document.getElementById("logoutBtn");
     const fsBtn = document.getElementById("fsBtn");
     const fsExit = document.getElementById("fsExit");
@@ -517,36 +516,26 @@
 
       closeCreate();
       await loadRooms();
-    // === Auto-join last room if remembered ===
+    /*AUTOJOIN*/ 
     try{
       const savedRaw = localStorage.getItem("lastChat");
+      let roomToJoin = null;
+      let savedMode = "city";
       if(savedRaw){
-        const saved = JSON.parse(savedRaw);
-        const savedRoom = saved?.room;
-        const savedMode = saved?.mode || "city";
-        if(savedRoom){
-          if(typeof currentMode !== "undefined"){ currentMode = savedMode; }
-          if(typeof updateTabUI === "function") updateTabUI();
-          if(typeof renderRoomDropdown === "function") renderRoomDropdown();
-          const rs = document.getElementById("roomSelect");
-          if(rs) rs.value = savedRoom;
-
-          if(savedMode === "user"){
-            try{
-              const { data:meta } = await supabase.from("rooms").select("name,is_private").ilike("name", savedRoom).maybeSingle();
-              if(meta && meta.is_private){
-                console.log("Saved room is private; not auto-joining.");
-              }else{
-                await joinRoom(savedRoom);
-              }
-            }catch(e){ await joinRoom(savedRoom); }
-          }else{
-            await joinRoom(savedRoom);
-          }
-        }
+        try{ const saved = JSON.parse(savedRaw); roomToJoin = saved?.room || null; savedMode = saved?.mode || "city"; }catch{}
       }
-    }catch(e){ console.warn("Aut/join failed", e); }
-
+      if(!roomToJoin){
+        const rs = document.getElementById("roomSelect");
+        roomToJoin = (rs && rs.value) ? rs.value : "Dallas";
+      }
+      if(typeof currentMode !== "undefined"){ currentMode = savedMode; }
+      if(typeof updateTabUI === "function") updateTabUI();
+      if(typeof renderRoomDropdown === "function") renderRoomDropdown();
+      const rs2 = document.getElementById("roomSelect");
+      if(rs2) rs2.value = roomToJoin;
+      await joinRoom(roomToJoin);
+    }catch(e){ console.warn("Auto-join failed", e); }
+    
       // switch to user tab so it shows up immediately
       currentMode = "user"; updateTabUI(); renderRoomDropdown();
       roomSelect.value = newRow.name;
@@ -959,7 +948,6 @@
       roomNameEl.textContent="—";
       clearMessages();
       msgEl.removeAttribute("aria-busy");
-      try{ localStorage.removeItem("lastChat"); }catch{}
     });
 
     logoutBtn.addEventListener("click", async ()=>{ await supabase.auth.signOut(); window.location.href="login.html"; });
@@ -977,6 +965,12 @@
     // Load meCard (minimal)
     document.getElementById("meCard").textContent = (me.username || "me");
 
+    
+    // Clean up realtime channel on page unload so presence stops
+    window.addEventListener("beforeunload", () => {
+      try { if (channel) { supabase.removeChannel(channel); } } catch {}
+    });
+    
     // message count refresher (only when joined)
     setInterval(async ()=>{
       if(!joined || !currentRoom) return;
