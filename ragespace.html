@@ -367,6 +367,12 @@
     const rtDot = document.getElementById("realtimeDot");
     const statusText = document.getElementById("statusText");
     const roomSelect = document.getElementById("roomSelect");
+    roomSelect?.addEventListener("change", async (e)=>{
+      const val = (e.target?.value || "").trim();
+      if(!val) return;
+      try{ localStorage.setItem("lastChat", JSON.stringify({ room: val, mode: (typeof currentMode!=="undefined"?currentMode:"city") })); }catch{}
+      await joinRoom(val);
+    });
     const customRoom = document.getElementById("customRoom");
     const joinBtn = null; // removed
     const cityTab = document.getElementById("cityTab");
@@ -929,18 +935,34 @@
 
     await requireSession();
     setComposerEnabled(false); // start locked
-
-    /*AUTOJOIN_ON_BOOT*/
+    
+    /*HARD_AUTOJOIN*/
     (async ()=>{
       try{
         let roomToJoin = null;
-        const saved = localStorage.getItem("lastChat");
-        if(saved){ try{ const o=JSON.parse(saved); roomToJoin = o?.room || null; }catch{} }
-        if(!roomToJoin){ roomToJoin = (roomSelect && roomSelect.value) ? roomSelect.value : "Dallas"; }
+        try{
+          const saved = JSON.parse(localStorage.getItem("lastChat") || "null");
+          roomToJoin = saved && saved.room ? saved.room : null;
+        }catch{}
+        if(!roomToJoin){
+          roomToJoin = (roomSelect && roomSelect.value) ? roomSelect.value : "Dallas";
+        }
         if(roomSelect) roomSelect.value = roomToJoin;
         await joinRoom(roomToJoin);
-      }catch(e){ console.warn("Auto-join error", e); }
+      }catch(e){
+        console.warn("Auto-join error", e);
+        status("Auto-join failed, retrying…", false);
+      }
+      setTimeout(()=>{
+        try{
+          if(!joined){
+            const fallback = (roomSelect && roomSelect.value) ? roomSelect.value : "Dallas";
+            joinRoom(fallback);
+          }
+        }catch{}
+      }, 1200);
     })();
+    
 
     // Load meCard (minimal)
     document.getElementById("meCard").textContent = (me.username || "me");
