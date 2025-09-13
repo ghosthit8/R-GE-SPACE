@@ -218,9 +218,8 @@
       <button id="cityTab" class="btn-ghost" title="Show city chats">City chats</button>
       <button id="userTab" class="btn-ghost" title="Show user chats">User chats</button>
       <button id="createRoomBtn" class="btn" title="Create a new room">Create room</button>
-      <button id="joinBtn" title="Join room">Join</button>
-      
-      <!-- Create Room modal -->
+      <!-- Join removed: auto-join enabled -->
+<!-- Create Room modal -->
       <dialog id="createRoomModal" class="modal">
         <form id="createRoomForm" method="dialog" class="card">
           <h3>Create a room</h3>
@@ -260,8 +259,8 @@
           <p id="jg-error" class="error" style="display:none"></p>
         </form>
       </dialog>
-      <!-- Leave removed: auto-switch + auto-join -->
-<!-- NEW: fullscreen toggle -->
+<button id="leaveBtn" class="btn-ghost" title="Leave room">Leave</button>
+      <!-- NEW: fullscreen toggle -->
       <button id="fsBtn" class="btn-ghost" title="Make chat full-screen">Full screen</button>
     </div>
   </header>
@@ -388,7 +387,7 @@
     const joinGateForm = document.getElementById("joinGateForm");
     const jgRoomLabel = document.getElementById("jg-room");
     const jgError = document.getElementById("jg-error");
-    const leaveBtn = null; // leave removed
+    const leaveBtn = document.getElement
     const logoutBtn = document.getElementById("logoutBtn");
     const fsBtn = document.getElementById("fsBtn");
     const fsExit = document.getElementById("fsExit");
@@ -528,7 +527,7 @@
       let roomToJoin = null;
       const saved = localStorage.getItem("lastChat");
       if(saved){
-        try{ const o=JSON.parse(saved); roomToJoin = o?.room || null; }catch{}
+        try{ const o = JSON.parse(saved); roomToJoin = o?.room || null; }catch{}
       }
       if(!roomToJoin){
         roomToJoin = (roomSelect && roomSelect.value) ? roomSelect.value : "Dallas";
@@ -939,6 +938,18 @@
     joinBtn.addEventListener("click", ()=>{ handleJoinClick(null); });
 
     // Leave: remove presence + lock composer
+    leaveBtn.addEventListener("click", async ()=>{
+      if(channel){ try{ await supabase.removeChannel(channel); }catch{} }
+      channel = null;
+      presence.delete(me.id);
+      drawPresence();
+      setComposerEnabled(false);
+      currentRoom=null;
+      roomNameEl.textContent="—";
+      clearMessages();
+      msgEl.removeAttribute("aria-busy");
+    });
+
     logoutBtn.addEventListener("click", async ()=>{ await supabase.auth.signOut(); window.location.href="login.html"; });
 
     // Optional: delete (owned) message
