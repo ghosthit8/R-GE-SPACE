@@ -28,7 +28,6 @@
   a{ color:var(--muted); text-decoration:none; }
   a:hover{ text-decoration:underline; }
 
-  /* ===== HEADER (fixed) ===== */
   header{
     position:fixed;
     top:calc(env(safe-area-inset-top,0px) + 8px);
@@ -72,7 +71,6 @@
   .btn-ghost{ background:#020402; border:1px dashed rgba(57,255,20,0.35); }
   .tab-active{ box-shadow:0 0 0 1px rgba(57,255,20,0.6), 0 0 18px rgba(57,255,20,0.25) inset; }
 
-  /* ===== LAYOUT ===== */
   .grid{ display:grid; grid-template-columns:1fr 310px; gap:14px; margin-top:12px; }
   @media (max-width:900px){ .grid{ grid-template-columns:1fr; } }
 
@@ -121,11 +119,7 @@
   .preview{ display:flex; gap:8px; align-items:center; margin-top:4px; font-size:12px; color:#b9ffb9; opacity:.9; }
   .preview .thumb{ width:44px; height:44px; border:1px solid rgba(57,255,20,0.35); object-fit:cover; }
   .drop-hint{ font-size:12px; opacity:.7; color:#a2ffa2; margin-top:2px; }
-  .messages.dragover{
-    outline:2px dashed var(--green);
-    outline-offset:-6px;
-    background:linear-gradient(180deg, rgba(57,255,20,0.08), rgba(57,255,20,0.03));
-  }
+  .messages.dragover{ outline:2px dashed var(--green); outline-offset:-6px; background:linear-gradient(180deg, rgba(57,255,20,0.08), rgba(57,255,20,0.03)); }
 
   .statusline{ font-size:12px; color:#a2ffa2; opacity:.85; display:flex; gap:10px; align-items:center; }
   .dot{ width:8px; height:8px; border-radius:50%; background:var(--red); box-shadow:0 0 8px var(--red); display:inline-block; }
@@ -145,7 +139,6 @@
   }
   .msg .media video, .msg .media img{ display:block; width:100%; height:auto; border-radius:10px; }
 
-  /* ===== FULLSCREEN MODE ===== */
   body.fs header{ display:none; }
   body.fs #header-spacer{ display:none; height:0 !important; }
   body.fs .wrap{ max-width:100%; padding:0; margin:0; }
@@ -201,7 +194,6 @@
 
       <!-- Create Room modal -->
       <dialog id="createRoomModal" class="modal">
-        <!-- NOTE: removed method="dialog" so submit works everywhere -->
         <form id="createRoomForm" class="card" autocomplete="off">
           <h3>Create a room</h3>
           <label class="field">
@@ -299,8 +291,10 @@
     </div>
   </div>
 
-  <!-- Layout script -->
+  <!-- Keep the UMD build (helps on non-module pages too) -->
   <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
+
+  <!-- Layout script -->
   <script>
     (function(){
       const FADE_ON_SCROLL = true;
@@ -335,6 +329,22 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    /* ---------- bcrypt loader that works in modules & mobile ---------- */
+    let BCRYPT = null;
+    async function ensureBcrypt(){
+      if (BCRYPT) return BCRYPT;
+      // UMD global from <script> tag
+      BCRYPT = (globalThis.dcodeIO && globalThis.dcodeIO.bcrypt) || globalThis.bcrypt || null;
+      if (BCRYPT) return BCRYPT;
+      // Fallback: dynamic ESM import
+      try{
+        const mod = await import('https://esm.sh/bcryptjs@2.4.3');
+        BCRYPT = mod.default || mod;
+      }catch(e){}
+      return BCRYPT;
+    }
+
+    /* ---------- DOM refs ---------- */
     const msgEl = document.getElementById("messages");
     const inputEl = document.getElementById("messageInput");
     const sendBtn = document.getElementById("sendBtn");
@@ -367,7 +377,7 @@
     const fsBtn = document.getElementById("fsBtn");
     const fsExit = document.getElementById("fsExit");
 
-    // Media picker
+    // Media
     const fileInput = document.getElementById("fileInput");
     const fileBtn = document.getElementById("fileBtn");
     const mediaPreview = document.getElementById("mediaPreview");
@@ -483,9 +493,17 @@
       if(is_private){
         const pass = (form.get("password")||"").toString();
         if(pass.length<4){ crError.textContent="Password must be at least 4 characters."; crError.style.display=""; return; }
+
+        const bc = await ensureBcrypt();
+        if(!bc){
+          crError.textContent = "Password crypto library not loaded.";
+          crError.style.display=""; 
+          return;
+        }
+
         try{
-          const salt = bcrypt.genSaltSync(10);
-          password_hash = bcrypt.hashSync(pass, salt);
+          const salt = bc.genSaltSync(10);
+          password_hash = bc.hashSync(pass, salt);
         }catch(err){
           crError.textContent = "Password crypto failed. Reload and try again.";
           crError.style.display=""; 
@@ -524,7 +542,9 @@
     async function verifyPasswordById(id, pass){
       const { data, error } = await supabase.from("rooms").select("password_hash").eq("id", id).single();
       if(error || !data?.password_hash) return false;
-      try{ return bcrypt.compareSync(pass, data.password_hash); }catch{ return false; }
+      const bc = await ensureBcrypt();
+      if(!bc) return false;
+      try{ return bc.compareSync(pass, data.password_hash); }catch{ return false; }
     }
 
     async function handleJoinClick(knownPass){
@@ -904,7 +924,6 @@
       }
     });
 
-    // (no join button to wire)
     document.getElementById("logoutBtn")?.addEventListener("click", async ()=>{
       await supabase.auth.signOut();
       window.location.href="login.html";
@@ -915,7 +934,6 @@
     await loadRooms();
     setComposerEnabled(false);
 
-    // Auto-join last room (fallback to Dallas)
     (async ()=>{
       try{
         let roomToJoin = null;
