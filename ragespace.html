@@ -6,7 +6,6 @@
 <title>Rage Space — City Chat</title>
 <meta name="color-scheme" content="dark" />
 
-<!-- ✅ Global theme & scanlines -->
 <link rel="stylesheet" href="./style.css?v=1" />
 
 <style>
@@ -17,20 +16,15 @@
   }
   *{ box-sizing:border-box; }
   html,body{ height:100%; }
-
-  /* ✅ Keep your page bg, but ensure the global scanline ::before shows properly */
   body{
     margin:0;
     background: radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.12), transparent 60%), #000;
     color:var(--green);
     font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
     letter-spacing:.2px;
-
-    /* cooperate with global scanlines (body::before) */
     position: relative;
     overflow-x: hidden;
   }
-
   a{ color:var(--muted); text-decoration:none; }
   a:hover{ text-decoration:underline; }
 
@@ -49,7 +43,7 @@
     box-shadow: 0 0 0 1px rgba(57,255,20,0.08), 0 8px 30px rgba(255,0,51,0.12) inset;
     transition: opacity .18s ease;
   }
-  #header-spacer{ height:140px; } /* JS overwrites with exact height */
+  #header-spacer{ height:140px; }
 
   .wrap{ max-width:var(--maxw); margin:0 auto 40px; padding:0 16px 16px; }
 
@@ -57,10 +51,7 @@
   .badge{ font-size:12px; color:#111; background:var(--green); border-radius:999px; padding:2px 8px; font-weight:700; }
   h1{ margin:0; font-size:clamp(20px,2.4vw,28px); letter-spacing:2px; color:var(--green); text-shadow:0 0 6px rgba(255,0,51,0.55); }
   .glitch{ font-weight:900; display:inline-block; position:relative; }
-  .glitch::before,.glitch::after{
-    content:attr(data-text);
-    position:absolute; left:0; top:0; opacity:.7; mix-blend-mode:screen; filter:blur(.3px);
-  }
+  .glitch::before,.glitch::after{ content:attr(data-text); position:absolute; left:0; top:0; opacity:.7; mix-blend-mode:screen; filter:blur(.3px); }
   .glitch::before{ transform:translate(-1px,-0.5px); color:#f0f; clip-path:polygon(0 0,100% 0,100% 40%,0 30%); }
   .glitch::after{  transform:translate(1px, .5px);  color:#0ff; clip-path:polygon(0 60%,100% 70%,100% 100%,0 100%); }
   .white-rabbit{ filter: drop-shadow(0 0 6px rgba(255,0,51,0.45)); }
@@ -113,7 +104,6 @@
   .msg:hover .ops{ opacity:.9; }
   .msg .ops button{ border-color:rgba(57,255,20,0.35); padding:4px 6px; border-radius:8px; font-weight:700; font-size:11px; background:#041004; }
 
-  /* ===== Composer with media ===== */
   .composer{ display:flex; gap:8px; align-items:center; }
   .composer input[type="text"]{ flex:1; height:44px; border-radius:14px; border-color:#0a260a; background:#020502; color:var(--ink); }
   .hint{ color:#a2ffa2; opacity:.75; font-size:12px; margin:2px 4px 0; }
@@ -128,12 +118,8 @@
   .file-btn:after{ content:"⟲"; font-weight:900; opacity:.5; margin-left:4px; display:none; }
   .file-btn.active:after{ display:inline; }
 
-  .preview{
-    display:flex; gap:8px; align-items:center; margin-top:4px; font-size:12px; color:#b9ffb9; opacity:.9;
-  }
-  .preview .thumb{
-    width:44px; height:44px; border-radius:8px; border:1px solid rgba(57,255,20,0.35); object-fit:cover;
-  }
+  .preview{ display:flex; gap:8px; align-items:center; margin-top:4px; font-size:12px; color:#b9ffb9; opacity:.9; }
+  .preview .thumb{ width:44px; height:44px; border-radius:8px; border:1px solid rgba(57,255,20,0.35); object-fit:cover; }
   .drop-hint{ font-size:12px; opacity:.7; color:#a2ffa2; margin-top:2px; }
   .messages.dragover{
     outline:2px dashed var(--green);
@@ -150,7 +136,6 @@
   .pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border:1px solid var(--green); border-radius:999px; font-size:12px; background:#010301; margin:4px 4px 0 0; }
   .footer{ margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; color:#b9ffb9; opacity:.85; font-size:12px; }
 
-  /* ===== Media inside messages ===== */
   .msg .media{
     margin-top:6px;
     max-width:min(320px, 80vw);
@@ -158,9 +143,7 @@
     border:1px solid rgba(57,255,20,0.35);
     box-shadow:0 0 0 1px rgba(57,255,20,0.08) inset;
   }
-  .msg .media video, .msg .media img{
-    display:block; width:100%; height:auto; border-radius:10px;
-  }
+  .msg .media video, .msg .media img{ display:block; width:100%; height:auto; border-radius:10px; }
 
   /* ===== FULLSCREEN MODE ===== */
   body.fs header{ display:none; }
@@ -171,7 +154,6 @@
   body.fs .chat{ height:100vh; min-height:100vh; }
   body.fs .messages{ border:none; border-radius:0; padding:14px 12px calc(16px + env(safe-area-inset-bottom,0px)); }
 
-  /* Button should only show IN fullscreen */
   .fs-exit{ display:none; }
   body.fs .fs-exit{ display:inline-flex; }
   .fs-exit[hidden]{ display:none !important; }
@@ -192,10 +174,8 @@
 </head>
 
 <body>
-  <!-- FLOATING exit (hidden until fs mode) -->
   <button id="fsExit" class="fs-exit" hidden>Exit full screen</button>
 
-  <!-- FIXED header -->
   <header id="site-header">
     <div class="brand">
       <span class="badge">18+</span>
@@ -218,8 +198,8 @@
       <button id="cityTab" class="btn-ghost" title="Show city chats">City chats</button>
       <button id="userTab" class="btn-ghost" title="Show user chats">User chats</button>
       <button id="createRoomBtn" class="btn" title="Create a new room">Create room</button>
-      <!-- Join removed -->
-<!-- Create Room modal -->
+
+      <!-- Create Room modal -->
       <dialog id="createRoomModal" class="modal">
         <form id="createRoomForm" method="dialog" class="card">
           <h3>Create a room</h3>
@@ -259,13 +239,11 @@
           <p id="jg-error" class="error" style="display:none"></p>
         </form>
       </dialog>
-      <!-- Leave removed -->
-<!-- NEW: fullscreen toggle -->
+
       <button id="fsBtn" class="btn-ghost" title="Make chat full-screen">Full screen</button>
     </div>
   </header>
 
-  <!-- Spacer ensures nothing sits under the fixed header -->
   <div id="header-spacer"></div>
 
   <div class="wrap">
@@ -280,7 +258,6 @@
 
         <div id="messages" class="messages" aria-live="polite" aria-busy="true"></div>
 
-        <!-- ✅ Composer w/ media -->
         <div class="composer">
           <input id="messageInput" type="text" maxlength="800" placeholder="Join a room to chat…" disabled />
           <div class="file-wrap">
@@ -321,9 +298,9 @@
     </div>
   </div>
 
-  <!-- Layout script: measure header, set spacer height, optional fade-on-scroll -->
+  <!-- Layout script -->
   <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
-<script>
+  <script>
     (function(){
       const FADE_ON_SCROLL = true;
       const header = document.getElementById('site-header');
@@ -343,7 +320,6 @@
       window.addEventListener('scroll', fade, { passive:true });
       setTimeout(measure, 400);
 
-      // Recalculate when entering/exiting fullscreen CSS mode
       const ro = new ResizeObserver(()=>{ if(!document.body.classList.contains('fs')) measure(); });
       ro.observe(header);
     })();
@@ -367,14 +343,14 @@
     const rtDot = document.getElementById("realtimeDot");
     const statusText = document.getElementById("statusText");
     const roomSelect = document.getElementById("roomSelect");
+
     roomSelect?.addEventListener("change", async (e)=>{
       const val = (e.target?.value || "").trim();
       if(!val) return;
       try{ localStorage.setItem("lastChat", JSON.stringify({ room: val, mode: (typeof currentMode!=="undefined"?currentMode:"city") })); }catch{}
       await joinRoom(val);
     });
-    const customRoom = document.getElementById("customRoom");
-    const joinBtn = null; // removed
+
     const cityTab = document.getElementById("cityTab");
     const userTab = document.getElementById("userTab");
     const createBtn = document.getElementById("createRoomBtn");
@@ -387,12 +363,10 @@
     const joinGateForm = document.getElementById("joinGateForm");
     const jgRoomLabel = document.getElementById("jg-room");
     const jgError = document.getElementById("jg-error");
-    const leaveBtn = null; // removed
-    const logoutBtn = document.getElementById("logoutBtn");
     const fsBtn = document.getElementById("fsBtn");
     const fsExit = document.getElementById("fsExit");
 
-    // NEW: media picker
+    // Media picker
     const fileInput = document.getElementById("fileInput");
     const fileBtn = document.getElementById("fileBtn");
     const mediaPreview = document.getElementById("mediaPreview");
@@ -404,11 +378,11 @@
     let currentRoom=null;
     let channel=null;
     let rateLimit={ last:0, ms:650 };
-    let presence=new Map(); // uid -> { username, ts }
-    let joined=false;       // gate for sending
-    let sending=false;      // prevents fast double taps
+    let presence=new Map();
+    let joined=false;
+    let sending=false;
 
-    const MAX_BYTES = 25 * 1024 * 1024; // 25 MB cap
+    const MAX_BYTES = 25 * 1024 * 1024;
     const ACCEPTED = ["image/", "video/"];
 
     const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
@@ -428,12 +402,11 @@
     }
     const profileHref = (uid)=> `profile.html?uid=${encodeURIComponent(uid)}`;
 
-    
-    // ===== Rooms table integration (with tabs) =====
+    // ===== Rooms table + tabs =====
     const CITY_LIST = ["Dallas","Austin","Houston","San Antonio","El Paso","NYC","LA","Chicago","Seattle","Portland","Denver","Miami","Atlanta","Phoenix","Philly","Boston","London","Berlin","Tokyo"];
-    let currentRoomsCache = new Map(); // nameLower -> row
-    let userRooms = [];  // from DB
-    let currentMode = "city"; // "city" | "user"
+    let currentRoomsCache = new Map();
+    let userRooms = [];
+    let currentMode = "city";
 
     function updateTabUI(){
       if(currentMode === "city"){
@@ -509,7 +482,6 @@
         const salt = bcrypt.genSaltSync(10);
         password_hash = bcrypt.hashSync(pass, salt);
       }
-      // uniqueness check
       const { data:exists, error:checkErr } = await supabase.from("rooms").select("id").ilike("name", name).maybeSingle();
       if(checkErr){ crError.textContent="Error checking name. Try again."; crError.style.display=""; return; }
       if(exists){ crError.textContent="That room name is already taken."; crError.style.display=""; return; }
@@ -522,12 +494,12 @@
 
       closeCreate();
       await loadRooms();
-      // switch to user tab so it shows up immediately
       currentMode = "user"; updateTabUI(); renderRoomDropdown();
       roomSelect.value = newRow.name;
+      // auto-join the new room
+      joinRoom(newRow.name);
     });
 
-    // ===== Join with private gate =====
     async function verifyPasswordById(id, pass){
       const { data, error } = await supabase.from("rooms").select("password_hash").eq("id", id).single();
       if(error || !data?.password_hash) return false;
@@ -579,12 +551,12 @@
     }
     async function toggleFullscreen(){
       const on = !document.body.classList.contains('fs');
-      if(on){ // going full
+      if(on){
         document.body.classList.add('fs');
         fsExit.hidden = false;
         fsBtn.textContent = 'Exit full';
-        await enterTrueFullscreen(); // silently ignore if blocked
-        window.scrollTo(0,0); // ensure top
+        await enterTrueFullscreen();
+        window.scrollTo(0,0);
       }else{
         document.body.classList.remove('fs');
         fsExit.hidden = true;
@@ -592,8 +564,8 @@
         await exitTrueFullscreen();
       }
     }
-    fsBtn.addEventListener('click', toggleFullscreen);
-    fsExit.addEventListener('click', toggleFullscreen);
+    fsBtn?.addEventListener('click', toggleFullscreen);
+    fsExit?.addEventListener('click', toggleFullscreen);
     document.addEventListener('fullscreenchange', ()=>{
       if(!document.fullscreenElement){
         document.body.classList.remove('fs');
@@ -602,7 +574,6 @@
       }
     });
 
-    // enable/disable the composer UI
     function setComposerEnabled(on){
       joined = !!on;
       inputEl.disabled = !on;
@@ -612,7 +583,7 @@
         inputEl.placeholder = "Type your message… (Enter to send, Shift+Enter = newline)";
         status("Live in #" + currentRoom, true);
       }else{
-        inputEl.placeholder = "Join a room to chat…";
+        inputEl.placeholder = "Connecting…";
         status("Connecting…", false);
         clearSelection();
       }
@@ -623,13 +594,10 @@
       if(!s){ window.location.href="login.html"; return null; }
       session=s; me.id=s.user.id; me.username=s.user.user_metadata?.username ?? null;
       if(!me.username){
-        const { data:prof, error } = await supabase.from("profiles").select("username").eq("id", me.id).maybeSingle();
-        if(!error && prof?.username) me.username = prof.username;
+        const { data:prof } = await supabase.from("profiles").select("username").eq("id", me.id).maybeSingle();
+        if(prof?.username) me.username = prof.username;
       }
       me.username ??= "user-" + s.user.id.slice(0,6);
-      // 👇 Debug: confirm auth
-      console.log("Auth session user:", s.user?.id);
-      // show self in sidebar
       document.getElementById("meCard").textContent = me.username;
       return s;
     }
@@ -696,7 +664,6 @@
       roomNameEl.textContent=currentRoom;
       status("Loading messages…", false);
 
-      // Immediate presence as soon as you join a room
       touchPresence(me.id, me.username);
 
       await subscribeRealtime(currentRoom);
@@ -731,13 +698,14 @@
           if(sub){
             statusText.textContent = `Live in #${currentRoom}`;
             touchPresence(me.id, me.username);
+          }else{
+            status("Connecting…", false);
           }
         });
     }
 
     function status(text, ok=true){ statusText.textContent=text; rtDot.classList.toggle("ok", !!ok); }
 
-    // ====== MEDIA HELPERS ======
     function clearSelection(){
       fileInput.value = "";
       mediaPreview.hidden = true;
@@ -771,7 +739,6 @@
 
     fileInput.addEventListener("change", (e)=> pickFile(e.target.files[0]));
 
-    // Paste image from clipboard (desktop)
     document.addEventListener("paste", (e)=>{
       if(!joined) return;
       const item = [...(e.clipboardData?.items || [])].find(x=> x.kind==="file");
@@ -784,7 +751,6 @@
       }
     });
 
-    // Drag & drop onto messages
     ["dragenter","dragover"].forEach(ev=>{
       msgEl.addEventListener(ev, e=>{
         e.preventDefault(); e.stopPropagation();
@@ -804,7 +770,6 @@
       if(file){ pickFile(file); const dt = new DataTransfer(); dt.items.add(file); fileInput.files = dt.files; }
     });
 
-    // ✅ DEBUGGABLE upload: prints full error to console and sets contentType/cacheControl
     async function uploadFile(file) {
       const ext = (file.name.split(".").pop() || "").toLowerCase();
       const safeExt = ext || (file.type.startsWith("image/") ? "png" : "mp4");
@@ -819,7 +784,7 @@
         });
 
       if (error) {
-        console.error("Storage upload error:", error);   //  ← see exact reason in DevTools
+        console.error("Storage upload error:", error);
         status("Upload failed: " + (error.message || "unknown error"), false);
         return null;
       }
@@ -829,8 +794,6 @@
       return { url: data.publicUrl, type };
     }
 
-    // ====== SAFER SINGLE-SEND (retries if media columns missing) ======
-    
     async function ensureUsername(){
       if(me.username) return me.username;
       try{
@@ -841,6 +804,7 @@
       }catch(e){}
       return me.username;
     }
+
     async function send(){
       await ensureUsername();
       if(!joined || !currentRoom){ status("Join a room first", false); return; }
@@ -885,7 +849,6 @@
         media_type: media?.type ?? null
       });
 
-      // Try insert WITH media fields first
       let { error } = await supabase.from("messages").insert(withMedia);
 
       if(error){
@@ -920,23 +883,19 @@
       }
     });
 
-    // Join: set presence + switch room
-    joinBtn.addEventListener("click", ()=>{ handleJoinClick(null); });
+    // ❌ removed old joinBtn handler (there is no join button)
+    // ❌ guard logout (there is no logout button in DOM)
+    document.getElementById("logoutBtn")?.addEventListener("click", async ()=>{
+      await supabase.auth.signOut();
+      window.location.href="login.html";
+    });
 
-    // Leave: remove presence + lock composer
-    logoutBtn.addEventListener("click", async ()=>{ await supabase.auth.signOut(); window.location.href="login.html"; });
-
-    // Optional: delete (owned) message
-    async function deleteMessage(id){
-      if(!id) return;
-      const { error } = await supabase.from("messages").delete().eq("id", id).eq("user_id", me.id);
-      if(error){ status("Delete failed: " + error.message, false); }
-    }
-
+    // ======== BOOT ========
     await requireSession();
-    setComposerEnabled(false); // start locked
-    
-    /*HARD_AUTOJOIN*/
+    await loadRooms();
+    setComposerEnabled(false);
+
+    // HARD AUTO-JOIN on load (last room or Dallas)
     (async ()=>{
       try{
         let roomToJoin = null;
@@ -962,17 +921,20 @@
         }catch{}
       }, 1200);
     })();
-    
 
-    // Load meCard (minimal)
     document.getElementById("meCard").textContent = (me.username || "me");
 
-    // message count refresher (only when joined)
     setInterval(async ()=>{
       if(!joined || !currentRoom) return;
       const { count } = await supabase.from("messages").select("*",{ count:"exact", head:true }).eq("room", currentRoom);
       if(typeof count==="number") countEl.textContent=count.toString();
     }, 20000);
+
+    async function deleteMessage(id){
+      if(!id) return;
+      const { error } = await supabase.from("messages").delete().eq("id", id).eq("user_id", me.id);
+      if(error){ status("Delete failed: " + error.message, false); }
+    }
   </script>
 </body>
 </html>
