@@ -29,35 +29,48 @@
         radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.08), transparent 60%),
         repeating-linear-gradient(to bottom, rgba(255,255,255,.03) 0, rgba(255,255,255,.03) 2px, transparent 2px, transparent 4px),
         rgba(7,7,7,.45);
-      touch-action: none;
+      touch-action: none; /* required for custom pinch/pan */
     }
 
-    /* Giant canvas we transform together (cards + wires) */
-    .layer{ position:absolute; top:0; left:0; width:2400px; height:2000px; transform-origin:0 0; }
+    /* Big canvas so you can zoom far out */
+    .layer{ position:absolute; top:0; left:0; width:3000px; height:2200px; transform-origin:0 0; }
     svg.wires{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
     .nodes{ position:absolute; inset:0; z-index:1; }
 
     /* Cards */
-    .node{ position:absolute; width:240px; }
+    .node{ position:absolute; width:220px; }
     .card{
       border:1px solid var(--border); border-radius:12px; overflow:hidden; background:rgba(0,0,0,.55);
       box-shadow: 0 0 18px rgba(57,255,20,.08) inset; backdrop-filter: blur(1px);
     }
-    .thumb{ display:block; width:100%; aspect-ratio:4/5; object-fit:cover; background:#050505; }
+    .thumb{ display:block; width:100%; aspect-ratio:3/4; object-fit:cover; background:#050505; }
     .meta{ padding:8px 10px; border-top:1px solid var(--border); }
     .title{
-      font-size:.95rem; line-height:1.2; margin:0 0 6px 0; color:var(--ink);
+      font-size:.9rem; line-height:1.2; margin:0 0 4px 0; color:var(--ink);
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
     .row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
     .timer,.votes{ font-variant-numeric:tabular-nums; opacity:.85; }
-    .enter{ margin-top:8px; display:flex; justify-content:flex-end; }
-    .enter .btn{ padding:6px 10px; font-size:.9rem }
+    .enter{ margin-top:6px; display:flex; justify-content:flex-end; }
+    .enter .btn{ padding:5px 9px; font-size:.85rem }
+
+    /* Entrant tiles are view-only (no button) */
+    .entrant .enter{ display:none; }
+    .entrant .title{ opacity:.9; }
 
     .hint{
       position:absolute; right:12px; bottom:8px; font-size:.85rem; opacity:.75;
       background:rgba(0,0,0,.45); border:1px solid var(--border); border-radius:8px; padding:6px 8px;
       pointer-events:none;
+    }
+
+    /* Zoom controls */
+    .zoom-controls{
+      position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:8px; z-index:5;
+    }
+    .zoom-controls button{
+      width:42px; height:42px; border-radius:10px; border:1px solid var(--green);
+      background:rgba(0,0,0,.55); color:var(--green); font-weight:700; cursor:pointer;
     }
 
     @media (max-width:900px){ .viewport{ inset:64px 6px 6px } }
@@ -75,166 +88,310 @@
   </header>
 
   <div class="viewport" id="viewport">
-    <!-- Wires under cards -->
-    <svg class="layer wires" id="wires" viewBox="0 0 2400 2000" preserveAspectRatio="none"></svg>
-
-    <!-- Cards -->
+    <svg class="layer wires" id="wires" viewBox="0 0 3000 2200" preserveAspectRatio="none"></svg>
     <div class="layer nodes" id="nodes"></div>
 
-    <div class="hint">Drag to move • Pinch/scroll to zoom • Tap a card to enter</div>
+    <!-- On-screen zoom controls -->
+    <div class="zoom-controls">
+      <button id="zoomin"  aria-label="Zoom in">＋</button>
+      <button id="zoomout" aria-label="Zoom out">－</button>
+      <button id="zoomreset" aria-label="Reset zoom">⟳</button>
+    </div>
+
+    <div class="hint">Drag to move • Pinch/Scroll to zoom • Double-tap to zoom in</div>
   </div>
 
   <script>
-    /****************** DATA ******************/
-    // Minimal demo; swap to Supabase later.
+    /************* CONFIG *************/
     function hours(h){ return Date.now()+h*3600*1000; }
-    const N = [
-      // TOP FOUR (feeders)
-      { id:'bT1', x:220,  y:100,  a:{name:'A1', img:'https://picsum.photos/seed/a1/600/800', v:12}, b:{name:'A2', img:'https://picsum.photos/seed/a2/600/800', v:17}, ends:hours(8)  },
-      { id:'bT2', x:520,  y:70,   a:{name:'A3', img:'https://picsum.photos/seed/a3/600/800', v:7 }, b:{name:'A4', img:'https://picsum.photos/seed/a4/600/800', v:9 },  ends:hours(10) },
-      { id:'bT3', x:900,  y:70,   a:{name:'A5', img:'https://picsum.photos/seed/a5/600/800', v:14}, b:{name:'A6', img:'https://picsum.photos/seed/a6/600/800', v:11}, ends:hours(12) },
-      { id:'bT4', x:1200, y:100,  a:{name:'A7', img:'https://picsum.photos/seed/a7/600/800', v:19}, b:{name:'A8', img:'https://picsum.photos/seed/a8/600/800', v:13}, ends:hours(16) },
 
-      // TOP MERGE (matches the single horizontal bus in your sketch)
-      { id:'bTM', x:680,  y:360,  a:{name:'Top Winner L', img:'https://picsum.photos/seed/am/600/800', v:0}, b:{name:'Top Winner R', img:'https://picsum.photos/seed/bm/600/800', v:0}, ends:hours(20) },
-
-      // BIG CENTER (final)
-      { id:'bC',  x:820,  y:880,  a:{name:'Upper Champ',  img:'https://picsum.photos/seed/ac/600/800', v:0}, b:{name:'Lower Champ',  img:'https://picsum.photos/seed/bc/600/800', v:0}, ends:hours(28) },
-
-      // BOTTOM LEFT PAIR → MERGE
-      { id:'bB1', x:360,  y:1360, a:{name:'B1', img:'https://picsum.photos/seed/b1/600/800', v:8 }, b:{name:'B2', img:'https://picsum.photos/seed/b2/600/800', v:6 },  ends:hours(9)  },
-      { id:'bB2', x:640,  y:1360, a:{name:'B3', img:'https://picsum.photos/seed/b3/600/800', v:5 }, b:{name:'B4', img:'https://picsum.photos/seed/b4/600/800', v:4 },  ends:hours(11) },
-      { id:'bBM1',x:520,  y:1640, a:{name:'BL Winner',   img:'https://picsum.photos/seed/blm/600/800', v:0}, b:{name:'—',           img:'https://picsum.photos/seed/blank/600/800', v:0}, ends:hours(22) },
-
-      // BOTTOM RIGHT PAIR → MERGE
-      { id:'bB3', x:1060, y:1360, a:{name:'B5', img:'https://picsum.photos/seed/b5/600/800', v:9 }, b:{name:'B6', img:'https://picsum.photos/seed/b6/600/800', v:12}, ends:hours(13) },
-      { id:'bB4', x:1340, y:1360, a:{name:'B7', img:'https://picsum.photos/seed/b7/600/800', v:10}, b:{name:'B8', img:'https://picsum.photos/seed/b8/600/800', v:7 },  ends:hours(15) },
-      { id:'bBM2',x:1220, y:1640, a:{name:'BR Winner',   img:'https://picsum.photos/seed/brm/600/800', v:0}, b:{name:'—',           img:'https://picsum.photos/seed/blank2/600/800', v:0}, ends:hours(24) },
+    // 8 entrants (first round shown as one straight row)
+    const ENTRANTS = [
+      {name:'Seed 1', img:'https://picsum.photos/seed/e1/600/800', v:0},
+      {name:'Seed 2', img:'https://picsum.photos/seed/e2/600/800', v:0},
+      {name:'Seed 3', img:'https://picsum.photos/seed/e3/600/800', v:0},
+      {name:'Seed 4', img:'https://picsum.photos/seed/e4/600/800', v:0},
+      {name:'Seed 5', img:'https://picsum.photos/seed/e5/600/800', v:0},
+      {name:'Seed 6', img:'https://picsum.photos/seed/e6/600/800', v:0},
+      {name:'Seed 7', img:'https://picsum.photos/seed/e7/600/800', v:0},
+      {name:'Seed 8', img:'https://picsum.photos/seed/e8/600/800', v:0},
     ];
 
-    // WIRES: from bottom-center of child to top-center of parent.
-    const EDGES = [
-      // top feeders to horizontal bus (drawn as bus + short vertical taps)
-      { from:'bT1', to:'bTM' }, { from:'bT2', to:'bTM' },
-      { from:'bT3', to:'bTM' }, { from:'bT4', to:'bTM' },
+    // Layout constants
+    const CARD_W = 220;
+    let   CARD_H = 320; // corrected after render
 
-      // top merge to big center
-      { from:'bTM', to:'bC' },
+    const Y_R1    = 200;
+    const Y_QF    = Y_R1 + 420;
+    const Y_SEMI  = Y_QF + 420;
+    const Y_FINAL = Y_SEMI + 420;
 
-      // bottoms → merges
-      { from:'bB1', to:'bBM1' }, { from:'bB2', to:'bBM1' },
-      { from:'bB3', to:'bBM2' }, { from:'bB4', to:'bBM2' },
+    const X_START = 100;
+    const X_GAP   = 260;
 
-      // bottom merges to big center
-      { from:'bBM1', to:'bC' }, { from:'bBM2', to:'bC' },
-    ];
+    /************* DOM helpers *************/
+    const viewport = document.getElementById('viewport');
+    const nodesEl  = document.getElementById('nodes');
+    const wiresEl  = document.getElementById('wires');
 
-    /****************** BUILD ******************/
-    const nodesEl = document.getElementById('nodes');
-    const wiresEl = document.getElementById('wires');
-    const CARD_W = 240, CARD_H = 240*1.25;
-    const map = new Map();
-
-    function addNode(n){
-      map.set(n.id, n);
-      const el = document.createElement('div');
-      el.className = 'node';
-      el.style.left = n.x+'px'; el.style.top = n.y+'px';
-      el.innerHTML = `
-        <article class="card" title="Open battle">
-          <img class="thumb" src="${n.a.img}" alt="">
-          <div class="meta">
-            <h3 class="title">${n.a.name} vs ${n.b.name}</h3>
-            <div class="row">
-              <span class="timer" data-ends="${n.ends}"></span>
-              <span class="votes">${n.a.v} - ${n.b.v}</span>
+    function nodeHTML({id,x,y,a,b,ends,entrant=false}){
+      return `
+        <div class="node ${entrant?'entrant':''}" data-id="${id}" style="left:${x}px; top:${y}px">
+          <article class="card" title="${entrant?'Entrant':'Open battle'}">
+            <img class="thumb" src="${a.img}" alt="">
+            <div class="meta">
+              <h3 class="title">${entrant ? a.name : `${a.name} vs ${b.name}`}</h3>
+              <div class="row">
+                <span class="timer" data-ends="${ends}"></span>
+                <span class="votes">${a.v}${entrant?'':` - ${b.v}`}</span>
+              </div>
+              <div class="enter"><a class="btn" href="matchup.html?battle=${id}">Enter</a></div>
             </div>
-            <div class="enter"><a class="btn" href="matchup.html?battle=${n.id}">Enter</a></div>
-          </div>
-        </article>`;
-      el.addEventListener('click', (e)=>{
-        if (!(e.target instanceof HTMLAnchorElement)) location.href=`matchup.html?battle=${n.id}`;
-      });
-      nodesEl.appendChild(el);
+          </article>
+        </div>`;
     }
-    N.forEach(addNode);
+    function addClickNav(){
+      nodesEl.addEventListener('click',(e)=>{
+        const tile = e.target.closest('.node');
+        if (!tile || tile.classList.contains('entrant')) return;
+        if (e.target.closest('a')) return;
+        location.href = `matchup.html?battle=${tile.dataset.id}`;
+      });
+    }
 
-    // helpers for wire points
-    const topCenter    = n => [n.x + CARD_W/2, n.y];
-    const bottomCenter = n => [n.x + CARD_W/2, n.y + 300]; // ~card height (thumb + meta)
+    /************* BUILD LAYOUT *************/
+    // Entrants row
+    let html = '';
+    const entrantCenters = [];
+    ENTRANTS.forEach((p, i)=>{
+      const x = X_START + i*X_GAP;
+      entrantCenters.push(x + CARD_W/2);
+      html += nodeHTML({ id:`E${i+1}`, x, y:Y_R1, a:p, b:p, ends:hours(8), entrant:true });
+    });
+    nodesEl.innerHTML = html;
+    addClickNav();
 
-    function pathEl(d){ const p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('d',d);
-      p.setAttribute('fill','none'); p.setAttribute('stroke','rgba(57,255,20,0.5)'); p.setAttribute('stroke-width','2'); p.setAttribute('shape-rendering','crispEdges'); return p; }
+    requestAnimationFrame(()=>{
+      const anyCard = nodesEl.querySelector('.card');
+      if (anyCard) CARD_H = anyCard.getBoundingClientRect().height;
 
+      // QFs
+      const qfX = [];
+      for(let i=0;i<4;i++){
+        const c = (entrantCenters[i*2] + entrantCenters[i*2+1]) / 2 - CARD_W/2;
+        qfX.push(c);
+        nodesEl.insertAdjacentHTML('beforeend', nodeHTML({
+          id:`QF${i+1}`, x:c, y:Y_QF,
+          a:{name:`E${i*2+1}`, img:ENTRANTS[i*2].img, v:0},
+          b:{name:`E${i*2+2}`, img:ENTRANTS[i*2+1].img, v:0},
+          ends:hours(12)
+        }));
+      }
+
+      // Semis
+      const semiX = [];
+      for(let i=0;i<2;i++){
+        const c = (qfX[i*2] + CARD_W/2 + qfX[i*2+1] + CARD_W/2) / 2 - CARD_W/2;
+        semiX.push(c);
+        nodesEl.insertAdjacentHTML('beforeend', nodeHTML({
+          id:`SF${i+1}`, x:c, y:Y_SEMI,
+          a:{name:`Winner QF${i*2+1}`, img:ENTRANTS[i*4].img, v:0},
+          b:{name:`Winner QF${i*2+2}`, img:ENTRANTS[i*4+2].img, v:0},
+          ends:hours(16)
+        }));
+      }
+
+      // Final
+      const finalCenter = (semiX[0] + CARD_W/2 + semiX[1] + CARD_W/2)/2 - CARD_W/2;
+      nodesEl.insertAdjacentHTML('beforeend', nodeHTML({
+        id:'FINAL', x:finalCenter, y:Y_FINAL,
+        a:{name:'Winner SF1', img:ENTRANTS[0].img, v:0},
+        b:{name:'Winner SF2', img:ENTRANTS[4].img, v:0},
+        ends:hours(20)
+      }));
+
+      drawWires();
+      centerOnLoad();
+    });
+
+    /************* WIRES *************/
+    function rectOf(id){
+      const el = nodesEl.querySelector(`[data-id="${id}"]`);
+      return { x: parseFloat(el.style.left), y: parseFloat(el.style.top) };
+    }
+    function tc(r){ return [r.x + CARD_W/2, r.y]; }
+    function bc(r){ return [r.x + CARD_W/2, r.y + CARD_H]; }
+    function pathEl(d){
+      const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('d', d);
+      p.setAttribute('fill','none');
+      p.setAttribute('stroke','rgba(57,255,20,0.55)');
+      p.setAttribute('stroke-width','2');
+      p.setAttribute('shape-rendering','crispEdges');
+      return p;
+    }
+    function elbow(fromRect, toRect){
+      const [x1,y1]=bc(fromRect), [x2,y2]=tc(toRect);
+      const midY=(y1+y2)/2;
+      return `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
+    }
     function drawWires(){
       wiresEl.innerHTML='';
-      // Draw the “bus” line once (visual from your sketch)
-      // Bus runs under the four top nodes, then drops into bTM.
-      const busY = 330; // horizontal bar y
-      const busLeftX  = N.find(n=>n.id==='bT1').x + CARD_W/2;
-      const busRightX = N.find(n=>n.id==='bT4').x + CARD_W/2 + 80;
-      wiresEl.appendChild(pathEl(`M ${busLeftX} ${busY} L ${busRightX} ${busY}`));
-
-      // Taps from top nodes to bus
-      ['bT1','bT2','bT3','bT4'].forEach(id=>{
-        const n = map.get(id);
-        const [bx, by] = bottomCenter(n);
-        const tapX = bx; const tapY = busY;
-        const p = `M ${bx} ${by} L ${bx} ${tapY}`;
-        wiresEl.appendChild(pathEl(p));
-      });
-
-      // Bus to top merge (bTM)
-      const tm = map.get('bTM'); const [tmx,tmy] = topCenter(tm);
-      wiresEl.appendChild(pathEl(`M ${busRightX} ${busY} L ${tmx} ${busY} L ${tmx} ${tmy}`));
-
-      // Other edges (standard elbow)
-      EDGES.forEach(e=>{
-        if (['bT1','bT2','bT3','bT4'].includes(e.from) && e.to==='bTM') return; // already handled by bus
-        const a = map.get(e.from), b = map.get(e.to); if(!a||!b) return;
-        const [x1,y1] = bottomCenter(a); const [x2,y2] = topCenter(b);
-        const midY = (y1+y2)/2;
-        wiresEl.appendChild(pathEl(`M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`));
+      const pairs = [
+        ['E1','QF1'], ['E2','QF1'],
+        ['E3','QF2'], ['E4','QF2'],
+        ['E5','QF3'], ['E6','QF3'],
+        ['E7','QF4'], ['E8','QF4'],
+        ['QF1','SF1'], ['QF2','SF1'],
+        ['QF3','SF2'], ['QF4','SF2'],
+        ['SF1','FINAL'], ['SF2','FINAL'],
+      ];
+      pairs.forEach(([a,b])=>{
+        wiresEl.appendChild(pathEl(elbow(rectOf(a), rectOf(b))));
       });
     }
-    drawWires();
 
-    /****************** TIMERS ******************/
-    function fmt(ms){ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000);
-      const hh=String(Math.floor(s/3600)).padStart(2,'0'), mm=String(Math.floor((s%3600)/60)).padStart(2,'0'), ss=String(s%60).padStart(2,'0'); return `${hh}:${mm}:${ss}`; }
-    function tick(){ document.querySelectorAll('.timer').forEach(el=>{ const ends=+el.dataset.ends; el.textContent=fmt(ends-Date.now()); }); }
-    tick(); const tId=setInterval(tick,1000); window.addEventListener('beforeunload',()=>clearInterval(tId));
+    /************* Timers *************/
+    function fmt(ms){
+      if(ms<=0) return '00:00:00';
+      const s=Math.floor(ms/1000);
+      const hh=String(Math.floor(s/3600)).padStart(2,'0');
+      const mm=String(Math.floor((s%3600)/60)).padStart(2,'0');
+      const ss=String(s%60).padStart(2,'0');
+      return `${hh}:${mm}:${ss}`;
+    }
+    function tick(){
+      document.querySelectorAll('.timer').forEach(el=>{
+        const ends=+el.dataset.ends;
+        el.textContent=fmt(ends-Date.now());
+      });
+    }
+    tick(); const tId=setInterval(tick,1000);
+    window.addEventListener('beforeunload',()=>clearInterval(tId));
 
-    /****************** PAN & ZOOM ******************/
-    const viewport=document.getElementById('viewport');
-    const layers=[wiresEl,nodesEl]; // move both together
-    let scale=0.7, minS=0.45, maxS=2.2, tx=120, ty=20;
-    function apply(){ layers.forEach(el=>{ el.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; el.style.transformOrigin='0 0'; }); }
+    /************* PAN & ZOOM (wheel, pinch, double-tap, buttons) *************/
+    const layers=[wiresEl,nodesEl];
+    let scale=0.95, minS=0.10, maxS=3.0, tx=40, ty=12;
+
+    function apply(){
+      layers.forEach(el=>{
+        el.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
+        el.style.transformOrigin='0 0';
+      });
+    }
     apply();
 
-    // Wheel zoom (cursor-centered)
+    // Auto-center on load
+    function centerOnLoad(){
+      const view = viewport.getBoundingClientRect();
+      const totalWidth = X_START + (ENTRANTS.length-1)*X_GAP + CARD_W + X_START;
+      const totalHeight = Y_FINAL + CARD_H + 80;
+      const sx = (view.width - 40) / totalWidth;
+      const sy = (view.height - 80) / totalHeight;
+      scale = Math.max(minS, Math.min(maxS, Math.min(sx, sy)*0.95));
+      tx = (view.width - totalWidth*scale)/2;
+      ty = 12;
+      apply();
+    }
+
+    // Wheel zoom (desktop)
     viewport.addEventListener('wheel',(e)=>{
       e.preventDefault();
       const r=viewport.getBoundingClientRect();
       const mx=(e.clientX-r.left-tx)/scale, my=(e.clientY-r.top-ty)/scale;
-      const ds=e.deltaY<0?1.1:0.9; const ns=Math.min(maxS,Math.max(minS,scale*ds));
-      tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
+      const ds=e.deltaY<0?1.12:0.9;
+      const ns=Math.min(maxS,Math.max(minS,scale*ds));
+      tx = e.clientX-r.left - mx*ns;
+      ty = e.clientY-r.top  - my*ns;
+      scale=ns; apply();
     },{passive:false});
 
-    // Drag to pan
-    let drag=false, lx=0, ly=0;
-    viewport.addEventListener('pointerdown',e=>{ drag=true; lx=e.clientX; ly=e.clientY; viewport.setPointerCapture(e.pointerId); });
-    viewport.addEventListener('pointermove',e=>{ if(!drag) return; tx+=e.clientX-lx; ty+=e.clientY-ly; lx=e.clientX; ly=e.clientY; apply(); });
-    viewport.addEventListener('pointerup',()=>drag=false);
-    viewport.addEventListener('pointercancel',()=>drag=false);
+    // Drag to pan (single pointer)
+    let dragging=false, lx=0, ly=0;
+    viewport.addEventListener('pointerdown',e=>{
+      viewport.setPointerCapture(e.pointerId);
+      activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+      if (activePointers.size===1){ dragging=true; lx=e.clientX; ly=e.clientY; }
+    });
+    viewport.addEventListener('pointermove',e=>{
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+      if (activePointers.size===2){
+        pinchUpdate(); // handled below
+      } else if (dragging){
+        tx += e.clientX - lx; ty += e.clientY - ly; lx = e.clientX; ly = e.clientY; apply();
+      }
+    });
+    viewport.addEventListener('pointerup',e=>{
+      activePointers.delete(e.pointerId);
+      if (activePointers.size<2) isPinching=false;
+      if (activePointers.size===0) dragging=false;
+    });
+    viewport.addEventListener('pointercancel',e=>{
+      activePointers.delete(e.pointerId);
+      isPinching=false; dragging=false;
+    });
 
-    // Double-click zoom
+    // Double-tap zoom (mobile) / double-click (desktop)
     viewport.addEventListener('dblclick',(e)=>{
       const r=viewport.getBoundingClientRect();
       const mx=(e.clientX-r.left-tx)/scale, my=(e.clientY-r.top-ty)/scale;
-      const ns=Math.min(maxS,scale*1.35);
-      tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
+      const factor = e.shiftKey ? 0.74 : 1.35;
+      const ns=Math.min(maxS,Math.max(minS,scale*factor));
+      tx = e.clientX-r.left - mx*ns;
+      ty = e.clientY-r.top  - my*ns;
+      scale=ns; apply();
     });
+
+    // Pinch-to-zoom (two pointers)
+    const activePointers = new Map(); // id -> {x,y}
+    let isPinching=false, pinchStartDist=0, pinchStartScale=1, pinchCenter=[0,0];
+
+    function distance(p1,p2){ const dx=p1.x-p2.x, dy=p1.y-p2.y; return Math.hypot(dx,dy); }
+    function midpoint(p1,p2){ return [(p1.x+p2.x)/2, (p1.y+p2.y)/2]; }
+
+    function pinchUpdate(){
+      const pts = [...activePointers.values()];
+      if (pts.length!==2) return;
+      const p1=pts[0], p2=pts[1];
+
+      if (!isPinching){
+        isPinching=true;
+        pinchStartDist = distance(p1,p2);
+        pinchStartScale = scale;
+        pinchCenter = midpoint(p1,p2);
+        return;
+      }
+      const r=viewport.getBoundingClientRect();
+      const centerX = (pinchCenter[0]-r.left - tx)/scale;
+      const centerY = (pinchCenter[1]-r.top  - ty)/scale;
+
+      const dist = distance(p1,p2);
+      const ns = Math.min(maxS, Math.max(minS, pinchStartScale * (dist/pinchStartDist)));
+
+      // keep the pinch center fixed
+      tx = pinchCenter[0]-r.left - centerX*ns;
+      ty = pinchCenter[1]-r.top  - centerY*ns;
+      scale = ns; apply();
+    }
+
+    // On-screen zoom buttons
+    document.getElementById('zoomin').addEventListener('click', ()=>{
+      zoomBy(1.2);
+    });
+    document.getElementById('zoomout').addEventListener('click', ()=>{
+      zoomBy(1/1.2);
+    });
+    document.getElementById('zoomreset').addEventListener('click', centerOnLoad);
+
+    function zoomBy(factor){
+      const r=viewport.getBoundingClientRect();
+      // zoom around viewport center
+      const cx=r.width/2, cy=r.height/2;
+      const mx=(cx-tx)/scale, my=(cy-ty)/scale;
+      const ns=Math.min(maxS,Math.max(minS,scale*factor));
+      tx = cx - mx*ns; ty = cy - my*ns; scale=ns; apply();
+    }
   </script>
 </body>
 </html>
