@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Rage Space — Tournament Brackets</title>
+  <link rel="stylesheet" href="style.css?v=2" />
+  <style>
+    :root{
+      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --border:#0f2510;
+      --card:#070707; --muted:#8aff8a;
+    }
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{
+      margin:0; background:#000; color:var(--green);
+      font-family: ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow:hidden;
+    }
+    header{ max-width:960px; margin:10px auto 0; padding:0 16px; }
+    .toolbar{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .btn{ border:1px solid var(--green); color:var(--green); text-decoration:none; padding:8px 12px; border-radius:10px; display:inline-flex; align-items:center; gap:8px; background:transparent; cursor:pointer; }
+
+    /* Viewport you can drag/zoom */
+    .viewport{
+      position:fixed; inset:56px 8px 8px; border:1px solid var(--border); border-radius:14px; overflow:hidden;
+      background:
+        radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.08), transparent 60%),
+        repeating-linear-gradient(to bottom, rgba(255,255,255,.03) 0, rgba(255,255,255,.03) 2px, transparent 2px, transparent 4px),
+        rgba(7,7,7,.45);
+      touch-action: none; /* enables good pointer panning */
+    }
+
+    /* Giant canvas that we transform */
+    .canvas{
+      position:absolute; top:0; left:0; width:2400px; height:2000px;
+      transform-origin: 0 0;
+    }
+
+    /* Underlay lines so text never overlaps them */
+    svg.wires{
+      position:absolute; inset:0; width:100%; height:100%; pointer-events:none;
+    }
+
+    /* Nodes layer (cards) */
+    .node{
+      position:absolute; width:220px;
+    }
+    .card{
+      border:1px solid var(--border); border-radius:12px; overflow:hidden; background:rgba(0,0,0,.55);
+      box-shadow: 0 0 18px rgba(57,255,20,.08) inset;
+      backdrop-filter: blur(1px);
+    }
+    .thumb{
+      display:block; width:100%; aspect-ratio:4/5; object-fit:cover;
+      background:#050505;
+    }
+    .meta{
+      padding:8px 10px; border-top:1px solid var(--border);
+    }
+    .title{
+      font-size:.95rem; line-height:1.2; margin:0 0 6px 0; color:var(--ink);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .timer,.votes{ font-variant-numeric: tabular-nums; opacity:.85; }
+    .enter{ margin-top:8px; display:flex; justify-content:flex-end; }
+    .enter .btn{ padding:6px 10px; font-size:.9rem }
+
+    /* Zoom hint */
+    .hint{
+      position:absolute; right:12px; bottom:8px; font-size:.85rem; opacity:.75;
+      background:rgba(0,0,0,.45); border:1px solid var(--border); border-radius:8px; padding:6px 8px;
+      pointer-events:none;
+    }
+
+    @media (max-width:900px){
+      .viewport{ inset:64px 6px 6px }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="toolbar">
+      <h1 style="margin:0">R<span class="anarchy">Ⓐ</span>GE SPACE — TOURNAMENT</h1>
+      <div style="display:flex; gap:8px">
+        <a class="btn" href="matchup.html">⚔️ Random Battle</a>
+        <a class="btn" href="menu.html">← Menu</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="viewport" id="viewport">
+    <!-- Lines go under cards so text never overlaps -->
+    <svg class="wires" id="wires" viewBox="0 0 2400 2000" preserveAspectRatio="none"></svg>
+
+    <!-- Absolute-positioned bracket canvas -->
+    <div class="canvas" id="canvas"></div>
+
+    <div class="hint">Drag to move • Pinch/scroll to zoom • Tap a card to enter</div>
+  </div>
+
+  <script>
+    /**** Demo data (align ids with matchup.html if you’re using that page) ****/
+    // Layout targets to match your sketch: top cluster → mid join → big mid → stem → bottom cluster.
+    // Positions are in canvas pixels.
+    const NODES = [
+      // Top row (four feeders)
+      { id:'b-1001', x:220,  y:120,  left:{name:'Signal Bleed', img:'https://picsum.photos/seed/rs1/600/800', votes:48}, right:{name:'Red Drift', img:'https://picsum.photos/seed/rs2/600/800', votes:52}, endsAt: Date.now()+1000*60*60*8 },
+      { id:'b-1002', x:520,  y:100,  left:{name:'Static Teeth', img:'https://picsum.photos/seed/rs3/600/800', votes:19}, right:{name:'Neon Flood', img:'https://picsum.photos/seed/rs4/600/800', votes:27}, endsAt: Date.now()+1000*60*60*10 },
+      { id:'b-1003', x:820,  y:120,  left:{name:'Cold CRT', img:'https://picsum.photos/seed/rs5/600/800', votes:6},  right:{name:'Burn-In', img:'https://picsum.photos/seed/rs6/600/800', votes:5},  endsAt: Date.now()+1000*60*60*14 },
+      { id:'b-1004', x:1120, y:140,  left:{name:'Snow Crash', img:'https://picsum.photos/seed/rs7/600/800', votes:33}, right:{name:'VHS Wake', img:'https://picsum.photos/seed/rs8/600/800', votes:41}, endsAt: Date.now()+1000*60*60*20 },
+
+      // Top merge (semi of that cluster)
+      { id:'b-2001', x:520,  y:420,  left:{name:'(Top Winner A)', img:'https://picsum.photos/seed/rs9/600/800', votes:0}, right:{name:'(Top Winner B)', img:'https://picsum.photos/seed/rs10/600/800', votes:0}, endsAt: Date.now()+1000*60*60*24 },
+
+      // Big middle node
+      { id:'b-3001', x:760,  y:760,  left:{name:'(Upper Winner)', img:'https://picsum.photos/seed/rs11/600/800', votes:0}, right:{name:'(Lower Winner)', img:'https://picsum.photos/seed/rs12/600/800', votes:0}, endsAt: Date.now()+1000*60*60*28 },
+
+      // Bottom row (four feeders)
+      { id:'b-1005', x:420,  y:1280, left:{name:'Scanline Eve', img:'https://picsum.photos/seed/rs13/600/800', votes:12}, right:{name:'Cobalt Bloom', img:'https://picsum.photos/seed/rs14/600/800', votes:15}, endsAt: Date.now()+1000*60*60*9 },
+      { id:'b-1006', x:720,  y:1260, left:{name:'Copper Melt', img:'https://picsum.photos/seed/rs15/600/800', votes:7},  right:{name:'Luma Bite', img:'https://picsum.photos/seed/rs16/600/800', votes:5},  endsAt: Date.now()+1000*60*60*11 },
+      { id:'b-1007', x:1020, y:1260, left:{name:'Bunker Flux', img:'https://picsum.photos/seed/rs17/600/800', votes:28}, right:{name:'CRT Kerosene', img:'https://picsum.photos/seed/rs18/600/800', votes:22}, endsAt: Date.now()+1000*60*60*17 },
+      { id:'b-1008', x:1320, y:1280, left:{name:'Spindle Ghost', img:'https://picsum.photos/seed/rs19/600/800', votes:18}, right:{name:'Anode Riot', img:'https://picsum.photos/seed/rs20/600/800', votes:24}, endsAt: Date.now()+1000*60*60*23 },
+
+      // Bottom merge (semi of bottom cluster)
+      { id:'b-2002', x:820,  y:1560, left:{name:'(Bottom Winner A)', img:'https://picsum.photos/seed/rs21/600/800', votes:0}, right:{name:'(Bottom Winner B)', img:'https://picsum.photos/seed/rs22/600/800', votes:0}, endsAt: Date.now()+1000*60*60*26 },
+    ];
+
+    // Edges (from child node center-bottom to parent node center-top) to match your drawn joins
+    const EDGES = [
+      // Top four feed into top-merge
+      { from:'b-1001', to:'b-2001' },
+      { from:'b-1002', to:'b-2001' },
+      { from:'b-1003', to:'b-2001' },
+      { from:'b-1004', to:'b-2001' },
+
+      // Top-merge into big-middle
+      { from:'b-2001', to:'b-3001' },
+
+      // Bottom four into bottom-merge
+      { from:'b-1005', to:'b-2002' },
+      { from:'b-1006', to:'b-2002' },
+      { from:'b-1007', to:'b-2002' },
+      { from:'b-1008', to:'b-2002' },
+
+      // Bottom-merge into big-middle (final)
+      { from:'b-2002', to:'b-3001' },
+    ];
+
+    const CANVAS_W = 2400, CANVAS_H = 2000;
+    const CARD_W = 220, CARD_H = 220*1.25; // approx including meta
+    const canvas = document.getElementById('canvas');
+    const wires = document.getElementById('wires');
+
+    // Build cards
+    const nodeMap = new Map();
+    NODES.forEach(n=>{
+      nodeMap.set(n.id, n);
+      const node = document.createElement('div');
+      node.className = 'node';
+      node.style.left = n.x + 'px';
+      node.style.top  = n.y + 'px';
+      node.dataset.id = n.id;
+
+      node.innerHTML = `
+        <article class="card" title="Open battle">
+          <img class="thumb" src="${n.left.img}" alt="">
+          <div class="meta">
+            <h3 class="title">${n.left.name} vs ${n.right.name}</h3>
+            <div class="row">
+              <span class="timer" data-ends="${n.endsAt}"></span>
+              <span class="votes">${n.left.votes} - ${n.right.votes}</span>
+            </div>
+            <div class="enter">
+              <a class="btn" href="matchup.html?battle=${n.id}">Enter</a>
+            </div>
+          </div>
+        </article>
+      `;
+      node.addEventListener('click', (ev)=>{
+        // let the "Enter" button work; otherwise whole card is a link
+        if (!(ev.target instanceof HTMLAnchorElement)) {
+          location.href = `matchup.html?battle=${n.id}`;
+        }
+      });
+      canvas.appendChild(node);
+    });
+
+    // Draw wires under cards
+    function centerBottom(n){ return [n.x + CARD_W/2, n.y + 220]; }
+    function centerTop(n){ return [n.x + CARD_W/2, n.y]; }
+    function drawEdges(){
+      const NS = 'http://www.w3.org/2000/svg';
+      wires.innerHTML = '';
+      EDGES.forEach(e=>{
+        const a = nodeMap.get(e.from), b = nodeMap.get(e.to);
+        if (!a || !b) return;
+        const [x1,y1] = centerBottom(a);
+        const [x2,y2] = centerTop(b);
+        // smooth elbow-ish path
+        const midY = (y1 + y2)/2;
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('d', `M ${x1},${y1} L ${x1},${midY} L ${x2},${midY} L ${x2},${y2}`);
+        path.setAttribute('fill','none');
+        path.setAttribute('stroke','rgba(57,255,20,0.45)');
+        path.setAttribute('stroke-width','2');
+        path.setAttribute('shape-rendering','crispEdges');
+        wires.appendChild(path);
+      });
+    }
+    drawEdges();
+
+    // Timers
+    function fmt(ms){
+      if (ms<=0) return '00:00:00';
+      const s = Math.floor(ms/1000);
+      const hh = String(Math.floor(s/3600)).padStart(2,'0');
+      const mm = String(Math.floor((s%3600)/60)).padStart(2,'0');
+      const ss = String(s%60).padStart(2,'0');
+      return `${hh}:${mm}:${ss}`;
+    }
+    function tick(){
+      document.querySelectorAll('.timer').forEach(el=>{
+        const ends = +el.getAttribute('data-ends');
+        el.textContent = fmt(ends - Date.now());
+      });
+    }
+    tick();
+    const tId = setInterval(tick, 1000);
+    window.addEventListener('beforeunload', ()=> clearInterval(tId));
+
+    /************** Pan & Zoom (pointer + wheel + pinch) **************/
+    const viewport = document.getElementById('viewport');
+    let scale = 0.7, minScale = 0.4, maxScale = 2.2;
+    let tx = 140, ty = 20; // initial offset so you see the top cluster
+    const apply = ()=> {
+      const m = `translate(${tx}px, ${ty}px) scale(${scale})`;
+      canvas.style.transform = m;
+      wires.style.transform = m;
+      wires.style.transformOrigin = '0 0';
+    };
+    apply();
+
+    // Wheel to zoom (centered at mouse)
+    viewport.addEventListener('wheel', (e)=>{
+      e.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      const mx = (e.clientX - rect.left - tx)/scale;
+      const my = (e.clientY - rect.top  - ty)/scale;
+
+      const ds = e.deltaY < 0 ? 1.1 : 0.9;
+      const newScale = Math.min(maxScale, Math.max(minScale, scale * ds));
+      // keep point under cursor stable
+      tx = e.clientX - rect.left - mx * newScale;
+      ty = e.clientY - rect.top  - my * newScale;
+      scale = newScale;
+      apply();
+    }, { passive:false });
+
+    // Drag to pan
+    let dragging=false, lx=0, ly=0;
+    viewport.addEventListener('pointerdown', (e)=>{
+      dragging=true; lx=e.clientX; ly=e.clientY; viewport.setPointerCapture(e.pointerId);
+    });
+    viewport.addEventListener('pointermove', (e)=>{
+      if(!dragging) return;
+      const dx = e.clientX - lx, dy = e.clientY - ly;
+      tx += dx; ty += dy; lx = e.clientX; ly = e.clientY; apply();
+    });
+    viewport.addEventListener('pointerup', ()=> dragging=false);
+    viewport.addEventListener('pointercancel', ()=> dragging=false);
+
+    // (Optional) Double-tap/Double-click to smart-zoom
+    viewport.addEventListener('dblclick', (e)=>{
+      const rect = viewport.getBoundingClientRect();
+      const mx = (e.clientX - rect.left - tx)/scale;
+      const my = (e.clientY - rect.top  - ty)/scale;
+      const newScale = Math.min(maxScale, scale * 1.4);
+      tx = e.clientX - rect.left - mx * newScale;
+      ty = e.clientY - rect.top  - my * newScale;
+      scale = newScale; apply();
+    });
+  </script>
+</body>
+</html>
