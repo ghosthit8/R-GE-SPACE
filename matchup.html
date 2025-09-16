@@ -5,6 +5,65 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Rage Space — Matchup</title>
   <link rel="stylesheet" href="style.css?v=2" />
+  <style>
+    :root{
+      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5;
+      --card:#070707; --muted:#8aff8a; --border:#0f2510; --maxw: 960px;
+    }
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{
+      margin:0; background:#000; color:var(--green);
+      font-family: ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap{ max-width:var(--maxw); margin:16px auto 64px; padding:0 16px; }
+    h1{ letter-spacing:.06em }
+    .scorebar{
+      display:flex; gap:12px; align-items:center; justify-content:space-between;
+      border:1px solid var(--border); padding:8px 12px; border-radius:10px; background:rgba(7,7,7,.6);
+      box-shadow: 0 0 18px rgba(57,255,20,.08) inset;
+    }
+    .btn{ border:1px solid var(--green); color:var(--green); text-decoration:none; padding:8px 12px; border-radius:10px; display:inline-flex; align-items:center; gap:8px; background:transparent; cursor:pointer; }
+    .btn.primary{ background:rgba(57,255,20,.08) }
+    .btn:disabled{ opacity:.45; cursor:not-allowed }
+    .grid{
+      margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:16px;
+    }
+    .tile{
+      border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(7,7,7,.6);
+    }
+    .art{
+      aspect-ratio: 4/5;
+      background: linear-gradient(45deg, rgba(57,255,20,.08), transparent 60%), #050505;
+      display:block; width:100%; object-fit:cover;
+    }
+    .meta{
+      display:flex; gap:12px; align-items:center; justify-content:space-between;
+      padding:10px 12px; border-top:1px solid var(--border);
+    }
+    .badge{
+      font-size:.9rem; color:var(--ink); opacity:.75;
+    }
+    .countdown{
+      margin-top:12px; text-align:center; font-variant-numeric:tabular-nums;
+    }
+    .vote-row{
+      margin-top:14px; display:flex; gap:10px; align-items:center; justify-content:center;
+    }
+    .toast{
+      position:fixed; left:50%; transform:translateX(-50%);
+      bottom:24px; background:#0a0a0a; color:var(--ink);
+      border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:none;
+      box-shadow: 0 0 18px rgba(57,255,20,.2);
+      z-index:9999;
+    }
+
+    /* Mobile */
+    @media (max-width:760px){
+      .grid{ grid-template-columns:1fr; }
+    }
+  </style>
 </head>
 <body>
   <header class="wrap" style="padding-top:0">
@@ -14,51 +73,214 @@
   <div class="wrap">
     <div class="scorebar">
       <div class="score">Your points: <span id="pts">0</span></div>
-      <a class="btn" href="index.html">⬅ Back</a>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <span class="badge">Battle <span id="battleIndex">1</span>/<span id="battleTotal">1</span></span>
+        <a class="btn" href="tournament-brackets.html">🏁 Brackets</a>
+        <a class="btn" href="menu.html">← Menu</a>
+      </div>
     </div>
 
-    <div class="grid">
-      <!-- LEFT TILE -->
+    <div class="countdown">
+      Decision in: <span id="clock">00:00:00</span>
+    </div>
+
+    <div class="grid" id="grid">
+      <!-- Left -->
       <div class="tile">
-        <!-- Replace with <img class="art" src="left.jpg" alt="Left entry"> -->
-        <div class="art"></div>
+        <img id="leftArt" class="art" alt="Left entry" />
         <div class="meta">
-          <span>Entry #101 — LEFT</span>
-          <button class="btn primary" onclick="vote('left')">Vote Left</button>
+          <span id="leftLabel">Entry — LEFT</span>
+          <button class="btn primary" id="voteLeft">Vote Left</button>
         </div>
       </div>
 
-      <!-- RIGHT TILE -->
+      <!-- Right -->
       <div class="tile">
-        <div class="art"></div>
+        <img id="rightArt" class="art" alt="Right entry" />
         <div class="meta">
-          <span>Entry #102 — RIGHT</span>
-          <button class="btn primary" onclick="vote('right')">Vote Right</button>
+          <span id="rightLabel">Entry — RIGHT</span>
+          <button class="btn primary" id="voteRight">Vote Right</button>
         </div>
       </div>
+    </div>
+
+    <div class="vote-row">
+      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
+      <button class="btn" id="skipBtn" title="Go to next battle">⏭ Next Battle</button>
     </div>
   </div>
 
   <div id="toast" class="toast"></div>
 
   <script>
+    /** ---- Demo data (replace with Supabase later) ---- **/
+    // Every battle gets a stable id, an endsAt ISO (24h window), and two entries.
+    const DEMO_BATTLES = [
+      {
+        id: 'b-1001',
+        endsAt: new Date(Date.now() + 1000*60*60*8).toISOString(), // 8h from now
+        left:  { id:'e-101', label:'Entry #101 — “Signal Bleed”',  img:'https://picsum.photos/seed/rs-left1/800/1000' },
+        right: { id:'e-102', label:'Entry #102 — “Red Drift”',     img:'https://picsum.photos/seed/rs-right1/800/1000' }
+      },
+      {
+        id: 'b-1002',
+        endsAt: new Date(Date.now() + 1000*60*60*22).toISOString(), // 22h
+        left:  { id:'e-103', label:'Entry #103 — “Static Teeth”',  img:'https://picsum.photos/seed/rs-left2/800/1000' },
+        right: { id:'e-104', label:'Entry #104 — “Neon Flood”',    img:'https://picsum.photos/seed/rs-right2/800/1000' }
+      },
+      {
+        id: 'b-1003',
+        endsAt: new Date(Date.now() + 1000*60*60*26).toISOString(), // 26h (tomorrow window)
+        left:  { id:'e-105', label:'Entry #105 — “Cold CRT”',      img:'https://picsum.photos/seed/rs-left3/800/1000' },
+        right: { id:'e-106', label:'Entry #106 — “Burn-In”',       img:'https://picsum.photos/seed/rs-right3/800/1000' }
+      },
+    ];
+
+    /** ---- State & DOM ---- **/
     const ptsEl = document.getElementById('pts');
     const toast = document.getElementById('toast');
-    let pts = 0;
+    const clock = document.getElementById('clock');
+    const battleIndexEl = document.getElementById('battleIndex');
+    const battleTotalEl = document.getElementById('battleTotal');
 
-    function vote(side){
-      pts += 10;
-      ptsEl.textContent = pts;
-      showToast(`You voted ${side.toUpperCase()} (+10 pts)`);
-      // TODO: send to Supabase + lock vote per round
-    }
+    const leftArt = document.getElementById('leftArt');
+    const rightArt = document.getElementById('rightArt');
+    const leftLabel = document.getElementById('leftLabel');
+    const rightLabel = document.getElementById('rightLabel');
 
+    const voteLeftBtn = document.getElementById('voteLeft');
+    const voteRightBtn = document.getElementById('voteRight');
+    const submitBtn = document.getElementById('submitBtn');
+    const skipBtn = document.getElementById('skipBtn');
+
+    let pts = parseInt(localStorage.getItem('rs_points') || '0', 10);
+    ptsEl.textContent = pts;
+
+    const TOTAL = DEMO_BATTLES.length;
+    battleTotalEl.textContent = TOTAL;
+
+    // Restore where the user left off:
+    let idx = parseInt(localStorage.getItem('rs_matchup_index') || '0', 10);
+    if (Number.isNaN(idx) || idx < 0 || idx >= TOTAL) idx = 0;
+
+    let chosen = null; // 'left' | 'right'
+
+    /** ---- Helpers ---- **/
     function showToast(msg){
       toast.textContent = msg;
       toast.style.display = 'block';
       clearTimeout(showToast._t);
       showToast._t = setTimeout(()=> toast.style.display='none', 1400);
     }
+
+    function fmtClock(ms){
+      if (ms <= 0) return '00:00:00';
+      const s = Math.floor(ms/1000);
+      const hh = String(Math.floor(s/3600)).padStart(2,'0');
+      const mm = String(Math.floor((s%3600)/60)).padStart(2,'0');
+      const ss = String(s%60).padStart(2,'0');
+      return `${hh}:${mm}:${ss}`;
+    }
+
+    function lockVoteKey(battleId){ return `rs_vote_${battleId}`; }
+
+    /** ---- Render battle ---- **/
+    function render(){
+      const b = DEMO_BATTLES[idx];
+      battleIndexEl.textContent = (idx+1).toString();
+
+      // art + labels
+      leftArt.src = b.left.img;
+      rightArt.src = b.right.img;
+      leftLabel.textContent = b.left.label;
+      rightLabel.textContent = b.right.label;
+
+      // restore selection if any (but do not auto-submit)
+      chosen = null;
+      submitBtn.disabled = true;
+      voteLeftBtn.disabled = false;
+      voteRightBtn.disabled = false;
+
+      // if already voted in this battle, disable voting
+      const locked = localStorage.getItem(lockVoteKey(b.id));
+      if (locked){
+        voteLeftBtn.disabled = true;
+        voteRightBtn.disabled = true;
+        submitBtn.disabled = true;
+        showToast('You already voted in this battle.');
+      }
+
+      // countdown
+      updateClock();
+      clearInterval(render._t);
+      render._t = setInterval(updateClock, 1000);
+    }
+
+    function updateClock(){
+      const b = DEMO_BATTLES[idx];
+      const ms = new Date(b.endsAt).getTime() - Date.now();
+      clock.textContent = fmtClock(ms);
+      if (ms <= 0){
+        submitBtn.disabled = true;
+        voteLeftBtn.disabled = true;
+        voteRightBtn.disabled = true;
+      }
+    }
+
+    /** ---- Voting ---- **/
+    voteLeftBtn.addEventListener('click', ()=>{
+      if (voteLeftBtn.disabled) return;
+      chosen = 'left';
+      submitBtn.disabled = false;
+      showToast('Selected LEFT');
+    });
+    voteRightBtn.addEventListener('click', ()=>{
+      if (voteRightBtn.disabled) return;
+      chosen = 'right';
+      submitBtn.disabled = false;
+      showToast('Selected RIGHT');
+    });
+
+    submitBtn.addEventListener('click', async ()=>{
+      const b = DEMO_BATTLES[idx];
+      if (!chosen) return;
+
+      // lock local vote
+      localStorage.setItem(lockVoteKey(b.id), chosen);
+
+      // demo: give points
+      pts += 10;
+      ptsEl.textContent = pts;
+      localStorage.setItem('rs_points', String(pts));
+
+      // TODO: Supabase insert:
+      //  - votes table: battle_id, entry_id, user_id, created_at
+      //  - use RLS to lock one vote per (battle_id, user_id)
+      //  - server-verified 24h window
+      showToast(`Vote submitted: ${chosen.toUpperCase()} (+10 pts)`);
+
+      // go next after a short beat
+      setTimeout(nextBattle, 600);
+    });
+
+    skipBtn.addEventListener('click', nextBattle);
+
+    function nextBattle(){
+      idx = (idx + 1) % TOTAL;
+      localStorage.setItem('rs_matchup_index', String(idx));
+      render();
+    }
+
+    // If a brackets page sent us to a specific battle id
+    const urlParams = new URLSearchParams(location.search);
+    const jumpTo = urlParams.get('battle');
+    if (jumpTo){
+      const found = DEMO_BATTLES.findIndex(b => b.id === jumpTo);
+      if (found >= 0) idx = found;
+    }
+
+    // boot
+    render();
   </script>
 </body>
 </html>
