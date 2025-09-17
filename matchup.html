@@ -27,12 +27,8 @@
     .btn{ border:1px solid var(--green); color:var(--green); text-decoration:none; padding:8px 12px; border-radius:10px; display:inline-flex; align-items:center; gap:8px; background:transparent; cursor:pointer; }
     .btn.primary{ background:rgba(57,255,20,.08) }
     .btn:disabled{ opacity:.45; cursor:not-allowed }
-    .grid{
-      margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:16px;
-    }
-    .tile{
-      border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(7,7,7,.6);
-    }
+    .grid{ margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .tile{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(7,7,7,.6); }
     .art{
       aspect-ratio: 4/5;
       background: linear-gradient(45deg, rgba(57,255,20,.08), transparent 60%), #050505;
@@ -42,15 +38,9 @@
       display:flex; gap:12px; align-items:center; justify-content:space-between;
       padding:10px 12px; border-top:1px solid var(--border);
     }
-    .badge{
-      font-size:.9rem; color:var(--ink); opacity:.75;
-    }
-    .countdown{
-      margin-top:12px; text-align:center; font-variant-numeric:tabular-nums;
-    }
-    .vote-row{
-      margin-top:14px; display:flex; gap:10px; align-items:center; justify-content:center;
-    }
+    .badge{ font-size:.9rem; color:var(--ink); opacity:.75; }
+    .countdown{ margin-top:12px; text-align:center; font-variant-numeric:tabular-nums; }
+    .vote-row{ margin-top:14px; display:flex; gap:10px; align-items:center; justify-content:center; }
     .toast{
       position:fixed; left:50%; transform:translateX(-50%);
       bottom:24px; background:#0a0a0a; color:var(--ink);
@@ -58,11 +48,7 @@
       box-shadow: 0 0 18px rgba(57,255,20,.2);
       z-index:9999;
     }
-
-    /* Mobile */
-    @media (max-width:760px){
-      .grid{ grid-template-columns:1fr; }
-    }
+    @media (max-width:760px){ .grid{ grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -112,31 +98,20 @@
 
   <div id="toast" class="toast"></div>
 
-  <script>
-    /** ---- Demo data (replace with Supabase later) ---- **/
-    // Every battle gets a stable id, an endsAt ISO (24h window), and two entries.
-    const DEMO_BATTLES = [
-      {
-        id: 'b-1001',
-        endsAt: new Date(Date.now() + 1000*60*60*8).toISOString(), // 8h from now
-        left:  { id:'e-101', label:'Entry #101 — “Signal Bleed”',  img:'https://picsum.photos/seed/rs-left1/800/1000' },
-        right: { id:'e-102', label:'Entry #102 — “Red Drift”',     img:'https://picsum.photos/seed/rs-right1/800/1000' }
-      },
-      {
-        id: 'b-1002',
-        endsAt: new Date(Date.now() + 1000*60*60*22).toISOString(), // 22h
-        left:  { id:'e-103', label:'Entry #103 — “Static Teeth”',  img:'https://picsum.photos/seed/rs-left2/800/1000' },
-        right: { id:'e-104', label:'Entry #104 — “Neon Flood”',    img:'https://picsum.photos/seed/rs-right2/800/1000' }
-      },
-      {
-        id: 'b-1003',
-        endsAt: new Date(Date.now() + 1000*60*60*26).toISOString(), // 26h (tomorrow window)
-        left:  { id:'e-105', label:'Entry #105 — “Cold CRT”',      img:'https://picsum.photos/seed/rs-left3/800/1000' },
-        right: { id:'e-106', label:'Entry #106 — “Burn-In”',       img:'https://picsum.photos/seed/rs-right3/800/1000' }
-      },
-    ];
+  <!-- Supabase client -->
+  <script type="module">
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-    /** ---- State & DOM ---- **/
+    /************** CONFIG (your values) **************/
+    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+    const TOURNAMENT_ID = "682da23f-6e32-4782-8b8a-8e59527d6b58";
+    const MAX_MATCHES = 8;
+
+    /************** Supabase **************/
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    /************** State & DOM **************/
     const ptsEl = document.getElementById('pts');
     const toast = document.getElementById('toast');
     const clock = document.getElementById('clock');
@@ -156,23 +131,30 @@
     let pts = parseInt(localStorage.getItem('rs_points') || '0', 10);
     ptsEl.textContent = pts;
 
-    const TOTAL = DEMO_BATTLES.length;
-    battleTotalEl.textContent = TOTAL;
+    // per-device session id to enforce one vote / match
+    const SESSION_KEY = 'rs_session_id';
+    let sessionId = localStorage.getItem(SESSION_KEY);
+    if (!sessionId){ sessionId = crypto.randomUUID(); localStorage.setItem(SESSION_KEY, sessionId); }
 
-    // Restore where the user left off:
-    let idx = parseInt(localStorage.getItem('rs_matchup_index') || '0', 10);
-    if (Number.isNaN(idx) || idx < 0 || idx >= TOTAL) idx = 0;
+    // Deep link support (?battle=<match_id>)
+    const urlParams = new URLSearchParams(location.search);
+    const jumpTo = urlParams.get('battle');
 
-    let chosen = null; // 'left' | 'right'
+    // data
+    let BATTLES = [];
+    let idx = 0;
+    let chosen = null;
+    let tickHandle = null;
 
-    /** ---- Helpers ---- **/
+    function lockVoteKey(battleId){ return `rs_vote_${battleId}`; }
+
+    /************** Helpers **************/
     function showToast(msg){
       toast.textContent = msg;
       toast.style.display = 'block';
       clearTimeout(showToast._t);
       showToast._t = setTimeout(()=> toast.style.display='none', 1400);
     }
-
     function fmtClock(ms){
       if (ms <= 0) return '00:00:00';
       const s = Math.floor(ms/1000);
@@ -181,44 +163,87 @@
       const ss = String(s%60).padStart(2,'0');
       return `${hh}:${mm}:${ss}`;
     }
+    function safeSrc(el, url){
+      if (!url){ el.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='; return false; }
+      el.src = url; return true;
+    }
 
-    function lockVoteKey(battleId){ return `rs_vote_${battleId}`; }
+    /************** Load battles from Supabase **************/
+    async function loadBattles(){
+      const { data, error } = await supabase
+        .from('match_public')
+        .select('*')
+        .eq('tournament_id', TOURNAMENT_ID)
+        .in('state', ['open','scheduled'])          // show open and upcoming
+        .order('round_number', { ascending: true })
+        .order('index_in_round', { ascending: true })
+        .limit(MAX_MATCHES);
 
-    /** ---- Render battle ---- **/
+      if (error){ console.error(error); showToast('Failed to load matches.'); return; }
+
+      BATTLES = (data || []).map(r => ({
+        id: r.id,
+        round: r.round_number,
+        indexInRound: r.index_in_round,
+        state: r.state,                               // 'open' | 'scheduled'
+        start: r.start_time,
+        end: r.end_time,
+        left:  { id:r.a_id, label:r.a_name, img:r.a_image },
+        right: { id:r.b_id, label:r.b_name, img:r.b_image },
+      }));
+
+      // Jump to specific battle if provided
+      if (jumpTo){
+        const found = BATTLES.findIndex(b => b.id === jumpTo);
+        if (found >= 0) idx = found;
+      }
+
+      battleTotalEl.textContent = BATTLES.length || 0;
+
+      if (!BATTLES.length){
+        leftLabel.textContent = 'No matches available';
+        rightLabel.textContent = 'Check back soon';
+        voteLeftBtn.disabled = true; voteRightBtn.disabled = true; submitBtn.disabled = true;
+        return;
+      }
+      render();
+    }
+
+    /************** Render a battle **************/
     function render(){
-      const b = DEMO_BATTLES[idx];
+      const b = BATTLES[idx];
       battleIndexEl.textContent = (idx+1).toString();
 
-      // art + labels
-      leftArt.src = b.left.img;
-      rightArt.src = b.right.img;
-      leftLabel.textContent = b.left.label;
-      rightLabel.textContent = b.right.label;
+      // art + labels (TBD supported)
+      const hasL = safeSrc(leftArt,  b.left?.img);
+      const hasR = safeSrc(rightArt, b.right?.img);
+      leftLabel.textContent  = hasL ? b.left.label  : 'TBD';
+      rightLabel.textContent = hasR ? b.right.label : 'TBD';
 
-      // restore selection if any (but do not auto-submit)
+      // voting window + lock
+      const now    = Date.now();
+      const starts = new Date(b.start).getTime();
+      const ends   = new Date(b.end).getTime();
+      const inWindow = now >= starts && now < ends;
+      const votable  = b.state === 'open' && inWindow && hasL && hasR;
+
+      const locked = !!localStorage.getItem(lockVoteKey(b.id));
       chosen = null;
       submitBtn.disabled = true;
-      voteLeftBtn.disabled = false;
-      voteRightBtn.disabled = false;
+      voteLeftBtn.disabled  = !votable || locked;
+      voteRightBtn.disabled = !votable || locked;
 
-      // if already voted in this battle, disable voting
-      const locked = localStorage.getItem(lockVoteKey(b.id));
-      if (locked){
-        voteLeftBtn.disabled = true;
-        voteRightBtn.disabled = true;
-        submitBtn.disabled = true;
-        showToast('You already voted in this battle.');
-      }
+      if (locked) showToast('You already voted in this battle.');
 
       // countdown
       updateClock();
-      clearInterval(render._t);
-      render._t = setInterval(updateClock, 1000);
+      clearInterval(tickHandle);
+      tickHandle = setInterval(updateClock, 1000);
     }
 
     function updateClock(){
-      const b = DEMO_BATTLES[idx];
-      const ms = new Date(b.endsAt).getTime() - Date.now();
+      const b = BATTLES[idx];
+      const ms = new Date(b.end).getTime() - Date.now();
       clock.textContent = fmtClock(ms);
       if (ms <= 0){
         submitBtn.disabled = true;
@@ -227,60 +252,60 @@
       }
     }
 
-    /** ---- Voting ---- **/
+    /************** Voting **************/
     voteLeftBtn.addEventListener('click', ()=>{
       if (voteLeftBtn.disabled) return;
-      chosen = 'left';
+      chosen = 'A'; // left = slot A
       submitBtn.disabled = false;
       showToast('Selected LEFT');
     });
     voteRightBtn.addEventListener('click', ()=>{
       if (voteRightBtn.disabled) return;
-      chosen = 'right';
+      chosen = 'B'; // right = slot B
       submitBtn.disabled = false;
       showToast('Selected RIGHT');
     });
 
     submitBtn.addEventListener('click', async ()=>{
-      const b = DEMO_BATTLES[idx];
+      const b = BATTLES[idx];
       if (!chosen) return;
 
-      // lock local vote
+      submitBtn.disabled = true;
+
+      // Insert vote (RLS enforces 'open' window + one per session)
+      const { error } = await supabase.from('votes').insert({
+        match_id: b.id,
+        slot: chosen,                 // 'A' | 'B'
+        session_id: sessionId
+      });
+
+      if (error){
+        console.error(error);
+        showToast('Vote failed.');
+        submitBtn.disabled = false;
+        return;
+      }
+
+      // lock locally
       localStorage.setItem(lockVoteKey(b.id), chosen);
 
-      // demo: give points
-      pts += 10;
-      ptsEl.textContent = pts;
+      // points (client-side gamification)
+      pts += 10; ptsEl.textContent = pts;
       localStorage.setItem('rs_points', String(pts));
 
-      // TODO: Supabase insert:
-      //  - votes table: battle_id, entry_id, user_id, created_at
-      //  - use RLS to lock one vote per (battle_id, user_id)
-      //  - server-verified 24h window
-      showToast(`Vote submitted: ${chosen.toUpperCase()} (+10 pts)`);
-
-      // go next after a short beat
+      showToast(`Vote submitted: ${chosen==='A'?'LEFT':'RIGHT'} (+10 pts)`);
       setTimeout(nextBattle, 600);
     });
 
     skipBtn.addEventListener('click', nextBattle);
-
     function nextBattle(){
-      idx = (idx + 1) % TOTAL;
-      localStorage.setItem('rs_matchup_index', String(idx));
+      if (!BATTLES.length) return;
+      idx = (idx + 1) % BATTLES.length;
       render();
     }
 
-    // If a brackets page sent us to a specific battle id
-    const urlParams = new URLSearchParams(location.search);
-    const jumpTo = urlParams.get('battle');
-    if (jumpTo){
-      const found = DEMO_BATTLES.findIndex(b => b.id === jumpTo);
-      if (found >= 0) idx = found;
-    }
-
     // boot
-    render();
+    loadBattles();
   </script>
 </body>
 </html>
