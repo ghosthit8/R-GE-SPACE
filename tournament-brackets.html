@@ -22,26 +22,24 @@
     .toolbar{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
     .btn{ border:1px solid var(--green); color:var(--green); text-decoration:none; padding:8px 12px; border-radius:10px; display:inline-flex; align-items:center; gap:8px; background:transparent; cursor:pointer; }
 
-    /* Pan/zoom viewport */
     .viewport{
       position:fixed; inset:56px 8px 8px; border:1px solid var(--border); border-radius:14px; overflow:hidden;
       background:
         radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.08), transparent 60%),
         repeating-linear-gradient(to bottom, rgba(255,255,255,.03) 0, rgba(255,255,255,.03) 2px, transparent 2px, transparent 4px),
         rgba(7,7,7,.45);
-      touch-action: none; /* required for custom pinch/pan */
+      touch-action: none;
     }
 
-    /* Big canvas so you can zoom far out */
     .layer{ position:absolute; top:0; left:0; width:3000px; height:2200px; transform-origin:0 0; }
     svg.wires{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
     .nodes{ position:absolute; inset:0; z-index:1; }
 
-    /* Cards */
     .node{ position:absolute; width:220px; }
     .card{
       border:1px solid var(--border); border-radius:12px; overflow:hidden; background:rgba(0,0,0,.55);
       box-shadow: 0 0 18px rgba(57,255,20,.08) inset; backdrop-filter: blur(1px);
+      position: relative;
     }
     .thumb{ display:block; width:100%; aspect-ratio:3/4; object-fit:cover; background:#050505; }
     .meta{ padding:8px 10px; border-top:1px solid var(--border); }
@@ -58,13 +56,25 @@
     .entrant .enter{ display:none; }
     .entrant .title{ opacity:.9; }
 
+    /* TBD look */
+    .tbd .thumb{
+      background:
+        repeating-linear-gradient(45deg, rgba(57,255,20,.08) 0 6px, transparent 6px 12px),
+        #0a0a0a;
+      filter: saturate(.4) contrast(.9) brightness(.9);
+    }
+    .tbd .tbd-badge{
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      font-size:3rem; font-weight:900; color:rgba(57,255,20,.75);
+      text-shadow:0 0 10px rgba(57,255,20,.4); pointer-events:none;
+    }
+
     .hint{
       position:absolute; right:12px; bottom:8px; font-size:.85rem; opacity:.75;
       background:rgba(0,0,0,.45); border:1px solid var(--border); border-radius:8px; padding:6px 8px;
       pointer-events:none;
     }
 
-    /* Zoom controls */
     .zoom-controls{
       position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:8px; z-index:5;
     }
@@ -91,7 +101,6 @@
     <svg class="layer wires" id="wires" viewBox="0 0 3000 2200" preserveAspectRatio="none"></svg>
     <div class="layer nodes" id="nodes"></div>
 
-    <!-- On-screen zoom controls -->
     <div class="zoom-controls">
       <button id="zoomin"  aria-label="Zoom in">＋</button>
       <button id="zoomout" aria-label="Zoom out">－</button>
@@ -105,16 +114,16 @@
     /************* CONFIG *************/
     function hours(h){ return Date.now()+h*3600*1000; }
 
-    // 8 entrants (first round shown as one straight row)
+    // 8 entrants in one top row
     const ENTRANTS = [
-      {name:'Seed 1', img:'https://picsum.photos/seed/e1/600/800', v:0},
-      {name:'Seed 2', img:'https://picsum.photos/seed/e2/600/800', v:0},
-      {name:'Seed 3', img:'https://picsum.photos/seed/e3/600/800', v:0},
-      {name:'Seed 4', img:'https://picsum.photos/seed/e4/600/800', v:0},
-      {name:'Seed 5', img:'https://picsum.photos/seed/e5/600/800', v:0},
-      {name:'Seed 6', img:'https://picsum.photos/seed/e6/600/800', v:0},
-      {name:'Seed 7', img:'https://picsum.photos/seed/e7/600/800', v:0},
-      {name:'Seed 8', img:'https://picsum.photos/seed/e8/600/800', v:0},
+      {name:'Seed 1', img:'https://picsum.photos/seed/e1/600/800', v:12},
+      {name:'Seed 2', img:'https://picsum.photos/seed/e2/600/800', v:17},
+      {name:'Seed 3', img:'https://picsum.photos/seed/e3/600/800', v:9 },
+      {name:'Seed 4', img:'https://picsum.photos/seed/e4/600/800', v:6 },
+      {name:'Seed 5', img:'https://picsum.photos/seed/e5/600/800', v:15},
+      {name:'Seed 6', img:'https://picsum.photos/seed/e6/600/800', v:10},
+      {name:'Seed 7', img:'https://picsum.photos/seed/e7/600/800', v:11},
+      {name:'Seed 8', img:'https://picsum.photos/seed/e8/600/800', v:8 },
     ];
 
     // Layout constants
@@ -134,89 +143,113 @@
     const nodesEl  = document.getElementById('nodes');
     const wiresEl  = document.getElementById('wires');
 
-    function nodeHTML({id,x,y,a,b,ends,entrant=false}){
+    // In-memory node registry so we can update cards later
+    const NODE = new Map(); // id -> {type, el, data}
+
+    function nodeHTML({id,x,y,a,b,ends,entrant=false,tbd=false}){
       return `
-        <div class="node ${entrant?'entrant':''}" data-id="${id}" style="left:${x}px; top:${y}px">
-          <article class="card" title="${entrant?'Entrant':'Open battle'}">
-            <img class="thumb" src="${a.img}" alt="">
+        <div class="node ${entrant?'entrant':''} ${tbd?'tbd':''}" data-id="${id}" style="left:${x}px; top:${y}px">
+          <article class="card" title="${tbd?'TBD':'Open battle'}">
+            <img class="thumb" src="${(tbd? 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' : a.img)}" alt="">
+            ${tbd?'<div class="tbd-badge">?</div>':''}
             <div class="meta">
-              <h3 class="title">${entrant ? a.name : `${a.name} vs ${b.name}`}</h3>
+              <h3 class="title">${tbd ? 'TBD' : (entrant ? a.name : `${a.name} vs ${b.name}`)}</h3>
               <div class="row">
                 <span class="timer" data-ends="${ends}"></span>
-                <span class="votes">${a.v}${entrant?'':` - ${b.v}`}</span>
+                <span class="votes">${tbd ? '—' : (entrant ? a.v : `${a.v} - ${b.v}`)}</span>
               </div>
               <div class="enter"><a class="btn" href="matchup.html?battle=${id}">Enter</a></div>
             </div>
           </article>
         </div>`;
     }
+    function getNodeEl(id){ return nodesEl.querySelector(`[data-id="${id}"]`); }
+    function setCardToWinner(id, winner){
+      const el = getNodeEl(id);
+      if (!el) return;
+      el.classList.remove('tbd');
+      const img = el.querySelector('.thumb');
+      const title = el.querySelector('.title');
+      const votes = el.querySelector('.votes');
+      const badge = el.querySelector('.tbd-badge');
+      if (badge) badge.remove();
+      img.src = winner.img;
+      title.textContent = winner.name;
+      votes.textContent = winner.v ?? 0;
+    }
+
     function addClickNav(){
       nodesEl.addEventListener('click',(e)=>{
         const tile = e.target.closest('.node');
-        if (!tile || tile.classList.contains('entrant')) return;
+        if (!tile || tile.classList.contains('entrant') || tile.classList.contains('tbd')) return; // entrants & TBD cards don't navigate
         if (e.target.closest('a')) return;
         location.href = `matchup.html?battle=${tile.dataset.id}`;
       });
     }
 
     /************* BUILD LAYOUT *************/
-    // Entrants row
+    // 1) Entrants row
     let html = '';
     const entrantCenters = [];
     ENTRANTS.forEach((p, i)=>{
       const x = X_START + i*X_GAP;
       entrantCenters.push(x + CARD_W/2);
       html += nodeHTML({ id:`E${i+1}`, x, y:Y_R1, a:p, b:p, ends:hours(8), entrant:true });
+      NODE.set(`E${i+1}`, {type:'entrant', data:{a:p, ends:hours(8)}});
     });
     nodesEl.innerHTML = html;
     addClickNav();
 
+    // 2) After render, add QFs/Semis/Final as TBD and draw wires
     requestAnimationFrame(()=>{
       const anyCard = nodesEl.querySelector('.card');
       if (anyCard) CARD_H = anyCard.getBoundingClientRect().height;
 
-      // QFs
+      // Quarterfinals: center under each pair, TBD
       const qfX = [];
       for(let i=0;i<4;i++){
         const c = (entrantCenters[i*2] + entrantCenters[i*2+1]) / 2 - CARD_W/2;
         qfX.push(c);
+        const id=`QF${i+1}`;
+        const ends=hours(12); // demo; swap from DB
         nodesEl.insertAdjacentHTML('beforeend', nodeHTML({
-          id:`QF${i+1}`, x:c, y:Y_QF,
-          a:{name:`E${i*2+1}`, img:ENTRANTS[i*2].img, v:0},
-          b:{name:`E${i*2+2}`, img:ENTRANTS[i*2+1].img, v:0},
-          ends:hours(12)
+          id, x:c, y:Y_QF, a:{name:'TBD', img:''}, b:{name:'TBD', img:''}, ends, tbd:true
         }));
+        NODE.set(id, {type:'match', data:{a:null,b:null,ends, decided:false}});
       }
 
-      // Semis
+      // Semis: TBD
       const semiX = [];
       for(let i=0;i<2;i++){
         const c = (qfX[i*2] + CARD_W/2 + qfX[i*2+1] + CARD_W/2) / 2 - CARD_W/2;
         semiX.push(c);
+        const id=`SF${i+1}`;
+        const ends=hours(16);
         nodesEl.insertAdjacentHTML('beforeend', nodeHTML({
-          id:`SF${i+1}`, x:c, y:Y_SEMI,
-          a:{name:`Winner QF${i*2+1}`, img:ENTRANTS[i*4].img, v:0},
-          b:{name:`Winner QF${i*2+2}`, img:ENTRANTS[i*4+2].img, v:0},
-          ends:hours(16)
+          id, x:c, y:Y_SEMI, a:{name:'TBD', img:''}, b:{name:'TBD', img:''}, ends, tbd:true
         }));
+        NODE.set(id, {type:'match', data:{a:null,b:null,ends, decided:false}});
       }
 
-      // Final
+      // Final: TBD
       const finalCenter = (semiX[0] + CARD_W/2 + semiX[1] + CARD_W/2)/2 - CARD_W/2;
+      const finalEnds=hours(20);
       nodesEl.insertAdjacentHTML('beforeend', nodeHTML({
-        id:'FINAL', x:finalCenter, y:Y_FINAL,
-        a:{name:'Winner SF1', img:ENTRANTS[0].img, v:0},
-        b:{name:'Winner SF2', img:ENTRANTS[4].img, v:0},
-        ends:hours(20)
+        id:'FINAL', x:finalCenter, y:Y_FINAL, a:{name:'TBD', img:''}, b:{name:'TBD', img:''}, ends:finalEnds, tbd:true
       }));
+      NODE.set('FINAL', {type:'match', data:{a:null,b:null,ends:finalEnds, decided:false}});
 
+      // Draw wires now that everything exists
       drawWires();
       centerOnLoad();
+
+      // Start propagation loop
+      startEngine();
     });
 
     /************* WIRES *************/
     function rectOf(id){
-      const el = nodesEl.querySelector(`[data-id="${id}"]`);
+      const el = getNodeEl(id);
       return { x: parseFloat(el.style.left), y: parseFloat(el.style.top) };
     }
     function tc(r){ return [r.x + CARD_W/2, r.y]; }
@@ -238,12 +271,15 @@
     function drawWires(){
       wiresEl.innerHTML='';
       const pairs = [
+        // Entrants -> Quarterfinals
         ['E1','QF1'], ['E2','QF1'],
         ['E3','QF2'], ['E4','QF2'],
         ['E5','QF3'], ['E6','QF3'],
         ['E7','QF4'], ['E8','QF4'],
+        // QFs -> Semis
         ['QF1','SF1'], ['QF2','SF1'],
         ['QF3','SF2'], ['QF4','SF2'],
+        // Semis -> Final
         ['SF1','FINAL'], ['SF2','FINAL'],
       ];
       pairs.forEach(([a,b])=>{
@@ -251,7 +287,7 @@
       });
     }
 
-    /************* Timers *************/
+    /************* TIMER + PROPAGATION ENGINE *************/
     function fmt(ms){
       if(ms<=0) return '00:00:00';
       const s=Math.floor(ms/1000);
@@ -260,14 +296,104 @@
       const ss=String(s%60).padStart(2,'0');
       return `${hh}:${mm}:${ss}`;
     }
-    function tick(){
+    function tickTimers(){
       document.querySelectorAll('.timer').forEach(el=>{
         const ends=+el.dataset.ends;
-        el.textContent=fmt(ends-Date.now());
+        const left = ends - Date.now();
+        el.textContent = fmt(left);
       });
     }
-    tick(); const tId=setInterval(tick,1000);
-    window.addEventListener('beforeunload',()=>clearInterval(tId));
+    tickTimers(); setInterval(tickTimers, 1000);
+
+    // Edges with slot info: who feeds into which parent slot
+    const EDGE_SLOTS = [
+      { from:'E1', to:'QF1', slot:'a' }, { from:'E2', to:'QF1', slot:'b' },
+      { from:'E3', to:'QF2', slot:'a' }, { from:'E4', to:'QF2', slot:'b' },
+      { from:'E5', to:'QF3', slot:'a' }, { from:'E6', to:'QF3', slot:'b' },
+      { from:'E7', to:'QF4', slot:'a' }, { from:'E8', to:'QF4', slot:'b' },
+
+      { from:'QF1', to:'SF1', slot:'a' }, { from:'QF2', to:'SF1', slot:'b' },
+      { from:'QF3', to:'SF2', slot:'a' }, { from:'QF4', to:'SF2', slot:'b' },
+
+      { from:'SF1', to:'FINAL', slot:'a' }, { from:'SF2', to:'FINAL', slot:'b' },
+    ];
+
+    // Helper: decide a winner object {name,img,v} for a match node id
+    function winnerOf(matchId){
+      // demo rule: higher votes wins; entrants are not matches
+      if (matchId.startsWith('E')) return NODE.get(matchId).data.a;
+      const cardEl = getNodeEl(matchId);
+      if (!cardEl) return null;
+      // For demo, we stored nothing; but we know winners of QFs/SFs only after fill.
+      // We'll read current card DOM: if still TBD, no winner; else use current thumb/name.
+      if (cardEl.classList.contains('tbd')) return null;
+      const name = cardEl.querySelector('.title').textContent.trim();
+      const img  = cardEl.querySelector('.thumb').src;
+      const vTxt = cardEl.querySelector('.votes').textContent.trim();
+      const v    = parseInt(vTxt,10) || 0;
+      return {name, img, v};
+    }
+
+    // Demo “decider”: when a match timer expires, pick higher vote side from entrants feeding it
+    function decideMatch(id){
+      const el = getNodeEl(id);
+      if (!el) return;
+      if (!el.classList.contains('tbd')) return; // already decided
+
+      const ends = +el.querySelector('.timer').dataset.ends;
+      if (Date.now() < ends) return; // not done
+
+      // Figure out its two feeders
+      const feeders = EDGE_SLOTS.filter(e=>e.to===id).map(e=>e.from);
+      if (feeders.length!==2) return;
+
+      // Resolve each feeder to a candidate (for QF: entrants; for SF/FINAL: winners of previous)
+      const candA = winnerOf(feeders[0]) || NODE.get(feeders[0])?.data?.a;
+      const candB = winnerOf(feeders[1]) || NODE.get(feeders[1])?.data?.a;
+
+      if (!candA || !candB) return; // upstream not ready yet
+
+      const winner = (candA.v >= candB.v) ? candA : candB;
+      setCardToWinner(id, winner);
+      NODE.get(id).data.decided = true;
+      NODE.get(id).data.a = winner; // store winner for next round
+    }
+
+    function propagateUpstream(){
+      // resolve in order: QFs → SFs → FINAL
+      ['QF1','QF2','QF3','QF4','SF1','SF2','FINAL'].forEach(decideMatch);
+
+      // After deciding any match, fill its parent's slot image/name if parent still TBD
+      EDGE_SLOTS.forEach(edge=>{
+        const parentEl = getNodeEl(edge.to);
+        if (!parentEl) return;
+        const parentData = NODE.get(edge.to)?.data;
+        if (!parentEl.classList.contains('tbd')) return; // parent already decided
+
+        const winner = winnerOf(edge.from);
+        if (!winner) return;
+
+        // Pre-fill the parent card's title/thumb on that slot (visual hint), keep TBD overlay
+        const img = parentEl.querySelector('.thumb');
+        const title = parentEl.querySelector('.title');
+        if (edge.slot==='a'){
+          // Show left contender name (just for hint)
+          title.textContent = winner.name + '  vs  ?';
+        }else{
+          title.textContent = '?  vs  ' + winner.name;
+        }
+        // (Optional) we could compose a split image; for now leave the TBD background until decided.
+        // Store for the decider:
+        parentData[edge.slot] = winner;
+      });
+    }
+
+    function startEngine(){
+      // faster loop for visual snappiness, but cheap work
+      setInterval(()=>{
+        propagateUpstream();
+      }, 1000);
+    }
 
     /************* PAN & ZOOM (wheel, pinch, double-tap, buttons) *************/
     const layers=[wiresEl,nodesEl];
@@ -281,11 +407,10 @@
     }
     apply();
 
-    // Auto-center on load
     function centerOnLoad(){
-      const view = viewport.getBoundingClientRect();
       const totalWidth = X_START + (ENTRANTS.length-1)*X_GAP + CARD_W + X_START;
       const totalHeight = Y_FINAL + CARD_H + 80;
+      const view = viewport.getBoundingClientRect();
       const sx = (view.width - 40) / totalWidth;
       const sy = (view.height - 80) / totalHeight;
       scale = Math.max(minS, Math.min(maxS, Math.min(sx, sy)*0.95));
@@ -294,20 +419,20 @@
       apply();
     }
 
-    // Wheel zoom (desktop)
     viewport.addEventListener('wheel',(e)=>{
       e.preventDefault();
       const r=viewport.getBoundingClientRect();
       const mx=(e.clientX-r.left-tx)/scale, my=(e.clientY-r.top-ty)/scale;
       const ds=e.deltaY<0?1.12:0.9;
       const ns=Math.min(maxS,Math.max(minS,scale*ds));
-      tx = e.clientX-r.left - mx*ns;
-      ty = e.clientY-r.top  - my*ns;
-      scale=ns; apply();
+      tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
     },{passive:false});
 
-    // Drag to pan (single pointer)
+    // Pointer handling for drag + pinch
     let dragging=false, lx=0, ly=0;
+    const activePointers = new Map();
+    let isPinching=false, pinchStartDist=0, pinchStartScale=1, pinchCenter=[0,0];
+
     viewport.addEventListener('pointerdown',e=>{
       viewport.setPointerCapture(e.pointerId);
       activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
@@ -317,9 +442,9 @@
       if (!activePointers.has(e.pointerId)) return;
       activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
       if (activePointers.size===2){
-        pinchUpdate(); // handled below
+        pinchUpdate();
       } else if (dragging){
-        tx += e.clientX - lx; ty += e.clientY - ly; lx = e.clientX; ly = e.clientY; apply();
+        tx += e.clientX - lx; ty += e.clientY - ly; lx=e.clientX; ly=e.clientY; apply();
       }
     });
     viewport.addEventListener('pointerup',e=>{
@@ -332,64 +457,41 @@
       isPinching=false; dragging=false;
     });
 
-    // Double-tap zoom (mobile) / double-click (desktop)
     viewport.addEventListener('dblclick',(e)=>{
       const r=viewport.getBoundingClientRect();
       const mx=(e.clientX-r.left-tx)/scale, my=(e.clientY-r.top-ty)/scale;
       const factor = e.shiftKey ? 0.74 : 1.35;
       const ns=Math.min(maxS,Math.max(minS,scale*factor));
-      tx = e.clientX-r.left - mx*ns;
-      ty = e.clientY-r.top  - my*ns;
-      scale=ns; apply();
+      tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
     });
 
-    // Pinch-to-zoom (two pointers)
-    const activePointers = new Map(); // id -> {x,y}
-    let isPinching=false, pinchStartDist=0, pinchStartScale=1, pinchCenter=[0,0];
-
     function distance(p1,p2){ const dx=p1.x-p2.x, dy=p1.y-p2.y; return Math.hypot(dx,dy); }
-    function midpoint(p1,p2){ return [(p1.x+p2.x)/2, (p1.y+p2.y)/2]; }
-
     function pinchUpdate(){
-      const pts = [...activePointers.values()];
-      if (pts.length!==2) return;
+      const pts = [...activePointers.values()]; if (pts.length!==2) return;
       const p1=pts[0], p2=pts[1];
-
       if (!isPinching){
-        isPinching=true;
-        pinchStartDist = distance(p1,p2);
-        pinchStartScale = scale;
-        pinchCenter = midpoint(p1,p2);
+        isPinching=true; pinchStartDist = distance(p1,p2); pinchStartScale = scale;
+        const r=viewport.getBoundingClientRect();
+        pinchCenter = [(p1.x+p2.x)/2, (p1.y+p2.y)/2];
         return;
       }
       const r=viewport.getBoundingClientRect();
       const centerX = (pinchCenter[0]-r.left - tx)/scale;
       const centerY = (pinchCenter[1]-r.top  - ty)/scale;
-
       const dist = distance(p1,p2);
       const ns = Math.min(maxS, Math.max(minS, pinchStartScale * (dist/pinchStartDist)));
-
-      // keep the pinch center fixed
-      tx = pinchCenter[0]-r.left - centerX*ns;
-      ty = pinchCenter[1]-r.top  - centerY*ns;
-      scale = ns; apply();
+      tx = pinchCenter[0]-r.left - centerX*ns; ty = pinchCenter[1]-r.top - centerY*ns; scale = ns; apply();
     }
 
-    // On-screen zoom buttons
-    document.getElementById('zoomin').addEventListener('click', ()=>{
-      zoomBy(1.2);
-    });
-    document.getElementById('zoomout').addEventListener('click', ()=>{
-      zoomBy(1/1.2);
-    });
+    // Zoom buttons
+    document.getElementById('zoomin').addEventListener('click', ()=> zoomBy(1.2));
+    document.getElementById('zoomout').addEventListener('click', ()=> zoomBy(1/1.2));
     document.getElementById('zoomreset').addEventListener('click', centerOnLoad);
-
-    function zoomBy(factor){
+    function zoomBy(f){
       const r=viewport.getBoundingClientRect();
-      // zoom around viewport center
       const cx=r.width/2, cy=r.height/2;
       const mx=(cx-tx)/scale, my=(cy-ty)/scale;
-      const ns=Math.min(maxS,Math.max(minS,scale*factor));
+      const ns=Math.min(maxS,Math.max(minS,scale*f));
       tx = cx - mx*ns; ty = cy - my*ns; scale=ns; apply();
     }
   </script>
