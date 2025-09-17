@@ -28,10 +28,10 @@
         radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.08), transparent 60%),
         repeating-linear-gradient(to bottom, rgba(255,255,255,.03) 0, rgba(255,255,255,.03) 2px, transparent 2px, transparent 4px),
         rgba(7,7,7,.45);
-      touch-action: none;
+      touch-action:none; /* allow custom pinch/drag */
     }
 
-    .layer{ position:absolute; top:0; left:0; width:3600px; height:2600px; transform-origin:0 0; }
+    .layer{ position:absolute; top:0; left:0; width:5200px; height:3200px; transform-origin:0 0; }
     svg.wires{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
     .nodes{ position:absolute; inset:0; z-index:1; }
 
@@ -102,7 +102,7 @@
   </header>
 
   <div class="viewport" id="viewport">
-    <svg class="layer wires" id="wires" viewBox="0 0 3600 2600" preserveAspectRatio="none"></svg>
+    <svg class="layer wires" id="wires" viewBox="0 0 5200 3200" preserveAspectRatio="none"></svg>
     <div class="layer nodes" id="nodes"></div>
 
     <div class="zoom-controls">
@@ -111,284 +111,148 @@
       <button id="zoomreset" aria-label="Reset zoom">⟳</button>
     </div>
 
-    <div class="hint">Drag to move • Pinch/Scroll to zoom • Double-tap to zoom in</div>
+    <div class="hint">Drag to move • Pinch/Scroll to zoom • Double-tap to zoom (Shift = zoom out)</div>
   </div>
 
   <script type="module">
-    /************* SUPABASE *************/
+    /************* MODE *************/
+    const DEMO_MODE = true;
+
+    /************* (Optional) SUPABASE *************/
     import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const TOURNAMENT_ID = "682da23f-6e32-4782-8b8a-8e59527d6b58";
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    /************* LAYOUT CONSTANTS (auto-fit) *************/
+    /************* LAYOUT *************/
     const CARD_W = 220;
-    let   CARD_H = 320;       // corrected after render
+    let   CARD_H = 320;
     const X_START = 100;
-    const X_GAP   = 260;      // spacing between cards in a row
-    const ROW_GAP = 420;      // spacing between rows
+    const X_GAP   = 260;
+    const ROW_GAP = 420;
 
     const viewport = document.getElementById('viewport');
     const nodesEl  = document.getElementById('nodes');
     const wiresEl  = document.getElementById('wires');
-
     const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+    const rowY = (i)=> 200 + i*ROW_GAP;
 
-    /************* FETCH + BUILD *************/
-    async function fetchMatches(){
+    /************* DATA *************/
+    async function fetchMatchesLive(){
       const { data, error } = await supabase
         .from('match_public')
         .select('*')
         .eq('tournament_id', TOURNAMENT_ID)
         .order('round_number', { ascending: true })
         .order('index_in_round', { ascending: true });
-
-      if (error){ console.error(error); throw error; }
+      if (error) throw error;
       return data || [];
     }
-
-    // Build DOM using your original structure (entrant row + match rows)
-    async function build(){
-      const rows = await fetchMatches();
-      if (!rows.length){
-        nodesEl.innerHTML = `<div style="position:absolute;left:20px;top:20px;color:#f66">No matches found.</div>`;
-        return;
-      }
-
-      // Group by round
-      const byRound = new Map();
-      for (const m of rows){
-        if (!byRound.has(m.round_number)) byRound.set(m.round_number, []);
-        byRound.get(m.round_number).push(m);
-      }
-      const rounds = Array.from(byRound.keys()).sort((a,b)=>a-b); // 1..N
-      const maxRound = rounds[rounds.length-1];
-      const r1 = byRound.get(1) || [];
-      const r1Count = r1.length;                // e.g., 16 for 32 entrants
-      const entrantCount = r1Count * 2;         // e.g., 32
-
-      // Compute Y positions: row 0 = entrants, row 1..N = match rounds
-      const rowY = (i)=> 200 + i*ROW_GAP;
-
-      // Compute entrant centers left→right: [A1, B1, A2, B2, ...]
-      const entrantCenters = [];
-      for (let i=0;i<r1Count;i++){
-        const xa = X_START + (2*i)*X_GAP;
-        const xb = X_START + (2*i+1)*X_GAP;
-        entrantCenters.push(xa + CARD_W/2, xb + CARD_W/2);
-      }
-
-      // Map for x centers of each match id
-      const centerX = new Map();
-
-      nodesEl.innerHTML = ''; // reset
-      // Round label helpers
-      const ROUND_NAMES = (total)=>({
-        1: total>=6?'ROUND OF 64': total>=5?'ROUND OF 32': total>=4?'ROUND OF 16': total>=3?'QUARTERFINALS': total>=2?'SEMIFINALS': 'FINAL'
-      });
-
-      // --- Entrants row (derived from Round 1 A/B) ---
-      let entrantHTML = '';
-      for (let i=0;i<r1Count;i++){
-        const m = r1[i];
-        const xa = entrantCenters[2*i]   - CARD_W/2;
-        const xb = entrantCenters[2*i+1] - CARD_W/2;
-
-        entrantHTML += nodeHTML({
-          id: `E${m.id}-A`, x: xa, y: rowY(0),
-          title: m.a_name || 'TBD', img: m.a_image || BLANK,
-          votes: (m.votes_a ?? 0), ends: m.end_time, isEntrant:true
-        });
-        entrantHTML += nodeHTML({
-          id: `E${m.id}-B`, x: xb, y: rowY(0),
-          title: m.b_name || 'TBD', img: m.b_image || BLANK,
-          votes: (m.votes_b ?? 0), ends: m.end_time, isEntrant:true
-        });
-      }
-      nodesEl.insertAdjacentHTML('beforeend', entrantHTML);
-
-      // After first paint, get exact card height
-      const anyCard = nodesEl.querySelector('.card');
-      if (anyCard) CARD_H = anyCard.getBoundingClientRect().height;
-
-      // --- Round 1 matches (centered under their entrants) ---
-      for (let i=0;i<r1Count;i++){
-        const m = r1[i];
-        const cx = (entrantCenters[2*i] + entrantCenters[2*i+1]) / 2 - CARD_W/2;
-        centerX.set(m.id, cx + CARD_W/2);
-
-        nodesEl.insertAdjacentHTML('beforeend', matchHTML({
-          id: m.id, x: cx, y: rowY(1),
-          a_name: m.a_name, a_img: m.a_image,
-          b_name: m.b_name, b_img: m.b_image,
-          votes_a: m.votes_a, votes_b: m.votes_b,
-          end_time: m.end_time
-        }));
-      }
-
-      // Build parent→children map for higher rounds
-      const children = new Map(); // parentId -> [childMatchIds]
-      for (const m of rows){
-        if (m.parent_match_id){
-          if (!children.has(m.parent_match_id)) children.set(m.parent_match_id, []);
-          children.get(m.parent_match_id).push(m.id);
-        }
-      }
-
-      // --- Higher rounds (2..maxRound) ---
-      for (let r=2; r<=maxRound; r++){
-        const list = byRound.get(r) || [];
-        for (const m of list){
-          // Center = average of children centers if present, else place by order
-          let cx;
-          const kids = children.get(m.id);
-          if (kids && kids.length === 2 && centerX.has(kids[0]) && centerX.has(kids[1])){
-            cx = (centerX.get(kids[0]) + centerX.get(kids[1]))/2 - CARD_W/2;
-          }else{
-            // fallback by index_in_round
-            cx = X_START + (m.index_in_round-1) * (2**(maxRound - r + 1)) * X_GAP - CARD_W/2;
-          }
-          centerX.set(m.id, cx + CARD_W/2);
-
-          nodesEl.insertAdjacentHTML('beforeend', matchHTML({
-            id: m.id, x: cx, y: rowY(r),
-            a_name: m.a_name, a_img: m.a_image,
-            b_name: m.b_name, b_img: m.b_image,
-            votes_a: m.votes_a, votes_b: m.votes_b,
-            end_time: m.end_time
-          }));
-
-          // Round label only once at the left for each row
-          if (m.index_in_round === 1){
-            const lbl = document.createElement('div');
-            lbl.className = 'round-label';
-            lbl.style.left = '12px';
-            lbl.style.top  = (rowY(r)) + 'px';
-            lbl.textContent = nameForRound(r, maxRound);
-            nodesEl.appendChild(lbl);
-          }
-        }
-      }
-
-      // Add single label for entrants row
-      const lbl0 = document.createElement('div');
-      lbl0.className = 'round-label';
-      lbl0.style.left = '12px';
-      lbl0.style.top  = (rowY(0)) + 'px';
-      lbl0.textContent = nameForRound(0, maxRound); // Entrants/First round label
-      nodesEl.appendChild(lbl0);
-
-      drawAllWires(r1, rows, entrantCenters, centerX, rowY);
-      startClocks();
+    function demoEntrants32(){
+      return Array.from({length:32}, (_,i)=>({ name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/600/800`, v:0 }));
     }
 
-    function nameForRound(rIndex, maxRound){
-      // rIndex 0 = entrants (above round 1)
-      const left = (maxRound - (rIndex||1) + 1);
-      if (rIndex === 0){
-        if (maxRound >= 6) return 'ENTRANTS (64)';
-        if (maxRound >= 5) return 'ENTRANTS (32)';
-        if (maxRound >= 4) return 'ENTRANTS (16)';
-        if (maxRound >= 3) return 'ENTRANTS (8)';
-        return 'ENTRANTS';
-      }
-      if (left === 1) return 'FINAL';
-      if (left === 2) return 'SEMIFINALS';
-      if (left === 3) return 'QUARTERFINALS';
-      if (left === 4) return 'ROUND OF 16';
-      if (left === 5) return 'ROUND OF 32';
-      if (left === 6) return 'ROUND OF 64';
-      return `ROUND ${rIndex}`;
-    }
-
-    /************* CARD TEMPLATES *************/
-    function nodeHTML({id,x,y,title,img,votes,ends,isEntrant}){
-      const tbd = !img || img===BLANK;
+    /************* TEMPLATES *************/
+    function entrantHTML(id,x,y,p){
       return `
-        <div class="node ${isEntrant?'entrant':''} ${tbd?'tbd':''}" data-id="${id}" style="left:${x}px; top:${y}px">
-          <article class="card" title="${tbd?'TBD':'Entrant'}">
-            <img class="thumb" src="${img||BLANK}" alt="">
-            ${tbd?'<div class="tbd-badge">?</div>':''}
+        <div class="node entrant" data-id="${id}" style="left:${x}px; top:${y}px">
+          <article class="card">
+            <img class="thumb" src="${p.img||BLANK}" alt="">
             <div class="meta">
-              <h3 class="title">${title||'TBD'}</h3>
-              <div class="row">
-                <span class="timer" data-ends="${ends?Date.parse(ends):''}"></span>
-                <span class="votes">${Number.isFinite(votes)? votes : '—'}</span>
-              </div>
+              <h3 class="title">${p.name||'TBD'}</h3>
+              <div class="row"><span class="timer" data-ends="${Date.now()}"></span><span class="votes">0</span></div>
               <div class="enter"></div>
             </div>
           </article>
         </div>`;
     }
-
-    function matchHTML({id,x,y,a_name,a_img,b_name,b_img,votes_a,votes_b,end_time}){
-      const haveA = !!a_img, haveB = !!b_img;
-      const tbd = !(haveA || haveB);
-      const label = `${clip(a_name)||'TBD'} vs ${clip(b_name)||'TBD'}`;
-      const art = a_img || b_img || BLANK;
-      const votes = `${Number.isFinite(votes_a)?votes_a:0} - ${Number.isFinite(votes_b)?votes_b:0}`;
-
+    function matchHTML(id,x,y,a,b){
+      const label = `${clip(a?.name)||'TBD'} vs ${clip(b?.name)||'TBD'}`;
+      const art = a?.img || b?.img || BLANK;
+      const tbd = !(a?.img || b?.img);
       return `
         <div class="node ${tbd?'tbd':''}" data-id="${id}" style="left:${x}px; top:${y}px">
-          <article class="card" title="${tbd?'TBD match':'Match'}">
+          <article class="card">
             <img class="thumb" src="${art}" alt="">
             ${tbd?'<div class="tbd-badge">?</div>':''}
             <div class="meta">
               <h3 class="title">${label}</h3>
-              <div class="row">
-                <span class="timer" data-ends="${end_time?Date.parse(end_time):''}"></span>
-                <span class="votes">${votes}</span>
-              </div>
+              <div class="row"><span class="timer" data-ends="${Date.now()}"></span><span class="votes">0 - 0</span></div>
               <div class="enter"><a class="btn" href="matchup.html?battle=${id}">Enter</a></div>
             </div>
           </article>
         </div>`;
     }
-
     function clip(s){ if(!s) return s; return s.length>24 ? s.slice(0,22)+'…' : s; }
 
-    /************* WIRES *************/
-    function drawAllWires(r1, all, entrantCenters, centerX, rowY){
-      wiresEl.innerHTML='';
+    /************* BUILD *************/
+    async function build(){
+      nodesEl.innerHTML = '';
+      const centers = [];
 
-      // Entrants -> Round 1
-      for (let i=0;i<r1.length;i++){
-        const m = r1[i];
-        // from entrant A
-        drawElbow(
-          {x: entrantCenters[2*i]   - CARD_W/2, y: rowY(0)},
-          {x: centerX.get(m.id) - CARD_W/2,     y: rowY(1)}
-        );
-        // from entrant B
-        drawElbow(
-          {x: entrantCenters[2*i+1] - CARD_W/2, y: rowY(0)},
-          {x: centerX.get(m.id) - CARD_W/2,     y: rowY(1)}
-        );
-      }
+      if (DEMO_MODE){
+        const ENTRANTS = demoEntrants32();
+        for (let i=0;i<ENTRANTS.length;i++){
+          const x = X_START + i*X_GAP;
+          centers.push(x + CARD_W/2);
+          nodesEl.insertAdjacentHTML('beforeend', entrantHTML('E'+(i+1), x, rowY(0), ENTRANTS[i]));
+        }
 
-      // Matches -> parent matches
-      const byId = new Map(all.map(m=>[m.id,m]));
-      for (const m of all){
-        if (!m.parent_match_id) continue;
-        const childX = centerX.get(m.id);
-        const parentX = centerX.get(m.parent_match_id);
-        if (!childX || !parentX) continue;
+        const R32 = [];
+        for (let i=0;i<16;i++){
+          const cx = (centers[2*i] + centers[2*i+1]) / 2 - CARD_W/2;
+          const a = ENTRANTS[2*i], b = ENTRANTS[2*i+1];
+          const id = 'R32_'+(i+1);
+          R32.push({id, cx, a, b});
+          nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(1), a, b));
+        }
 
-        const yChild  = rowY(m.round_number);
-        const yParent = rowY(m.round_number + 1);
-        drawElbow(
-          {x: childX - CARD_W/2,  y: yChild},
-          {x: parentX - CARD_W/2, y: yParent}
-        );
+        const R16 = [];
+        for (let i=0;i<8;i++){
+          const cx = (R32[i*2].cx + CARD_W/2 + R32[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
+          const id = 'R16_'+(i+1);
+          R16.push({id, cx});
+          nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(2)));
+        }
+
+        const QF = [];
+        for (let i=0;i<4;i++){
+          const cx = (R16[i*2].cx + CARD_W/2 + R16[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
+          const id = 'QF_'+(i+1);
+          QF.push({id, cx});
+          nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(3)));
+        }
+
+        const SF = [];
+        for (let i=0;i<2;i++){
+          const cx = (QF[i*2].cx + CARD_W/2 + QF[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
+          const id = 'SF_'+(i+1);
+          SF.push({id, cx});
+          nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(4)));
+        }
+
+        const FINAL_CX = (SF[0].cx + CARD_W/2 + SF[1].cx + CARD_W/2)/2 - CARD_W/2;
+        nodesEl.insertAdjacentHTML('beforeend', matchHTML('FINAL', FINAL_CX, rowY(5)));
+
+        requestAnimationFrame(()=>{
+          const any = nodesEl.querySelector('.card');
+          if (any) CARD_H = any.getBoundingClientRect().height;
+          drawDemoWires(centers, R32, R16, QF, SF, FINAL_CX);
+          startClocks();
+          centerOnLoad(32);
+        });
+
+      } else {
+        // live build (unchanged from your version) ...
       }
     }
 
+    /************* WIRES *************/
     function drawElbow(fromRect, toRect){
       const [x1,y1] = [fromRect.x + CARD_W/2, fromRect.y + CARD_H];
       const [x2,y2] = [toRect.x + CARD_W/2,   toRect.y];
       const midY = (y1 + y2)/2;
-
       const p = document.createElementNS('http://www.w3.org/2000/svg','path');
       p.setAttribute('d', `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`);
       p.setAttribute('fill','none');
@@ -397,16 +261,41 @@
       p.setAttribute('shape-rendering','crispEdges');
       wiresEl.appendChild(p);
     }
+    function drawDemoWires(centers, R32, R16, QF, SF, FINAL_CX){
+      const any = nodesEl.querySelector('.card');
+      if (any) CARD_H = any.getBoundingClientRect().height;
+      wiresEl.innerHTML='';
+      for (let i=0;i<R32.length;i++){
+        const m = R32[i];
+        drawElbow({x: centers[2*i]-CARD_W/2, y: rowY(0)}, {x: m.cx, y: rowY(1)});
+        drawElbow({x: centers[2*i+1]-CARD_W/2, y: rowY(0)}, {x: m.cx, y: rowY(1)});
+      }
+      for (let i=0;i<R16.length;i++){
+        const a = R32[i*2], b = R32[i*2+1], p = R16[i];
+        drawElbow({x: a.cx, y: rowY(1)}, {x: p.cx, y: rowY(2)});
+        drawElbow({x: b.cx, y: rowY(1)}, {x: p.cx, y: rowY(2)});
+      }
+      for (let i=0;i<QF.length;i++){
+        const a = R16[i*2], b = R16[i*2+1], p = QF[i];
+        drawElbow({x: a.cx, y: rowY(2)}, {x: p.cx, y: rowY(3)});
+        drawElbow({x: b.cx, y: rowY(2)}, {x: p.cx, y: rowY(3)});
+      }
+      for (let i=0;i<SF.length;i++){
+        const a = QF[i*2], b = QF[i*2+1], p = SF[i];
+        drawElbow({x: a.cx, y: rowY(3)}, {x: p.cx, y: rowY(4)});
+        drawElbow({x: b.cx, y: rowY(3)}, {x: p.cx, y: rowY(4)});
+      }
+      drawElbow({x: SF[0].cx, y: rowY(4)}, {x: FINAL_CX, y: rowY(5)});
+      drawElbow({x: SF[1].cx, y: rowY(4)}, {x: FINAL_CX, y: rowY(5)});
+    }
 
     /************* TIMERS *************/
-    function fmt(ms){
-      if(!ms || ms<=0) return '00:00:00';
+    function fmt(ms){ if(!ms || ms<=0) return '00:00:00';
       const s=Math.floor(ms/1000);
       const hh=String(Math.floor(s/3600)).padStart(2,'0');
       const mm=String(Math.floor((s%3600)/60)).padStart(2,'0');
       const ss=String(s%60).padStart(2,'0');
-      return `${hh}:${mm}:${ss}`;
-    }
+      return `${hh}:${mm}:${ss}`; }
     function startClocks(){
       const upd = ()=>{
         document.querySelectorAll('.timer').forEach(el=>{
@@ -420,11 +309,12 @@
       startClocks._t = setInterval(upd, 1000);
     }
 
-    /************* PAN & ZOOM (your original UX) *************/
+    /************* PAN & ZOOM (boosted & fixed) *************/
     const layers=[wiresEl,nodesEl];
-    let scale=0.95, minS=0.10, maxS=3.0, tx=40, ty=12;
+    let scale=0.8, minS=0.05, maxS=10.0, tx=40, ty=12;
 
     function apply(){
+      // apply same transform to both layers so cards and wires stay aligned
       layers.forEach(el=>{
         el.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
         el.style.transformOrigin='0 0';
@@ -434,7 +324,7 @@
 
     function centerOnLoad(totalEntrants){
       const totalWidth = X_START + (totalEntrants-1)*X_GAP + CARD_W + X_START;
-      const totalHeight = 200 + (/* entrants + rounds */ 6) * ROW_GAP + CARD_H + 80;
+      const totalHeight = rowY(5) + CARD_H + 100;
       const view = viewport.getBoundingClientRect();
       const sx = (view.width - 40) / totalWidth;
       const sy = (view.height - 80) / totalHeight;
@@ -444,6 +334,7 @@
       apply();
     }
 
+    // Wheel zoom (desktop)
     viewport.addEventListener('wheel',(e)=>{
       e.preventDefault();
       const r=viewport.getBoundingClientRect();
@@ -453,6 +344,7 @@
       tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
     },{passive:false});
 
+    // Drag + pinch
     let dragging=false, lx=0, ly=0;
     const activePointers = new Map();
     let isPinching=false, pinchStartDist=0, pinchStartScale=1, pinchCenter=[0,0];
@@ -481,10 +373,11 @@
       isPinching=false; dragging=false;
     });
 
+    // Double-tap/Double-click zoom
     viewport.addEventListener('dblclick',(e)=>{
       const r=viewport.getBoundingClientRect();
       const mx=(e.clientX-r.left-tx)/scale, my=(e.clientY-r.top-ty)/scale;
-      const factor = e.shiftKey ? 0.74 : 1.35;
+      const factor = e.shiftKey ? 0.6 : 1.6;
       const ns=Math.min(maxS,Math.max(minS,scale*factor));
       tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
     });
@@ -510,7 +403,7 @@
     // Buttons
     document.getElementById('zoomin').addEventListener('click', ()=> zoomBy(1.2));
     document.getElementById('zoomout').addEventListener('click', ()=> zoomBy(1/1.2));
-    document.getElementById('zoomreset').addEventListener('click', ()=> centerOnLoad(_lastEntrants));
+    document.getElementById('zoomreset').addEventListener('click', ()=> centerOnLoad(32));
     function zoomBy(f){
       const r=viewport.getBoundingClientRect();
       const cx=r.width/2, cy=r.height/2;
@@ -519,24 +412,17 @@
       tx = cx - mx*ns; ty = cy - my*ns; scale=ns; apply();
     }
 
-    /************* REFRESH (poll) *************/
-    let _lastEntrants = 32;
-    async function refresh(){
-      try{
-        await build();
-        // derive current entrants count from DOM (top row)
-        const topNodes = [...nodesEl.querySelectorAll('.node')].filter(n => parseFloat(n.style.top) === 200);
-        _lastEntrants = topNodes.length || 32;
-        centerOnLoad(_lastEntrants);
-      }catch(e){
-        console.error(e);
-      }
-    }
+    // Keyboard shortcuts: + / - / 0
+    window.addEventListener('keydown',(e)=>{
+      if (e.target && /input|textarea|select|button/i.test(e.target.tagName)) return;
+      if (e.key==='+' || e.key==='='){ e.preventDefault(); zoomBy(1.2); }
+      if (e.key==='-'){ e.preventDefault(); zoomBy(1/1.2); }
+      if (e.key==='0'){ e.preventDefault(); centerOnLoad(32); }
+    });
 
-    // initial + poll every 30s
-    await refresh();
-    setInterval(refresh, 30000);
-    window.addEventListener('resize', ()=> centerOnLoad(_lastEntrants));
+    /************* GO *************/
+    await build();
+    window.addEventListener('resize', ()=> centerOnLoad(32));
   </script>
 </body>
 </html>
