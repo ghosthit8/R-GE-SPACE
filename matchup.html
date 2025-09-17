@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Rage Space — Matchup</title>
-  <link rel="stylesheet" href="style.css?v=2" />
+  <link rel="stylesheet" href="style.css?v=3" />
   <style>
     :root{
       --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5;
-      --card:#070707; --muted:#8aff8a; --border:#0f2510; --maxw: 960px;
+      --card:#070707; --muted:#8aff8a; --border:#0f2510; --maxw: 980px;
     }
     *{ box-sizing:border-box }
     html,body{ height:100% }
@@ -17,8 +17,21 @@
       font-family: ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
       -webkit-font-smoothing: antialiased;
     }
-    .wrap{ max-width:var(--maxw); margin:16px auto 64px; padding:0 16px; }
-    h1{ letter-spacing:.06em }
+
+    header.wrap{ max-width:var(--maxw); margin:12px auto 0; padding:0 16px; }
+
+    /* Viewport for pan/zoom (like brackets page) */
+    .viewport{
+      position:fixed; inset:64px 8px 8px; border:1px solid var(--border); border-radius:14px; overflow:hidden;
+      background:
+        radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.08), transparent 60%),
+        repeating-linear-gradient(to bottom, rgba(255,255,255,.03) 0, rgba(255,255,255,.03) 2px, transparent 2px, transparent 4px),
+        rgba(7,7,7,.45);
+      touch-action:none;
+    }
+    .layer{ position:absolute; inset:0; transform-origin:0 0; padding:18px; }
+
+    .wrap{ max-width:var(--maxw); margin:0 auto; padding:0 8px 40px; }
     .scorebar{
       display:flex; gap:12px; align-items:center; justify-content:space-between;
       border:1px solid var(--border); padding:8px 12px; border-radius:10px; background:rgba(7,7,7,.6);
@@ -28,26 +41,27 @@
     .btn.primary{ background:rgba(57,255,20,.08) }
     .btn:disabled{ opacity:.45; cursor:not-allowed }
     .grid{ margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-    .tile{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(7,7,7,.6); }
-    .art{
-      aspect-ratio: 4/5;
-      background: linear-gradient(45deg, rgba(57,255,20,.08), transparent 60%), #050505;
-      display:block; width:100%; object-fit:cover;
-    }
-    .meta{
-      display:flex; gap:12px; align-items:center; justify-content:space-between;
-      padding:10px 12px; border-top:1px solid var(--border);
-    }
+    .tile{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(7,7,7,.6); position:relative; }
+    .art{ aspect-ratio: 4/5; background: linear-gradient(45deg, rgba(57,255,20,.08), transparent 60%), #050505; display:block; width:100%; object-fit:cover; }
+    .tbdBadge{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:3rem; font-weight:900; color:rgba(57,255,20,.75); text-shadow:0 0 10px rgba(57,255,20,.4); pointer-events:none; }
+    .meta{ display:flex; gap:12px; align-items:center; justify-content:space-between; padding:10px 12px; border-top:1px solid var(--border); }
     .badge{ font-size:.9rem; color:var(--ink); opacity:.75; }
     .countdown{ margin-top:12px; text-align:center; font-variant-numeric:tabular-nums; }
     .vote-row{ margin-top:14px; display:flex; gap:10px; align-items:center; justify-content:center; }
+    .stateTag{ padding:3px 8px; border:1px solid var(--border); border-radius:999px; font-size:.8rem; opacity:.85; }
     .toast{
-      position:fixed; left:50%; transform:translateX(-50%);
-      bottom:24px; background:#0a0a0a; color:var(--ink);
-      border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:none;
-      box-shadow: 0 0 18px rgba(57,255,20,.2);
-      z-index:9999;
+      position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#0a0a0a; color:var(--ink);
+      border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:none; box-shadow:0 0 18px rgba(57,255,20,.2); z-index:9999;
     }
+
+    .zoom-controls{
+      position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:8px; z-index:5;
+    }
+    .zoom-controls button{
+      width:42px; height:42px; border-radius:10px; border:1px solid var(--green);
+      background:rgba(0,0,0,.55); color:var(--green); font-weight:700; cursor:pointer;
+    }
+
     @media (max-width:760px){ .grid{ grid-template-columns:1fr; } }
   </style>
 </head>
@@ -56,53 +70,64 @@
     <h1>R<span class="anarchy">Ⓐ</span>GE SPACE — MATCHUP</h1>
   </header>
 
-  <div class="wrap">
-    <div class="scorebar">
-      <div class="score">Your points: <span id="pts">0</span></div>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <span class="badge">Battle <span id="battleIndex">1</span>/<span id="battleTotal">1</span></span>
-        <a class="btn" href="tournament-brackets.html">🏁 Brackets</a>
-        <a class="btn" href="menu.html">← Menu</a>
-      </div>
-    </div>
+  <!-- Pan/zoom viewport -->
+  <div class="viewport" id="viewport">
+    <div class="layer" id="layer">
+      <div class="wrap">
+        <div class="scorebar">
+          <div>
+            <span class="stateTag" id="stateTag">—</span>
+            <span class="badge">Round <span id="roundNum">–</span>, Match <span id="battleIndex">1</span>/<span id="battleTotal">1</span></span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <a class="btn" href="tournament-brackets.html">🏁 Brackets</a>
+            <a class="btn" href="menu.html">← Menu</a>
+          </div>
+        </div>
 
-    <div class="countdown">
-      Decision in: <span id="clock">00:00:00</span>
-    </div>
+        <div class="countdown">Decision in: <span id="clock">00:00:00</span></div>
 
-    <div class="grid" id="grid">
-      <!-- Left -->
-      <div class="tile">
-        <img id="leftArt" class="art" alt="Left entry" />
-        <div class="meta">
-          <span id="leftLabel">Entry — LEFT</span>
-          <button class="btn primary" id="voteLeft">Vote Left</button>
+        <div class="grid" id="grid">
+          <div class="tile" id="leftTile">
+            <img id="leftArt" class="art" alt="Left entry" />
+            <div id="leftTbd" class="tbdBadge" style="display:none">?</div>
+            <div class="meta">
+              <span id="leftLabel">Entry — LEFT</span>
+              <button class="btn primary" id="voteLeft">Vote Left</button>
+            </div>
+          </div>
+
+          <div class="tile" id="rightTile">
+            <img id="rightArt" class="art" alt="Right entry" />
+            <div id="rightTbd" class="tbdBadge" style="display:none">?</div>
+            <div class="meta">
+              <span id="rightLabel">Entry — RIGHT</span>
+              <button class="btn primary" id="voteRight">Vote Right</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="vote-row">
+          <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
+          <button class="btn" id="skipBtn" title="Go to next battle">⏭ Next</button>
         </div>
       </div>
-
-      <!-- Right -->
-      <div class="tile">
-        <img id="rightArt" class="art" alt="Right entry" />
-        <div class="meta">
-          <span id="rightLabel">Entry — RIGHT</span>
-          <button class="btn primary" id="voteRight">Vote Right</button>
-        </div>
-      </div>
     </div>
 
-    <div class="vote-row">
-      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
-      <button class="btn" id="skipBtn" title="Go to next battle">⏭ Next Battle</button>
+    <div class="zoom-controls">
+      <button id="zoomin"  aria-label="Zoom in">＋</button>
+      <button id="zoomout" aria-label="Zoom out">－</button>
+      <button id="zoomreset" aria-label="Reset zoom">⟳</button>
     </div>
   </div>
 
   <div id="toast" class="toast"></div>
 
-  <!-- Supabase client -->
+  <!-- Supabase client (ESM) -->
   <script type="module">
     import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-    /************** CONFIG (your values) **************/
+    /************** CONFIG **************/
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const TOURNAMENT_ID = "682da23f-6e32-4782-8b8a-8e59527d6b58";
@@ -111,140 +136,138 @@
     /************** Supabase **************/
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    /************** State & DOM **************/
-    const ptsEl = document.getElementById('pts');
+    /************** DOM **************/
     const toast = document.getElementById('toast');
     const clock = document.getElementById('clock');
+    const roundNumEl = document.getElementById('roundNum');
     const battleIndexEl = document.getElementById('battleIndex');
     const battleTotalEl = document.getElementById('battleTotal');
+    const stateTag = document.getElementById('stateTag');
 
     const leftArt = document.getElementById('leftArt');
     const rightArt = document.getElementById('rightArt');
     const leftLabel = document.getElementById('leftLabel');
     const rightLabel = document.getElementById('rightLabel');
+    const leftTbd = document.getElementById('leftTbd');
+    const rightTbd = document.getElementById('rightTbd');
 
     const voteLeftBtn = document.getElementById('voteLeft');
     const voteRightBtn = document.getElementById('voteRight');
     const submitBtn = document.getElementById('submitBtn');
     const skipBtn = document.getElementById('skipBtn');
 
-    let pts = parseInt(localStorage.getItem('rs_points') || '0', 10);
-    ptsEl.textContent = pts;
-
-    // per-device session id to enforce one vote / match
-    const SESSION_KEY = 'rs_session_id';
-    let sessionId = localStorage.getItem(SESSION_KEY);
-    if (!sessionId){ sessionId = crypto.randomUUID(); localStorage.setItem(SESSION_KEY, sessionId); }
-
-    // Deep link support (?battle=<match_id>)
-    const urlParams = new URLSearchParams(location.search);
-    const jumpTo = urlParams.get('battle');
-
-    // data
+    /************** State **************/
     let BATTLES = [];
     let idx = 0;
     let chosen = null;
     let tickHandle = null;
 
-    function lockVoteKey(battleId){ return `rs_vote_${battleId}`; }
+    const SESSION_KEY = 'rs_session_id';
+    let sessionId = localStorage.getItem(SESSION_KEY);
+    if (!sessionId){ sessionId = crypto.randomUUID(); localStorage.setItem(SESSION_KEY, sessionId); }
 
-    /************** Helpers **************/
+    const urlParams = new URLSearchParams(location.search);
+    const deepId = urlParams.get('battle');
+
+    const lockKey = (id)=> `rs_vote_${id}`;
+
+    /************** Utils **************/
     function showToast(msg){
       toast.textContent = msg;
       toast.style.display = 'block';
       clearTimeout(showToast._t);
       showToast._t = setTimeout(()=> toast.style.display='none', 1400);
     }
-    function fmtClock(ms){
-      if (ms <= 0) return '00:00:00';
-      const s = Math.floor(ms/1000);
-      const hh = String(Math.floor(s/3600)).padStart(2,'0');
-      const mm = String(Math.floor((s%3600)/60)).padStart(2,'0');
-      const ss = String(s%60).padStart(2,'0');
+    function fmt(ms){
+      if(ms<=0) return '00:00:00';
+      const s=Math.floor(ms/1000);
+      const hh=String(Math.floor(s/3600)).padStart(2,'0');
+      const mm=String(Math.floor((s%3600)/60)).padStart(2,'0');
+      const ss=String(s%60).padStart(2,'0');
       return `${hh}:${mm}:${ss}`;
     }
-    function safeSrc(el, url){
-      if (!url){ el.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='; return false; }
+    function safeImg(el, url){
+      if (!url){ el.src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='; return false; }
       el.src = url; return true;
     }
 
-    /************** Load battles from Supabase **************/
+    /************** Load matches **************/
     async function loadBattles(){
       const { data, error } = await supabase
         .from('match_public')
         .select('*')
         .eq('tournament_id', TOURNAMENT_ID)
-        .in('state', ['open','scheduled'])          // show open and upcoming
+        .in('state', ['open','scheduled'])
         .order('round_number', { ascending: true })
         .order('index_in_round', { ascending: true })
         .limit(MAX_MATCHES);
 
       if (error){ console.error(error); showToast('Failed to load matches.'); return; }
 
-      BATTLES = (data || []).map(r => ({
+      BATTLES = (data||[]).map(r => ({
         id: r.id,
         round: r.round_number,
         indexInRound: r.index_in_round,
-        state: r.state,                               // 'open' | 'scheduled'
+        state: r.state,
         start: r.start_time,
         end: r.end_time,
-        left:  { id:r.a_id, label:r.a_name, img:r.a_image },
-        right: { id:r.b_id, label:r.b_name, img:r.b_image },
+        A: { id:r.a_id, name:r.a_name, img:r.a_image },
+        B: { id:r.b_id, name:r.b_name, img:r.b_image },
+        votesA: r.votes_a ?? 0,
+        votesB: r.votes_b ?? 0,
       }));
 
-      // Jump to specific battle if provided
-      if (jumpTo){
-        const found = BATTLES.findIndex(b => b.id === jumpTo);
-        if (found >= 0) idx = found;
+      if (deepId){
+        const j = BATTLES.findIndex(b => b.id === deepId);
+        if (j >= 0) idx = j;
       }
 
-      battleTotalEl.textContent = BATTLES.length || 0;
-
+      battleTotalEl.textContent = BATTLES.length;
       if (!BATTLES.length){
         leftLabel.textContent = 'No matches available';
         rightLabel.textContent = 'Check back soon';
-        voteLeftBtn.disabled = true; voteRightBtn.disabled = true; submitBtn.disabled = true;
+        voteLeftBtn.disabled = voteRightBtn.disabled = submitBtn.disabled = true;
         return;
       }
       render();
     }
 
-    /************** Render a battle **************/
+    /************** Render **************/
     function render(){
       const b = BATTLES[idx];
       battleIndexEl.textContent = (idx+1).toString();
+      roundNumEl.textContent = b.round;
 
-      // art + labels (TBD supported)
-      const hasL = safeSrc(leftArt,  b.left?.img);
-      const hasR = safeSrc(rightArt, b.right?.img);
-      leftLabel.textContent  = hasL ? b.left.label  : 'TBD';
-      rightLabel.textContent = hasR ? b.right.label : 'TBD';
-
-      // voting window + lock
-      const now    = Date.now();
+      const now = Date.now();
       const starts = new Date(b.start).getTime();
-      const ends   = new Date(b.end).getTime();
+      const ends = new Date(b.end).getTime();
       const inWindow = now >= starts && now < ends;
-      const votable  = b.state === 'open' && inWindow && hasL && hasR;
+      const votable = b.state === 'open' && inWindow && b.A.img && b.B.img;
 
-      const locked = !!localStorage.getItem(lockVoteKey(b.id));
-      chosen = null;
+      stateTag.textContent = votable ? 'OPEN' : (now < starts ? 'SCHEDULED' : 'CLOSED');
+
+      const hasA = safeImg(leftArt, b.A.img);
+      const hasB = safeImg(rightArt, b.B.img);
+      leftTbd.style.display = hasA ? 'none' : 'flex';
+      rightTbd.style.display = hasB ? 'none' : 'flex';
+      leftLabel.textContent = hasA ? b.A.name : 'TBD';
+      rightLabel.textContent = hasB ? b.B.name : 'TBD';
+
+      const alreadyVoted = !!localStorage.getItem(lockKey(b.id));
+      voteLeftBtn.disabled = !votable || alreadyVoted;
+      voteRightBtn.disabled = !votable || alreadyVoted;
       submitBtn.disabled = true;
-      voteLeftBtn.disabled  = !votable || locked;
-      voteRightBtn.disabled = !votable || locked;
+      chosen = null;
 
-      if (locked) showToast('You already voted in this battle.');
-
-      // countdown
+      if (tickHandle) clearInterval(tickHandle);
       updateClock();
-      clearInterval(tickHandle);
       tickHandle = setInterval(updateClock, 1000);
     }
 
     function updateClock(){
       const b = BATTLES[idx];
       const ms = new Date(b.end).getTime() - Date.now();
-      clock.textContent = fmtClock(ms);
+      clock.textContent = fmt(ms);
       if (ms <= 0){
         submitBtn.disabled = true;
         voteLeftBtn.disabled = true;
@@ -252,31 +275,25 @@
       }
     }
 
-    /************** Voting **************/
+    /************** Interactions **************/
     voteLeftBtn.addEventListener('click', ()=>{
       if (voteLeftBtn.disabled) return;
-      chosen = 'A'; // left = slot A
-      submitBtn.disabled = false;
-      showToast('Selected LEFT');
+      chosen = 'A'; submitBtn.disabled = false; showToast('Selected LEFT');
     });
     voteRightBtn.addEventListener('click', ()=>{
       if (voteRightBtn.disabled) return;
-      chosen = 'B'; // right = slot B
-      submitBtn.disabled = false;
-      showToast('Selected RIGHT');
+      chosen = 'B'; submitBtn.disabled = false; showToast('Selected RIGHT');
     });
 
     submitBtn.addEventListener('click', async ()=>{
       const b = BATTLES[idx];
       if (!chosen) return;
-
       submitBtn.disabled = true;
 
-      // Insert vote (RLS enforces 'open' window + one per session)
       const { error } = await supabase.from('votes').insert({
         match_id: b.id,
-        slot: chosen,                 // 'A' | 'B'
-        session_id: sessionId
+        slot: chosen,
+        session_id: sessionId,
       });
 
       if (error){
@@ -286,14 +303,8 @@
         return;
       }
 
-      // lock locally
-      localStorage.setItem(lockVoteKey(b.id), chosen);
-
-      // points (client-side gamification)
-      pts += 10; ptsEl.textContent = pts;
-      localStorage.setItem('rs_points', String(pts));
-
-      showToast(`Vote submitted: ${chosen==='A'?'LEFT':'RIGHT'} (+10 pts)`);
+      localStorage.setItem(lockKey(b.id), chosen);
+      showToast(`Vote submitted: ${chosen==='A'?'LEFT':'RIGHT'}`);
       setTimeout(nextBattle, 600);
     });
 
@@ -304,8 +315,113 @@
       render();
     }
 
-    // boot
+    /************** Pan & Zoom (boosted like brackets) **************/
+    const layer = document.getElementById('layer');
+    let scale=1.0, minS=0.05, maxS=10.0, tx=0, ty=0;
+
+    function apply(){
+      layer.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
+      layer.style.transformOrigin = '0 0';
+    }
+    apply();
+
+    function centerOnLoad(){
+      // Keep content roughly centered on open
+      const vp = document.getElementById('viewport').getBoundingClientRect();
+      tx = (vp.width - layer.getBoundingClientRect().width)/2;
+      ty = 0;
+      scale = Math.max(minS, Math.min(maxS, 1));
+      apply();
+    }
+
+    const viewportEl = document.getElementById('viewport');
+
+    viewportEl.addEventListener('wheel',(e)=>{
+      e.preventDefault();
+      const r=viewportEl.getBoundingClientRect();
+      const mx=(e.clientX-r.left-tx)/scale, my=(e.clientY-r.top-ty)/scale;
+      const ds=e.deltaY<0?1.12:0.9;
+      const ns=Math.min(maxS,Math.max(minS,scale*ds));
+      tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
+    },{passive:false});
+
+    let dragging=false, lx=0, ly=0;
+    const activePointers = new Map();
+    let isPinching=false, pinchStartDist=0, pinchStartScale=1, pinchCenter=[0,0];
+
+    viewportEl.addEventListener('pointerdown',e=>{
+      viewportEl.setPointerCapture(e.pointerId);
+      activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+      if (activePointers.size===1){ dragging=true; lx=e.clientX; ly=e.clientY; }
+    });
+    viewportEl.addEventListener('pointermove',e=>{
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+      if (activePointers.size===2){
+        pinchUpdate();
+      } else if (dragging){
+        tx += e.clientX - lx; ty += e.clientY - ly; lx=e.clientX; ly=e.clientY; apply();
+      }
+    });
+    viewportEl.addEventListener('pointerup',e=>{
+      activePointers.delete(e.pointerId);
+      if (activePointers.size<2) isPinching=false;
+      if (activePointers.size===0) dragging=false;
+    });
+    viewportEl.addEventListener('pointercancel',e=>{
+      activePointers.delete(e.pointerId);
+      isPinching=false; dragging=false;
+    });
+
+    viewportEl.addEventListener('dblclick',(e)=>{
+      const r=viewportEl.getBoundingClientRect();
+      const mx=(e.clientX-r.left-tx)/scale, my=(e.clientY-r.top-ty)/scale;
+      const factor = e.shiftKey ? 0.6 : 1.6;
+      const ns=Math.min(maxS,Math.max(minS,scale*factor));
+      tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
+    });
+
+    function distance(p1,p2){ const dx=p1.x-p2.x, dy=p1.y-p2.y; return Math.hypot(dx,dy); }
+    function pinchUpdate(){
+      const pts = [...activePointers.values()]; if (pts.length!==2) return;
+      const p1=pts[0], p2=pts[1];
+      if (!isPinching){
+        isPinching=true; pinchStartDist = distance(p1,p2); pinchStartScale = scale;
+        const r=viewportEl.getBoundingClientRect();
+        pinchCenter = [(p1.x+p2.x)/2, (p1.y+p2.y)/2];
+        return;
+      }
+      const r=viewportEl.getBoundingClientRect();
+      const centerX = (pinchCenter[0]-r.left - tx)/scale;
+      const centerY = (pinchCenter[1]-r.top  - ty)/scale;
+      const dist = distance(p1,p2);
+      const ns = Math.min(maxS, Math.max(minS, pinchStartScale * (dist/pinchStartDist)));
+      tx = pinchCenter[0]-r.left - centerX*ns; ty = pinchCenter[1]-r.top - centerY*ns; scale = ns; apply();
+    }
+
+    document.getElementById('zoomin').addEventListener('click', ()=> zoomBy(1.2));
+    document.getElementById('zoomout').addEventListener('click', ()=> zoomBy(1/1.2));
+    document.getElementById('zoomreset').addEventListener('click', centerOnLoad);
+    function zoomBy(f){
+      const r=viewportEl.getBoundingClientRect();
+      const cx=r.width/2, cy=r.height/2;
+      const mx=(cx-tx)/scale, my=(cy-ty)/scale;
+      const ns=Math.min(maxS,Math.max(minS,scale*f));
+      tx = cx - mx*ns; ty = cy - my*ns; scale=ns; apply();
+    }
+
+    // Keyboard shortcuts: + / - / 0
+    window.addEventListener('keydown',(e)=>{
+      if (e.target && /input|textarea|select|button/i.test(e.target.tagName)) return;
+      if (e.key==='+' || e.key==='='){ e.preventDefault(); zoomBy(1.2); }
+      if (e.key==='-'){ e.preventDefault(); zoomBy(1/1.2); }
+      if (e.key==='0'){ e.preventDefault(); centerOnLoad(); }
+    });
+
+    /************** Boot **************/
     loadBattles();
+    centerOnLoad();
+    window.addEventListener('resize', centerOnLoad);
   </script>
 </body>
 </html>
