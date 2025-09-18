@@ -28,10 +28,11 @@
         radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.08), transparent 60%),
         repeating-linear-gradient(to bottom, rgba(255,255,255,.03) 0, rgba(255,255,255,.03) 2px, transparent 2px, transparent 4px),
         rgba(7,7,7,.45);
-      touch-action:none; /* allow custom pinch/drag */
+      touch-action:none;
     }
 
-    .layer{ position:absolute; top:0; left:0; width:5200px; height:3200px; transform-origin:0 0; }
+    .stage{ position:absolute; inset:0; transform-origin:0 0; will-change: transform; }
+    .layer{ position:absolute; top:0; left:0; width:5200px; height:3200px; }
     svg.wires{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
     .nodes{ position:absolute; inset:0; z-index:1; }
 
@@ -41,7 +42,17 @@
       box-shadow: 0 0 18px rgba(57,255,20,.08) inset; backdrop-filter: blur(1px);
       position: relative;
     }
+
+    /* image areas */
     .thumb{ display:block; width:100%; aspect-ratio:3/4; object-fit:cover; background:#050505; }
+    .thumb-duo{
+      display:flex; width:100%; aspect-ratio:3/4; overflow:hidden; background:#050505;
+    }
+    .thumb-duo img{ width:50%; height:100%; object-fit:cover; filter:saturate(.9) contrast(.95); }
+    .winner{ display:none; }                  /* hidden until decided */
+    .node.decided .thumb-duo{ display:none; } /* hide duo once decided */
+    .node.decided .winner{ display:block; }   /* show single winner image */
+
     .meta{ padding:8px 10px; border-top:1px solid var(--border); }
     .title{
       font-size:.9rem; line-height:1.2; margin:0 0 4px 0; color:var(--ink);
@@ -87,6 +98,13 @@
       background:rgba(0,0,0,.55); color:var(--green); font-weight:700; cursor:pointer;
     }
 
+    /* winner line that appears after the clock hits 0 */
+    .result {
+      margin-top: 6px;
+      font-size: .85rem;
+      color: var(--muted);
+    }
+
     @media (max-width:900px){ .viewport{ inset:64px 6px 6px } }
   </style>
 </head>
@@ -102,8 +120,10 @@
   </header>
 
   <div class="viewport" id="viewport">
-    <svg class="layer wires" id="wires" viewBox="0 0 5200 3200" preserveAspectRatio="none"></svg>
-    <div class="layer nodes" id="nodes"></div>
+    <div class="stage" id="stage">
+      <svg class="layer wires" id="wires" viewBox="0 0 5200 3200" preserveAspectRatio="none"></svg>
+      <div class="layer nodes" id="nodes"></div>
+    </div>
 
     <div class="zoom-controls">
       <button id="zoomin"  aria-label="Zoom in">＋</button>
@@ -116,9 +136,9 @@
 
   <script type="module">
     /************* MODE *************/
-    const DEMO_MODE = true;
+    const DEMO_MODE = true; // demo layout stays; we overlay with live data
 
-    /************* (Optional) SUPABASE *************/
+    /************* SUPABASE *************/
     import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
@@ -133,24 +153,20 @@
     const ROW_GAP = 420;
 
     const viewport = document.getElementById('viewport');
+    const stage    = document.getElementById('stage');
     const nodesEl  = document.getElementById('nodes');
     const wiresEl  = document.getElementById('wires');
-    const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
-    const rowY = (i)=> 200 + i*ROW_GAP;
 
-    /************* DATA *************/
-    async function fetchMatchesLive(){
-      const { data, error } = await supabase
-        .from('match_public')
-        .select('*')
-        .eq('tournament_id', TOURNAMENT_ID)
-        .order('round_number', { ascending: true })
-        .order('index_in_round', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    }
+    const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+    const rowY = (i)=> 200 + i*ROW_GAP; // 0 entrants, 1 R32, 2 R16, 3 QF, 4 SF, 5 Final
+
+    /************* DATA (demo builder) *************/
     function demoEntrants32(){
-      return Array.from({length:32}, (_,i)=>({ name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/600/800`, v:0 }));
+      return Array.from({length:32}, (_,i)=>({
+        name: `Seed ${i+1}`,
+        img: `https://picsum.photos/seed/e${i+1}/600/800`,
+        v: 0
+      }));
     }
 
     /************* TEMPLATES *************/
@@ -161,91 +177,110 @@
             <img class="thumb" src="${p.img||BLANK}" alt="">
             <div class="meta">
               <h3 class="title">${p.name||'TBD'}</h3>
-              <div class="row"><span class="timer" data-ends="${Date.now()}"></span><span class="votes">0</span></div>
+              <div class="row">
+                <span class="timer" data-ends="${Date.now()}"></span>
+                <span class="votes">0</span>
+              </div>
               <div class="enter"></div>
             </div>
           </article>
         </div>`;
     }
+
+    // Ongoing matches show a duo; winner image reveals ONLY after timer ends
     function matchHTML(id,x,y,a,b){
       const label = `${clip(a?.name)||'TBD'} vs ${clip(b?.name)||'TBD'}`;
-      const art = a?.img || b?.img || BLANK;
-      const tbd = !(a?.img || b?.img);
+      const tbd = !(a && b);
+      const endsAt = Date.now() + 24*60*60*1000; // demo default 24h
+
+      const votesA = a?.v ?? 0;
+      const votesB = b?.v ?? 0;
+
+      const media = tbd
+        ? `<img class="thumb" src="${a?.img || b?.img || BLANK}" alt=""><div class="tbd-badge">?</div>`
+        : `<div class="thumb-duo">
+             <img src="${a.img}" alt="">
+             <img src="${b.img}" alt="">
+           </div>
+           <img class="winner thumb" src="${BLANK}" alt="">`;
+
       return `
-        <div class="node ${tbd?'tbd':''}" data-id="${id}" style="left:${x}px; top:${y}px">
+        <div class="node ${tbd?'tbd':''}" data-id="${id}" data-ends="${endsAt}"
+             data-va="${votesA}" data-vb="${votesB}"
+             style="left:${x}px; top:${y}px">
           <article class="card">
-            <img class="thumb" src="${art}" alt="">
-            ${tbd?'<div class="tbd-badge">?</div>':''}
+            ${media}
             <div class="meta">
               <h3 class="title">${label}</h3>
-              <div class="row"><span class="timer" data-ends="${Date.now()}"></span><span class="votes">0 - 0</span></div>
+              <div class="row">
+                <span class="timer" data-ends="${endsAt}"></span>
+                <span class="votes">${votesA} - ${votesB}</span>
+              </div>
+              <div class="result" style="display:none"></div>
               <div class="enter"><a class="btn" href="matchup.html?battle=${id}">Enter</a></div>
             </div>
           </article>
         </div>`;
     }
+
     function clip(s){ if(!s) return s; return s.length>24 ? s.slice(0,22)+'…' : s; }
 
-    /************* BUILD *************/
+    /************* BUILD (DEMO 32) *************/
     async function build(){
       nodesEl.innerHTML = '';
+      wiresEl.innerHTML = '';
       const centers = [];
 
-      if (DEMO_MODE){
-        const ENTRANTS = demoEntrants32();
-        for (let i=0;i<ENTRANTS.length;i++){
-          const x = X_START + i*X_GAP;
-          centers.push(x + CARD_W/2);
-          nodesEl.insertAdjacentHTML('beforeend', entrantHTML('E'+(i+1), x, rowY(0), ENTRANTS[i]));
-        }
-
-        const R32 = [];
-        for (let i=0;i<16;i++){
-          const cx = (centers[2*i] + centers[2*i+1]) / 2 - CARD_W/2;
-          const a = ENTRANTS[2*i], b = ENTRANTS[2*i+1];
-          const id = 'R32_'+(i+1);
-          R32.push({id, cx, a, b});
-          nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(1), a, b));
-        }
-
-        const R16 = [];
-        for (let i=0;i<8;i++){
-          const cx = (R32[i*2].cx + CARD_W/2 + R32[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
-          const id = 'R16_'+(i+1);
-          R16.push({id, cx});
-          nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(2)));
-        }
-
-        const QF = [];
-        for (let i=0;i<4;i++){
-          const cx = (R16[i*2].cx + CARD_W/2 + R16[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
-          const id = 'QF_'+(i+1);
-          QF.push({id, cx});
-          nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(3)));
-        }
-
-        const SF = [];
-        for (let i=0;i<2;i++){
-          const cx = (QF[i*2].cx + CARD_W/2 + QF[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
-          const id = 'SF_'+(i+1);
-          SF.push({id, cx});
-          nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(4)));
-        }
-
-        const FINAL_CX = (SF[0].cx + CARD_W/2 + SF[1].cx + CARD_W/2)/2 - CARD_W/2;
-        nodesEl.insertAdjacentHTML('beforeend', matchHTML('FINAL', FINAL_CX, rowY(5)));
-
-        requestAnimationFrame(()=>{
-          const any = nodesEl.querySelector('.card');
-          if (any) CARD_H = any.getBoundingClientRect().height;
-          drawDemoWires(centers, R32, R16, QF, SF, FINAL_CX);
-          startClocks();
-          centerOnLoad(32);
-        });
-
-      } else {
-        // live build (unchanged from your version) ...
+      const ENTRANTS = demoEntrants32();
+      for (let i=0;i<ENTRANTS.length;i++){
+        const x = X_START + i*X_GAP;
+        centers.push(x + CARD_W/2);
+        nodesEl.insertAdjacentHTML('beforeend', entrantHTML('E'+(i+1), x, rowY(0), ENTRANTS[i]));
       }
+
+      const R32 = [];
+      for (let i=0;i<16;i++){
+        const cx = (centers[2*i] + centers[2*i+1]) / 2 - CARD_W/2;
+        const a = ENTRANTS[2*i], b = ENTRANTS[2*i+1];
+        const id = 'R32_'+(i+1);
+        R32.push({id, cx, a, b});
+        nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(1), a, b));
+      }
+
+      const R16 = [];
+      for (let i=0;i<8;i++){
+        const cx = (R32[i*2].cx + CARD_W/2 + R32[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
+        const id = 'R16_'+(i+1);
+        R16.push({id, cx});
+        nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(2)));
+      }
+
+      const QF = [];
+      for (let i=0;i<4;i++){
+        const cx = (R16[i*2].cx + CARD_W/2 + R16[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
+        const id = 'QF_'+(i+1);
+        QF.push({id, cx});
+        nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(3)));
+      }
+
+      const SF = [];
+      for (let i=0;i<2;i++){
+        const cx = (QF[i*2].cx + CARD_W/2 + QF[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
+        const id = 'SF_'+(i+1);
+        SF.push({id, cx});
+        nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(4)));
+      }
+
+      const FINAL_CX = (SF[0].cx + CARD_W/2 + SF[1].cx + CARD_W/2)/2 - CARD_W/2;
+      nodesEl.insertAdjacentHTML('beforeend', matchHTML('FINAL', FINAL_CX, rowY(5)));
+
+      requestAnimationFrame(()=>{
+        const any = nodesEl.querySelector('.card');
+        if (any) CARD_H = any.getBoundingClientRect().height;
+        drawDemoWires(centers, R32, R16, QF, SF, FINAL_CX);
+        startClocks();
+        centerOnLoad(32);
+      });
     }
 
     /************* WIRES *************/
@@ -261,6 +296,7 @@
       p.setAttribute('shape-rendering','crispEdges');
       wiresEl.appendChild(p);
     }
+
     function drawDemoWires(centers, R32, R16, QF, SF, FINAL_CX){
       const any = nodesEl.querySelector('.card');
       if (any) CARD_H = any.getBoundingClientRect().height;
@@ -289,41 +325,134 @@
       drawElbow({x: SF[1].cx, y: rowY(4)}, {x: FINAL_CX, y: rowY(5)});
     }
 
-    /************* TIMERS *************/
-    function fmt(ms){ if(!ms || ms<=0) return '00:00:00';
+    /************* TIMERS + STATE *************/
+    function fmt(ms){
+      if(!ms || ms<=0) return '00:00:00';
       const s=Math.floor(ms/1000);
       const hh=String(Math.floor(s/3600)).padStart(2,'0');
       const mm=String(Math.floor((s%3600)/60)).padStart(2,'0');
       const ss=String(s%60).padStart(2,'0');
-      return `${hh}:${mm}:${ss}`; }
-    function startClocks(){
-      const upd = ()=>{
-        document.querySelectorAll('.timer').forEach(el=>{
-          const ends = +el.dataset.ends || 0;
-          const left = ends - Date.now();
-          el.textContent = fmt(left);
-        });
-      };
-      upd();
-      clearInterval(startClocks._t);
-      startClocks._t = setInterval(upd, 1000);
+      return `${hh}:${mm}:${ss}`;
     }
 
-    /************* PAN & ZOOM (boosted & fixed) *************/
-    const layers=[wiresEl,nodesEl];
-    let scale=0.8, minS=0.05, maxS=10.0, tx=40, ty=12;
+    function refreshStates(){
+      document.querySelectorAll('.node[data-ends]').forEach(node=>{
+        const ends = +node.dataset.ends || 0;
+        const left = ends - Date.now();
+        const timerEl = node.querySelector('.timer');
+        if (timerEl) timerEl.textContent = fmt(left);
 
-    function apply(){
-      // apply same transform to both layers so cards and wires stay aligned
-      layers.forEach(el=>{
-        el.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
-        el.style.transformOrigin='0 0';
+        // Don't declare anything until clock hits 0, or if TBD
+        if (left > 0 || node.classList.contains('tbd')) return;
+
+        // Only once
+        if (node.classList.contains('decided')) return;
+        node.classList.add('decided');
+
+        // Votes (ties → A)
+        const va = +node.dataset.va || 0;
+        const vb = +node.dataset.vb || 0;
+        const winnerIsA = (va >= vb);
+
+        // Swap image to the winner
+        const duo = node.querySelector('.thumb-duo');
+        const aImg = duo?.querySelector('img:nth-child(1)')?.src;
+        const bImg = duo?.querySelector('img:nth-child(2)')?.src;
+        const w = node.querySelector('img.winner');
+        const winnerSrc = winnerIsA ? aImg : bImg;
+        if (w && winnerSrc) w.src = winnerSrc;
+
+        // Winner text
+        const titleEl = node.querySelector('.title');
+        const [nameA, nameB] = (titleEl?.textContent || '').split(' vs ');
+        const winnerName = winnerIsA ? (nameA || 'A') : (nameB || 'B');
+        const resultEl = node.querySelector('.result');
+        if (resultEl){
+          resultEl.style.display = '';
+          resultEl.textContent = `Winner: ${winnerName} — ${va}–${vb}`;
+        }
+        if (titleEl) titleEl.textContent = winnerName;
+
+        // Keep numeric tally visible too
+        const vEl = node.querySelector('.votes');
+        if (vEl) vEl.textContent = `${va} - ${vb}`;
       });
     }
-    apply();
 
+    function startClocks(){
+      refreshStates();
+      clearInterval(startClocks._t);
+      startClocks._t = setInterval(refreshStates, 1000);
+    }
+
+    /************* LIVE OVERLAY (votes, names, timers, enter links) *************/
+    async function refreshFromDB(){
+      const { data, error } = await supabase
+        .from('match_public')
+        .select('*')
+        .eq('tournament_id', TOURNAMENT_ID)
+        .eq('round_number', 1) // overlay only R32
+        .order('index_in_round', { ascending: true });
+
+      if (error){ console.warn('refresh failed', error); return; }
+      if (!data || !data.length) return;
+
+      data.forEach(row=>{
+        // Map DB row -> demo node id 'R32_X'
+        const id = `R32_${row.index_in_round}`;
+        const n = document.querySelector(`.node[data-id="${id}"]`);
+        if (!n) return;
+
+        // Title
+        const t = n.querySelector('.title');
+        if (t) t.textContent = `${row.a_name || 'TBD'} vs ${row.b_name || 'TBD'}`;
+
+        // Timer (node + visible)
+        const ends = row.end_time ? new Date(row.end_time).getTime() : (Date.now()+24*60*60*1000);
+        n.dataset.ends = ends;
+        const timer = n.querySelector('.timer');
+        if (timer) timer.dataset.ends = ends;
+
+        // Votes (data + label)
+        const a = row.votes_a ?? 0, b = row.votes_b ?? 0;
+        n.dataset.va = a;
+        n.dataset.vb = b;
+        const vEl = n.querySelector('.votes');
+        if (vEl) vEl.textContent = `${a} - ${b}`;
+
+        // Images: duo if both slots have images
+        const hasA = !!row.a_image, hasB = !!row.b_image;
+        const duo = n.querySelector('.thumb-duo');
+        const single = n.querySelector('img.thumb:not(.winner)');
+        if (hasA && hasB){
+          if (!duo){
+            const wrap = document.createElement('div'); wrap.className='thumb-duo';
+            const imgA = document.createElement('img'); imgA.src = row.a_image; imgA.alt='';
+            const imgB = document.createElement('img'); imgB.src = row.b_image; imgB.alt='';
+            wrap.appendChild(imgA); wrap.appendChild(imgB);
+            if (single) single.replaceWith(wrap);
+          } else {
+            const imgs = duo.querySelectorAll('img');
+            if (imgs[0]) imgs[0].src = row.a_image;
+            if (imgs[1]) imgs[1].src = row.b_image;
+          }
+          n.classList.remove('tbd');
+        } else if (single){
+          single.src = row.a_image || row.b_image || single.src;
+          n.classList.toggle('tbd', !(row.a_image || row.b_image));
+        }
+
+        // Enter → real DB id
+        const link = n.querySelector('.enter a.btn');
+        if (link && row.id) link.href = `matchup.html?battle=${encodeURIComponent(row.id)}`;
+      });
+    }
+
+    /************* PAN & ZOOM *************/
+    let scale=0.8, minS=0.05, maxS=10.0, tx=40, ty=12;
+    function apply(){ stage.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; }
     function centerOnLoad(totalEntrants){
-      const totalWidth = X_START + (totalEntrants-1)*X_GAP + CARD_W + X_START;
+      const totalWidth = 100 + (totalEntrants-1)*260 + 220 + 100;
       const totalHeight = rowY(5) + CARD_H + 100;
       const view = viewport.getBoundingClientRect();
       const sx = (view.width - 40) / totalWidth;
@@ -333,21 +462,22 @@
       ty = 12;
       apply();
     }
+    apply();
 
-    // Wheel zoom (desktop)
     viewport.addEventListener('wheel',(e)=>{
       e.preventDefault();
-      const r=viewport.getBoundingClientRect();
-      const mx=(e.clientX-r.left-tx)/scale, my=(e.clientY-r.top-ty)/scale;
       const ds=e.deltaY<0?1.12:0.9;
       const ns=Math.min(maxS,Math.max(minS,scale*ds));
-      tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
+      const r=viewport.getBoundingClientRect();
+      const cx=r.width/2, cy=r.height/2;
+      const mx=(cx-tx)/scale, my=(cy-ty)/scale;
+      tx = cx - mx*ns; ty = cy - my*ns; scale=ns; apply();
     },{passive:false});
 
-    // Drag + pinch
     let dragging=false, lx=0, ly=0;
     const activePointers = new Map();
-    let isPinching=false, pinchStartDist=0, pinchStartScale=1, pinchCenter=[0,0];
+    let isPinching=false, pinchStartDist=0, pinchStartScale=1;
+    function distance(p1,p2){ const dx=p1.x-p2.x, dy=p1.y-p2.y; return Math.hypot(dx,dy); }
 
     viewport.addEventListener('pointerdown',e=>{
       viewport.setPointerCapture(e.pointerId);
@@ -373,7 +503,26 @@
       isPinching=false; dragging=false;
     });
 
-    // Double-tap/Double-click zoom
+    function pinchUpdate(){
+      const pts = [...activePointers.values()]; if (pts.length!==2) return;
+      const p1=pts[0], p2=pts[1];
+
+      const r = viewport.getBoundingClientRect();
+      const cx = (p1.x + p2.x)/2;
+      const cy = (p1.y + p2.y)/2;
+
+      const worldX = (cx - r.left - tx) / scale;
+      const worldY = (cy - r.top  - ty) / scale;
+
+      const dist = distance(p1,p2);
+      if (!isPinching){ isPinching = true; pinchStartDist = dist; pinchStartScale = scale; }
+
+      const ns = Math.min(maxS, Math.max(minS, pinchStartScale * (dist / pinchStartDist)));
+      tx = cx - r.left - worldX * ns;
+      ty = cy - r.top  - worldY * ns;
+      scale = ns; apply();
+    }
+
     viewport.addEventListener('dblclick',(e)=>{
       const r=viewport.getBoundingClientRect();
       const mx=(e.clientX-r.left-tx)/scale, my=(e.clientY-r.top-ty)/scale;
@@ -382,25 +531,6 @@
       tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
     });
 
-    function distance(p1,p2){ const dx=p1.x-p2.x, dy=p1.y-p2.y; return Math.hypot(dx,dy); }
-    function pinchUpdate(){
-      const pts = [...activePointers.values()]; if (pts.length!==2) return;
-      const p1=pts[0], p2=pts[1];
-      if (!isPinching){
-        isPinching=true; pinchStartDist = distance(p1,p2); pinchStartScale = scale;
-        const r=viewport.getBoundingClientRect();
-        pinchCenter = [(p1.x+p2.x)/2, (p1.y+p2.y)/2];
-        return;
-      }
-      const r=viewport.getBoundingClientRect();
-      const centerX = (pinchCenter[0]-r.left - tx)/scale;
-      const centerY = (pinchCenter[1]-r.top  - ty)/scale;
-      const dist = distance(p1,p2);
-      const ns = Math.min(maxS, Math.max(minS, pinchStartScale * (dist/pinchStartDist)));
-      tx = pinchCenter[0]-r.left - centerX*ns; ty = pinchCenter[1]-r.top - centerY*ns; scale = ns; apply();
-    }
-
-    // Buttons
     document.getElementById('zoomin').addEventListener('click', ()=> zoomBy(1.2));
     document.getElementById('zoomout').addEventListener('click', ()=> zoomBy(1/1.2));
     document.getElementById('zoomreset').addEventListener('click', ()=> centerOnLoad(32));
@@ -412,7 +542,6 @@
       tx = cx - mx*ns; ty = cy - my*ns; scale=ns; apply();
     }
 
-    // Keyboard shortcuts: + / - / 0
     window.addEventListener('keydown',(e)=>{
       if (e.target && /input|textarea|select|button/i.test(e.target.tagName)) return;
       if (e.key==='+' || e.key==='='){ e.preventDefault(); zoomBy(1.2); }
@@ -421,7 +550,10 @@
     });
 
     /************* GO *************/
-    await build();
+    await build();                 // draw demo layout
+    startClocks();                 // ticking countdowns
+    await refreshFromDB();         // first overlay from DB
+    setInterval(refreshFromDB, 5000); // keep votes/timers/links fresh
     window.addEventListener('resize', ()=> centerOnLoad(32));
   </script>
 </body>
