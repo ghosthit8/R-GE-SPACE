@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Rage Space — Matchup</title>
+  <title>Rage Space — Tournament Brackets</title>
   <link rel="stylesheet" href="style.css?v=3" />
   <style>
     :root{
-      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5;
-      --card:#070707; --muted:#8aff8a; --border:#0f2510; --maxw: 980px;
+      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --border:#0f2510;
+      --card:#070707; --muted:#8aff8a;
     }
     *{ box-sizing:border-box }
     html,body{ height:100% }
@@ -16,42 +16,78 @@
       margin:0; background:#000; color:var(--green);
       font-family: ui-sans-serif,system-ui,Arial,Helvetica,sans-serif;
       -webkit-font-smoothing: antialiased;
+      overflow:hidden;
     }
+    header{ max-width:960px; margin:10px auto 0; padding:0 16px; }
+    .toolbar{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .btn{ border:1px solid var(--green); color:var(--green); text-decoration:none; padding:8px 12px; border-radius:10px; display:inline-flex; align-items:center; gap:8px; background:transparent; cursor:pointer; }
 
-    header.wrap{ max-width:var(--maxw); margin:12px auto 0; padding:0 16px; }
-
-    /* Viewport for pan/zoom (like brackets page) */
     .viewport{
-      position:fixed; inset:64px 8px 8px; border:1px solid var(--border); border-radius:14px; overflow:hidden;
+      position:fixed; inset:56px 8px 8px; border:1px solid var(--border); border-radius:14px; overflow:hidden;
       background:
         radial-gradient(1200px 800px at 70% -20%, rgba(57,255,20,0.08), transparent 60%),
         repeating-linear-gradient(to bottom, rgba(255,255,255,.03) 0, rgba(255,255,255,.03) 2px, transparent 2px, transparent 4px),
         rgba(7,7,7,.45);
       touch-action:none;
     }
-    .layer{ position:absolute; inset:0; transform-origin:0 0; padding:18px; }
 
-    .wrap{ max-width:var(--maxw); margin:0 auto; padding:0 8px 40px; }
-    .scorebar{
-      display:flex; gap:12px; align-items:center; justify-content:space-between;
-      border:1px solid var(--border); padding:8px 12px; border-radius:10px; background:rgba(7,7,7,.6);
-      box-shadow: 0 0 18px rgba(57,255,20,.08) inset;
+    .stage{ position:absolute; inset:0; transform-origin:0 0; will-change: transform; }
+    .layer{ position:absolute; top:0; left:0; width:5200px; height:3200px; }
+    svg.wires{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
+    .nodes{ position:absolute; inset:0; z-index:1; }
+
+    .node{ position:absolute; width:220px; }
+    .card{
+      border:1px solid var(--border); border-radius:12px; overflow:hidden; background:rgba(0,0,0,.55);
+      box-shadow: 0 0 18px rgba(57,255,20,.08) inset; backdrop-filter: blur(1px);
+      position: relative;
     }
-    .btn{ border:1px solid var(--green); color:var(--green); text-decoration:none; padding:8px 12px; border-radius:10px; display:inline-flex; align-items:center; gap:8px; background:transparent; cursor:pointer; }
-    .btn.primary{ background:rgba(57,255,20,.08) }
-    .btn:disabled{ opacity:.45; cursor:not-allowed }
-    .grid{ margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-    .tile{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(7,7,7,.6); position:relative; }
-    .art{ aspect-ratio: 4/5; background: linear-gradient(45deg, rgba(57,255,20,.08), transparent 60%), #050505; display:block; width:100%; object-fit:cover; }
-    .tbdBadge{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:3rem; font-weight:900; color:rgba(57,255,20,.75); text-shadow:0 0 10px rgba(57,255,20,.4); pointer-events:none; }
-    .meta{ display:flex; gap:12px; align-items:center; justify-content:space-between; padding:10px 12px; border-top:1px solid var(--border); }
-    .badge{ font-size:.9rem; color:var(--ink); opacity:.75; }
-    .countdown{ margin-top:12px; text-align:center; font-variant-numeric:tabular-nums; }
-    .vote-row{ margin-top:14px; display:flex; gap:10px; align-items:center; justify-content:center; }
-    .stateTag{ padding:3px 8px; border:1px solid var(--border); border-radius:999px; font-size:.8rem; opacity:.85; }
-    .toast{
-      position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#0a0a0a; color:var(--ink);
-      border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:none; box-shadow:0 0 18px rgba(57,255,20,.2); z-index:9999;
+
+    /* image areas */
+    .thumb{ display:block; width:100%; aspect-ratio:3/4; object-fit:cover; background:#050505; }
+    .thumb-duo{
+      display:flex; width:100%; aspect-ratio:3/4; overflow:hidden; background:#050505;
+    }
+    .thumb-duo img{ width:50%; height:100%; object-fit:cover; filter:saturate(.9) contrast(.95); }
+    .winner{ display:none; }                  /* hidden until decided */
+    .node.decided .thumb-duo{ display:none; } /* hide duo once decided */
+    .node.decided .winner{ display:block; }   /* show single winner image */
+
+    .meta{ padding:8px 10px; border-top:1px solid var(--border); }
+    .title{
+      font-size:.9rem; line-height:1.2; margin:0 0 4px 0; color:var(--ink);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .timer,.votes{ font-variant-numeric:tabular-nums; opacity:.85; }
+    .enter{ margin-top:6px; display:flex; justify-content:flex-end; }
+    .enter .btn{ padding:5px 9px; font-size:.85rem }
+
+    .entrant .enter{ display:none; }
+    .entrant .title{ opacity:.9; }
+
+    .tbd .thumb{
+      background:
+        repeating-linear-gradient(45deg, rgba(57,255,20,.08) 0 6px, transparent 6px 12px),
+        #0a0a0a;
+      filter: saturate(.4) contrast(.9) brightness(.9);
+    }
+    .tbd .tbd-badge{
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      font-size:3rem; font-weight:900; color:rgba(57,255,20,.75);
+      text-shadow:0 0 10px rgba(57,255,20,.4); pointer-events:none;
+    }
+
+    .round-label{
+      position:absolute; left:12px; transform:translateY(-120%); font-size:.85rem; opacity:.8;
+      background:rgba(0,0,0,.45); border:1px solid var(--border); border-radius:8px; padding:4px 8px;
+      pointer-events:none;
+    }
+
+    .hint{
+      position:absolute; right:12px; bottom:8px; font-size:.85rem; opacity:.75;
+      background:rgba(0,0,0,.45); border:1px solid var(--border); border-radius:8px; padding:6px 8px;
+      pointer-events:none;
     }
 
     .zoom-controls{
@@ -62,56 +98,31 @@
       background:rgba(0,0,0,.55); color:var(--green); font-weight:700; cursor:pointer;
     }
 
-    @media (max-width:760px){ .grid{ grid-template-columns:1fr; } }
+    /* winner line that appears after the clock hits 0 */
+    .result {
+      margin-top: 6px;
+      font-size: .85rem;
+      color: var(--muted);
+    }
+
+    @media (max-width:900px){ .viewport{ inset:64px 6px 6px } }
   </style>
 </head>
 <body>
-  <header class="wrap" style="padding-top:0">
-    <h1>R<span class="anarchy">Ⓐ</span>GE SPACE — MATCHUP</h1>
+  <header>
+    <div class="toolbar">
+      <h1 style="margin:0">R<span class="anarchy">Ⓐ</span>GE SPACE — TOURNAMENT</h1>
+      <div style="display:flex; gap:8px">
+        <a class="btn" href="matchup.html">⚔️ Random Battle</a>
+        <a class="btn" href="menu.html">← Menu</a>
+      </div>
+    </div>
   </header>
 
-  <!-- Pan/zoom viewport -->
   <div class="viewport" id="viewport">
-    <div class="layer" id="layer">
-      <div class="wrap">
-        <div class="scorebar">
-          <div>
-            <span class="stateTag" id="stateTag">—</span>
-            <span class="badge">Round <span id="roundNum">–</span>, Match <span id="battleIndex">1</span>/<span id="battleTotal">1</span></span>
-          </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <a class="btn" href="tournament-brackets.html">🏁 Brackets</a>
-            <a class="btn" href="menu.html">← Menu</a>
-          </div>
-        </div>
-
-        <div class="countdown">Decision in: <span id="clock">00:00:00</span></div>
-
-        <div class="grid" id="grid">
-          <div class="tile" id="leftTile">
-            <img id="leftArt" class="art" alt="Left entry" />
-            <div id="leftTbd" class="tbdBadge" style="display:none">?</div>
-            <div class="meta">
-              <span id="leftLabel">Entry — LEFT</span>
-              <button class="btn primary" id="voteLeft">Vote Left</button>
-            </div>
-          </div>
-
-          <div class="tile" id="rightTile">
-            <img id="rightArt" class="art" alt="Right entry" />
-            <div id="rightTbd" class="tbdBadge" style="display:none">?</div>
-            <div class="meta">
-              <span id="rightLabel">Entry — RIGHT</span>
-              <button class="btn primary" id="voteRight">Vote Right</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="vote-row">
-          <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
-          <button class="btn" id="skipBtn" title="Go to next battle">⏭ Next</button>
-        </div>
-      </div>
+    <div class="stage" id="stage">
+      <svg class="layer wires" id="wires" viewBox="0 0 5200 3200" preserveAspectRatio="none"></svg>
+      <div class="layer nodes" id="nodes"></div>
     </div>
 
     <div class="zoom-controls">
@@ -119,242 +130,361 @@
       <button id="zoomout" aria-label="Zoom out">－</button>
       <button id="zoomreset" aria-label="Reset zoom">⟳</button>
     </div>
+
+    <div class="hint">Drag to move • Pinch/Scroll to zoom • Double-tap to zoom (Shift = zoom out)</div>
   </div>
 
-  <div id="toast" class="toast"></div>
-
-  <!-- Supabase client (ESM) -->
   <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+    /************* MODE *************/
+    const DEMO_MODE = true; // demo layout stays; we overlay with live data
 
-    /************** CONFIG **************/
+    /************* SUPABASE *************/
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const TOURNAMENT_ID = "682da23f-6e32-4782-8b8a-8e59527d6b58";
-    const MAX_MATCHES = 32;
-
-    /************** Supabase **************/
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    /************** DOM **************/
-    const toast = document.getElementById('toast');
-    const clock = document.getElementById('clock');
-    const roundNumEl = document.getElementById('roundNum');
-    const battleIndexEl = document.getElementById('battleIndex');
-    const battleTotalEl = document.getElementById('battleTotal');
-    const stateTag = document.getElementById('stateTag');
+    /************* LAYOUT *************/
+    const CARD_W = 220;
+    let   CARD_H = 320;
+    const X_START = 100;
+    const X_GAP   = 260;
+    const ROW_GAP = 420;
 
-    const leftArt = document.getElementById('leftArt');
-    const rightArt = document.getElementById('rightArt');
-    const leftLabel = document.getElementById('leftLabel');
-    const rightLabel = document.getElementById('rightLabel');
-    const leftTbd = document.getElementById('leftTbd');
-    const rightTbd = document.getElementById('rightTbd');
+    const viewport = document.getElementById('viewport');
+    const stage    = document.getElementById('stage');
+    const nodesEl  = document.getElementById('nodes');
+    const wiresEl  = document.getElementById('wires');
 
-    const voteLeftBtn = document.getElementById('voteLeft');
-    const voteRightBtn = document.getElementById('voteRight');
-    const submitBtn = document.getElementById('submitBtn');
-    const skipBtn = document.getElementById('skipBtn');
+    const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+    const rowY = (i)=> 200 + i*ROW_GAP; // 0 entrants, 1 R32, 2 R16, 3 QF, 4 SF, 5 Final
 
-    /************** State **************/
-    let BATTLES = [];
-    let idx = 0;
-    let chosen = null;
-    let tickHandle = null;
-
-    const SESSION_KEY = 'rs_session_id';
-    let sessionId = localStorage.getItem(SESSION_KEY);
-    if (!sessionId){ sessionId = crypto.randomUUID(); localStorage.setItem(SESSION_KEY, sessionId); }
-
-    const urlParams = new URLSearchParams(location.search);
-    const deepId = urlParams.get('battle');
-
-    const lockKey = (id)=> `rs_vote_${id}`;
-
-    /************** Utils **************/
-    function showToast(msg){
-      toast.textContent = msg;
-      toast.style.display = 'block';
-      clearTimeout(showToast._t);
-      showToast._t = setTimeout(()=> toast.style.display='none', 1400);
+    /************* DATA (demo builder) *************/
+    function demoEntrants32(){
+      return Array.from({length:32}, (_,i)=>({
+        name: `Seed ${i+1}`,
+        img: `https://picsum.photos/seed/e${i+1}/600/800`,
+        v: 0
+      }));
     }
+
+    /************* TEMPLATES *************/
+    function entrantHTML(id,x,y,p){
+      return `
+        <div class="node entrant" data-id="${id}" style="left:${x}px; top:${y}px">
+          <article class="card">
+            <img class="thumb" src="${p.img||BLANK}" alt="">
+            <div class="meta">
+              <h3 class="title">${p.name||'TBD'}</h3>
+              <div class="row">
+                <span class="timer" data-ends="${Date.now()}"></span>
+                <span class="votes">0</span>
+              </div>
+              <div class="enter"></div>
+            </div>
+          </article>
+        </div>`;
+    }
+
+    // Ongoing matches show a duo; winner image reveals ONLY after timer ends
+    function matchHTML(id,x,y,a,b){
+      const label = `${clip(a?.name)||'TBD'} vs ${clip(b?.name)||'TBD'}`;
+      const tbd = !(a && b);
+      const endsAt = Date.now() + 24*60*60*1000; // demo default 24h
+
+      const votesA = a?.v ?? 0;
+      const votesB = b?.v ?? 0;
+
+      const media = tbd
+        ? `<img class="thumb" src="${a?.img || b?.img || BLANK}" alt=""><div class="tbd-badge">?</div>`
+        : `<div class="thumb-duo">
+             <img src="${a.img}" alt="">
+             <img src="${b.img}" alt="">
+           </div>
+           <img class="winner thumb" src="${BLANK}" alt="">`;
+
+      return `
+        <div class="node ${tbd?'tbd':''}" data-id="${id}" data-ends="${endsAt}"
+             data-va="${votesA}" data-vb="${votesB}"
+             style="left:${x}px; top:${y}px">
+          <article class="card">
+            ${media}
+            <div class="meta">
+              <h3 class="title">${label}</h3>
+              <div class="row">
+                <span class="timer" data-ends="${endsAt}"></span>
+                <span class="votes">${votesA} - ${votesB}</span>
+              </div>
+              <div class="result" style="display:none"></div>
+              <div class="enter"><a class="btn" href="matchup.html?battle=${id}">Enter</a></div>
+            </div>
+          </article>
+        </div>`;
+    }
+
+    function clip(s){ if(!s) return s; return s.length>24 ? s.slice(0,22)+'…' : s; }
+
+    /************* BUILD (DEMO 32) *************/
+    async function build(){
+      nodesEl.innerHTML = '';
+      wiresEl.innerHTML = '';
+      const centers = [];
+
+      const ENTRANTS = demoEntrants32();
+      for (let i=0;i<ENTRANTS.length;i++){
+        const x = X_START + i*X_GAP;
+        centers.push(x + CARD_W/2);
+        nodesEl.insertAdjacentHTML('beforeend', entrantHTML('E'+(i+1), x, rowY(0), ENTRANTS[i]));
+      }
+
+      const R32 = [];
+      for (let i=0;i<16;i++){
+        const cx = (centers[2*i] + centers[2*i+1]) / 2 - CARD_W/2;
+        const a = ENTRANTS[2*i], b = ENTRANTS[2*i+1];
+        const id = 'R32_'+(i+1);
+        R32.push({id, cx, a, b});
+        nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(1), a, b));
+      }
+
+      const R16 = [];
+      for (let i=0;i<8;i++){
+        const cx = (R32[i*2].cx + CARD_W/2 + R32[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
+        const id = 'R16_'+(i+1);
+        R16.push({id, cx});
+        nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(2)));
+      }
+
+      const QF = [];
+      for (let i=0;i<4;i++){
+        const cx = (R16[i*2].cx + CARD_W/2 + R16[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
+        const id = 'QF_'+(i+1);
+        QF.push({id, cx});
+        nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(3)));
+      }
+
+      const SF = [];
+      for (let i=0;i<2;i++){
+        const cx = (QF[i*2].cx + CARD_W/2 + QF[i*2+1].cx + CARD_W/2)/2 - CARD_W/2;
+        const id = 'SF_'+(i+1);
+        SF.push({id, cx});
+        nodesEl.insertAdjacentHTML('beforeend', matchHTML(id, cx, rowY(4)));
+      }
+
+      const FINAL_CX = (SF[0].cx + CARD_W/2 + SF[1].cx + CARD_W/2)/2 - CARD_W/2;
+      nodesEl.insertAdjacentHTML('beforeend', matchHTML('FINAL', FINAL_CX, rowY(5)));
+
+      requestAnimationFrame(()=>{
+        const any = nodesEl.querySelector('.card');
+        if (any) CARD_H = any.getBoundingClientRect().height;
+        drawDemoWires(centers, R32, R16, QF, SF, FINAL_CX);
+        startClocks();
+        centerOnLoad(32);
+      });
+    }
+
+    /************* WIRES *************/
+    function drawElbow(fromRect, toRect){
+      const [x1,y1] = [fromRect.x + CARD_W/2, fromRect.y + CARD_H];
+      const [x2,y2] = [toRect.x + CARD_W/2,   toRect.y];
+      const midY = (y1 + y2)/2;
+      const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('d', `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`);
+      p.setAttribute('fill','none');
+      p.setAttribute('stroke','rgba(57,255,20,0.55)');
+      p.setAttribute('stroke-width','2');
+      p.setAttribute('shape-rendering','crispEdges');
+      wiresEl.appendChild(p);
+    }
+
+    function drawDemoWires(centers, R32, R16, QF, SF, FINAL_CX){
+      const any = nodesEl.querySelector('.card');
+      if (any) CARD_H = any.getBoundingClientRect().height;
+      wiresEl.innerHTML='';
+      for (let i=0;i<R32.length;i++){
+        const m = R32[i];
+        drawElbow({x: centers[2*i]-CARD_W/2, y: rowY(0)}, {x: m.cx, y: rowY(1)});
+        drawElbow({x: centers[2*i+1]-CARD_W/2, y: rowY(0)}, {x: m.cx, y: rowY(1)});
+      }
+      for (let i=0;i<R16.length;i++){
+        const a = R32[i*2], b = R32[i*2+1], p = R16[i];
+        drawElbow({x: a.cx, y: rowY(1)}, {x: p.cx, y: rowY(2)});
+        drawElbow({x: b.cx, y: rowY(1)}, {x: p.cx, y: rowY(2)});
+      }
+      for (let i=0;i<QF.length;i++){
+        const a = R16[i*2], b = R16[i*2+1], p = QF[i];
+        drawElbow({x: a.cx, y: rowY(2)}, {x: p.cx, y: rowY(3)});
+        drawElbow({x: b.cx, y: rowY(2)}, {x: p.cx, y: rowY(3)});
+      }
+      for (let i=0;i<SF.length;i++){
+        const a = QF[i*2], b = QF[i*2+1], p = SF[i];
+        drawElbow({x: a.cx, y: rowY(3)}, {x: p.cx, y: rowY(4)});
+        drawElbow({x: b.cx, y: rowY(3)}, {x: p.cx, y: rowY(4)});
+      }
+      drawElbow({x: SF[0].cx, y: rowY(4)}, {x: FINAL_CX, y: rowY(5)});
+      drawElbow({x: SF[1].cx, y: rowY(4)}, {x: FINAL_CX, y: rowY(5)});
+    }
+
+    /************* TIMERS + STATE *************/
     function fmt(ms){
-      if(ms<=0) return '00:00:00';
+      if(!ms || ms<=0) return '00:00:00';
       const s=Math.floor(ms/1000);
       const hh=String(Math.floor(s/3600)).padStart(2,'0');
       const mm=String(Math.floor((s%3600)/60)).padStart(2,'0');
       const ss=String(s%60).padStart(2,'0');
       return `${hh}:${mm}:${ss}`;
     }
-    function safeImg(el, url){
-      if (!url){ el.src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='; return false; }
-      el.src = url; return true;
+
+    function refreshStates(){
+      document.querySelectorAll('.node[data-ends]').forEach(node=>{
+        const ends = +node.dataset.ends || 0;
+        const left = ends - Date.now();
+        const timerEl = node.querySelector('.timer');
+        if (timerEl) timerEl.textContent = fmt(left);
+
+        // Don't declare anything until clock hits 0, or if TBD
+        if (left > 0 || node.classList.contains('tbd')) return;
+
+        // Only once
+        if (node.classList.contains('decided')) return;
+        node.classList.add('decided');
+
+        // Votes (ties → A)
+        const va = +node.dataset.va || 0;
+        const vb = +node.dataset.vb || 0;
+        const winnerIsA = (va >= vb);
+
+        // Swap image to the winner
+        const duo = node.querySelector('.thumb-duo');
+        const aImg = duo?.querySelector('img:nth-child(1)')?.src;
+        const bImg = duo?.querySelector('img:nth-child(2)')?.src;
+        const w = node.querySelector('img.winner');
+        const winnerSrc = winnerIsA ? aImg : bImg;
+        if (w && winnerSrc) w.src = winnerSrc;
+
+        // Winner text
+        const titleEl = node.querySelector('.title');
+        const [nameA, nameB] = (titleEl?.textContent || '').split(' vs ');
+        const winnerName = winnerIsA ? (nameA || 'A') : (nameB || 'B');
+        const resultEl = node.querySelector('.result');
+        if (resultEl){
+          resultEl.style.display = '';
+          resultEl.textContent = `Winner: ${winnerName} — ${va}–${vb}`;
+        }
+        if (titleEl) titleEl.textContent = winnerName;
+
+        // Keep numeric tally visible too
+        const vEl = node.querySelector('.votes');
+        if (vEl) vEl.textContent = `${va} - ${vb}`;
+      });
     }
 
-    /************** Load matches **************/
-    async function loadBattles(){
+    function startClocks(){
+      refreshStates();
+      clearInterval(startClocks._t);
+      startClocks._t = setInterval(refreshStates, 1000);
+    }
+
+    /************* LIVE OVERLAY (votes, names, timers, enter links) *************/
+    async function refreshFromDB(){
       const { data, error } = await supabase
         .from('match_public')
         .select('*')
         .eq('tournament_id', TOURNAMENT_ID)
-        .in('state', ['open','scheduled'])
-        .order('round_number', { ascending: true })
-        .order('index_in_round', { ascending: true })
-        .limit(MAX_MATCHES);
+        .eq('round_number', 1) // overlay only R32
+        .order('index_in_round', { ascending: true });
 
-      if (error){ console.error(error); showToast('Failed to load matches.'); return; }
+      if (error){ console.warn('refresh failed', error); return; }
+      if (!data || !data.length) return;
 
-      BATTLES = (data||[]).map(r => ({
-        id: r.id,
-        round: r.round_number,
-        indexInRound: r.index_in_round,
-        state: r.state,
-        start: r.start_time,
-        end: r.end_time,
-        A: { id:r.a_id, name:r.a_name, img:r.a_image },
-        B: { id:r.b_id, name:r.b_name, img:r.b_image },
-        votesA: r.votes_a ?? 0,
-        votesB: r.votes_b ?? 0,
-      }));
+      data.forEach(row=>{
+        // Map DB row -> demo node id 'R32_X'
+        const id = `R32_${row.index_in_round}`;
+        const n = document.querySelector(`.node[data-id="${id}"]`);
+        if (!n) return;
 
-      if (deepId){
-        const j = BATTLES.findIndex(b => b.id === deepId);
-        if (j >= 0) idx = j;
-      }
+        // Title
+        const t = n.querySelector('.title');
+        if (t) t.textContent = `${row.a_name || 'TBD'} vs ${row.b_name || 'TBD'}`;
 
-      battleTotalEl.textContent = BATTLES.length;
-      if (!BATTLES.length){
-        leftLabel.textContent = 'No matches available';
-        rightLabel.textContent = 'Check back soon';
-        voteLeftBtn.disabled = voteRightBtn.disabled = submitBtn.disabled = true;
-        return;
-      }
-      render();
-    }
+        // Timer (node + visible)
+        const ends = row.end_time ? new Date(row.end_time).getTime() : (Date.now()+24*60*60*1000);
+        n.dataset.ends = ends;
+        const timer = n.querySelector('.timer');
+        if (timer) timer.dataset.ends = ends;
 
-    /************** Render **************/
-    function render(){
-      const b = BATTLES[idx];
-      battleIndexEl.textContent = (idx+1).toString();
-      roundNumEl.textContent = b.round;
+        // Votes (data + label)
+        const a = row.votes_a ?? 0, b = row.votes_b ?? 0;
+        n.dataset.va = a;
+        n.dataset.vb = b;
+        const vEl = n.querySelector('.votes');
+        if (vEl) vEl.textContent = `${a} - ${b}`;
 
-      const now = Date.now();
-      const starts = new Date(b.start).getTime();
-      const ends = new Date(b.end).getTime();
-      const inWindow = now >= starts && now < ends;
-      const votable = b.state === 'open' && inWindow && b.A.img && b.B.img;
+        // Images: duo if both slots have images
+        const hasA = !!row.a_image, hasB = !!row.b_image;
+        const duo = n.querySelector('.thumb-duo');
+        const single = n.querySelector('img.thumb:not(.winner)');
+        if (hasA && hasB){
+          if (!duo){
+            const wrap = document.createElement('div'); wrap.className='thumb-duo';
+            const imgA = document.createElement('img'); imgA.src = row.a_image; imgA.alt='';
+            const imgB = document.createElement('img'); imgB.src = row.b_image; imgB.alt='';
+            wrap.appendChild(imgA); wrap.appendChild(imgB);
+            if (single) single.replaceWith(wrap);
+          } else {
+            const imgs = duo.querySelectorAll('img');
+            if (imgs[0]) imgs[0].src = row.a_image;
+            if (imgs[1]) imgs[1].src = row.b_image;
+          }
+          n.classList.remove('tbd');
+        } else if (single){
+          single.src = row.a_image || row.b_image || single.src;
+          n.classList.toggle('tbd', !(row.a_image || row.b_image));
+        }
 
-      stateTag.textContent = votable ? 'OPEN' : (now < starts ? 'SCHEDULED' : 'CLOSED');
-
-      const hasA = safeImg(leftArt, b.A.img);
-      const hasB = safeImg(rightArt, b.B.img);
-      leftTbd.style.display = hasA ? 'none' : 'flex';
-      rightTbd.style.display = hasB ? 'none' : 'flex';
-      leftLabel.textContent = hasA ? b.A.name : 'TBD';
-      rightLabel.textContent = hasB ? b.B.name : 'TBD';
-
-      const alreadyVoted = !!localStorage.getItem(lockKey(b.id));
-      voteLeftBtn.disabled = !votable || alreadyVoted;
-      voteRightBtn.disabled = !votable || alreadyVoted;
-      submitBtn.disabled = true;
-      chosen = null;
-
-      if (tickHandle) clearInterval(tickHandle);
-      updateClock();
-      tickHandle = setInterval(updateClock, 1000);
-    }
-
-    function updateClock(){
-      const b = BATTLES[idx];
-      const ms = new Date(b.end).getTime() - Date.now();
-      clock.textContent = fmt(ms);
-      if (ms <= 0){
-        submitBtn.disabled = true;
-        voteLeftBtn.disabled = true;
-        voteRightBtn.disabled = true;
-      }
-    }
-
-    /************** Interactions **************/
-    voteLeftBtn.addEventListener('click', ()=>{
-      if (voteLeftBtn.disabled) return;
-      chosen = 'A'; submitBtn.disabled = false; showToast('Selected LEFT');
-    });
-    voteRightBtn.addEventListener('click', ()=>{
-      if (voteRightBtn.disabled) return;
-      chosen = 'B'; submitBtn.disabled = false; showToast('Selected RIGHT');
-    });
-
-    submitBtn.addEventListener('click', async ()=>{
-      const b = BATTLES[idx];
-      if (!chosen) return;
-      submitBtn.disabled = true;
-
-      const { error } = await supabase.from('votes').insert({
-        match_id: b.id,
-        slot: chosen,
-        session_id: sessionId,
+        // Enter → real DB id
+        const link = n.querySelector('.enter a.btn');
+        if (link && row.id) link.href = `matchup.html?battle=${encodeURIComponent(row.id)}`;
       });
-
-      if (error){
-        console.error(error);
-        showToast('Vote failed.');
-        submitBtn.disabled = false;
-        return;
-      }
-
-      localStorage.setItem(lockKey(b.id), chosen);
-      showToast(`Vote submitted: ${chosen==='A'?'LEFT':'RIGHT'}`);
-      setTimeout(nextBattle, 600);
-    });
-
-    skipBtn.addEventListener('click', nextBattle);
-    function nextBattle(){
-      if (!BATTLES.length) return;
-      idx = (idx + 1) % BATTLES.length;
-      render();
     }
 
-    /************** Pan & Zoom (boosted like brackets) **************/
-    const layer = document.getElementById('layer');
-    let scale=1.0, minS=0.05, maxS=10.0, tx=0, ty=0;
-
-    function apply(){
-      layer.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
-      layer.style.transformOrigin = '0 0';
+    /************* PAN & ZOOM *************/
+    let scale=0.8, minS=0.05, maxS=10.0, tx=40, ty=12;
+    function apply(){ stage.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; }
+    function centerOnLoad(totalEntrants){
+      const totalWidth = 100 + (totalEntrants-1)*260 + 220 + 100;
+      const totalHeight = rowY(5) + CARD_H + 100;
+      const view = viewport.getBoundingClientRect();
+      const sx = (view.width - 40) / totalWidth;
+      const sy = (view.height - 80) / totalHeight;
+      scale = Math.max(minS, Math.min(maxS, Math.min(sx, sy)*0.95));
+      tx = (view.width - totalWidth*scale)/2;
+      ty = 12;
+      apply();
     }
     apply();
 
-    function centerOnLoad(){
-      // Keep content roughly centered on open
-      const vp = document.getElementById('viewport').getBoundingClientRect();
-      tx = (vp.width - layer.getBoundingClientRect().width)/2;
-      ty = 0;
-      scale = Math.max(minS, Math.min(maxS, 1));
-      apply();
-    }
-
-    const viewportEl = document.getElementById('viewport');
-
-    viewportEl.addEventListener('wheel',(e)=>{
+    viewport.addEventListener('wheel',(e)=>{
       e.preventDefault();
-      const r=viewportEl.getBoundingClientRect();
-      const mx=(e.clientX-r.left-tx)/scale, my=(e.clientY-r.top-ty)/scale;
       const ds=e.deltaY<0?1.12:0.9;
       const ns=Math.min(maxS,Math.max(minS,scale*ds));
-      tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
+      const r=viewport.getBoundingClientRect();
+      const cx=r.width/2, cy=r.height/2;
+      const mx=(cx-tx)/scale, my=(cy-ty)/scale;
+      tx = cx - mx*ns; ty = cy - my*ns; scale=ns; apply();
     },{passive:false});
 
     let dragging=false, lx=0, ly=0;
     const activePointers = new Map();
-    let isPinching=false, pinchStartDist=0, pinchStartScale=1, pinchCenter=[0,0];
+    let isPinching=false, pinchStartDist=0, pinchStartScale=1;
+    function distance(p1,p2){ const dx=p1.x-p2.x, dy=p1.y-p2.y; return Math.hypot(dx,dy); }
 
-    viewportEl.addEventListener('pointerdown',e=>{
-      viewportEl.setPointerCapture(e.pointerId);
+    viewport.addEventListener('pointerdown',e=>{
+      viewport.setPointerCapture(e.pointerId);
       activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
       if (activePointers.size===1){ dragging=true; lx=e.clientX; ly=e.clientY; }
     });
-    viewportEl.addEventListener('pointermove',e=>{
+    viewport.addEventListener('pointermove',e=>{
       if (!activePointers.has(e.pointerId)) return;
       activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
       if (activePointers.size===2){
@@ -363,65 +493,68 @@
         tx += e.clientX - lx; ty += e.clientY - ly; lx=e.clientX; ly=e.clientY; apply();
       }
     });
-    viewportEl.addEventListener('pointerup',e=>{
+    viewport.addEventListener('pointerup',e=>{
       activePointers.delete(e.pointerId);
       if (activePointers.size<2) isPinching=false;
       if (activePointers.size===0) dragging=false;
     });
-    viewportEl.addEventListener('pointercancel',e=>{
+    viewport.addEventListener('pointercancel',e=>{
       activePointers.delete(e.pointerId);
       isPinching=false; dragging=false;
     });
 
-    viewportEl.addEventListener('dblclick',(e)=>{
-      const r=viewportEl.getBoundingClientRect();
+    function pinchUpdate(){
+      const pts = [...activePointers.values()]; if (pts.length!==2) return;
+      const p1=pts[0], p2=pts[1];
+
+      const r = viewport.getBoundingClientRect();
+      const cx = (p1.x + p2.x)/2;
+      const cy = (p1.y + p2.y)/2;
+
+      const worldX = (cx - r.left - tx) / scale;
+      const worldY = (cy - r.top  - ty) / scale;
+
+      const dist = distance(p1,p2);
+      if (!isPinching){ isPinching = true; pinchStartDist = dist; pinchStartScale = scale; }
+
+      const ns = Math.min(maxS, Math.max(minS, pinchStartScale * (dist / pinchStartDist)));
+      tx = cx - r.left - worldX * ns;
+      ty = cy - r.top  - worldY * ns;
+      scale = ns; apply();
+    }
+
+    viewport.addEventListener('dblclick',(e)=>{
+      const r=viewport.getBoundingClientRect();
       const mx=(e.clientX-r.left-tx)/scale, my=(e.clientY-r.top-ty)/scale;
       const factor = e.shiftKey ? 0.6 : 1.6;
       const ns=Math.min(maxS,Math.max(minS,scale*factor));
       tx = e.clientX-r.left - mx*ns; ty = e.clientY-r.top - my*ns; scale=ns; apply();
     });
 
-    function distance(p1,p2){ const dx=p1.x-p2.x, dy=p1.y-p2.y; return Math.hypot(dx,dy); }
-    function pinchUpdate(){
-      const pts = [...activePointers.values()]; if (pts.length!==2) return;
-      const p1=pts[0], p2=pts[1];
-      if (!isPinching){
-        isPinching=true; pinchStartDist = distance(p1,p2); pinchStartScale = scale;
-        const r=viewportEl.getBoundingClientRect();
-        pinchCenter = [(p1.x+p2.x)/2, (p1.y+p2.y)/2];
-        return;
-      }
-      const r=viewportEl.getBoundingClientRect();
-      const centerX = (pinchCenter[0]-r.left - tx)/scale;
-      const centerY = (pinchCenter[1]-r.top  - ty)/scale;
-      const dist = distance(p1,p2);
-      const ns = Math.min(maxS, Math.max(minS, pinchStartScale * (dist/pinchStartDist)));
-      tx = pinchCenter[0]-r.left - centerX*ns; ty = pinchCenter[1]-r.top - centerY*ns; scale = ns; apply();
-    }
-
     document.getElementById('zoomin').addEventListener('click', ()=> zoomBy(1.2));
     document.getElementById('zoomout').addEventListener('click', ()=> zoomBy(1/1.2));
-    document.getElementById('zoomreset').addEventListener('click', centerOnLoad);
+    document.getElementById('zoomreset').addEventListener('click', ()=> centerOnLoad(32));
     function zoomBy(f){
-      const r=viewportEl.getBoundingClientRect();
+      const r=viewport.getBoundingClientRect();
       const cx=r.width/2, cy=r.height/2;
       const mx=(cx-tx)/scale, my=(cy-ty)/scale;
       const ns=Math.min(maxS,Math.max(minS,scale*f));
       tx = cx - mx*ns; ty = cy - my*ns; scale=ns; apply();
     }
 
-    // Keyboard shortcuts: + / - / 0
     window.addEventListener('keydown',(e)=>{
       if (e.target && /input|textarea|select|button/i.test(e.target.tagName)) return;
       if (e.key==='+' || e.key==='='){ e.preventDefault(); zoomBy(1.2); }
       if (e.key==='-'){ e.preventDefault(); zoomBy(1/1.2); }
-      if (e.key==='0'){ e.preventDefault(); centerOnLoad(); }
+      if (e.key==='0'){ e.preventDefault(); centerOnLoad(32); }
     });
 
-    /************** Boot **************/
-    loadBattles();
-    centerOnLoad();
-    window.addEventListener('resize', centerOnLoad);
+    /************* GO *************/
+    await build();                 // draw demo layout
+    startClocks();                 // ticking countdowns
+    await refreshFromDB();         // first overlay from DB
+    setInterval(refreshFromDB, 5000); // keep votes/timers/links fresh
+    window.addEventListener('resize', ()=> centerOnLoad(32));
   </script>
 </body>
 </html>
