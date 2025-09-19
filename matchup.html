@@ -1,246 +1,352 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Rage Space — Matchup</title>
-  <link rel="stylesheet" href="style.css?v=4" />
-  <style>
-    :root{ --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --card:#070707; --muted:#8aff8a; --border:#0f2510; --maxw: 980px; }
-    *{ box-sizing:border-box } html,body{ height:100% }
-    body{ margin:0; background:#000; color:var(--green); font-family: ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; -webkit-font-smoothing: antialiased; }
-    .wrap{ max-width:var(--maxw); margin:16px auto 64px; padding:0 16px; }
-    h1{ letter-spacing:.06em }
-    .scorebar{ display:flex; gap:12px; align-items:center; justify-content:space-between; border:1px solid var(--border); padding:8px 12px; border-radius:10px; background:rgba(7,7,7,.6); box-shadow: 0 0 18px rgba(57,255,20,.08) inset; }
-    .btn{ border:1px solid var(--green); color:var(--green); text-decoration:none; padding:8px 12px; border-radius:10px; display:inline-flex; align-items:center; gap:8px; background:transparent; cursor:pointer; }
-    .btn.primary{ background:rgba(57,255,20,.08) }
-    .btn:disabled{ opacity:.45; cursor:not-allowed }
-    .grid{ margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-    .tile{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(7,7,7,.6); position:relative; }
-    .art{ aspect-ratio:4/5; background:linear-gradient(45deg, rgba(57,255,20,.08), transparent 60%), #050505; display:block; width:100%; object-fit:cover; }
-    .tbdBadge{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:3rem; font-weight:900; color:rgba(57,255,20,.75); text-shadow:0 0 10px rgba(57,255,20,.4); pointer-events:none; }
-    .meta{ display:flex; gap:12px; align-items:center; justify-content:space-between; padding:10px 12px; border-top:1px solid var(--border); }
-    .badge{ font-size:.9rem; color:var(--ink); opacity:.75; }
-    .countdown{ margin-top:12px; text-align:center; font-variant-numeric:tabular-nums; }
-    .vote-row{ margin-top:14px; display:flex; gap:10px; align-items:center; justify-content:center; }
-    .stateTag{ padding:3px 8px; border:1px solid var(--border); border-radius:999px; font-size:.8rem; opacity:.85; }
-    .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#0a0a0a; color:#e5ffe5; border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:none; box-shadow:0 0 18px rgba(57,255,20,.2); z-index:9999; }
-    @media (max-width:760px){ .grid{ grid-template-columns:1fr; } }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rage Space — Tournament (Stack, Single-Page Voting)</title>
+<style>
+  :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707; }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:#000;color:var(--green);font-family:ui-sans-serif,system-ui,Arial}
+  a.btn,button.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+  header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px}
+  .app{display:grid;grid-template-columns: 360px 1fr;gap:14px;height:calc(100vh - 56px);padding:0 14px 14px}
+
+  /* Left list */
+  .listWrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column}
+  .listHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .list{overflow:auto}
+  .matchItem{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid rgba(15,37,16,.6);cursor:pointer}
+  .matchItem:hover{background:rgba(57,255,20,.05)}
+  .thumbMini{width:64px;height:64px;background:#050505;border-radius:8px;overflow:hidden;display:flex}
+  .thumbMini img{width:50%;object-fit:cover}
+  .title{color:var(--ink);font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .metaRow{display:flex;gap:8px;align-items:center}
+  .badge{font-size:.75rem;border:1px solid var(--border);border-radius:8px;padding:2px 6px;opacity:.85}
+  .timer{font-variant-numeric:tabular-nums;opacity:.85}
+  .selected{outline:2px solid rgba(57,255,20,.55);outline-offset:-2px}
+
+  /* Right detail */
+  .detail{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column}
+  .detailHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .stage{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:14px}
+  .tile{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.6);position:relative}
+  .art{aspect-ratio:4/5;background:#050505;display:block;width:100%;object-fit:cover}
+  .tbd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:900;color:rgba(57,255,20,.75)}
+  .tileMeta{display:flex;justify-content:space-between;gap:8px;padding:10px;border-top:1px solid var(--border)}
+  .countdown{padding:0 14px 10px}
+  .actions{padding:0 14px 14px;display:flex;gap:10px;align-items:center}
+  .hint{opacity:.75;padding:0 14px 14px}
+  .choice.btn{border-style:solid}
+  .choice.btn.active{box-shadow:0 0 0 2px rgba(57,255,20,.6) inset}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:var(--ink);padding:8px 12px;border-radius:10px;display:none}
+  /* hide timers on nodes w/o data-ends (until both entrants arrive) */
+  .timer:not([data-ends]){display:none}
+  @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
+</style>
 </head>
 <body>
-  <header class="wrap" style="padding-top:0">
-    <h1>R<span class="anarchy">Ⓐ</span>GE SPACE — MATCHUP</h1>
+  <header>
+    <h1 style="margin:0">R<span style="letter-spacing:.03em">Ⓐ</span>GE SPACE — TOURNAMENT</h1>
+    <div style="display:flex;gap:8px">
+      <!-- Bracket visual button can go here later -->
+      <a class="btn" href="#" onclick="return false">🏁 Bracket (coming soon)</a>
+    </div>
   </header>
 
-  <div class="wrap">
-    <div class="scorebar">
-      <div>
-        <span class="stateTag" id="stateTag">—</span>
-        <span class="badge">Round <span id="roundNum">–</span>, Match <span id="battleIndex">1</span>/<span id="battleTotal">1</span></span>
+  <div class="app">
+    <!-- LEFT: scrollable list -->
+    <section class="listWrap">
+      <div class="listHead">
+        <strong>Bracket</strong>
+        <span class="badge" id="roundSummary">R32 → Final</span>
       </div>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <a class="btn" href="tournament-brackets.html">🏁 Brackets</a>
-        <a class="btn" href="menu.html">← Menu</a>
+      <div class="list" id="matchList"></div>
+    </section>
+
+    <!-- RIGHT: big detail -->
+    <section class="detail">
+      <div class="detailHead">
+        <div>
+          <span class="badge" id="detailRound">Round –</span>
+          <span class="badge" id="detailIndex">Match –/–</span>
+        </div>
+        <span class="badge" id="detailState">—</span>
       </div>
-    </div>
 
-    <div class="countdown">Decision in: <span id="clock">00:00:00</span></div>
+      <div class="countdown">Decision in: <span class="timer" id="detailClock">00:00:00</span></div>
 
-    <div class="grid" id="grid">
-      <div class="tile" id="leftTile">
-        <img id="leftArt" class="art" alt="Left entry" />
-        <div id="leftTbd" class="tbdBadge" style="display:none">?</div>
-        <div class="meta">
-          <span id="leftLabel">Entry — LEFT</span>
-          <button class="btn primary" id="voteLeft">Vote Left</button>
+      <div class="stage">
+        <div class="tile">
+          <img id="leftArt" class="art" alt="">
+          <div id="leftTbd" class="tbd" style="display:none">?</div>
+          <div class="tileMeta">
+            <span id="leftName">TBD</span>
+            <span class="badge" id="leftVotes">0</span>
+          </div>
+        </div>
+        <div class="tile">
+          <img id="rightArt" class="art" alt="">
+          <div id="rightTbd" class="tbd" style="display:none">?</div>
+          <div class="tileMeta">
+            <span id="rightName">TBD</span>
+            <span class="badge" id="rightVotes">0</span>
+          </div>
         </div>
       </div>
 
-      <div class="tile" id="rightTile">
-        <img id="rightArt" class="art" alt="Right entry" />
-        <div id="rightTbd" class="tbdBadge" style="display:none">?</div>
-        <div class="meta">
-          <span id="rightLabel">Entry — RIGHT</span>
-          <button class="btn primary" id="voteRight">Vote Right</button>
-        </div>
+      <div class="actions">
+        <button id="btnLeft" class="btn choice">Vote LEFT</button>
+        <button id="btnRight" class="btn choice">Vote RIGHT</button>
+        <button id="btnSubmit" class="btn" disabled>✅ Submit Vote</button>
+        <span id="voteLock" class="badge" style="display:none">You voted.</span>
       </div>
-    </div>
-
-    <div class="vote-row">
-      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
-      <button class="btn" id="skipBtn" title="Go to next battle">⏭ Next</button>
-    </div>
+      <div class="hint">Pick a side and submit. One vote per match (local to your browser). Timers auto-start for each round once both entrants arrive.</div>
+    </section>
   </div>
 
   <div id="toast" class="toast"></div>
 
-  <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+<script type="module">
+  /********* Helpers *********/
+  const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+  const roundLabel = ['','R32','R16','QF','SF','FINAL'];
+  const fmt = (ms)=>{ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000);
+    return String(Math.floor(s/3600)).padStart(2,'0')+':' +
+           String(Math.floor((s%3600)/60)).padStart(2,'0')+':' +
+           String(s%60).padStart(2,'0'); };
+  const showToast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(showToast._t); showToast._t=setTimeout(()=>el.style.display='none',1200); };
+  const lockKey = (id)=> `rs_stack_vote_${id}`;
 
-    // Keep true while brackets are in demo (R32_1..16). Flip to false when live.
-    const DEMO_MODE = true;
-
-    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-    const TOURNAMENT_ID = "682da23f-6e32-4782-8b8a-8e59527d6b58";
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    const toast = document.getElementById('toast');
-    const clock = document.getElementById('clock');
-    const roundNumEl = document.getElementById('roundNum');
-    const battleIndexEl = document.getElementById('battleIndex');
-    const battleTotalEl = document.getElementById('battleTotal');
-    const stateTag = document.getElementById('stateTag');
-    const leftArt = document.getElementById('leftArt'), rightArt = document.getElementById('rightArt');
-    const leftLabel = document.getElementById('leftLabel'), rightLabel = document.getElementById('rightLabel');
-    const leftTbd = document.getElementById('leftTbd'), rightTbd = document.getElementById('rightTbd');
-    const voteLeftBtn = document.getElementById('voteLeft'), voteRightBtn = document.getElementById('voteRight');
-    const submitBtn = document.getElementById('submitBtn'), skipBtn = document.getElementById('skipBtn');
-
-    let BATTLES = []; let idx = 0; let chosen = null; let tickHandle = null;
-
-    const SESSION_KEY = 'rs_session_id';
-    let sessionId = localStorage.getItem(SESSION_KEY);
-    if (!sessionId){ sessionId = crypto.randomUUID(); localStorage.setItem(SESSION_KEY, sessionId); }
-
-    const urlParams = new URLSearchParams(location.search);
-    const deepId = urlParams.get('battle');
-
-    const lockKey = (id)=> `rs_vote_${id}`;
-
-    function showToast(msg){ toast.textContent = msg; toast.style.display = 'block'; clearTimeout(showToast._t); showToast._t = setTimeout(()=> toast.style.display='none', 1400); }
-    function fmt(ms){ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000); const hh=String(Math.floor(s/3600)).padStart(2,'0'); const mm=String(Math.floor((s%3600)/60)).padStart(2,'0'); const ss=String(s%60).padStart(2,'0'); return `${hh}:${mm}:${ss}`; }
-    function safeImg(el, url){ if (!url){ el.src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='; return false; } el.src = url; return true; }
-
-    function demoBattles32(){
-      const now = Date.now(), ends = now + 5*60*1000; // 5 minutes for testing (was 24h)
-      const entries = Array.from({length:32}, (_,i)=>({ name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000` }));
-      const arr=[];
-      for (let i=0;i<16;i++){
-        const A=entries[2*i], B=entries[2*i+1];
-        arr.push({ id:`R32_${i+1}`, round:1, indexInRound:i+1, state:'open',
-          start:new Date(now-60*1000).toISOString(), end:new Date(ends).toISOString(),
-          A:{id:`E${2*i+1}`, name:A.name, img:A.img},
-          B:{id:`E${2*i+2}`, name:B.name, img:B.img},
-          votesA:0, votesB:0
-        });
-      }
-      return arr;
-    }
-
-    async function loadBattles(){
-      if (DEMO_MODE){
-        BATTLES = demoBattles32();
-      } else {
-        const { data, error } = await supabase
-          .from('match_public')
-          .select('*')
-          .eq('tournament_id', TOURNAMENT_ID)
-          .order('round_number', { ascending: true })
-          .order('index_in_round', { ascending: true });
-        if (error){ console.error(error); showToast('Failed to load matches.'); return; }
-        BATTLES = (data||[]).map(r => ({
-          id:r.id, round:r.round_number, indexInRound:r.index_in_round,
-          state:r.state, start:r.start_time, end:r.end_time,
-          A:{id:r.a_id, name:r.a_name, img:r.a_image},
-          B:{id:r.b_id, name:r.b_name, img:r.b_image},
-          votesA:r.votes_a ?? 0, votesB:r.votes_b ?? 0
-        }));
-      }
-
-      battleTotalEl.textContent = BATTLES.length;
-
-      if (deepId){
-        const j = BATTLES.findIndex(b => b.id === deepId);
-        if (j >= 0) idx = j; else {
-          const k = BATTLES.findIndex(b => b.state === 'open');
-          idx = (k >= 0 ? k : 0);
-        }
-      } else {
-        const k = BATTLES.findIndex(b => b.state === 'open');
-        idx = (k >= 0 ? k : 0);
-      }
-
-      if (!BATTLES.length){
-        leftLabel.textContent='No matches available'; rightLabel.textContent='Check back soon';
-        voteLeftBtn.disabled = voteRightBtn.disabled = submitBtn.disabled = true; return;
-      }
-      render(true);
-    }
-
-    function setVotedUI(){
-      submitBtn.textContent = '🎉 Vote submitted!';
-      submitBtn.disabled = true;
-      voteLeftBtn.disabled = true;
-      voteRightBtn.disabled = true;
-    }
-
-    function render(replaceUrl=false){
-      const b = BATTLES[idx];
-      battleIndexEl.textContent = (idx+1).toString();
-      roundNumEl.textContent = b.round;
-
-      const targetUrl = `?battle=${encodeURIComponent(b.id)}`;
-      if (replaceUrl) history.replaceState(null, '', targetUrl); else history.pushState(null, '', targetUrl);
-
-      const now = Date.now(), starts = new Date(b.start).getTime(), ends = new Date(b.end).getTime();
-      const inWindow = now >= starts && now < ends;
-      const votable = b.state === 'open' && inWindow && b.A.img && b.B.img;
-      stateTag.textContent = votable ? 'OPEN' : (now < starts ? 'SCHEDULED' : 'CLOSED');
-
-      const hasA = safeImg(leftArt, b.A.img); const hasB = safeImg(rightArt, b.B.img);
-      leftTbd.style.display = hasA ? 'none' : 'flex'; rightTbd.style.display = hasB ? 'none' : 'flex';
-      leftLabel.textContent = hasA ? b.A.name : 'TBD'; rightLabel.textContent = hasB ? b.B.name : 'TBD';
-
-      const alreadyVoted = !!localStorage.getItem(lockKey(b.id));
-      submitBtn.textContent = '✅ Submit Vote';
-      submitBtn.disabled = true;
-      voteLeftBtn.disabled = !votable || alreadyVoted;
-      voteRightBtn.disabled = !votable || alreadyVoted;
-
-      if (alreadyVoted) setVotedUI();
-
-      chosen = null;
-      if (tickHandle) clearInterval(tickHandle);
-      updateClock(); tickHandle = setInterval(updateClock, 1000);
-    }
-
-    function updateClock(){
-      const b = BATTLES[idx];
-      const ms = new Date(b.end).getTime() - Date.now();
-      clock.textContent = fmt(ms);
-      if (ms <= 0){ setVotedUI(); }
-    }
-
-    voteLeftBtn.addEventListener('click', ()=>{ if (voteLeftBtn.disabled) return; chosen = 'A'; submitBtn.disabled = false; showToast('Selected LEFT'); });
-    voteRightBtn.addEventListener('click', ()=>{ if (voteRightBtn.disabled) return; chosen = 'B'; submitBtn.disabled = false; showToast('Selected RIGHT'); });
-
-    submitBtn.addEventListener('click', async ()=>{
-      const b = BATTLES[idx]; if (!chosen) return;
-      submitBtn.disabled = true;
-
-      if (!DEMO_MODE){
-        const { error } = await supabase.from('votes').insert({ match_id: b.id, slot: chosen, session_id: sessionId });
-        if (error){ console.error(error); showToast('Vote failed.'); submitBtn.disabled = false; return; }
-      }
-
-      localStorage.setItem(lockKey(b.id), chosen);
-      setVotedUI();
-      showToast(`Vote submitted: ${chosen==='A'?'LEFT':'RIGHT'}`);
-      setTimeout(nextBattle, 800);
+  /********* Demo tournament *********/
+  const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
+  const rounds = {1:[],2:[],3:[],4:[],5:[]}; // 1=R32…5=Final
+  for (let i=0;i<16;i++){
+    rounds[1].push({
+      id:`R32_${i+1}`, round:1, index:i+1,
+      A:{name:entries[2*i].name, img:entries[2*i].img},
+      B:{name:entries[2*i+1].name, img:entries[2*i+1].img},
+      votesA:0, votesB:0,
+      ends: Date.now()+5*60*1000, // R32 starts immediately
     });
+  }
+  for (let r=2, size=8; r<=5; r++, size=Math.max(1, size/2)){
+    for (let i=0;i<size;i++){
+      rounds[r].push({ id:[,'R16','QF','SF','FINAL'][r] + '_' + (i+1),
+        round:r, index:i+1, A:{}, B:{}, votesA:0, votesB:0, ends:null });
+    }
+  }
 
-    skipBtn.addEventListener('click', nextBattle);
-    function nextBattle(){ if (!BATTLES.length) return; idx = (idx + 1) % BATTLES.length; render(); }
+  /********* DOM *********/
+  const listEl = document.getElementById('matchList');
+  const detailRound = document.getElementById('detailRound');
+  const detailIndex = document.getElementById('detailIndex');
+  const detailState = document.getElementById('detailState');
+  const detailClock = document.getElementById('detailClock');
+  const leftArt = document.getElementById('leftArt'), rightArt = document.getElementById('rightArt');
+  const leftTbd = document.getElementById('leftTbd'), rightTbd = document.getElementById('rightTbd');
+  const leftName = document.getElementById('leftName'), rightName = document.getElementById('rightName');
+  const leftVotes = document.getElementById('leftVotes'), rightVotes = document.getElementById('rightVotes');
 
-    window.addEventListener('popstate', ()=>{
-      const p = new URLSearchParams(location.search).get('battle');
-      const j = BATTLES.findIndex(b => b.id === p);
-      if (j >= 0){ idx = j; render(true); }
-    });
+  const btnLeft = document.getElementById('btnLeft');
+  const btnRight = document.getElementById('btnRight');
+  const btnSubmit = document.getElementById('btnSubmit');
+  const voteLockBadge = document.getElementById('voteLock');
 
-    loadBattles();
-  </script>
+  let flat = [];  // flattened matches (object references)
+  let sel = null; // selected match id
+  let tickHandle = null;
+  let chosen = null;
+
+  /********* Build list *********/
+  function buildList(){
+    flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
+    listEl.innerHTML = '';
+    for (const m of flat){
+      const item = document.createElement('div');
+      item.className = 'matchItem';
+      item.dataset.id = m.id;
+
+      const mini = document.createElement('div');
+      mini.className = 'thumbMini';
+      const iA = document.createElement('img'); iA.src = m.A?.img || BLANK;
+      const iB = document.createElement('img'); iB.src = m.B?.img || BLANK;
+      mini.append(iA,iB);
+
+      const mid = document.createElement('div');
+      const title = document.createElement('div'); title.className='title';
+      title.textContent = `${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
+      const row = document.createElement('div'); row.className='metaRow';
+      const badge = document.createElement('span'); badge.className='badge';
+      badge.textContent = roundLabel[m.round];
+      const timer = document.createElement('span'); timer.className='timer';
+      if (m.ends){ timer.dataset.ends = m.ends; timer.textContent = fmt(m.ends - Date.now()); }
+      row.append(badge, timer);
+      mid.append(title, row);
+
+      const score = document.createElement('div');
+      score.textContent = `${m.votesA||0} - ${m.votesB||0}`;
+
+      item.append(mini, mid, score);
+      item.addEventListener('click', ()=> select(m.id));
+      listEl.appendChild(item);
+    }
+
+    // select first match with both entrants, else first
+    const first = flat.find(x => x.A.img && x.B.img) || flat[0];
+    if (first) select(first.id);
+  }
+
+  function repaintRow(id){
+    const m = flat.find(x=>x.id===id); if (!m) return;
+    const row = [...listEl.children].find(c=>c.dataset.id===id); if (!row) return;
+    const imgs = row.querySelectorAll('.thumbMini img');
+    if (imgs[0]) imgs[0].src = m.A?.img || BLANK;
+    if (imgs[1]) imgs[1].src = m.B?.img || BLANK;
+    const title = row.querySelector('.title'); if (title) title.textContent = `${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
+    const timer = row.querySelector('.timer');
+    if (m.ends){ timer.dataset.ends = m.ends; timer.textContent = fmt(m.ends - Date.now()); }
+    else { timer.removeAttribute('data-ends'); timer.textContent = ''; }
+    const score = row.children[row.children.length-1]; score.textContent = `${m.votesA||0} - ${m.votesB||0}`;
+  }
+
+  /********* Selection + detail *********/
+  function select(id){
+    sel = id; chosen = null;
+    [...listEl.children].forEach(li => li.classList.toggle('selected', li.dataset.id===id));
+    const m = flat.find(x=>x.id===id); if(!m) return;
+
+    detailRound.textContent = roundLabel[m.round];
+    detailIndex.textContent = `Match ${m.index}/${rounds[m.round].length}`;
+    const canVote = !!(m.A.img && m.B.img);
+    detailState.textContent = m.ends ? 'OPEN' : (canVote ? 'READY' : 'TBD');
+
+    leftArt.src = m.A.img || BLANK; rightArt.src = m.B.img || BLANK;
+    leftTbd.style.display = m.A.img ? 'none' : 'flex';
+    rightTbd.style.display = m.B.img ? 'none' : 'flex';
+    leftName.textContent = m.A.name || 'TBD'; rightName.textContent = m.B.name || 'TBD';
+    leftVotes.textContent = m.votesA||0; rightVotes.textContent = m.votesB||0;
+
+    const already = !!localStorage.getItem(lockKey(m.id));
+    btnLeft.disabled = btnRight.disabled = !m.ends || already;
+    btnSubmit.disabled = true;
+    voteLockBadge.style.display = already ? 'inline-block' : 'none';
+    btnLeft.classList.remove('active'); btnRight.classList.remove('active');
+
+    if (m.ends){ detailClock.dataset.ends = m.ends; } else { detailClock.removeAttribute('data-ends'); }
+    updateClock();
+
+    if (tickHandle) clearInterval(tickHandle);
+    tickHandle = setInterval(updateClock, 1000);
+  }
+
+  function updateClock(){
+    const m = flat.find(x=>x.id===sel); if (!m) return;
+    const ms = (m.ends||0) - Date.now();
+    detailClock.textContent = fmt(ms>0?ms:0);
+  }
+
+  /********* Timers + advancement *********/
+  const nextId = (id)=>{
+    const [r, idxStr] = id.split('_'); const idx = parseInt(idxStr||'1',10);
+    if (r==='R32') return `R16_${Math.ceil(idx/2)}`;
+    if (r==='R16') return `QF_${Math.ceil(idx/2)}`;
+    if (r==='QF')  return `SF_${Math.ceil(idx/2)}`;
+    if (r==='SF')  return `FINAL_1`;
+    return null;
+  };
+
+  function startFreshTimerIfReady(node){
+    if (node.A?.img && node.B?.img && !node.ends){
+      node.ends = Date.now()+5*60*1000;
+      repaintRow(node.id);
+      if (sel===node.id) select(node.id);
+    }
+  }
+
+  function advanceWinner(m){
+    const winner = (m.votesA||0) >= (m.votesB||0) ? m.A : m.B;
+    const nid = nextId(m.id); if (!nid) return;
+    const nr = flat.find(x=>x.id===nid); if (!nr) return;
+    if (!nr.A.img) nr.A = {...winner}; else if (!nr.B.img) nr.B = {...winner};
+    repaintRow(nr.id);
+    if (sel===nr.id) select(nr.id);
+    startFreshTimerIfReady(nr);
+  }
+
+  function decideIfElapsed(m){
+    if (!m.ends) return false;
+    const left = m.ends - Date.now();
+    if (left > 0) return false;
+    advanceWinner(m);
+    m.ends = null; // finished
+    repaintRow(m.id);
+    if (sel===m.id) select(m.id);
+    return true;
+  }
+
+  function globalTick(){
+    let changed=false;
+    for (const m of flat){
+      if (m.ends){
+        const left = m.ends - Date.now();
+        const row = [...listEl.children].find(c=>c.dataset.id===m.id);
+        const t = row?.querySelector('.timer');
+        if (t){ t.textContent = fmt(left>0?left:0); t.dataset.ends = m.ends; }
+        if (left<=0){ changed = decideIfElapsed(m) || changed; }
+      }
+    }
+    if (changed){
+      for (const m of flat) repaintRow(m.id);
+    }
+    // refresh selected pane display
+    if (sel){
+      const m = flat.find(x=>x.id===sel);
+      if (m){
+        leftVotes.textContent = m.votesA||0; rightVotes.textContent = m.votesB||0;
+        const canVote = !!(m.A.img && m.B.img);
+        detailState.textContent = m.ends ? 'OPEN' : (canVote ? 'READY' : 'TBD');
+      }
+    }
+  }
+
+  /********* Voting *********/
+  btnLeft.addEventListener('click', ()=>{
+    const m = flat.find(x=>x.id===sel); if (!m || !m.ends) return;
+    if (localStorage.getItem(lockKey(m.id))) return;
+    chosen = 'A';
+    btnLeft.classList.add('active'); btnRight.classList.remove('active');
+    btnSubmit.disabled = false;
+  });
+  btnRight.addEventListener('click', ()=>{
+    const m = flat.find(x=>x.id===sel); if (!m || !m.ends) return;
+    if (localStorage.getItem(lockKey(m.id))) return;
+    chosen = 'B';
+    btnRight.classList.add('active'); btnLeft.classList.remove('active');
+    btnSubmit.disabled = false;
+  });
+
+  btnSubmit.addEventListener('click', ()=>{
+    const m = flat.find(x=>x.id===sel); if (!m || !m.ends || !chosen) return;
+    if (localStorage.getItem(lockKey(m.id))) return;
+
+    if (chosen==='A') m.votesA = (m.votesA||0) + 1;
+    else m.votesB = (m.votesB||0) + 1;
+
+    localStorage.setItem(lockKey(m.id), chosen);
+    voteLockBadge.style.display = 'inline-block';
+    btnLeft.disabled = btnRight.disabled = true;
+    btnSubmit.disabled = true;
+
+    repaintRow(m.id);
+    if (sel===m.id) { leftVotes.textContent = m.votesA||0; rightVotes.textContent = m.votesB||0; }
+    showToast(`Vote submitted: ${chosen==='A'?'LEFT':'RIGHT'}`);
+  });
+
+  /********* Init *********/
+  buildList();
+  setInterval(globalTick, 1000);
+</script>
 </body>
 </html>
