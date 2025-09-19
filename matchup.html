@@ -114,7 +114,7 @@
     function safeImg(el, url){ if (!url){ el.src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='; return false; } el.src = url; return true; }
 
     function demoBattles32(){
-      const now = Date.now(), ends = now + 24*60*60*1000;
+      const now = Date.now(), ends = now + 5*60*1000; // 5 minutes for testing (was 24h)
       const entries = Array.from({length:32}, (_,i)=>({ name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000` }));
       const arr=[];
       for (let i=0;i<16;i++){
