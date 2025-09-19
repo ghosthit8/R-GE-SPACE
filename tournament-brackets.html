@@ -41,7 +41,7 @@
   .choice.btn{border-style:solid}
   .choice.btn.active{box-shadow:0 0 0 2px rgba(57,255,20,.6) inset}
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:var(--ink);padding:8px 12px;border-radius:10px;display:none}
-  /* hide timers on nodes w/o data-ends (until both entrants arrive) */
+  /* Hide timers on nodes w/o data-ends (until both entrants arrive) */
   .timer:not([data-ends]){display:none}
   @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
 </style>
@@ -50,7 +50,6 @@
   <header>
     <h1 style="margin:0">R<span style="letter-spacing:.03em">Ⓐ</span>GE SPACE — TOURNAMENT</h1>
     <div style="display:flex;gap:8px">
-      <!-- Bracket visual button can go here later -->
       <a class="btn" href="#" onclick="return false">🏁 Bracket (coming soon)</a>
     </div>
   </header>
@@ -109,6 +108,9 @@
   <div id="toast" class="toast"></div>
 
 <script type="module">
+  /********* Config *********/
+  const ROUND_MINUTES = 5; // change to 0.1 for ~6s testing
+
   /********* Helpers *********/
   const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
   const roundLabel = ['','R32','R16','QF','SF','FINAL'];
@@ -128,13 +130,14 @@
       A:{name:entries[2*i].name, img:entries[2*i].img},
       B:{name:entries[2*i+1].name, img:entries[2*i+1].img},
       votesA:0, votesB:0,
-      ends: Date.now()+5*60*1000, // R32 starts immediately
+      ends: Date.now()+ROUND_MINUTES*60*1000,
+      decided:false,
     });
   }
   for (let r=2, size=8; r<=5; r++, size=Math.max(1, size/2)){
     for (let i=0;i<size;i++){
       rounds[r].push({ id:[,'R16','QF','SF','FINAL'][r] + '_' + (i+1),
-        round:r, index:i+1, A:{}, B:{}, votesA:0, votesB:0, ends:null });
+        round:r, index:i+1, A:{}, B:{}, votesA:0, votesB:0, ends:null, decided:false });
     }
   }
 
@@ -220,7 +223,7 @@
     detailRound.textContent = roundLabel[m.round];
     detailIndex.textContent = `Match ${m.index}/${rounds[m.round].length}`;
     const canVote = !!(m.A.img && m.B.img);
-    detailState.textContent = m.ends ? 'OPEN' : (canVote ? 'READY' : 'TBD');
+    detailState.textContent = m.decided ? 'DECIDED' : (m.ends ? 'OPEN' : (canVote ? 'READY' : 'TBD'));
 
     leftArt.src = m.A.img || BLANK; rightArt.src = m.B.img || BLANK;
     leftTbd.style.display = m.A.img ? 'none' : 'flex';
@@ -229,7 +232,7 @@
     leftVotes.textContent = m.votesA||0; rightVotes.textContent = m.votesB||0;
 
     const already = !!localStorage.getItem(lockKey(m.id));
-    btnLeft.disabled = btnRight.disabled = !m.ends || already;
+    btnLeft.disabled = btnRight.disabled = !m.ends || already || m.decided;
     btnSubmit.disabled = true;
     voteLockBadge.style.display = already ? 'inline-block' : 'none';
     btnLeft.classList.remove('active'); btnRight.classList.remove('active');
@@ -258,8 +261,8 @@
   };
 
   function startFreshTimerIfReady(node){
-    if (node.A?.img && node.B?.img && !node.ends){
-      node.ends = Date.now()+5*60*1000;
+    if (node.A?.img && node.B?.img && !node.ends && !node.decided){
+      node.ends = Date.now()+ROUND_MINUTES*60*1000;
       repaintRow(node.id);
       if (sel===node.id) select(node.id);
     }
@@ -275,52 +278,56 @@
     startFreshTimerIfReady(nr);
   }
 
-  function decideIfElapsed(m){
-    if (!m.ends) return false;
-    const left = m.ends - Date.now();
-    if (left > 0) return false;
+  function finalizeMatch(m){
+    if (m.decided) return false;
+    m.decided = true;
+    m.ends = null; // clear timer
     advanceWinner(m);
-    m.ends = null; // finished
     repaintRow(m.id);
     if (sel===m.id) select(m.id);
     return true;
   }
 
   function globalTick(){
-    let changed=false;
+    let anyChanged=false;
+
     for (const m of flat){
-      if (m.ends){
+      if (m.ends && !m.decided){
         const left = m.ends - Date.now();
         const row = [...listEl.children].find(c=>c.dataset.id===m.id);
         const t = row?.querySelector('.timer');
         if (t){ t.textContent = fmt(left>0?left:0); t.dataset.ends = m.ends; }
-        if (left<=0){ changed = decideIfElapsed(m) || changed; }
+        if (left<=0){ anyChanged = finalizeMatch(m) || anyChanged; }
       }
     }
-    if (changed){
-      for (const m of flat) repaintRow(m.id);
-    }
-    // refresh selected pane display
+
+    // selected pane refresh (state text, votes, clock)
     if (sel){
       const m = flat.find(x=>x.id===sel);
       if (m){
         leftVotes.textContent = m.votesA||0; rightVotes.textContent = m.votesB||0;
         const canVote = !!(m.A.img && m.B.img);
-        detailState.textContent = m.ends ? 'OPEN' : (canVote ? 'READY' : 'TBD');
+        detailState.textContent = m.decided ? 'DECIDED' : (m.ends ? 'OPEN' : (canVote ? 'READY' : 'TBD'));
+        updateClock();
       }
+    }
+
+    if (anyChanged){
+      // repaint all rows once to sync thumbnails/titles/timers
+      for (const m of flat) repaintRow(m.id);
     }
   }
 
   /********* Voting *********/
   btnLeft.addEventListener('click', ()=>{
-    const m = flat.find(x=>x.id===sel); if (!m || !m.ends) return;
+    const m = flat.find(x=>x.id===sel); if (!m || !m.ends || m.decided) return;
     if (localStorage.getItem(lockKey(m.id))) return;
     chosen = 'A';
     btnLeft.classList.add('active'); btnRight.classList.remove('active');
     btnSubmit.disabled = false;
   });
   btnRight.addEventListener('click', ()=>{
-    const m = flat.find(x=>x.id===sel); if (!m || !m.ends) return;
+    const m = flat.find(x=>x.id===sel); if (!m || !m.ends || m.decided) return;
     if (localStorage.getItem(lockKey(m.id))) return;
     chosen = 'B';
     btnRight.classList.add('active'); btnLeft.classList.remove('active');
@@ -328,7 +335,7 @@
   });
 
   btnSubmit.addEventListener('click', ()=>{
-    const m = flat.find(x=>x.id===sel); if (!m || !m.ends || !chosen) return;
+    const m = flat.find(x=>x.id===sel); if (!m || !m.ends || !chosen || m.decided) return;
     if (localStorage.getItem(lockKey(m.id))) return;
 
     if (chosen==='A') m.votesA = (m.votesA||0) + 1;
