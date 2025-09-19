@@ -5,43 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Rage Space — Tournament (Stack, 5s + Random Ties)</title>
 <style>
-  :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707; }
+  :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;background:#000;color:var(--green);font-family:ui-sans-serif,system-ui,Arial}
   a.btn,button.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
   header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px}
-  .app{display:grid;grid-template-columns: 360px 1fr;gap:14px;height:calc(100vh - 56px);padding:0 14px 14px}
+  .app{display:grid;grid-template-columns:360px 1fr;gap:14px;height:calc(100vh - 56px);padding:0 14px 14px}
 
-  /* Left list */
-  .listWrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column}
-  .listHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
-  .list{overflow:auto}
-  .matchItem{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid rgba(15,37,16,.6);cursor:pointer}
+  .listWrap{border:1px solid #0f2510;border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
+  .listHead{padding:10px 12px;border-bottom:1px solid #0f2510;display:flex;justify-content:space-between;align-items:center}
+  .list{overflow:auto;flex:1;min-height:0}
+  .matchItem{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:10px;border-bottom:1px solid rgba(15,37,16,.6);cursor:pointer}
   .matchItem:hover{background:rgba(57,255,20,.05)}
   .thumbMini{width:64px;height:64px;background:#050505;border-radius:8px;overflow:hidden;display:flex}
   .thumbMini img{width:50%;object-fit:cover}
-  .title{color:var(--ink);font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .title{color:var(--ink,#e5ffe5);font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .metaRow{display:flex;gap:8px;align-items:center}
-  .badge{font-size:.75rem;border:1px solid var(--border);border-radius:8px;padding:2px 6px;opacity:.85}
+  .badge{font-size:.75rem;border:1px solid #0f2510;border-radius:8px;padding:2px 6px;opacity:.85}
   .timer{font-variant-numeric:tabular-nums;opacity:.85}
   .selected{outline:2px solid rgba(57,255,20,.55);outline-offset:-2px}
 
-  /* Right detail */
-  .detail{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column}
-  .detailHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .detail{border:1px solid #0f2510;border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column}
+  .detailHead{padding:10px 12px;border-bottom:1px solid #0f2510;display:flex;justify-content:space-between;align-items:center}
   .stage{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:14px}
-  .tile{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.6);position:relative}
+  .tile{border:1px solid #0f2510;border-radius:12px;overflow:hidden;background:rgba(7,7,7,.6);position:relative}
   .art{aspect-ratio:4/5;background:#050505;display:block;width:100%;object-fit:cover}
   .tbd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:900;color:rgba(57,255,20,.75)}
-  .tileMeta{display:flex;justify-content:space-between;gap:8px;padding:10px;border-top:1px solid var(--border)}
+  .tileMeta{display:flex;justify-content:space-between;gap:8px;padding:10px;border-top:1px solid #0f2510}
   .countdown{padding:0 14px 10px}
-  .actions{padding:0 14px 14px;display:flex;gap:10px;align-items:center}
+  .actions{padding:0 14px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .hint{opacity:.75;padding:0 14px 14px}
-  .choice.btn{border-style:solid}
   .choice.btn.active{box-shadow:0 0 0 2px rgba(57,255,20,.6) inset}
-  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:var(--ink);padding:8px 12px;border-radius:10px;display:none}
-  /* Hide timers on nodes w/o data-ends (until both entrants arrive) */
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid #0f2510;color:var(--ink,#e5ffe5);padding:8px 12px;border-radius:10px;display:none;z-index:50}
   .timer:not([data-ends]){display:none}
   @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
 </style>
@@ -50,12 +46,13 @@
   <header>
     <h1 style="margin:0">R<span style="letter-spacing:.03em">Ⓐ</span>GE SPACE — TOURNAMENT</h1>
     <div style="display:flex;gap:8px">
+      <button id="btnReset" class="btn">🔁 Reset test</button>
+      <button id="btnForce" class="btn">⚡ Force decide (selected)</button>
       <a class="btn" href="#" onclick="return false">🏁 Bracket (coming soon)</a>
     </div>
   </header>
 
   <div class="app">
-    <!-- LEFT: scrollable list -->
     <section class="listWrap">
       <div class="listHead">
         <strong>Bracket</strong>
@@ -64,7 +61,6 @@
       <div class="list" id="matchList"></div>
     </section>
 
-    <!-- RIGHT: big detail -->
     <section class="detail">
       <div class="detailHead">
         <div>
@@ -108,254 +104,203 @@
   <div id="toast" class="toast"></div>
 
 <script type="module">
-  /********* Config *********/
-  const ROUND_MS = 5000; // 5 seconds per match for testing
+  /* ===== Config ===== */
+  const ROUND_MS = 5000; // 5 seconds per match
 
-  /********* Helpers *********/
+  /* ===== Helpers ===== */
   const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
   const roundLabel = ['','R32','R16','QF','SF','FINAL'];
   const fmt = (ms)=>{ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000);
     return String(Math.floor(s/3600)).padStart(2,'0')+':' +
            String(Math.floor((s%3600)/60)).padStart(2,'0')+':' +
            String(s%60).padStart(2,'0'); };
-  const showToast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(showToast._t); showToast._t=setTimeout(()=>el.style.display='none',1200); };
+  const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
   const lockKey = (id)=> `rs_stack_vote_${id}`;
-
-  /********* Demo tournament *********/
-  const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
-  const rounds = {1:[],2:[],3:[],4:[],5:[]}; // 1=R32…5=Final
-  for (let i=0;i<16;i++){
-    rounds[1].push({
-      id:`R32_${i+1}`, round:1, index:i+1,
-      A:{name:entries[2*i].name, img:entries[2*i].img},
-      B:{name:entries[2*i+1].name, img:entries[2*i+1].img},
-      votesA:0, votesB:0,
-      ends: Date.now()+ROUND_MS, decided:false,
-    });
-  }
-  for (let r=2, size=8; r<=5; r++, size=Math.max(1, size/2)){
-    for (let i=0;i<size;i++){
-      rounds[r].push({ id:[,'R16','QF','SF','FINAL'][r] + '_' + (i+1),
-        round:r, index:i+1, A:{}, B:{}, votesA:0, votesB:0, ends:null, decided:false });
-    }
-  }
-
-  /********* DOM *********/
-  const listEl = document.getElementById('matchList');
-  const detailRound = document.getElementById('detailRound');
-  const detailIndex = document.getElementById('detailIndex');
-  const detailState = document.getElementById('detailState');
-  const detailClock = document.getElementById('detailClock');
-  const leftArt = document.getElementById('leftArt'), rightArt = document.getElementById('rightArt');
-  const leftTbd = document.getElementById('leftTbd'), rightTbd = document.getElementById('rightTbd');
-  const leftName = document.getElementById('leftName'), rightName = document.getElementById('rightName');
-  const leftVotes = document.getElementById('leftVotes'), rightVotes = document.getElementById('rightVotes');
-
-  const btnLeft = document.getElementById('btnLeft');
-  const btnRight = document.getElementById('btnRight');
-  const btnSubmit = document.getElementById('btnSubmit');
-  const voteLockBadge = document.getElementById('voteLock');
-
-  let flat = [];  // flattened matches (object references)
-  let sel = null; // selected match id
-  let tickHandle = null;
-  let chosen = null;
-
-  /********* Build list *********/
-  function buildList(){
-    flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
-    listEl.innerHTML = '';
-    for (const m of flat){
-      const item = document.createElement('div');
-      item.className = 'matchItem';
-      item.dataset.id = m.id;
-
-      const mini = document.createElement('div');
-      mini.className = 'thumbMini';
-      const iA = document.createElement('img'); iA.src = m.A?.img || BLANK;
-      const iB = document.createElement('img'); iB.src = m.B?.img || BLANK;
-      mini.append(iA,iB);
-
-      const mid = document.createElement('div');
-      const title = document.createElement('div'); title.className='title';
-      title.textContent = `${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
-      const row = document.createElement('div'); row.className='metaRow';
-      const badge = document.createElement('span'); badge.className='badge';
-      badge.textContent = roundLabel[m.round];
-      const timer = document.createElement('span'); timer.className='timer';
-      if (m.ends){ timer.dataset.ends = m.ends; timer.textContent = fmt(m.ends - Date.now()); }
-      row.append(badge, timer);
-      mid.append(title, row);
-
-      const score = document.createElement('div');
-      score.textContent = `${m.votesA||0} - ${m.votesB||0}`;
-
-      item.append(mini, mid, score);
-      item.addEventListener('click', ()=> select(m.id));
-      listEl.appendChild(item);
-    }
-
-    const first = flat.find(x => x.A.img && x.B.img) || flat[0];
-    if (first) select(first.id);
-  }
-
-  function repaintRow(id){
-    const m = flat.find(x=>x.id===id); if (!m) return;
-    const row = [...listEl.children].find(c=>c.dataset.id===id); if (!row) return;
-    const imgs = row.querySelectorAll('.thumbMini img');
-    if (imgs[0]) imgs[0].src = m.A?.img || BLANK;
-    if (imgs[1]) imgs[1].src = m.B?.img || BLANK;
-    const title = row.querySelector('.title'); if (title) title.textContent = `${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
-    const timer = row.querySelector('.timer');
-    if (m.ends){ timer.dataset.ends = m.ends; timer.textContent = fmt(m.ends - Date.now()); }
-    else { timer.removeAttribute('data-ends'); timer.textContent = ''; }
-    const score = row.children[row.children.length-1]; score.textContent = `${m.votesA||0} - ${m.votesB||0}`;
-  }
-
-  /********* Selection + detail *********/
-  function select(id){
-    sel = id; chosen = null;
-    [...listEl.children].forEach(li => li.classList.toggle('selected', li.dataset.id===id));
-    const m = flat.find(x=>x.id===id); if(!m) return;
-
-    detailRound.textContent = roundLabel[m.round];
-    detailIndex.textContent = `Match ${m.index}/${rounds[m.round].length}`;
-    const canVote = !!(m.A.img && m.B.img);
-    detailState.textContent = m.decided ? 'DECIDED' : (m.ends ? 'OPEN' : (canVote ? 'READY' : 'TBD'));
-
-    leftArt.src = m.A.img || BLANK; rightArt.src = m.B.img || BLANK;
-    leftTbd.style.display = m.A.img ? 'none' : 'flex';
-    rightTbd.style.display = m.B.img ? 'none' : 'flex';
-    leftName.textContent = m.A.name || 'TBD'; rightName.textContent = m.B.name || 'TBD';
-    leftVotes.textContent = m.votesA||0; rightVotes.textContent = m.votesB||0;
-
-    const already = !!localStorage.getItem(lockKey(m.id));
-    btnLeft.disabled = btnRight.disabled = !m.ends || already || m.decided;
-    btnSubmit.disabled = true;
-    voteLockBadge.style.display = already ? 'inline-block' : 'none';
-    btnLeft.classList.remove('active'); btnRight.classList.remove('active');
-
-    if (m.ends){ detailClock.dataset.ends = m.ends; } else { detailClock.removeAttribute('data-ends'); }
-    updateClock();
-
-    if (tickHandle) clearInterval(tickHandle);
-    tickHandle = setInterval(updateClock, 1000);
-  }
-
-  function updateClock(){
-    const m = flat.find(x=>x.id===sel); if (!m) return;
-    const ms = (m.ends||0) - Date.now();
-    detailClock.textContent = fmt(ms>0?ms:0);
-  }
-
-  /********* Timers + advancement *********/
-  const nextId = (id)=>{
-    const [r, idxStr] = id.split('_'); const idx = parseInt(idxStr||'1',10);
-    if (r==='R32') return `R16_${Math.ceil(idx/2)}`;
-    if (r==='R16') return `QF_${Math.ceil(idx/2)}`;
-    if (r==='QF')  return `SF_${Math.ceil(idx/2)}`;
-    if (r==='SF')  return `FINAL_1`;
-    return null;
+  const clearVoteLocks = ()=>{
+    const ks=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k?.startsWith('rs_stack_vote_')) ks.push(k); }
+    ks.forEach(k=>localStorage.removeItem(k));
   };
 
-  function startFreshTimerIfReady(node){
-    if (node.A?.img && node.B?.img && !node.ends && !node.decided){
-      node.ends = Date.now()+ROUND_MS;
-      repaintRow(node.id);
-      if (sel===node.id) select(node.id);
+  /* ===== Tournament state ===== */
+  let rounds, flat, sel=null, tickHandle=null, chosen=null;
+
+  function makeTournament(){
+    const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
+    rounds = {1:[],2:[],3:[],4:[],5:[]};
+    for (let i=0;i<16;i++){
+      rounds[1].push({ id:`R32_${i+1}`, round:1, index:i+1,
+        A:{name:entries[2*i].name, img:entries[2*i].img},
+        B:{name:entries[2*i+1].name, img:entries[2*i+1].img},
+        votesA:0, votesB:0, ends: Date.now()+ROUND_MS, decided:false });
     }
+    for (let r=2, size=8; r<=5; r++, size=Math.max(1,size/2)){
+      for (let i=0;i<size;i++){
+        rounds[r].push({ id:[,'R16','QF','SF','FINAL'][r]+'_'+(i+1), round:r, index:i+1,
+          A:{}, B:{}, votesA:0, votesB:0, ends:null, decided:false });
+      }
+    }
+    flat=[...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
   }
 
-  // tie-break logic: random when equal
-  function pickWinnerObj(m){
-    const a = m.votesA||0, b = m.votesB||0;
-    if (a > b) return m.A;
-    if (b > a) return m.B;
-    return (Math.random() < 0.5) ? m.A : m.B; // random tie
+  /* ===== DOM ===== */
+  const listEl=document.getElementById('matchList');
+  const detailRound=document.getElementById('detailRound');
+  const detailIndex=document.getElementById('detailIndex');
+  const detailState=document.getElementById('detailState');
+  const detailClock=document.getElementById('detailClock');
+  const leftArt=document.getElementById('leftArt'), rightArt=document.getElementById('rightArt');
+  const leftTbd=document.getElementById('leftTbd'), rightTbd=document.getElementById('rightTbd');
+  const leftName=document.getElementById('leftName'), rightName=document.getElementById('rightName');
+  const leftVotes=document.getElementById('leftVotes'), rightVotes=document.getElementById('rightVotes');
+  const btnLeft=document.getElementById('btnLeft'), btnRight=document.getElementById('btnRight');
+  const btnSubmit=document.getElementById('btnSubmit');
+  const voteLockBadge=document.getElementById('voteLock');
+  const btnReset=document.getElementById('btnReset'), btnForce=document.getElementById('btnForce');
+
+  /* ===== Build / repaint ===== */
+  function buildList(selectId){
+    listEl.innerHTML='';
+    for (const m of flat){
+      const item=document.createElement('div'); item.className='matchItem'; item.dataset.id=m.id;
+      const mini=document.createElement('div'); mini.className='thumbMini';
+      const iA=document.createElement('img'); iA.src=m.A?.img||BLANK;
+      const iB=document.createElement('img'); iB.src=m.B?.img||BLANK;
+      mini.append(iA,iB);
+
+      const mid=document.createElement('div');
+      const title=document.createElement('div'); title.className='title';
+      title.textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
+      const row=document.createElement('div'); row.className='metaRow';
+      const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
+      const timer=document.createElement('span'); timer.className='timer';
+      if(m.ends){timer.dataset.ends=m.ends; timer.textContent=fmt(m.ends-Date.now());}
+      row.append(badge,timer); mid.append(title,row);
+
+      const score=document.createElement('div'); score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
+      item.append(mini,mid,score);
+      item.addEventListener('click',()=>select(m.id));
+      listEl.appendChild(item);
+    }
+    const first = selectId || (flat.find(x=>x.A.img&&x.B.img)||flat[0])?.id;
+    if(first) select(first);
   }
+  function repaintRow(id){
+    const m=flat.find(x=>x.id===id); if(!m) return;
+    const row=[...listEl.children].find(c=>c.dataset.id===id); if(!row) return;
+    const imgs=row.querySelectorAll('.thumbMini img');
+    imgs[0].src=m.A?.img||BLANK; imgs[1].src=m.B?.img||BLANK;
+    row.querySelector('.title').textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
+    const t=row.querySelector('.timer');
+    if(m.ends){ t.dataset.ends=m.ends; t.textContent=fmt(m.ends-Date.now()); }
+    else { t.removeAttribute('data-ends'); t.textContent=''; }
+    row.lastChild.textContent=`${m.votesA||0} - ${m.votesB||0}`;
+  }
+  function scrollToRow(id){ const row=[...listEl.children].find(c=>c.dataset.id===id); if(row) listEl.scrollTo({top:row.offsetTop-12,behavior:'smooth'}); }
+
+  /* ===== Selection ===== */
+  function select(id){
+    sel=id; chosen=null;
+    [...listEl.children].forEach(li=>li.classList.toggle('selected',li.dataset.id===id));
+    const m=flat.find(x=>x.id===id); if(!m) return;
+    detailRound.textContent=roundLabel[m.round];
+    detailIndex.textContent=`Match ${m.index}/${rounds[m.round].length}`;
+    const canVote=!!(m.A.img&&m.B.img);
+    detailState.textContent=m.decided?'DECIDED':(m.ends?'OPEN':(canVote?'READY':'TBD'));
+    leftArt.src=m.A.img||BLANK; rightArt.src=m.B.img||BLANK;
+    leftTbd.style.display=m.A.img?'none':'flex'; rightTbd.style.display=m.B.img?'none':'flex';
+    leftName.textContent=m.A.name||'TBD'; rightName.textContent=m.B.name||'TBD';
+    leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
+    const locked=!!localStorage.getItem(lockKey(m.id));
+    btnLeft.disabled=btnRight.disabled=!m.ends||locked||m.decided; btnSubmit.disabled=true;
+    voteLockBadge.style.display=locked?'inline-block':'none';
+    btnLeft.classList.remove('active'); btnRight.classList.remove('active');
+    if(m.ends){detailClock.dataset.ends=m.ends;} else detailClock.removeAttribute('data-ends');
+    updateClock();
+    if(tickHandle) clearInterval(tickHandle);
+    tickHandle=setInterval(updateClock,1000);
+  }
+  function updateClock(){ const m=flat.find(x=>x.id===sel); if(!m) return; const ms=(m.ends||0)-Date.now(); detailClock.textContent=fmt(ms>0?ms:0); }
+
+  /* ===== Progression ===== */
+  const nextId=(id)=>{const [r,i]=id.split('_'); const idx=+i||1;
+    if(r==='R32') return `R16_${Math.ceil(idx/2)}`;
+    if(r==='R16') return `QF_${Math.ceil(idx/2)}`;
+    if(r==='QF')  return `SF_${Math.ceil(idx/2)}`;
+    if(r==='SF')  return `FINAL_1`;
+    return null;
+  };
+  function startFreshTimerIfReady(node){
+    if(node.A?.img && node.B?.img && !node.ends && !node.decided){
+      node.ends = Date.now()+ROUND_MS;
+      repaintRow(node.id);
+      if(sel===node.id) select(node.id);
+    }
+  }
+  function pickWinnerObj(m){ const a=m.votesA||0, b=m.votesB||0; if(a>b) return m.A; if(b>a) return m.B; return (Math.random()<0.5)?m.A:m.B; }
 
   function advanceWinner(m){
     const winner = pickWinnerObj(m);
-    const nid = nextId(m.id); if (!nid) return;
-    const nr = flat.find(x=>x.id===nid); if (!nr) return;
-    if (!nr.A.img) nr.A = {...winner}; else if (!nr.B.img) nr.B = {...winner};
-    repaintRow(nr.id);
-    if (sel===nr.id) select(nr.id);
+    const nid = nextId(m.id); if(!nid) return;
+    const nr  = flat.find(x=>x.id===nid); if(!nr) return;
+
+    // Put winner into next slot
+    if(!nr.A.img) nr.A={...winner}; else if(!nr.B.img) nr.B={...winner};
+
+    // 🔧 Rebuild the entire list so R16 rows definitely re-render on all devices
+    buildList(nid);
     startFreshTimerIfReady(nr);
+    scrollToRow(nid);
+    toast(`Advanced to ${roundLabel[nr.round]}_${nr.index}`);
   }
 
   function finalizeMatch(m){
-    if (m.decided) return false;
-    m.decided = true;
-    m.ends = null; // finished
+    if(m.decided) return false;
+    m.decided=true; m.ends=null;
     advanceWinner(m);
     repaintRow(m.id);
-    if (sel===m.id) select(m.id);
+    if(sel===m.id) select(m.id);
     return true;
   }
 
   function globalTick(){
-    let anyChanged=false;
-
-    for (const m of flat){
-      if (m.ends && !m.decided){
-        const left = m.ends - Date.now();
-        const row = [...listEl.children].find(c=>c.dataset.id===m.id);
-        const t = row?.querySelector('.timer');
-        if (t){ t.textContent = fmt(left>0?left:0); t.dataset.ends = m.ends; }
-        if (left<=0){ anyChanged = finalizeMatch(m) || anyChanged; }
+    let any=false;
+    for(const m of flat){
+      if(m.ends && !m.decided){
+        const left=m.ends-Date.now();
+        const row=[...listEl.children].find(c=>c.dataset.id===m.id);
+        const t=row?.querySelector('.timer'); if(t){ t.textContent=fmt(left>0?left:0); t.dataset.ends=m.ends; }
+        if(left<=0){ any = finalizeMatch(m) || any; }
       }
     }
-
-    if (sel){
-      const m = flat.find(x=>x.id===sel);
-      if (m){
-        leftVotes.textContent = m.votesA||0; rightVotes.textContent = m.votesB||0;
-        const canVote = !!(m.A.img && m.B.img);
-        detailState.textContent = m.decided ? 'DECIDED' : (m.ends ? 'OPEN' : (canVote ? 'READY' : 'TBD'));
+    if(sel){
+      const m=flat.find(x=>x.id===sel);
+      if(m){
+        leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
+        const canVote=!!(m.A.img&&m.B.img);
+        detailState.textContent=m.decided?'DECIDED':(m.ends?'OPEN':(canVote?'READY':'TBD'));
         updateClock();
       }
     }
-
-    if (anyChanged){ for (const m of flat) repaintRow(m.id); }
+    if(any){ for(const m of flat) repaintRow(m.id); }
   }
 
-  /********* Voting (local, 1 per match) *********/
-  btnLeft.addEventListener('click', ()=>{
-    const m = flat.find(x=>x.id===sel); if (!m || !m.ends || m.decided) return;
-    if (localStorage.getItem(lockKey(m.id))) return;
-    chosen = 'A';
-    btnLeft.classList.add('active'); btnRight.classList.remove('active');
-    btnSubmit.disabled = false;
-  });
-  btnRight.addEventListener('click', ()=>{
-    const m = flat.find(x=>x.id===sel); if (!m || !m.ends || m.decided) return;
-    if (localStorage.getItem(lockKey(m.id))) return;
-    chosen = 'B';
-    btnRight.classList.add('active'); btnLeft.classList.remove('active');
-    btnSubmit.disabled = false;
-  });
-
-  btnSubmit.addEventListener('click', ()=>{
-    const m = flat.find(x=>x.id===sel); if (!m || !m.ends || !chosen || m.decided) return;
-    if (localStorage.getItem(lockKey(m.id))) return;
-
-    if (chosen==='A') m.votesA = (m.votesA||0) + 1;
-    else m.votesB = (m.votesB||0) + 1;
-
+  /* ===== Voting ===== */
+  btnLeft.addEventListener('click',()=>{const m=flat.find(x=>x.id===sel); if(!m||!m.ends||m.decided||localStorage.getItem(lockKey(m.id))) return; chosen='A'; btnLeft.classList.add('active'); btnRight.classList.remove('active'); btnSubmit.disabled=false;});
+  btnRight.addEventListener('click',()=>{const m=flat.find(x=>x.id===sel); if(!m||!m.ends||m.decided||localStorage.getItem(lockKey(m.id))) return; chosen='B'; btnRight.classList.add('active'); btnLeft.classList.remove('active'); btnSubmit.disabled=false;});
+  btnSubmit.addEventListener('click',()=>{const m=flat.find(x=>x.id===sel); if(!m||!m.ends||!chosen||m.decided||localStorage.getItem(lockKey(m.id))) return;
+    if(chosen==='A') m.votesA=(m.votesA||0)+1; else m.votesB=(m.votesB||0)+1;
     localStorage.setItem(lockKey(m.id), chosen);
-    voteLockBadge.style.display = 'inline-block';
-    btnLeft.disabled = btnRight.disabled = true;
-    btnSubmit.disabled = true;
+    voteLockBadge.style.display='inline-block'; btnLeft.disabled=btnRight.disabled=true; btnSubmit.disabled=true;
+    repaintRow(m.id); leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0; toast(`Vote: ${chosen==='A'?'LEFT':'RIGHT'}`); });
 
-    repaintRow(m.id);
-    if (sel===m.id) { leftVotes.textContent = m.votesA||0; rightVotes.textContent = m.votesB||0; }
-    showToast(`Vote submitted: ${chosen==='A'?'LEFT':'RIGHT'}`);
-  });
+  /* ===== Reset & Force ===== */
+  document.getElementById('btnReset').addEventListener('click',()=>{ clearVoteLocks(); if(tickHandle){clearInterval(tickHandle); tickHandle=null;} makeTournament(); buildList(); toast('Reset complete'); });
+  document.getElementById('btnForce').addEventListener('click',()=>{ const m=flat.find(x=>x.id===sel); if(!m) return; if(m.decided){toast('Already decided');return;} m.ends=Date.now(); finalizeMatch(m); });
 
-  /********* Init *********/
+  /* ===== Init ===== */
+  makeTournament();
   buildList();
-  setInterval(globalTick, 1000);
+  setInterval(globalTick, 250);
 </script>
 </body>
 </html>
