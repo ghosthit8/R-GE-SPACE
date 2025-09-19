@@ -49,9 +49,9 @@
       display:flex; width:100%; aspect-ratio:3/4; overflow:hidden; background:#050505;
     }
     .thumb-duo img{ width:50%; height:100%; object-fit:cover; filter:saturate(.9) contrast(.95); }
-    .winner{ display:none; }                  /* hidden until decided */
-    .node.decided .thumb-duo{ display:none; } /* hide duo once decided */
-    .node.decided .winner{ display:block; }   /* show single winner image */
+    .winner{ display:none; }
+    .node.decided .thumb-duo{ display:none; }
+    .node.decided .winner{ display:block; }
 
     .meta{ padding:8px 10px; border-top:1px solid var(--border); }
     .title{
@@ -63,10 +63,10 @@
     .enter{ margin-top:6px; display:flex; justify-content:flex-end; }
     .enter .btn{ padding:5px 9px; font-size:.85rem }
 
+    /* Seeds row look */
     .entrant .enter{ display:none; }
     .entrant .title{ opacity:.9; }
-    /* Seeds row: hide timers, show just the vote count under each seed */
-    .entrant .timer{ display:none }
+    .entrant .timer{ display:none } /* hide timers under seeds; show only vote number */
 
     .tbd .thumb{
       background:
@@ -131,7 +131,7 @@
 
   <script type="module">
     /************* MODE *************/
-    const DEMO_MODE = true; // draw full bracket locally, overlay live R32 data
+    const DEMO_MODE = true;
 
     /************* SUPABASE *************/
     import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
@@ -182,7 +182,6 @@
         </div>`;
     }
 
-    // Duo while open; single image only AFTER time is up.
     function matchHTML(id,x,y,a,b){
       const label = `${clip(a?.name)||'TBD'} vs ${clip(b?.name)||'TBD'}`;
       const tbd = !(a && b);
@@ -219,7 +218,7 @@
 
     function clip(s){ if(!s) return s; return s.length>24 ? s.slice(0,22)+'…' : s; }
 
-    /************* BUILD (DEMO 32) *************/
+    /************* BUILD *************/
     async function build(){
       nodesEl.innerHTML = '';
       wiresEl.innerHTML = '';
@@ -229,8 +228,8 @@
       for (let i=0;i<ENTRANTS.length;i++){
         const x = X_START + i*X_GAP;
         centers.push(x + CARD_W/2);
-        const matchIdx = Math.floor(i/2)+1;           // 1..16
-        const side = (i%2===0) ? 'A' : 'B';            // Seed1=A, Seed2=B, etc.
+        const matchIdx = Math.floor(i/2)+1;
+        const side = (i%2===0) ? 'A' : 'B';
         nodesEl.insertAdjacentHTML('beforeend',
           entrantHTML('E'+(i+1), x, rowY(0), ENTRANTS[i], matchIdx, side)
         );
@@ -341,23 +340,17 @@
         const timerEl = node.querySelector('.timer');
         if (timerEl) timerEl.textContent = fmt(left);
 
-        // do nothing until timer hits 0 or if TBD
         if (left > 0 || node.classList.contains('tbd')) return;
-
-        // only once
         if (node.classList.contains('decided')) return;
         node.classList.add('decided');
 
-        // tally (ties → A)
         const va = +node.dataset.va || 0;
         const vb = +node.dataset.vb || 0;
         const winnerIsA = (va >= vb);
 
-        // update visible score on the match card
         const vEl = node.querySelector('.votes');
         if (vEl) vEl.textContent = `${va} - ${vb}`;
 
-        // swap media to single winning image
         const duo = node.querySelector('.thumb-duo');
         const aImg = duo?.querySelector('img:nth-child(1)')?.src;
         const bImg = duo?.querySelector('img:nth-child(2)')?.src;
@@ -378,16 +371,17 @@
           }
         }
 
-        // hide enter on decided matches
         const enter = node.querySelector('.enter');
         if (enter) enter.style.display = 'none';
 
-        // advance winner to next round placeholder (image-only)
         const titleEl = node.querySelector('.title');
         const [nameA, nameB] = (titleEl?.textContent || '').split(' vs ');
         const winnerName = winnerIsA ? (nameA || 'Winner') : (nameB || 'Winner');
         advanceWinner(node.dataset.id, winnerSrc, winnerName);
       });
+
+      // keep seed counts mirrored from R32 nodes (safe even without DB overlay)
+      mirrorSeedCounts();
     }
 
     function startClocks(){
@@ -414,12 +408,10 @@
       const next = document.querySelector(`.node[data-id="${nextId}"]`);
       if (!next) return;
 
-      // remove TBD visual
       const tbdBadge = next.querySelector('.tbd-badge');
       if (tbdBadge) tbdBadge.style.display = 'none';
       next.classList.remove('tbd');
 
-      // force single image winner
       const nextDuo = next.querySelector('.thumb-duo');
       if (nextDuo){
         const img = document.createElement('img');
@@ -437,9 +429,21 @@
         }
       }
 
-      // hide all meta in the next-round slot -> image-only look
+      // image-only: remove meta completely so nothing shows but the image
       const meta = next.querySelector('.meta');
-      if (meta) meta.style.display = 'none';
+      if (meta) meta.remove();
+    }
+
+    // Mirror R32 A/B vote numbers into the Seed tiles below each image
+    function mirrorSeedCounts(){
+      document.querySelectorAll('.node[data-id^="R32_"]').forEach(n=>{
+        const idx = parseInt(n.dataset.id.split('_')[1],10);
+        const a = +n.dataset.va || 0, b = +n.dataset.vb || 0;
+        const leftSeedVotes  = document.querySelector(`.entrant[data-match="${idx}"][data-side="A"] .votes`);
+        const rightSeedVotes = document.querySelector(`.entrant[data-match="${idx}"][data-side="B"] .votes`);
+        if (leftSeedVotes)  leftSeedVotes.textContent  = String(a);
+        if (rightSeedVotes) rightSeedVotes.textContent = String(b);
+      });
     }
 
     /************* LIVE OVERLAY FROM SUPABASE (R32 only) *************/
@@ -449,7 +453,7 @@
           .from('match_public')
           .select('*')
           .eq('tournament_id', TOURNAMENT_ID)
-          .eq('round_number', 1) // Round of 32
+          .eq('round_number', 1)
           .order('index_in_round', { ascending: true });
 
         if (error) { console.warn(error); return; }
@@ -460,23 +464,19 @@
           const n = document.querySelector(`.node[data-id="${id}"]`);
           if (!n) return;
 
-          // Title
           const t = n.querySelector('.title');
           if (t) t.textContent = `${row.a_name || 'TBD'} vs ${row.b_name || 'TBD'}`;
 
-          // Timer
           const ends = row.end_time ? new Date(row.end_time).getTime() : (Date.now()+24*60*60*1000);
           n.dataset.ends = ends;
           const timer = n.querySelector('.timer');
           if (timer) timer.dataset.ends = ends;
 
-          // Votes on match card
           const a = row.votes_a ?? 0, b = row.votes_b ?? 0;
           n.dataset.va = a; n.dataset.vb = b;
           const vEl = n.querySelector('.votes');
           if (vEl) vEl.textContent = `${a} - ${b}`;
 
-          // Images on match card
           const hasA = !!row.a_image, hasB = !!row.b_image;
           const duo = n.querySelector('.thumb-duo');
           const single = n.querySelector('img.thumb:not(.winner)');
@@ -498,11 +498,10 @@
             n.classList.toggle('tbd', !(row.a_image || row.b_image));
           }
 
-          // Enter link -> real DB id
           const link = n.querySelector('.enter a.btn');
           if (link && row.id) link.href = `matchup.html?battle=${encodeURIComponent(row.id)}`;
 
-          // ---- push per-side votes to the Seed tiles (entrants row)
+          // also reflect counts + names/images to seeds immediately
           const leftSeed  = document.querySelector(`.entrant[data-match="${row.index_in_round}"][data-side="A"]`);
           const rightSeed = document.querySelector(`.entrant[data-match="${row.index_in_round}"][data-side="B"]`);
           if (leftSeed){
@@ -516,6 +515,9 @@
             const is = rightSeed.querySelector('img.thumb'); if (is && row.b_image) is.src = row.b_image;
           }
         });
+
+        // after overlay, mirror again to be safe
+        mirrorSeedCounts();
       }catch(e){ console.warn(e); }
     }
 
@@ -629,9 +631,9 @@
     });
 
     /************* GO *************/
-    await build();                 // draw layout
-    startClocks();                 // countdowns & decisions
-    await refreshFromDB();         // overlay R32 from DB (votes, names, images, links)
+    await build();
+    startClocks();
+    await refreshFromDB();
     setInterval(refreshFromDB, 5000);
     window.addEventListener('resize', ()=> centerOnLoad(32));
   </script>
