@@ -185,7 +185,7 @@
     function matchHTML(id,x,y,a,b){
       const label = `${clip(a?.name)||'TBD'} vs ${clip(b?.name)||'TBD'}`;
       const tbd = !(a && b);
-      const endsAt = Date.now() + 24*60*60*1000; // demo: 24h
+      const endsAt = Date.now() + 5*60*1000; // demo: 5m for testing (was 24h)
 
       const votesA = a?.v ?? 0;
       const votesB = b?.v ?? 0;
@@ -467,7 +467,7 @@
           const t = n.querySelector('.title');
           if (t) t.textContent = `${row.a_name || 'TBD'} vs ${row.b_name || 'TBD'}`;
 
-          const ends = row.end_time ? new Date(row.end_time).getTime() : (Date.now()+24*60*60*1000);
+          const ends = row.end_time ? new Date(row.end_time).getTime() : (Date.now()+5*60*1000); // 5m fallback for testing
           n.dataset.ends = ends;
           const timer = n.querySelector('.timer');
           if (timer) timer.dataset.ends = ends;
