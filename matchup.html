@@ -32,10 +32,42 @@
   .detail{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
   .detailHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
   .stage{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:14px}
-  .tile{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.6);position:relative}
-  .art{aspect-ratio:4/5;background:#050505;display:block;width:100%;object-fit:cover}
-  .tbd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:900;color:rgba(57,255,20,.75)}
-  .tileMeta{display:flex;justify-content:space-between;gap:8px;padding:10px;border-top:1px solid var(--border);align-items:center}
+  /* stack vertically on phones (kept) */
+  @media (max-width:820px){
+    .stage{ grid-template-columns:1fr; gap:22px; }
+  }
+  .tile{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.6);position:relative;display:flex;flex-direction:column}
+
+  /* ---- FRAME + IMAGE (fit without cropping) ---- */
+  .frame{
+    position:relative;
+    width:100%;
+    /* was 16/9 — make taller so the image looks bigger */
+    aspect-ratio: 4 / 3;
+    background:#050505;
+    border-bottom:1px solid var(--border);
+    overflow:hidden;
+  }
+  /* On phones: a touch taller, with a soft cap */
+  @media (max-width:820px){
+    .frame{
+      aspect-ratio: 5 / 4;
+      max-height: 72vh;   /* prevents it from taking the whole screen */
+    }
+  }
+
+  .art{
+    position:absolute; inset:0; margin:auto;
+    max-width:100%; max-height:100%;
+    width:auto; height:auto;                  /* fit inside without crop */
+    object-fit:contain;
+    display:block; background:#000;           /* letterbox bars */
+  }
+
+  .tbd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:900;color:rgba(57,255,20,.75);pointer-events:none}
+
+  .tileMeta{display:flex;justify-content:space-between;gap:8px;padding:10px;align-items:center}
+
   .countdown{padding:0 14px 10px}
   .actions{padding:0 14px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .hint{opacity:.75;padding:0 14px 14px}
@@ -45,10 +77,18 @@
   .timer:not([data-ends]){display:none}
   @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
 
-  /* Fullscreen button helper */
-  .fs{margin-left:auto}
+  /* Small fullscreen icon */
+  .fsIcon{
+    position:absolute; top:8px; right:8px;
+    width:22px; height:22px; border-radius:6px;
+    border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5);
+    display:grid; place-items:center; font-size:12px; line-height:1;
+    opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2;
+  }
+  .fsIcon:hover{opacity:1}
+  .fsIcon:active{transform:scale(.98)}
 
-  /* === CYBERPUNK WINNER OVERLAY === */
+  /* === CYBERPUNK WINNER OVERLAY (unchanged) === */
   .championOverlay{
     position:fixed; inset:0; display:none; place-items:center; z-index:9999;
     background:
@@ -100,6 +140,19 @@
   .fxDot{ position:absolute; width:6px; height:6px; border-radius:50%; background: currentColor; opacity:.9; animation: fly var(--dur) ease-out forwards; }
   @keyframes fly{ to{ transform: translate(var(--tx), var(--ty)) scale(.2); opacity:0; } }
   .btnClose{ position:absolute; top:10px; right:10px; border:1px solid var(--green); color:var(--green); background:transparent; border-radius:8px; padding:6px 10px; cursor:pointer; }
+
+  /* Fullscreen fit (no crop) */
+  img.art:fullscreen,
+  img.art:-webkit-full-screen,
+  img.art:-ms-fullscreen{
+    width:100vw !important;
+    height:100vh !important;
+    max-width:100vw !important;
+    max-height:100vh !important;
+    object-fit:contain !important;
+    aspect-ratio:auto !important;
+    background:#000;
+  }
 </style>
 </head>
 <body>
@@ -140,22 +193,29 @@
       <div class="countdown">Decision in: <span class="timer" id="detailClock">00:00:00</span></div>
 
       <div class="stage">
-        <div class="tile">
-          <img id="leftArt" class="art" alt="">
-          <div id="leftTbd" class="tbd" style="display:none">?</div>
+        <!-- LEFT tile -->
+        <div class="tile" id="tileLeft">
+          <div class="frame">
+            <img id="leftArt" class="art" alt="">
+            <button class="fsIcon" id="fsLeft" aria-label="Fullscreen left">⤢</button>
+            <div id="leftTbd" class="tbd" style="display:none">?</div>
+          </div>
           <div class="tileMeta">
             <span id="leftName">TBD</span>
             <span class="badge" id="leftVotes">0</span>
-            <button id="fsLeft" class="btn fs" title="Fullscreen left">⤢ Fullscreen</button>
           </div>
         </div>
-        <div class="tile">
-          <img id="rightArt" class="art" alt="">
-          <div id="rightTbd" class="tbd" style="display:none">?</div>
+
+        <!-- RIGHT tile -->
+        <div class="tile" id="tileRight">
+          <div class="frame">
+            <img id="rightArt" class="art" alt="">
+            <button class="fsIcon" id="fsRight" aria-label="Fullscreen right">⤢</button>
+            <div id="rightTbd" class="tbd" style="display:none">?</div>
+          </div>
           <div class="tileMeta">
             <span id="rightName">TBD</span>
             <span class="badge" id="rightVotes">0</span>
-            <button id="fsRight" class="btn fs" title="Fullscreen right">⤢ Fullscreen</button>
           </div>
         </div>
       </div>
@@ -282,18 +342,16 @@
   const fsLeft = document.getElementById('fsLeft');
   const fsRight = document.getElementById('fsRight');
 
-  /********* Round helpers (for collapsing finished rounds) *********/
+  /********* Round helpers *********/
   function isRoundComplete(r){
     return rounds[r].length>0 && rounds[r].every(m=>m.decided);
   }
   function currentRound(){
-    // first round that still has any undecided match; else FINAL
     for(let r=1;r<=5;r++){ if(rounds[r].some(m=>!m.decided)) return r; }
     return 5;
   }
   function visibleMatches(){
     const cur = currentRound();
-    // If toggle is off, hide all rounds strictly before cur
     return flat.filter(m => showFinished ? true : (m.round >= cur));
   }
   function updateRoundBreadcrumb(){
@@ -331,15 +389,12 @@
     }
     updateRoundBreadcrumb();
 
-    // Choose a sensible selection
     let targetId = preserveId && items.some(x=>x.id===preserveId) ? preserveId : (items.find(x=>x.A.img&&x.B.img)||items[0])?.id;
     if(targetId) select(targetId);
   }
 
   function repaintRow(id){
-    // If row is hidden by filter, just rebuild list.
     if(!visibleMatches().some(x=>x.id===id)){ buildList(); return; }
-
     const m=flat.find(x=>x.id===id); if(!m) return;
     const row=[...listEl.children].find(c=>c.dataset.id===id); if(!row) return;
     const imgs=row.querySelectorAll('.thumbMini img');
@@ -462,7 +517,6 @@
     repaintRow(nr.id);
     startFreshTimerIfReady(nr);
 
-    // If the round we just finished is now complete, rebuild list to hide it
     if(isRoundComplete(m.round)){
       buildList(nr.id);
     }else{
@@ -506,12 +560,11 @@
     }
 
     if(anyChanged){
-      // If a whole round finished, rebuild to collapse it and update breadcrumb
       buildList(sel);
     }
   }
 
-  /********* Voting (added) *********/
+  /********* Voting *********/
   function setChoice(side){
     if (btnLeft.disabled || btnRight.disabled) return;
     chosen = side; // 'A' or 'B'
@@ -547,15 +600,26 @@
     toast('Vote submitted');
   });
 
-  /********* Fullscreen (new) *********/
-  function openFullscreen(el){
-    if(!el) return;
-    if(el.requestFullscreen) el.requestFullscreen();
-    else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    else if(el.msRequestFullscreen) el.msRequestFullscreen();
+  /********* Fullscreen (robust + dbl-tap) *********/
+  async function requestFS(el){
+    try{
+      if (el.requestFullscreen) await el.requestFullscreen({ navigationUI:'hide' });
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      else if (el.msRequestFullscreen) el.msRequestFullscreen();
+      else throw new Error('Fullscreen API unavailable');
+    }catch(e){
+      const src = (el.tagName==='IMG' ? el.src : el.querySelector('img')?.src);
+      if(src) window.open(src, '_blank');
+    }
   }
-  fsLeft.addEventListener('click', ()=> openFullscreen(leftArt));
-  fsRight.addEventListener('click', ()=> openFullscreen(rightArt));
+  function wireFS(imgEl, btnEl){
+    btnEl.addEventListener('click', ()=> requestFS(imgEl));
+    let last=0; imgEl.addEventListener('click', ()=>{
+      const now=Date.now(); if(now-last<300) requestFS(imgEl); last=now;
+    });
+  }
+  wireFS(leftArt,  fsLeft);
+  wireFS(rightArt, fsRight);
 
   /********* Controls *********/
   document.getElementById('btnReset').addEventListener('click', ()=>{
