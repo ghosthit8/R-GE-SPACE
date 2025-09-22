@@ -6,38 +6,46 @@
 <title>Rage Space — Tournament</title>
 <style>
   :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707; }
-  *{box-sizing:border-box} html,body{height:100%}
+  *{box-sizing:border-box}
+  html,body{height:100%}
   body{margin:0;background:#000;color:var(--green);font-family:ui-sans-serif,system-ui,Arial}
   a.btn,button.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
   header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px}
   .app{display:grid;grid-template-columns: 360px 1fr;gap:14px;height:calc(100vh - 56px);padding:0 14px 14px}
+
   .listWrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
   .listHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .listHeadRight{display:flex;align-items:center;gap:10px}
   .list{overflow:auto;flex:1;min-height:0}
   .matchItem{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:10px;border-bottom:1px solid rgba(15,37,16,.6);cursor:pointer}
-  .thumbMini{width:64px;height:64px;background:#050505;border-radius:8px;overflow:hidden;display:flex}
+  .matchItem:hover{background:rgba(57,255,20,.05)}
+  .thumbMini{width:64px;height:64px;background:#050505;border-radius:8px;overflow:hidden;display:flex;flex:0 0 auto}
   .thumbMini img{width:50%;object-fit:cover}
-  .title{color:#e5ffe5;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .title{color:var(--ink);font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .metaRow{display:flex;gap:8px;align-items:center}
   .badge{font-size:.75rem;border:1px solid var(--border);border-radius:8px;padding:2px 6px;opacity:.85}
   .timer{font-variant-numeric:tabular-nums;opacity:.85}
   .selected{outline:2px solid rgba(57,255,20,.55);outline-offset:-2px}
+
   .detail{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
   .detailHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
   .stage{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:14px}
   @media (max-width:820px){ .stage{ grid-template-columns:1fr; gap:22px; } }
   .tile{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.6);position:relative;display:flex;flex-direction:column}
+
   .frame{position:relative;width:100%;aspect-ratio:4/3;background:#050505;border-bottom:1px solid var(--border);overflow:hidden}
   @media (max-width:1000px){ .frame{ aspect-ratio:3/4; max-height:72vh; } }
-  .art{position:absolute;inset:0;margin:auto;max-width:100%;max-height:100%;object-fit:contain;background:#000}
+  .art{position:absolute;inset:0;margin:auto;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;background:#000;display:block}
+
   .tbd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:900;color:rgba(57,255,20,.75);pointer-events:none}
   .tileMeta{display:flex;justify-content:space-between;gap:8px;padding:10px;align-items:center}
+
   .countdown{padding:0 14px 10px}
   .actions{padding:0 14px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .hint{opacity:.75;padding:0 14px 14px}
   .choice.btn{border-style:solid}
   .choice.btn.active{box-shadow:0 0 0 2px rgba(57,255,20,.6) inset}
-  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:#e5ffe5;padding:8px 12px;border-radius:10px;display:none;z-index:50}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:var(--ink);padding:8px 12px;border-radius:10px;display:none;z-index:50}
   .timer:not([data-ends]){display:none}
   @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
 </style>
@@ -57,9 +65,12 @@
     <section class="listWrap">
       <div class="listHead">
         <strong>Bracket</strong>
-        <label style="display:inline-flex;align-items:center;gap:6px;font-size:.85rem;opacity:.9">
-          <input type="checkbox" id="toggleFinished"> Show finished rounds
-        </label>
+        <div class="listHeadRight">
+          <span class="badge" id="roundSummary">R32 → Final</span>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:.85rem;opacity:.9">
+            <input type="checkbox" id="toggleFinished"> Show finished rounds
+          </label>
+        </div>
       </div>
       <div class="list" id="matchList"></div>
     </section>
@@ -105,282 +116,423 @@
         <button id="btnSubmit" class="btn" disabled>✅ Submit Vote</button>
         <span id="voteLock" class="badge" style="display:none">You voted.</span>
       </div>
-      <div class="hint">One vote per match. Timer & votes sync via Supabase; local fallback keeps the timer through refresh.</div>
+      <div class="hint">Shared timers & votes via Supabase. Local fallback keeps the timer through refresh if RPCs are blocked.</div>
     </section>
   </div>
 
   <div id="toast" class="toast"></div>
 
+  <!-- Supabase client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script type="module">
-/*** CONFIG ***/
-const ROUND_MS = 30000;
-const SUPABASE_URL  = 'https://YOUR-PROJECT.supabase.co';   // <-- replace
-const SUPABASE_ANON = 'YOUR_PUBLIC_ANON_KEY';               // <-- replace
-const MATCH_TABLE = 'matches';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  /********* Config *********/
+  const ROUND_MS = 30000; // 30 seconds
+  const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';   // <-- replace
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';               // <-- replace
+  const MATCH_TABLE = 'matches';
 
-/*** HELPERS ***/
-const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
-const roundLabel = ['','R32','R16','QF','SF','FINAL'];
-const nowMs = ()=> Date.now();
-const toIso = (ms)=> new Date(ms).toISOString();
-const fmt = (ms)=>{ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000);
-  return String(Math.floor(s/3600)).padStart(2,'0')+':' +
-         String(Math.floor((s%3600)/60)).padStart(2,'0')+':' +
-         String(s%60).padStart(2,'0'); };
-const toast = (m)=>{ const el=document.getElementById('toast'); el.textContent=m; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1500); };
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  const toIso = (ms)=> new Date(ms).toISOString();
+  const nowMs = ()=> Date.now();
 
-/*** LOCAL PERSISTENCE (timer + vote lock) ***/
-const VOTE_NS='rs_vote_'; const TIMER_NS='rs_timer_';
-const lockKey =(id)=> VOTE_NS+id;
-const timerKey=(id)=> TIMER_NS+id;
-const setLocalTimer =(id,ends)=> localStorage.setItem(timerKey(id), String(ends));
-const getLocalTimer =(id)=> { const v=localStorage.getItem(timerKey(id)); return v?Number(v):null; };
-const clearLocalTimer=(id)=> localStorage.removeItem(timerKey(id));
-const clearVoteLocks=()=>{ const rm=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && (k.startsWith(VOTE_NS)||k.startsWith(TIMER_NS))) rm.push(k); } rm.forEach(k=>localStorage.removeItem(k)); };
+  /********* Helpers *********/
+  const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+  const roundLabel = ['','R32','R16','QF','SF','FINAL'];
 
-/*** DATA MODEL ***/
-let rounds, flat, sel=null, tickHandle=null, chosen=null, showFinished=false;
-function makeTournament(){
-  const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
-  rounds = {1:[],2:[],3:[],4:[],5:[]};
-  for (let i=0;i<16;i++){
-    rounds[1].push({ id:`R32_${i+1}`, round:1, index:i+1,
-      A:{name:entries[2*i].name, img:entries[2*i].img},
-      B:{name:entries[2*i+1].name, img:entries[2*i+1].img},
-      votesA:0, votesB:0, ends:null, decided:false });
+  // Vote lock + timer fallback (per browser)
+  const VOTE_NS='rs_vote_'; const TIMER_NS='rs_timer_';
+  const lockKey =(id)=> VOTE_NS+id;
+  const timerKey=(id)=> TIMER_NS+id;
+  const setLocalTimer =(id,ends)=> localStorage.setItem(timerKey(id), String(ends));
+  const getLocalTimer =(id)=> { const v=localStorage.getItem(timerKey(id)); return v?Number(v):null; };
+  const clearLocalTimer=(id)=> localStorage.removeItem(timerKey(id));
+  const clearVoteLocks=()=>{ const rm=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && (k.startsWith(VOTE_NS)||k.startsWith(TIMER_NS))) rm.push(k); } rm.forEach(k=>localStorage.removeItem(k)); };
+
+  const fmt = (ms)=>{ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000);
+    return String(Math.floor(s/3600)).padStart(2,'0')+':' +
+           String(Math.floor((s%3600)/60)).padStart(2,'0')+':' +
+           String(s%60).padStart(2,'0'); };
+
+  const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
+
+  /********* Tournament data *********/
+  let rounds, flat, sel=null, tickHandle=null, chosen=null, showFinished=false;
+
+  function makeTournament(){
+    const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
+    rounds = {1:[],2:[],3:[],4:[],5:[]};
+    for (let i=0;i<16;i++){
+      rounds[1].push({
+        id:`R32_${i+1}`, round:1, index:i+1,
+        A:{name:entries[2*i].name, img:entries[2*i].img},
+        B:{name:entries[2*i+1].name, img:entries[2*i+1].img},
+        votesA:0, votesB:0, ends:null, decided:false,
+      });
+    }
+    for (let r=2, size=8; r<=5; r++, size=Math.max(1, size/2)){
+      for (let i=0;i<size;i++){
+        rounds[r].push({ id: `${roundLabel[r]}_${i+1}`, round:r, index:i+1,
+          A:{}, B:{}, votesA:0, votesB:0, ends:null, decided:false
+        });
+      }
+    }
+    flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
   }
-  for (let r=2, size=8; r<=5; r++, size=Math.max(1,size/2)){
-    for (let i=0;i<size;i++){
-      rounds[r].push({ id:`${roundLabel[r]}_${i+1}`, round:r, index:i+1,
-        A:{}, B:{}, votesA:0, votesB:0, ends:null, decided:false });
+
+  /********* DOM refs *********/
+  const listEl=document.getElementById('matchList');
+  const detailRound=document.getElementById('detailRound');
+  const detailIndex=document.getElementById('detailIndex');
+  const detailState=document.getElementById('detailState');
+  const detailClock=document.getElementById('detailClock');
+  const leftArt=document.getElementById('leftArt'), rightArt=document.getElementById('rightArt');
+  const leftTbd=document.getElementById('leftTbd'), rightTbd=document.getElementById('rightTbd');
+  const leftName=document.getElementById('leftName'), rightName=document.getElementById('rightName');
+  const leftVotes=document.getElementById('leftVotes'), rightVotes=document.getElementById('rightVotes');
+  const btnLeft=document.getElementById('btnLeft'), btnRight=document.getElementById('btnRight');
+  const btnSubmit=document.getElementById('btnSubmit');
+  const voteLockBadge=document.getElementById('voteLock');
+  const btnReset=document.getElementById('btnReset'), btnForce=document.getElementById('btnForce'), btnClearVotes=document.getElementById('btnClearVotes');
+  const roundSummary=document.getElementById('roundSummary');
+  const toggleFinished=document.getElementById('toggleFinished');
+
+  /********* Supabase sync (timers + votes) *********/
+  async function loadServerState() {
+    const { data, error } = await supabase
+      .from(MATCH_TABLE)
+      .select('slug, ends, decided, votesA, votesB');
+    if (error) { console.warn('loadServerState error', error); return; }
+    console.log('[state] rows', data?.length, data?.slice?.(0,3));
+    const map = new Map(data.map(r => [r.slug, r]));
+    for (const m of flat) {
+      const row = map.get(m.id);
+      if (row) {
+        m.decided = !!row.decided;
+        m.ends    = row.ends ? new Date(row.ends).getTime() : null;
+        m.votesA  = row.votesA ?? 0;
+        m.votesB  = row.votesB ?? 0;
+      }
+      // local fallback if no server ends
+      if (!m.ends) {
+        const localEnds = getLocalTimer(m.id);
+        if (localEnds && localEnds > nowMs()) m.ends = localEnds;
+      }
     }
   }
-  flat=[...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
-}
 
-/*** DOM REFS ***/
-const listEl=document.getElementById('matchList');
-const detailRound=document.getElementById('detailRound');
-const detailIndex=document.getElementById('detailIndex');
-const detailState=document.getElementById('detailState');
-const detailClock=document.getElementById('detailClock');
-const leftArt=document.getElementById('leftArt'), rightArt=document.getElementById('rightArt');
-const leftTbd=document.getElementById('leftTbd'), rightTbd=document.getElementById('rightTbd');
-const leftName=document.getElementById('leftName'), rightName=document.getElementById('rightName');
-const leftVotes=document.getElementById('leftVotes'), rightVotes=document.getElementById('rightVotes');
-const btnLeft=document.getElementById('btnLeft'), btnRight=document.getElementById('btnRight');
-const btnSubmit=document.getElementById('btnSubmit');
-const voteLockBadge=document.getElementById('voteLock');
-const btnReset=document.getElementById('btnReset'), btnForce=document.getElementById('btnForce'), btnClearVotes=document.getElementById('btnClearVotes');
-const toggleFinished=document.getElementById('toggleFinished');
-
-/*** SUPABASE SYNC ***/
-async function ensureRowsExist(){
-  const rows = flat.map(m => ({ slug:m.id, round:m.round, idx:m.index }));
-  const { error } = await supabase.from(MATCH_TABLE).insert(rows, { onConflict:'slug', ignoreDuplicates:true });
-  if (error) { console.warn('ensureRowsExist error', error); toast('DB insert blocked (RLS?)'); }
-}
-async function loadServerState(){
-  const { data, error } = await supabase.from(MATCH_TABLE).select('slug,ends,decided,votesA,votesB');
-  if (error) { console.warn('loadServerState error', error); return; }
-  const map = new Map(data.map(r=>[r.slug,r]));
-  for (const m of flat){
-    const row = map.get(m.id);
-    if (row){
-      m.decided=!!row.decided;
-      m.ends   = row.ends ? new Date(row.ends).getTime() : null;
-      m.votesA = row.votesA ?? 0;
-      m.votesB = row.votesB ?? 0;
-    }
-    if (!m.ends){ const local=getLocalTimer(m.id); if(local && local>nowMs()) m.ends=local; }
+  async function ensureRowsExist() {
+    // insert by slug so server rows exist when RPC runs
+    const rows = flat.map(m => ({ slug: m.id, round: m.round, idx: m.index }));
+    const { error } = await supabase
+      .from(MATCH_TABLE)
+      .insert(rows, { onConflict: 'slug', ignoreDuplicates: true });
+    if (error) { console.warn('ensureRowsExist error', error); toast('DB insert blocked (RLS policy?)'); }
   }
-}
-async function startFreshTimerIfReady(node){
-  if(node.A?.img && node.B?.img && !node.ends && !node.decided){
-    const proposedEnds = nowMs()+ROUND_MS;
-    // server first
-    const resp = await supabase.rpc('start_timer_by_slug', { p_slug: node.id, p_ends: toIso(proposedEnds) });
-    if (!resp.error && (resp.data?.ends || (Array.isArray(resp.data)&&resp.data[0]?.ends))){
-      const row = Array.isArray(resp.data) ? resp.data[0] : resp.data;
-      node.ends = new Date(row.ends).getTime();
-      setLocalTimer(node.id, node.ends);
-    } else {
-      // local fallback
-      node.ends = proposedEnds;
-      setLocalTimer(node.id, node.ends);
-      console.warn('[timer] local fallback', node.id, resp.error||'(no row updated)');
+
+  // start a timer (server-first, with local fallback)
+  async function startFreshTimerIfReady(node){
+    if(node.A?.img && node.B?.img && !node.ends && !node.decided){
+      const proposedEnds = nowMs() + ROUND_MS;
+
+      // Try server RPC
+      let row=null, rpcErr=null;
+      try{
+        const resp = await supabase.rpc('start_timer_by_slug', { p_slug: node.id, p_ends: toIso(proposedEnds) });
+        console.log('[timer] RPC result', node.id, resp);
+        if (!resp.error) row = Array.isArray(resp.data) ? resp.data[0] : resp.data;
+        else rpcErr = resp.error;
+      }catch(e){ rpcErr = e; }
+
+      if (row?.ends) {
+        node.ends = new Date(row.ends).getTime();
+        setLocalTimer(node.id, node.ends);
+      } else {
+        // Fallback: local persistent timer (so refresh doesn’t reset)
+        node.ends = proposedEnds;
+        setLocalTimer(node.id, node.ends);
+        console.warn('[timer] local fallback for', node.id, rpcErr || '(no server row updated)');
+        // Try to push the same ends in background
+        supabase.rpc('start_timer_by_slug', { p_slug: node.id, p_ends: toIso(node.ends) })
+          .then(r => console.log('[timer] background push', node.id, r))
+          .catch(e => console.warn('[timer] background push failed', e));
+      }
+
+      repaintRow(node.id);
+      if(sel===node.id) select(node.id);
     }
-    repaintRow(node.id);
-    if (sel===node.id) select(node.id);
   }
-}
-async function decideOnServer(slug, decided=true){
-  const { error } = await supabase.rpc('decide_match_by_slug', { p_slug: slug, p_decided: decided });
-  if (error) console.warn('decide rpc error', error);
-}
-async function castVoteOnServer(slug, side){
-  const { data, error } = await supabase.rpc('cast_vote_by_slug', { p_slug: slug, p_side: side });
-  if (error) throw error;
-  return Array.isArray(data)?data[0]:data;
-}
 
-/*** UI BUILDERS ***/
-function isRoundComplete(r){ return rounds[r].every(m=>m.decided); }
-function visibleMatches(){ const cur=[1,2,3,4,5].find(r=>rounds[r].some(m=>!m.decided))||5; return flat.filter(m=> showFinished ? true : m.round>=cur); }
+  // decide via RPC (security definer) and clear local timer
+  async function decideOnServer(matchSlug, decided=true){
+    const { error } = await supabase.rpc('decide_match_by_slug', { p_slug: matchSlug, p_decided: decided });
+    if (error) console.warn('decide rpc error', error);
+    clearLocalTimer(matchSlug);
+  }
 
-function buildList(preserveId){
-  listEl.innerHTML='';
-  for (const m of visibleMatches()){
-    const item=document.createElement('div'); item.className='matchItem'; item.dataset.id=m.id;
-    const mini=document.createElement('div'); mini.className='thumbMini';
-    mini.innerHTML=`<img src="${m.A?.img||BLANK}"><img src="${m.B?.img||BLANK}">`;
-    const mid=document.createElement('div');
-    const title=document.createElement('div'); title.className='title';
-    title.textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
-    const row=document.createElement('div'); row.className='metaRow';
-    const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
-    const timer=document.createElement('span'); timer.className='timer';
+  // atomic vote via RPC
+  async function castVoteOnServer(matchSlug, side){
+    const { data, error } = await supabase
+      .rpc('cast_vote_by_slug', { p_slug: matchSlug, p_side: side });
+    if (error) { console.warn('cast_vote_by_slug error', error); throw error; }
+    return Array.isArray(data) ? data[0] : data;
+  }
+
+  function subscribeRealtime() {
+    supabase.channel('matches-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: MATCH_TABLE }, payload => {
+        const row = payload.new || payload.old;
+        if (!row) return;
+        const key = row.slug || row.id;
+        const m = flat.find(x => x.id === key);
+        if (!m || !payload.new) return;
+        m.decided = !!payload.new.decided;
+        m.ends = payload.new.ends ? new Date(payload.new.ends).getTime() : null;
+        m.votesA = payload.new.votesA ?? 0;
+        m.votesB = payload.new.votesB ?? 0;
+        if (!m.ends) clearLocalTimer(m.id);
+        repaintRow(m.id);
+        if (sel === m.id) select(m.id);
+      })
+      .subscribe();
+  }
+
+  /********* Round helpers *********/
+  function isRoundComplete(r){ return rounds[r].length>0 && rounds[r].every(m=>m.decided); }
+  function currentRound(){ for(let r=1;r<=5;r++){ if(rounds[r].some(m=>!m.decided)) return r; } return 5; }
+  function visibleMatches(){ const cur=currentRound(); return flat.filter(m => showFinished ? true : (m.round >= cur)); }
+  function updateRoundBreadcrumb(){ const cur=currentRound(); roundSummary.textContent = `${roundLabel[cur]} → Final`; }
+
+  /********* Build list *********/
+  function buildList(preserveId){
+    listEl.innerHTML='';
+    const items = visibleMatches();
+    for (const m of items){
+      const item=document.createElement('div'); item.className='matchItem'; item.dataset.id=m.id;
+      const mini=document.createElement('div'); mini.className='thumbMini';
+      const iA=document.createElement('img'); iA.src=m.A?.img||BLANK;
+      const iB=document.createElement('img'); iB.src=m.B?.img||BLANK;
+      mini.append(iA,iB);
+      const mid=document.createElement('div');
+      const title=document.createElement('div'); title.className='title';
+      title.textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
+      const row=document.createElement('div'); row.className='metaRow';
+      const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
+      const timer=document.createElement('span'); timer.className='timer';
+      if(m.ends){timer.dataset.ends=m.ends; timer.textContent=fmt(m.ends-nowMs());}
+      row.append(badge,timer); mid.append(title,row);
+      const score=document.createElement('div'); score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
+      item.append(mini,mid,score);
+      item.addEventListener('click',()=>select(m.id));
+      listEl.appendChild(item);
+    }
+    updateRoundBreadcrumb();
+    let targetId = preserveId && items.some(x=>x.id===preserveId) ? preserveId : (items.find(x=>x.A.img&&x.B.img)||items[0])?.id;
+    if(targetId) select(targetId);
+  }
+
+  function repaintRow(id){
+    if(!visibleMatches().some(x=>x.id===id)){ buildList(); return; }
+    const m=flat.find(x=>x.id===id); if(!m) return;
+    const row=[...listEl.children].find(c=>c.dataset.id===id); if(!row) return;
+    const imgs=row.querySelectorAll('.thumbMini img');
+    if(imgs[0]) imgs[0].src=m.A?.img||BLANK;
+    if(imgs[1]) imgs[1].src=m.B?.img||BLANK;
+    const title=row.querySelector('.title'); if(title) title.textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
+    const timer=row.querySelector('.timer');
     if(m.ends){timer.dataset.ends=m.ends; timer.textContent=fmt(m.ends-nowMs());}
-    row.append(badge,timer); mid.append(title,row);
-    const score=document.createElement('div'); score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
-    item.append(mini,mid,score);
-    item.addEventListener('click',()=>select(m.id));
-    listEl.appendChild(item);
+    else{timer.removeAttribute('data-ends'); timer.textContent='';}
+    const score=row.children[row.children.length-1]; score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
   }
-  const first = (visibleMatches().find(x=>x.A.img&&x.B.img) || visibleMatches()[0])?.id;
-  if (first) select(preserveId||first);
-}
 
-function repaintRow(id){
-  const m=flat.find(x=>x.id===id); if(!m) return;
-  const row=[...listEl.children].find(c=>c.dataset.id===id); if(!row) return;
-  const imgs=row.querySelectorAll('.thumbMini img');
-  if(imgs[0]) imgs[0].src=m.A?.img||BLANK;
-  if(imgs[1]) imgs[1].src=m.B?.img||BLANK;
-  row.querySelector('.title').textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
-  const t=row.querySelector('.timer');
-  if(m.ends){ t.dataset.ends=m.ends; t.textContent=fmt(m.ends-nowMs()); }
-  else { t.removeAttribute('data-ends'); t.textContent=''; }
-  row.lastChild.textContent=`${m.votesA||0} - ${m.votesB||0}`;
-}
+  function scrollToRow(id){
+    const row=[...listEl.children].find(c=>c.dataset.id===id);
+    if(!row) return;
+    listEl.scrollTo({top: row.offsetTop - 12, behavior:'smooth'});
+  }
 
-/*** SELECTION & TICK ***/
-function select(id){
-  sel=id; chosen=null;
-  [...listEl.children].forEach(li=>li.classList.toggle('selected',li.dataset.id===id));
-  const m=flat.find(x=>x.id===id); if(!m) return;
+  /********* Selection *********/
+  function select(id){
+    sel=id; chosen=null;
+    [...listEl.children].forEach(li=>li.classList.toggle('selected',li.dataset.id===id));
+    const m=flat.find(x=>x.id===id); if(!m) return;
 
-  detailRound.textContent=roundLabel[m.round];
-  detailIndex.textContent=`Match ${m.index}/${rounds[m.round].length}`;
+    detailRound.textContent=roundLabel[m.round];
+    detailIndex.textContent=`Match ${m.index}/${rounds[m.round].length}`;
 
-  const canVote=!!(m.A.img&&m.B.img);
-  detailState.textContent=m.decided?'DECIDED':(m.ends?'OPEN':(canVote?'READY':'TBD'));
+    const canVote=!!(m.A.img&&m.B.img);
+    detailState.textContent=m.decided?'DECIDED':(m.ends?'OPEN':(canVote?'READY':'TBD'));
 
-  leftArt.src=m.A.img||BLANK; rightArt.src=m.B.img||BLANK;
-  leftTbd.style.display=m.A.img?'none':'flex';
-  rightTbd.style.display=m.B.img?'none':'flex';
-  leftName.textContent=m.A.name||'TBD'; rightName.textContent=m.B.name||'TBD';
-  leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
+    leftArt.src=m.A.img||BLANK; rightArt.src=m.B.img||BLANK;
+    leftTbd.style.display=m.A.img?'none':'flex';
+    rightTbd.style.display=m.B.img?'none':'flex';
+    leftName.textContent=m.A.name||'TBD'; rightName.textContent=m.B.name||'TBD';
+    leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
 
-  const already=!!localStorage.getItem(lockKey(m.id));
-  btnLeft.disabled=btnRight.disabled=!m.ends||already||m.decided;
-  btnSubmit.disabled=true;
-  voteLockBadge.style.display=already?'inline-block':'none';
-  btnLeft.classList.remove('active'); btnRight.classList.remove('active');
+    const already=!!localStorage.getItem(lockKey(m.id));
+    btnLeft.disabled=btnRight.disabled=!m.ends||already||m.decided;
+    btnSubmit.disabled=true;
+    voteLockBadge.style.display=already?'inline-block':'none';
+    btnLeft.classList.remove('active'); btnRight.classList.remove('active');
 
-  if(m.ends){detailClock.dataset.ends=m.ends;} else {detailClock.removeAttribute('data-ends');}
-  updateClock();
+    if(m.ends){detailClock.dataset.ends=m.ends;} else {detailClock.removeAttribute('data-ends');}
+    updateClock();
 
-  clearInterval(tickHandle); tickHandle=setInterval(updateClock,1000);
-}
-function updateClock(){ const m=flat.find(x=>x.id===sel); if(!m) return;
-  const ms=(m.ends||0)-nowMs(); detailClock.textContent=fmt(ms>0?ms:0); }
+    if(tickHandle) clearInterval(tickHandle);
+    tickHandle=setInterval(updateClock,1000);
+  }
+  function updateClock(){const m=flat.find(x=>x.id===sel); if(!m) return;
+    const ms=(m.ends||0)-nowMs(); detailClock.textContent=fmt(ms>0?ms:0);}
 
-const nextId=(id)=>{const [r,i]=id.split('_');const idx=parseInt(i,10);
-  if(r==='R32')return`R16_${Math.ceil(idx/2)}`;
-  if(r==='R16')return`QF_${Math.ceil(idx/2)}`;
-  if(r==='QF')return`SF_${Math.ceil(idx/2)}`;
-  if(r==='SF')return`FINAL_1`; return null;};
+  /********* Winner + advancement *********/
+  const nextId=(id)=>{const [r,i]=id.split('_');const idx=parseInt(i||'1',10);
+    if(r==='R32')return`R16_${Math.ceil(idx/2)}`;
+    if(r==='R16')return`QF_${Math.ceil(idx/2)}`;
+    if(r==='QF')return`SF_${Math.ceil(idx/2)}`;
+    if(r==='SF')return`FINAL_1`; return null;};
 
-function winnerObj(m){ const a=m.votesA||0,b=m.votesB||0; return a>b?m.A:b>a?m.B:(Math.random()<.5?m.A:m.B); }
-async function finalizeMatch(m){
-  if(m.decided) return false;
-  m.decided=true; m.ends=null; clearLocalTimer(m.id);
-  await decideOnServer(m.id,true);
-  const winner=winnerObj(m);
-  const nid=nextId(m.id);
-  if(!nid){ repaintRow(m.id); if(sel===m.id) select(m.id); return true; }
-  const nr=flat.find(x=>x.id===nid); if(!nr) return true;
-  if(!nr.A.img) nr.A={...winner}; else if(!nr.B.img) nr.B={...winner};
-  repaintRow(m.id); repaintRow(nr.id);
-  startFreshTimerIfReady(nr);
-  if(rounds[m.round].every(x=>x.decided)) buildList(nr.id); else select(nr.id);
-  return true;
-}
-function globalTick(){
-  let any=false;
-  for(const m of flat){
-    if(m.ends && !m.decided){
-      const left=m.ends-nowMs();
-      const row=[...listEl.children].find(c=>c.dataset.id===m.id);
-      const t=row?.querySelector('.timer'); if(t){t.textContent=fmt(Math.max(left,0)); t.dataset.ends=m.ends;}
-      if(left<=0){ any = (finalizeMatch(m) || any); }
+  function pickWinnerObj(m){ const a=m.votesA||0, b=m.votesB||0; if(a>b) return m.A; if(b>a) return m.B; return (Math.random()<0.5)?m.A:m.B; }
+
+  async function finalizeMatch(m){
+    if(m.decided) return false;
+    m.decided=true; m.ends=null;
+    await decideOnServer(m.id,true);
+    clearLocalTimer(m.id);
+    const winner=pickWinnerObj(m);
+    const nid=nextId(m.id);
+    if(!nid){ repaintRow(m.id); if(sel===m.id) select(m.id); return true; }
+    const nr=flat.find(x=>x.id===nid); if(!nr) return true;
+    if(!nr.A.img) nr.A={...winner}; else if(!nr.B.img) nr.B={...winner};
+    repaintRow(m.id); repaintRow(nr.id);
+    startFreshTimerIfReady(nr);
+    if(isRoundComplete(m.round)){ buildList(nr.id); } else { select(nr.id); scrollToRow(nr.id); }
+    return true;
+  }
+
+  function globalTick(){
+    let anyChanged=false;
+    for(const m of flat){
+      if(m.ends && !m.decided){
+        const left=m.ends-nowMs();
+        const row=[...listEl.children].find(c=>c.dataset.id===m.id);
+        const t=row?.querySelector('.timer');
+        if(t){ t.textContent=fmt(left>0?left:0); t.dataset.ends=m.ends; }
+        if(left<=0){ anyChanged = finalizeMatch(m) || anyChanged; }
+      }
     }
+    if(sel){
+      const m=flat.find(x=>x.id===sel);
+      if(m){
+        leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
+        const canVote=!!(m.A.img&&m.B.img);
+        detailState.textContent=m.decided?'DECIDED':(m.ends?'OPEN':(canVote?'READY':'TBD'));
+        updateClock();
+      }
+    }
+    if(anyChanged){ buildList(sel); }
   }
-  if(sel){ const m=flat.find(x=>x.id===sel); if(m){ leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0; const can=!!(m.A.img&&m.B.img); detailState.textContent=m.decided?'DECIDED':(m.ends?'OPEN':(can?'READY':'TBD')); updateClock(); } }
-  if(any) buildList(sel);
-}
 
-/*** VOTING ***/
-function setChoice(side){ const m=flat.find(x=>x.id===sel); if(!m) return;
-  if(!m.ends || m.decided) return;
-  chosen=side; btnLeft.classList.toggle('active',side==='A'); btnRight.classList.toggle('active',side==='B'); btnSubmit.disabled=false;
-}
-btnLeft.addEventListener('click',()=>setChoice('A'));
-btnRight.addEventListener('click',()=>setChoice('B'));
-btnSubmit.addEventListener('click', async ()=>{
-  const m=flat.find(x=>x.id===sel); if(!m) return;
-  if(!m.ends || m.decided){ toast('Voting closed'); return; }
-  const key=lockKey(m.id);
-  if(localStorage.getItem(key)){ toast('You already voted here'); return; }
-  if(!chosen){ toast('Pick a side'); return; }
-  try{
-    const row=await castVoteOnServer(m.id, chosen);
-    m.votesA=row.votesa ?? row.votesA ?? m.votesA;
-    m.votesB=row.votesb ?? row.votesB ?? m.votesB;
-    localStorage.setItem(key, chosen);
-    voteLockBadge.style.display='inline-block';
-    btnLeft.disabled=btnRight.disabled=true; btnSubmit.disabled=true;
-    repaintRow(m.id); toast('Vote submitted');
-  }catch(e){ console.warn('vote error', e); toast('Vote failed (RPC/RLS)'); }
-});
+  /********* Voting *********/
+  function setChoice(side){
+    if (btnLeft.disabled || btnRight.disabled) return;
+    chosen = side;
+    btnLeft.classList.toggle('active', side==='A');
+    btnRight.classList.toggle('active', side==='B');
+    btnSubmit.disabled = false;
+  }
+  btnLeft.addEventListener('click', () => setChoice('A'));
+  btnRight.addEventListener('click', () => setChoice('B'));
 
-/*** CONTROLS ***/
-btnReset.addEventListener('click', async ()=>{
-  clearVoteLocks();
-  makeTournament();
-  await initAfterBuild();
-  toast('Reset complete');
-});
-btnForce.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided) return; m.ends=nowMs(); finalizeMatch(m); });
-btnClearVotes.addEventListener('click', ()=>{ clearVoteLocks(); voteLockBadge.style.display='none'; const m=flat.find(x=>x.id===sel); if(m && m.ends && !m.decided){ btnLeft.disabled=btnRight.disabled=false; } toast('Local votes cleared'); });
-toggleFinished.addEventListener('change',(e)=>{ showFinished=e.target.checked; buildList(sel); });
+  btnSubmit.addEventListener('click', async () => {
+    const m = flat.find(x => x.id === sel);
+    if (!m) return;
+    if (!m.ends || m.decided){ toast('Voting closed for this match'); return; }
 
-/*** INIT ***/
-async function initAfterBuild(){
-  await ensureRowsExist();
-  await loadServerState();
-  for(const m of flat) await startFreshTimerIfReady(m);
-  buildList();
-  clearInterval(tickHandle); tickHandle=setInterval(globalTick,250);
-}
-async function init(){
-  makeTournament();
-  await initAfterBuild();
-}
-init();
+    const key = lockKey(m.id);
+    if (localStorage.getItem(key)){ toast('You already voted here'); return; }
+    if (!chosen){ toast('Pick a side first'); return; }
+
+    try{
+      const row = await castVoteOnServer(m.id, chosen);
+      m.votesA = row.votesa ?? row.votesA ?? m.votesA;
+      m.votesB = row.votesb ?? row.votesB ?? m.votesB;
+
+      localStorage.setItem(key, chosen);
+      voteLockBadge.style.display = 'inline-block';
+      btnLeft.disabled = btnRight.disabled = true;
+      btnSubmit.disabled = true;
+
+      leftVotes.textContent = m.votesA || 0;
+      rightVotes.textContent = m.votesB || 0;
+      repaintRow(m.id);
+      toast('Vote submitted');
+    }catch(e){
+      console.warn('vote error', e);
+      toast('Vote failed (check RPC & RLS)');
+    }
+  });
+
+  /********* Controls *********/
+  document.getElementById('btnReset').addEventListener('click', async ()=>{
+    clearVoteLocks();
+    if (tickHandle) { clearInterval(tickHandle); tickHandle=null; }
+    makeTournament();
+    await initAfterTournamentBuild();
+    toast('Reset complete');
+  });
+
+  document.getElementById('btnForce').addEventListener('click', ()=>{
+    const m=flat.find(x=>x.id===sel);
+    if (!m) return;
+    if (m.decided) { toast('Match already decided'); return; }
+    m.ends = nowMs();
+    finalizeMatch(m);
+  });
+
+  document.getElementById('btnClearVotes').addEventListener('click', ()=>{
+    clearVoteLocks();
+    voteLockBadge.style.display='none';
+    if(sel){
+      const m=flat.find(x=>x.id===sel);
+      if(m && m.ends && !m.decided){
+        btnLeft.disabled = btnRight.disabled = false;
+      }
+    }
+    toast('Your local votes were cleared');
+  });
+
+  toggleFinished.addEventListener('change', (e)=>{
+    showFinished = e.target.checked;
+    buildList(sel);
+  });
+
+  /********* Init *********/
+  async function initAfterTournamentBuild(){
+    await ensureRowsExist();
+    await loadServerState();
+    for (const m of flat) await startFreshTimerIfReady(m);
+    buildList();
+    if (!tickHandle) tickHandle = setInterval(globalTick, 250);
+  }
+
+  async function init(){
+    makeTournament();
+    subscribeRealtime();
+    await initAfterTournamentBuild();
+  }
+  init();
+</script>
+
+<!-- Mobile console (enable with ?debug=1) -->
+<script>
+(function () {
+  const enable = new URL(location.href).searchParams.get('debug') === '1';
+  if (!enable) return;
+  var s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+  s.onload = function () { eruda.init(); };
+  document.body.appendChild(s);
+})();
 </script>
 </body>
 </html>
