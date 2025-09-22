@@ -35,7 +35,7 @@
   @media (max-width:820px){ .stage{ grid-template-columns:1fr; gap:22px; } }
   .tile{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.6);position:relative;display:flex;flex-direction:column}
 
-  /* Frame + image fit */
+  /* Frame + image fit (bigger/taller rectangle) */
   .frame{
     position:relative; width:100%; aspect-ratio:4/3;
     background:#050505; border-bottom:1px solid var(--border); overflow:hidden;
@@ -67,7 +67,7 @@
   }
   .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
 
-  /* Winner overlay */
+  /* Winner overlay (unchanged) */
   .championOverlay{
     position:fixed; inset:0; display:none; place-items:center; z-index:9999;
     background: radial-gradient(1000px 600px at 70% -10%, rgba(57,255,20,.09), transparent 60%),
@@ -322,16 +322,16 @@
     if (error) console.warn('ensureRowsExist error', error);
   }
 
-  // Server-first timer start: call RPC that sets ends iff NULL and returns the row
-  async function startTimerOnServer(matchId, endsMs){
-    const { data, error } = await supabase.rpc('start_timer', {
-      p_id: matchId,
-      p_ends: toIso(endsMs)
-    });
-    if (error) { console.warn('start_timer error', error); return null; }
-    // Some Postgres clients return array rows; some return single row
-    const row = Array.isArray(data) ? data[0] : data;
-    return row || null;
+  // *** IMPORTANT CHANGE: set 'ends' only if it's currently NULL and not decided ***
+  async function setEndsOnServer(matchId, endsMs) {
+    if (!endsMs) return;
+    const { error } = await supabase
+      .from(MATCH_TABLE)
+      .update({ ends: toIso(endsMs) })
+      .eq('id', matchId)
+      .is('ends', null)          // <-- prevents overwriting an existing timer
+      .eq('decided', false);     // <-- don't set timers on decided matches
+    if (error) console.warn('setEndsOnServer error', error);
   }
 
   async function setDecidedOnServer(matchId, decided) {
@@ -484,19 +484,12 @@
     if(r==='QF')return`SF_${Math.ceil(idx/2)}`;
     if(r==='SF')return`FINAL_1`; return null;};
 
-  // Only start a timer when the SERVER confirms the write
-  async function startFreshTimerIfReady(node){
+  function startFreshTimerIfReady(node){
     if(node.A?.img && node.B?.img && !node.ends && !node.decided){
-      const proposedEnds = nowMs() + ROUND_MS;
-      const row = await startTimerOnServer(node.id, proposedEnds);
-      if (row && (row.ends || row.ends_at)) {
-        node.ends = new Date(row.ends || row.ends_at).getTime();
-        repaintRow(node.id);
-        if(sel===node.id) select(node.id);
-        console.log('[timer] started on server for', node.id, 'ends=', row.ends || row.ends_at);
-      } else {
-        console.warn('[timer] server refused start (likely ends already set or blocked by RLS)', node.id);
-      }
+      node.ends = nowMs() + ROUND_MS;            // local for instant UI
+      setEndsOnServer(node.id, node.ends);       // server write **only if NULL**
+      repaintRow(node.id);
+      if(sel===node.id) select(node.id);
     }
   }
 
@@ -614,8 +607,8 @@
     if (tickHandle) { clearInterval(tickHandle); tickHandle=null; }
     overlay.classList.remove('show');
     makeTournament();
-    await initAfterTournamentBuild(); // server timers persist; fresh ones only start if missing
-    toast('Reset complete');
+    await initAfterTournamentBuild(); // re-sync with server (timers won’t reset because server write is guarded)
+    toast('Reset complete (fresh timers if missing + local votes cleared)');
   });
 
   document.getElementById('btnForce').addEventListener('click', ()=>{
@@ -645,9 +638,9 @@
 
   /********* Init *********/
   async function initAfterTournamentBuild(){
-    await ensureRowsExist();      // make sure rows exist first
-    await loadServerState();      // then hydrate ends/decided + votes
-    for (const m of flat) await startFreshTimerIfReady(m); // only starts if server accepts
+    await loadServerState();      // bring down ends/decided + votes
+    await ensureRowsExist();      // ensure rows exist WITHOUT overwriting
+    for (const m of flat) startFreshTimerIfReady(m);
     buildList();
     if (!tickHandle) tickHandle = setInterval(globalTick, 250);
   }
