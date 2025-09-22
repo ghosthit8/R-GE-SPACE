@@ -313,7 +313,7 @@
     }
   }
 
-  // *** FIXED: only insert missing rows; never overwrite existing server values ***
+  // only insert missing rows; never overwrite existing server values
   async function ensureRowsExist() {
     const rows = flat.map(m => ({ id: m.id, round: m.round, idx: m.index }));
     const { error } = await supabase
@@ -322,10 +322,15 @@
     if (error) console.warn('ensureRowsExist error', error);
   }
 
+  // *** IMPORTANT CHANGE: set 'ends' only if it's currently NULL and not decided ***
   async function setEndsOnServer(matchId, endsMs) {
-    const { error } = await supabase.from(MATCH_TABLE)
-      .update({ ends: endsMs ? toIso(endsMs) : null })
-      .eq('id', matchId);
+    if (!endsMs) return;
+    const { error } = await supabase
+      .from(MATCH_TABLE)
+      .update({ ends: toIso(endsMs) })
+      .eq('id', matchId)
+      .is('ends', null)          // <-- prevents overwriting an existing timer
+      .eq('decided', false);     // <-- don't set timers on decided matches
     if (error) console.warn('setEndsOnServer error', error);
   }
 
@@ -481,8 +486,8 @@
 
   function startFreshTimerIfReady(node){
     if(node.A?.img && node.B?.img && !node.ends && !node.decided){
-      node.ends = nowMs() + ROUND_MS;      // local for instant UI
-      setEndsOnServer(node.id, node.ends); // share via server
+      node.ends = nowMs() + ROUND_MS;            // local for instant UI
+      setEndsOnServer(node.id, node.ends);       // server write **only if NULL**
       repaintRow(node.id);
       if(sel===node.id) select(node.id);
     }
@@ -602,8 +607,8 @@
     if (tickHandle) { clearInterval(tickHandle); tickHandle=null; }
     overlay.classList.remove('show');
     makeTournament();
-    await initAfterTournamentBuild(); // re-sync with server
-    toast('Reset complete (fresh timers + local votes cleared)');
+    await initAfterTournamentBuild(); // re-sync with server (timers won’t reset because server write is guarded)
+    toast('Reset complete (fresh timers if missing + local votes cleared)');
   });
 
   document.getElementById('btnForce').addEventListener('click', ()=>{
