@@ -67,7 +67,7 @@
   }
   .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
 
-  /* Winner overlay (unchanged) */
+  /* Winner overlay (unchanged visuals) */
   .championOverlay{
     position:fixed; inset:0; display:none; place-items:center; z-index:9999;
     background: radial-gradient(1000px 600px at 70% -10%, rgba(57,255,20,.09), transparent 60%),
@@ -89,7 +89,7 @@
     padding:18px; display:grid; grid-template-columns: 340px 1fr; gap:18px;
   }
   @media (max-width:800px){ .championCard{ grid-template-columns:1fr } }
-  .championArt{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:#050505; aspect-ratio:4/5; width:100%; object-fit:cover; transform:translateZ(0); }
+  .championArt{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:#050505; aspect-ratio:4/5; width:100%; object-fit:cover; }
   .championMeta{ display:flex; flex-direction:column; gap:12px; justify-content:center; position:relative; }
   .glitchTitle{
     font-size: clamp(28px, 5.5vw, 68px); font-weight:900; letter-spacing:.02em;
@@ -106,7 +106,6 @@
     80%{clip-path: inset(80% 0 5% 0);} 100%{clip-path: inset(10% 0 70% 0);}
   }
   .winnerName{ font-size: clamp(16px, 2.2vw, 24px); color:var(--ink); border:1px solid var(--border); padding:8px 10px; border-radius:10px; display:inline-block; background: rgba(0,0,0,.35); }
-  .subBadge{ display:inline-flex; gap:8px; align-items:center; font-size:.9rem; border:1px solid var(--border); padding:6px 10px; border-radius:999px; opacity:.85; }
 
   /* Fullscreen fit */
   img.art:fullscreen,
@@ -300,52 +299,59 @@
   async function loadServerState() {
     const { data, error } = await supabase
       .from(MATCH_TABLE)
-      .select('id, ends, decided, votesA, votesB');
+      .select('slug, ends, decided, votesA, votesB');
     if (error) { console.warn('loadServerState error', error); return; }
-    const map = new Map(data.map(r => [r.id, r]));
+    const map = new Map(data.map(r => [r.slug, r]));
     for (const m of flat) {
-      const row = map.get(m.id);
+      const row = map.get(m.id);   // our local id is the slug (e.g., "R32_4")
       if (!row) continue;
       m.decided = !!row.decided;
-      m.ends = row.ends ? new Date(row.ends).getTime() : null;
-      m.votesA = row.votesA ?? 0;
-      m.votesB = row.votesB ?? 0;
+      m.ends    = row.ends ? new Date(row.ends).getTime() : null;
+      m.votesA  = row.votesA ?? 0;
+      m.votesB  = row.votesB ?? 0;
     }
   }
 
-  // only insert missing rows; never overwrite existing server values
+  // ensure rows exist by slug (does NOT overwrite server values)
   async function ensureRowsExist() {
-    const rows = flat.map(m => ({ id: m.id, round: m.round, idx: m.index }));
+    const rows = flat.map(m => ({ slug: m.id, round: m.round, idx: m.index }));
     const { error } = await supabase
       .from(MATCH_TABLE)
-      .insert(rows, { onConflict: 'id', ignoreDuplicates: true });
+      .insert(rows, { onConflict: 'slug', ignoreDuplicates: true });
     if (error) console.warn('ensureRowsExist error', error);
   }
 
-  // *** IMPORTANT CHANGE: set 'ends' only if it's currently NULL and not decided ***
-  async function setEndsOnServer(matchId, endsMs) {
-    if (!endsMs) return;
-    const { error } = await supabase
-      .from(MATCH_TABLE)
-      .update({ ends: toIso(endsMs) })
-      .eq('id', matchId)
-      .is('ends', null)          // <-- prevents overwriting an existing timer
-      .eq('decided', false);     // <-- don't set timers on decided matches
-    if (error) console.warn('setEndsOnServer error', error);
+  // start a timer ONLY if none exists (server-authoritative)
+  async function startFreshTimerIfReady(node){
+    if(node.A?.img && node.B?.img && !node.ends && !node.decided){
+      const proposedEnds = nowMs() + ROUND_MS;
+      const { data, error } = await supabase
+        .rpc('start_timer_by_slug', { p_slug: node.id, p_ends: toIso(proposedEnds) });
+      if (error) { console.warn('start_timer_by_slug error', error); return; }
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row?.ends) {
+        node.ends = new Date(row.ends).getTime();
+        repaintRow(node.id);
+        if(sel===node.id) select(node.id);
+      }
+    }
   }
 
-  async function setDecidedOnServer(matchId, decided) {
-    const { error } = await supabase.from(MATCH_TABLE)
+  // decide match (update by slug)
+  async function setDecidedOnServer(matchSlug, decided) {
+    const { error } = await supabase
+      .from(MATCH_TABLE)
       .update({ decided: !!decided, ends: null })
-      .eq('id', matchId);
+      .eq('slug', matchSlug);
     if (error) console.warn('setDecidedOnServer error', error);
   }
 
-  // Atomic server-side vote increment via RPC
-  async function castVoteOnServer(matchId, side){
-    const { data, error } = await supabase.rpc('cast_vote', { p_id: matchId, p_side: side });
-    if (error) { console.warn('cast_vote error', error); throw error; }
-    return data; // table row {id, votesa, votesb, ends, decided}
+  // atomic vote via RPC (by slug)
+  async function castVoteOnServer(matchSlug, side){
+    const { data, error } = await supabase
+      .rpc('cast_vote_by_slug', { p_slug: matchSlug, p_side: side });
+    if (error) { console.warn('cast_vote_by_slug error', error); throw error; }
+    return Array.isArray(data) ? data[0] : data;
   }
 
   function subscribeRealtime() {
@@ -353,7 +359,8 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: MATCH_TABLE }, payload => {
         const row = payload.new || payload.old;
         if (!row) return;
-        const m = flat.find(x => x.id === row.id);
+        const key = row.slug || row.id; // prefer slug
+        const m = flat.find(x => x.id === key);
         if (!m || !payload.new) return;
         m.decided = !!payload.new.decided;
         m.ends = payload.new.ends ? new Date(payload.new.ends).getTime() : null;
@@ -452,73 +459,46 @@
   function updateClock(){const m=flat.find(x=>x.id===sel); if(!m) return;
     const ms=(m.ends||0)-nowMs(); detailClock.textContent=fmt(ms>0?ms:0);}
 
-  /********* Winner FX *********/
-  function showChampion(winner){
-    championArt.src = winner.img || BLANK;
-    championName.textContent = winner.name || 'Champion';
-    championTitle.setAttribute('data-text','CHAMPION');
-    championTitle.textContent = 'CHAMPION';
-    fxLayer.innerHTML='';
-    const rect = fxLayer.getBoundingClientRect();
-    const make = (n, color)=>{
-      for(let i=0;i<n;i++){
-        const d=document.createElement('div');
-        d.className='fxDot'; d.style.left=(rect.width/2)+'px'; d.style.top=(rect.height/2)+'px'; d.style.color=color;
-        const ang=(Math.random()*Math.PI*2), dist=200+Math.random()*420;
-        d.style.setProperty('--tx', Math.cos(ang)*dist+'px');
-        d.style.setProperty('--ty', Math.sin(ang)*dist+'px');
-        d.style.setProperty('--dur', (0.9+Math.random()*0.9)+'s');
-        fxLayer.appendChild(d);
-      }
-    };
-    make(90,'var(--green)'); make(60,'var(--blue)'); make(60,'var(--pink)');
-    overlay.classList.add('show');
-  }
-  document.getElementById('btnCloseChampion').addEventListener('click', ()=> overlay.classList.remove('show'));
-  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.classList.remove('show'); });
-
-  /********* Progression *********/
+  /********* Winner + advancement *********/
   const nextId=(id)=>{const [r,i]=id.split('_');const idx=parseInt(i||'1',10);
     if(r==='R32')return`R16_${Math.ceil(idx/2)}`;
     if(r==='R16')return`QF_${Math.ceil(idx/2)}`;
     if(r==='QF')return`SF_${Math.ceil(idx/2)}`;
     if(r==='SF')return`FINAL_1`; return null;};
 
-  function startFreshTimerIfReady(node){
-    if(node.A?.img && node.B?.img && !node.ends && !node.decided){
-      node.ends = nowMs() + ROUND_MS;            // local for instant UI
-      setEndsOnServer(node.id, node.ends);       // server write **only if NULL**
-      repaintRow(node.id);
-      if(sel===node.id) select(node.id);
-    }
-  }
-
-  // Random tie-break when equal votes
   function pickWinnerObj(m){ const a=m.votesA||0, b=m.votesB||0; if(a>b) return m.A; if(b>a) return m.B; return (Math.random()<0.5)?m.A:m.B; }
-
-  function advanceWinner(m){
-    const winner=pickWinnerObj(m);
-    const nid=nextId(m.id);
-    if(!nid){ showChampion(winner); toast(`🏆 ${winner.name} is CHAMPION`); return; }
-    const nr=flat.find(x=>x.id===nid); if(!nr) return;
-    let slot='A';
-    if(!nr.A.img){ nr.A={...winner}; slot='A'; }
-    else if(!nr.B.img){ nr.B={...winner}; slot='B'; }
-    repaintRow(nr.id);
-    startFreshTimerIfReady(nr);
-    if(isRoundComplete(m.round)){ buildList(nr.id); } else { select(nr.id); scrollToRow(nr.id); }
-    toast(`Advanced to ${roundLabel[nr.round]}_${nr.index} (slot ${slot})`);
-  }
 
   function finalizeMatch(m){
     if(m.decided) return false;
     m.decided=true; m.ends=null;
-    setDecidedOnServer(m.id, true);
-    advanceWinner(m);
-    repaintRow(m.id);
-    if(sel===m.id) select(m.id);
+    setDecidedOnServer(m.id, true); // update by slug
+    const winner=pickWinnerObj(m);
+    const nid=nextId(m.id);
+    if(!nid){
+      showChampion(winner); repaintRow(m.id); if(sel===m.id) select(m.id); return true;
+    }
+    const nr=flat.find(x=>x.id===nid); if(!nr) return true;
+    if(!nr.A.img) nr.A={...winner}; else if(!nr.B.img) nr.B={...winner};
+    repaintRow(m.id); repaintRow(nr.id);
+    startFreshTimerIfReady(nr);
+    if(isRoundComplete(m.round)){ buildList(nr.id); } else { select(nr.id); scrollToRow(nr.id); }
     return true;
   }
+
+  function showChampion(winner){
+    const overlay = document.getElementById('championOverlay');
+    const championArt = document.getElementById('championArt');
+    const championName = document.getElementById('championName');
+    const championTitle = document.getElementById('championTitle');
+    const fxLayer = document.getElementById('fxLayer');
+    championArt.src = winner.img || BLANK;
+    championName.textContent = winner.name || 'Champion';
+    championTitle.setAttribute('data-text','CHAMPION');
+    championTitle.textContent = 'CHAMPION';
+    fxLayer.innerHTML='';
+    overlay.classList.add('show');
+  }
+  document.getElementById('btnCloseChampion').addEventListener('click', ()=> document.getElementById('championOverlay').classList.remove('show'));
 
   function globalTick(){
     let anyChanged=false;
@@ -543,7 +523,7 @@
     if(anyChanged){ buildList(sel); }
   }
 
-  /********* Voting (shared) *********/
+  /********* Voting *********/
   function setChoice(side){
     if (btnLeft.disabled || btnRight.disabled) return;
     chosen = side; // 'A' or 'B'
@@ -564,8 +544,7 @@
     if (!chosen){ toast('Pick a side first'); return; }
 
     try{
-      const row = await castVoteOnServer(m.id, chosen); // atomic increment on server
-      // Update local state from server response
+      const row = await castVoteOnServer(m.id, chosen); // RPC by slug
       m.votesA = row.votesa ?? row.votesA ?? m.votesA;
       m.votesB = row.votesb ?? row.votesB ?? m.votesB;
 
@@ -605,10 +584,10 @@
   document.getElementById('btnReset').addEventListener('click', async ()=>{
     clearVoteLocks();
     if (tickHandle) { clearInterval(tickHandle); tickHandle=null; }
-    overlay.classList.remove('show');
+    document.getElementById('championOverlay').classList.remove('show');
     makeTournament();
-    await initAfterTournamentBuild(); // re-sync with server (timers won’t reset because server write is guarded)
-    toast('Reset complete (fresh timers if missing + local votes cleared)');
+    await initAfterTournamentBuild(); // server timers persist; fresh ones only start if missing
+    toast('Reset complete');
   });
 
   document.getElementById('btnForce').addEventListener('click', ()=>{
@@ -638,9 +617,9 @@
 
   /********* Init *********/
   async function initAfterTournamentBuild(){
-    await loadServerState();      // bring down ends/decided + votes
-    await ensureRowsExist();      // ensure rows exist WITHOUT overwriting
-    for (const m of flat) startFreshTimerIfReady(m);
+    await ensureRowsExist();      // make sure slug rows exist first
+    await loadServerState();      // hydrate ends/decided + votes
+    for (const m of flat) await startFreshTimerIfReady(m); // starts only if server accepts
     buildList();
     if (!tickHandle) tickHandle = setInterval(globalTick, 250);
   }
