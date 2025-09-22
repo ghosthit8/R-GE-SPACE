@@ -301,6 +301,7 @@
       .from(MATCH_TABLE)
       .select('slug, ends, decided, votesA, votesB');
     if (error) { console.warn('loadServerState error', error); return; }
+    console.log('[state] rows', data?.length, data?.slice?.(0,3));
     const map = new Map(data.map(r => [r.slug, r]));
     for (const m of flat) {
       const row = map.get(m.id);   // our local id is the slug (e.g., "R32_4")
@@ -327,6 +328,7 @@
       const proposedEnds = nowMs() + ROUND_MS;
       const { data, error } = await supabase
         .rpc('start_timer_by_slug', { p_slug: node.id, p_ends: toIso(proposedEnds) });
+      console.log('[timer] RPC result', node.id, {data, error});
       if (error) { console.warn('start_timer_by_slug error', error); return; }
       const row = Array.isArray(data) ? data[0] : data;
       if (row?.ends) {
