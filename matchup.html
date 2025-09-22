@@ -313,16 +313,13 @@
     }
   }
 
-  async function upsertInitialMatches() {
-    const rows = flat.map(m => ({
-      id: m.id, round: m.round, idx: m.index,
-      ends: m.ends ? toIso(m.ends) : null,
-      decided: !!m.decided,
-      votesA: m.votesA ?? 0,
-      votesB: m.votesB ?? 0
-    }));
-    const { error } = await supabase.from(MATCH_TABLE).upsert(rows, { onConflict: 'id' });
-    if (error) console.warn('upsertInitialMatches error', error);
+  // *** FIXED: only insert missing rows; never overwrite existing server values ***
+  async function ensureRowsExist() {
+    const rows = flat.map(m => ({ id: m.id, round: m.round, idx: m.index }));
+    const { error } = await supabase
+      .from(MATCH_TABLE)
+      .insert(rows, { onConflict: 'id', ignoreDuplicates: true });
+    if (error) console.warn('ensureRowsExist error', error);
   }
 
   async function setEndsOnServer(matchId, endsMs) {
@@ -637,7 +634,7 @@
   /********* Init *********/
   async function initAfterTournamentBuild(){
     await loadServerState();      // bring down ends/decided + votes
-    await upsertInitialMatches(); // ensure rows exist
+    await ensureRowsExist();      // ensure rows exist WITHOUT overwriting
     for (const m of flat) startFreshTimerIfReady(m);
     buildList();
     if (!tickHandle) tickHandle = setInterval(globalTick, 250);
