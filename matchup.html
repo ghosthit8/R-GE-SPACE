@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Tournament (Shared Timers + Realtime Votes)</title>
+<title>Rage Space — Tournament</title>
 <style>
   :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707; --pink:#ff1f8f; --blue:#00e5ff; }
   *{box-sizing:border-box}
@@ -13,7 +13,6 @@
   header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px}
   .app{display:grid;grid-template-columns: 360px 1fr;gap:14px;height:calc(100vh - 56px);padding:0 14px 14px}
 
-  /* Left list */
   .listWrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
   .listHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px}
   .listHeadRight{display:flex;align-items:center;gap:10px}
@@ -28,27 +27,16 @@
   .timer{font-variant-numeric:tabular-nums;opacity:.85}
   .selected{outline:2px solid rgba(57,255,20,.55);outline-offset:-2px}
 
-  /* Right detail */
   .detail{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
   .detailHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
   .stage{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:14px}
   @media (max-width:820px){ .stage{ grid-template-columns:1fr; gap:22px; } }
   .tile{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.6);position:relative;display:flex;flex-direction:column}
-
-  /* Frame + image fit (bigger/taller rectangle) */
-  .frame{
-    position:relative; width:100%; aspect-ratio:4/3;
-    background:#050505; border-bottom:1px solid var(--border); overflow:hidden;
-  }
+  .frame{position:relative;width:100%;aspect-ratio:4/3;background:#050505;border-bottom:1px solid var(--border);overflow:hidden}
   @media (max-width:1000px){ .frame{ aspect-ratio:3/4; max-height:72vh; } }
-  .art{
-    position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%;
-    width:auto; height:auto; object-fit:contain; display:block; background:#000;
-  }
-
+  .art{position:absolute;inset:0;margin:auto;max-width:100%;max-height:100%;object-fit:contain;background:#000}
   .tbd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:900;color:rgba(57,255,20,.75);pointer-events:none}
   .tileMeta{display:flex;justify-content:space-between;gap:8px;padding:10px;align-items:center}
-
   .countdown{padding:0 14px 10px}
   .actions{padding:0 14px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .hint{opacity:.75;padding:0 14px 14px}
@@ -58,63 +46,17 @@
   .timer:not([data-ends]){display:none}
   @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
 
-  /* Fullscreen icon */
-  .fsIcon{
-    position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:6px;
-    border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5);
-    display:grid; place-items:center; font-size:12px; line-height:1;
-    opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2;
-  }
+  .fsIcon{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:6px;border:1px solid rgba(57,255,20,.7);background:rgba(0,0,0,.5);display:grid;place-items:center;font-size:12px;line-height:1;opacity:.9;backdrop-filter: blur(2px);cursor:pointer;z-index:2}
   .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
 
-  /* Winner overlay (unchanged visuals) */
-  .championOverlay{
-    position:fixed; inset:0; display:none; place-items:center; z-index:9999;
-    background: radial-gradient(1000px 600px at 70% -10%, rgba(57,255,20,.09), transparent 60%),
-               radial-gradient(900px 700px at 20% 110%, rgba(0,229,255,.08), transparent 60%),
-               rgba(0,0,0,.92);
-    overflow:hidden;
-  }
-  .championOverlay.show{ display:grid; animation:fadeIn .3s ease-out both; }
-  @keyframes fadeIn{ from{opacity:0} to{opacity:1} }
-  .scanlines::before{
-    content:""; position:absolute; inset:0;
-    background: repeating-linear-gradient(to bottom, rgba(255,255,255,.06), rgba(255,255,255,.06) 1px, transparent 1px, transparent 3px);
-    mix-blend-mode:overlay; pointer-events:none; opacity:.2;
-  }
-  .crtGlow{ filter: drop-shadow(0 0 16px rgba(57,255,20,.55)) drop-shadow(0 0 32px rgba(0,229,255,.35)); }
-  .championCard{
-    position:relative; width:min(900px, 92vw); border:1px solid var(--green);
-    border-radius:18px; background:linear-gradient(to bottom right, rgba(7,7,7,.85), rgba(7,7,7,.75));
-    padding:18px; display:grid; grid-template-columns: 340px 1fr; gap:18px;
-  }
-  @media (max-width:800px){ .championCard{ grid-template-columns:1fr } }
-  .championArt{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:#050505; aspect-ratio:4/5; width:100%; object-fit:cover; }
-  .championMeta{ display:flex; flex-direction:column; gap:12px; justify-content:center; position:relative; }
-  .glitchTitle{
-    font-size: clamp(28px, 5.5vw, 68px); font-weight:900; letter-spacing:.02em;
-    text-transform:uppercase; position:relative; line-height:1;
-  }
-  .glitchTitle::before, .glitchTitle::after{ content:attr(data-text); position:absolute; inset:0; pointer-events:none; }
-  .glitchTitle::before{ left:-2px; text-shadow: -2px 0 var(--pink); animation:glitch 2s infinite ease-in-out alternate-reverse; }
-  .glitchTitle::after{  left: 2px; text-shadow:  2px 0 var(--blue); animation:glitch 2.2s infinite ease-in-out alternate; }
-  @keyframes glitch{
-    0%{clip-path: inset(0 0 85% 0);} 10%{clip-path: inset(10% 0 70% 0);}
-    20%{clip-path: inset(85% 0 0 0);} 30%{clip-path: inset(40% 0 40% 0);}
-    40%{clip-path: inset(0 0 85% 0);} 50%{clip-path: inset(60% 0 20% 0);}
-    60%{clip-path: inset(20% 0 60% 0);} 70%{clip-path: inset(0 0 85% 0);}
-    80%{clip-path: inset(80% 0 5% 0);} 100%{clip-path: inset(10% 0 70% 0);}
-  }
-  .winnerName{ font-size: clamp(16px, 2.2vw, 24px); color:var(--ink); border:1px solid var(--border); padding:8px 10px; border-radius:10px; display:inline-block; background: rgba(0,0,0,.35); }
-
-  /* Fullscreen fit */
-  img.art:fullscreen,
-  img.art:-webkit-full-screen,
-  img.art:-ms-fullscreen{
-    width:100vw !important; height:100vh !important;
-    max-width:100vw !important; max-height:100vh !important;
-    object-fit:contain !important; aspect-ratio:auto !important; background:#000;
-  }
+  /* Winner overlay (kept) */
+  .championOverlay{position:fixed;inset:0;display:none;place-items:center;z-index:9999;background:radial-gradient(1000px 600px at 70% -10%, rgba(57,255,20,.09), transparent 60%),radial-gradient(900px 700px at 20% 110%, rgba(0,229,255,.08), transparent 60%),rgba(0,0,0,.92);overflow:hidden}
+  .championOverlay.show{display:grid;animation:fadeIn .3s ease-out both}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .championCard{position:relative;width:min(900px, 92vw);border:1px solid var(--green);border-radius:18px;background:linear-gradient(to bottom right, rgba(7,7,7,.85), rgba(7,7,7,.75));padding:18px;display:grid;grid-template-columns: 340px 1fr;gap:18px}
+  @media (max-width:800px){ .championCard{grid-template-columns:1fr} }
+  .championArt{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#050505;aspect-ratio:4/5;width:100%;object-fit:cover}
+  .winnerName{font-size: clamp(16px, 2.2vw, 24px); color:var(--ink); border:1px solid var(--border); padding:8px 10px; border-radius:10px; display:inline-block; background: rgba(0,0,0,.35)}
 </style>
 </head>
 <body>
@@ -154,7 +96,6 @@
       <div class="countdown">Decision in: <span class="timer" id="detailClock">00:00:00</span></div>
 
       <div class="stage">
-        <!-- TOP tile -->
         <div class="tile" id="tileLeft">
           <div class="frame">
             <img id="leftArt" class="art" alt="">
@@ -167,7 +108,6 @@
           </div>
         </div>
 
-        <!-- BOTTOM tile -->
         <div class="tile" id="tileRight">
           <div class="frame">
             <img id="rightArt" class="art" alt="">
@@ -193,46 +133,48 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- Winner Overlay -->
-  <div id="championOverlay" class="championOverlay scanlines">
+  <div id="championOverlay" class="championOverlay">
     <button id="btnCloseChampion" class="btnClose">✖</button>
-    <div class="championCard crtGlow">
+    <div class="championCard">
       <img id="championArt" class="championArt" alt="Champion art">
       <div class="championMeta">
-        <div class="subBadge">🏆 FINAL — WINNER</div>
-        <div id="championTitle" class="glitchTitle" data-text="CHAMPION">CHAMPION</div>
+        <div class="badge">🏆 FINAL — WINNER</div>
+        <div id="championTitle" style="font-weight:900;font-size:42px">CHAMPION</div>
         <div id="championName" class="winnerName">—</div>
         <div style="opacity:.8">Glory to the machine. Your art devours the bracket.</div>
       </div>
-      <div id="fxLayer" class="fxBurst"></div>
     </div>
   </div>
 
-  <!-- Supabase client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <script type="module">
-  /********* Config *********/
-  const ROUND_MS = 30000; // 30 seconds per match
-
-  /********* Supabase *********/
+  /* ===== Config ===== */
+  const ROUND_MS = 30000;
   const SUPABASE_URL  = 'https://YOUR-PROJECT.supabase.co';   // <-- replace
   const SUPABASE_ANON = 'YOUR_PUBLIC_ANON_KEY';               // <-- replace
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
   const MATCH_TABLE = 'matches';
+
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
   const toIso = (ms)=> new Date(ms).toISOString();
   const nowMs = ()=> Date.now();
 
-  /********* Helpers *********/
+  /* ===== Local namespaces ===== */
   const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
   const roundLabel = ['','R32','R16','QF','SF','FINAL'];
 
-  // Vote-lock (per-browser)
+  // Per-browser vote lock + timer fallback
   const VOTE_NS = 'rs_stack_vote_v2_';
   const LEGACY_NS = 'rs_stack_vote_';
+  const TIMER_NS = 'rs_timer_v1_';          // <— NEW: local persistent timer per slug
   const lockKey = (id)=> `${VOTE_NS}${id}`;
+  const timerKey = (id)=> `${TIMER_NS}${id}`;
+  const setLocalTimer = (id, ends)=> localStorage.setItem(timerKey(id), String(ends));
+  const getLocalTimer = (id)=> { const v = localStorage.getItem(timerKey(id)); return v? Number(v): null; }
+  const clearLocalTimer = (id)=> localStorage.removeItem(timerKey(id));
   const clearVoteLocks = ()=>{
-    const keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && (k.startsWith(VOTE_NS)||k.startsWith(LEGACY_NS))) keys.push(k); }
+    const keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(!k) continue;
+      if(k.startsWith(VOTE_NS) || k.startsWith(LEGACY_NS) || k.startsWith(TIMER_NS)) keys.push(k);
+    }
     keys.forEach(k=>localStorage.removeItem(k));
   };
 
@@ -240,10 +182,9 @@
     return String(Math.floor(s/3600)).padStart(2,'0')+':' +
            String(Math.floor((s%3600)/60)).padStart(2,'0')+':' +
            String(s%60).padStart(2,'0'); };
-
   const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
 
-  /********* Tournament data *********/
+  /* ===== Tournament model ===== */
   let rounds, flat, sel=null, tickHandle=null, chosen=null, showFinished=false;
 
   function makeTournament(){
@@ -267,7 +208,7 @@
     flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
   }
 
-  /********* DOM refs *********/
+  /* ===== DOM ===== */
   const listEl=document.getElementById('matchList');
   const detailRound=document.getElementById('detailRound');
   const detailIndex=document.getElementById('detailIndex');
@@ -284,18 +225,10 @@
   const roundSummary=document.getElementById('roundSummary');
   const toggleFinished=document.getElementById('toggleFinished');
 
-  // Overlay refs
   const overlay = document.getElementById('championOverlay');
-  const championArt = document.getElementById('championArt');
-  const championName = document.getElementById('championName');
-  const championTitle = document.getElementById('championTitle');
-  const fxLayer = document.getElementById('fxLayer');
+  document.getElementById('btnCloseChampion').addEventListener('click', ()=> overlay.classList.remove('show'));
 
-  // Fullscreen buttons
-  const fsLeft = document.getElementById('fsLeft');
-  const fsRight = document.getElementById('fsRight');
-
-  /********* Supabase sync (timers + votes) *********/
+  /* ===== Supabase sync ===== */
   async function loadServerState() {
     const { data, error } = await supabase
       .from(MATCH_TABLE)
@@ -304,17 +237,26 @@
     console.log('[state] rows', data?.length, data?.slice?.(0,3));
     const map = new Map(data.map(r => [r.slug, r]));
     for (const m of flat) {
-      const row = map.get(m.id);   // our local id is the slug (e.g., "R32_4")
-      if (!row) continue;
-      m.decided = !!row.decided;
-      m.ends    = row.ends ? new Date(row.ends).getTime() : null;
-      m.votesA  = row.votesA ?? 0;
-      m.votesB  = row.votesB ?? 0;
+      const row = map.get(m.id);
+      if (row) {
+        m.decided = !!row.decided;
+        m.ends    = row.ends ? new Date(row.ends).getTime() : null;
+        m.votesA  = row.votesA ?? 0;
+        m.votesB  = row.votesB ?? 0;
+      }
+      // If server gave no ends, try local fallback
+      if (!m.ends) {
+        const localEnds = getLocalTimer(m.id);
+        if (localEnds && localEnds > nowMs()) {
+          m.ends = localEnds; // show timer right away
+          detailState.textContent='OPEN';
+        }
+      }
     }
   }
 
-  // ensure rows exist by slug (does NOT overwrite server values)
   async function ensureRowsExist() {
+    // insert by slug so server rows are present when RPC runs
     const rows = flat.map(m => ({ slug: m.id, round: m.round, idx: m.index }));
     const { error } = await supabase
       .from(MATCH_TABLE)
@@ -322,33 +264,47 @@
     if (error) console.warn('ensureRowsExist error', error);
   }
 
-  // start a timer ONLY if none exists (server-authoritative)
+  // Try to start on server; if not, set a resilient local fallback
   async function startFreshTimerIfReady(node){
     if(node.A?.img && node.B?.img && !node.ends && !node.decided){
       const proposedEnds = nowMs() + ROUND_MS;
-      const { data, error } = await supabase
-        .rpc('start_timer_by_slug', { p_slug: node.id, p_ends: toIso(proposedEnds) });
-      console.log('[timer] RPC result', node.id, {data, error});
-      if (error) { console.warn('start_timer_by_slug error', error); return; }
-      const row = Array.isArray(data) ? data[0] : data;
+
+      // 1) Try server
+      let row = null, rpcErr = null;
+      try{
+        const resp = await supabase.rpc('start_timer_by_slug', { p_slug: node.id, p_ends: toIso(proposedEnds) });
+        console.log('[timer] RPC result', node.id, resp);
+        if (!resp.error) row = Array.isArray(resp.data) ? resp.data[0] : resp.data;
+        else rpcErr = resp.error;
+      }catch(e){ rpcErr = e; }
+
       if (row?.ends) {
         node.ends = new Date(row.ends).getTime();
-        repaintRow(node.id);
-        if(sel===node.id) select(node.id);
+        setLocalTimer(node.id, node.ends);     // keep local mirror too
+      } else {
+        // 2) Fallback: local persistent timer
+        node.ends = proposedEnds;
+        setLocalTimer(node.id, node.ends);
+        console.warn('[timer] using local fallback for', node.id, rpcErr || '(no server row updated)');
+        // also try to push to server in background once
+        supabase.rpc('start_timer_by_slug', { p_slug: node.id, p_ends: toIso(node.ends) })
+          .then(r => console.log('[timer] background push', node.id, r))
+          .catch(e => console.warn('[timer] background push failed', e));
       }
+
+      repaintRow(node.id);
+      if(sel===node.id) select(node.id);
     }
   }
 
-  // decide match (update by slug)
   async function setDecidedOnServer(matchSlug, decided) {
-    const { error } = await supabase
-      .from(MATCH_TABLE)
+    const { error } = await supabase.from(MATCH_TABLE)
       .update({ decided: !!decided, ends: null })
       .eq('slug', matchSlug);
     if (error) console.warn('setDecidedOnServer error', error);
+    clearLocalTimer(matchSlug);
   }
 
-  // atomic vote via RPC (by slug)
   async function castVoteOnServer(matchSlug, side){
     const { data, error } = await supabase
       .rpc('cast_vote_by_slug', { p_slug: matchSlug, p_side: side });
@@ -361,26 +317,26 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: MATCH_TABLE }, payload => {
         const row = payload.new || payload.old;
         if (!row) return;
-        const key = row.slug || row.id; // prefer slug
+        const key = row.slug || row.id;
         const m = flat.find(x => x.id === key);
         if (!m || !payload.new) return;
         m.decided = !!payload.new.decided;
         m.ends = payload.new.ends ? new Date(payload.new.ends).getTime() : null;
         m.votesA = payload.new.votesA ?? 0;
         m.votesB = payload.new.votesB ?? 0;
+        if (!m.ends) clearLocalTimer(m.id); // server cleared ends, clear local mirror
         repaintRow(m.id);
         if (sel === m.id) select(m.id);
       })
       .subscribe();
   }
 
-  /********* Round helpers *********/
+  /* ===== UI helpers ===== */
   function isRoundComplete(r){ return rounds[r].length>0 && rounds[r].every(m=>m.decided); }
   function currentRound(){ for(let r=1;r<=5;r++){ if(rounds[r].some(m=>!m.decided)) return r; } return 5; }
   function visibleMatches(){ const cur=currentRound(); return flat.filter(m => showFinished ? true : (m.round >= cur)); }
   function updateRoundBreadcrumb(){ const cur=currentRound(); roundSummary.textContent = `${roundLabel[cur]} → Final`; }
 
-  /********* Build list *********/
   function buildList(preserveId){
     listEl.innerHTML='';
     const items = visibleMatches();
@@ -428,7 +384,7 @@
     listEl.scrollTo({top: row.offsetTop - 12, behavior:'smooth'});
   }
 
-  /********* Selection *********/
+  /* ===== Selection & tick ===== */
   function select(id){
     sel=id; chosen=null;
     [...listEl.children].forEach(li=>li.classList.toggle('selected',li.dataset.id===id));
@@ -461,7 +417,6 @@
   function updateClock(){const m=flat.find(x=>x.id===sel); if(!m) return;
     const ms=(m.ends||0)-nowMs(); detailClock.textContent=fmt(ms>0?ms:0);}
 
-  /********* Winner + advancement *********/
   const nextId=(id)=>{const [r,i]=id.split('_');const idx=parseInt(i||'1',10);
     if(r==='R32')return`R16_${Math.ceil(idx/2)}`;
     if(r==='R16')return`QF_${Math.ceil(idx/2)}`;
@@ -473,12 +428,11 @@
   function finalizeMatch(m){
     if(m.decided) return false;
     m.decided=true; m.ends=null;
-    setDecidedOnServer(m.id, true); // update by slug
+    setDecidedOnServer(m.id, true);
+    clearLocalTimer(m.id);
     const winner=pickWinnerObj(m);
     const nid=nextId(m.id);
-    if(!nid){
-      showChampion(winner); repaintRow(m.id); if(sel===m.id) select(m.id); return true;
-    }
+    if(!nid){ overlay.classList.add('show'); document.getElementById('championArt').src = winner.img||BLANK; document.getElementById('championName').textContent = winner.name||'Champion'; repaintRow(m.id); if(sel===m.id) select(m.id); return true; }
     const nr=flat.find(x=>x.id===nid); if(!nr) return true;
     if(!nr.A.img) nr.A={...winner}; else if(!nr.B.img) nr.B={...winner};
     repaintRow(m.id); repaintRow(nr.id);
@@ -486,21 +440,6 @@
     if(isRoundComplete(m.round)){ buildList(nr.id); } else { select(nr.id); scrollToRow(nr.id); }
     return true;
   }
-
-  function showChampion(winner){
-    const overlay = document.getElementById('championOverlay');
-    const championArt = document.getElementById('championArt');
-    const championName = document.getElementById('championName');
-    const championTitle = document.getElementById('championTitle');
-    const fxLayer = document.getElementById('fxLayer');
-    championArt.src = winner.img || BLANK;
-    championName.textContent = winner.name || 'Champion';
-    championTitle.setAttribute('data-text','CHAMPION');
-    championTitle.textContent = 'CHAMPION';
-    fxLayer.innerHTML='';
-    overlay.classList.add('show');
-  }
-  document.getElementById('btnCloseChampion').addEventListener('click', ()=> document.getElementById('championOverlay').classList.remove('show'));
 
   function globalTick(){
     let anyChanged=false;
@@ -525,10 +464,10 @@
     if(anyChanged){ buildList(sel); }
   }
 
-  /********* Voting *********/
+  /* ===== Voting ===== */
   function setChoice(side){
     if (btnLeft.disabled || btnRight.disabled) return;
-    chosen = side; // 'A' or 'B'
+    chosen = side;
     btnLeft.classList.toggle('active', side==='A');
     btnRight.classList.toggle('active', side==='B');
     btnSubmit.disabled = false;
@@ -546,7 +485,7 @@
     if (!chosen){ toast('Pick a side first'); return; }
 
     try{
-      const row = await castVoteOnServer(m.id, chosen); // RPC by slug
+      const row = await castVoteOnServer(m.id, chosen);
       m.votesA = row.votesa ?? row.votesA ?? m.votesA;
       m.votesB = row.votesb ?? row.votesB ?? m.votesB;
 
@@ -564,31 +503,13 @@
     }
   });
 
-  /********* Fullscreen *********/
-  async function requestFS(el){
-    try{
-      if (el.requestFullscreen) await el.requestFullscreen({ navigationUI:'hide' });
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-      else if (el.msRequestFullscreen) el.msRequestFullscreen();
-      else throw new Error('Fullscreen API unavailable');
-    }catch(e){
-      const src = (el.tagName==='IMG' ? el.src : el.querySelector('img')?.src);
-      if(src) window.open(src, '_blank');
-    }
-  }
-  function wireFS(imgEl, btnEl){
-    btnEl.addEventListener('click', ()=> requestFS(imgEl));
-    let last=0; imgEl.addEventListener('click', ()=>{ const now=Date.now(); if(now-last<300) requestFS(imgEl); last=now; });
-  }
-  wireFS(leftArt,  fsLeft); wireFS(rightArt, fsRight);
-
-  /********* Controls *********/
+  /* ===== Controls ===== */
   document.getElementById('btnReset').addEventListener('click', async ()=>{
     clearVoteLocks();
     if (tickHandle) { clearInterval(tickHandle); tickHandle=null; }
-    document.getElementById('championOverlay').classList.remove('show');
+    overlay.classList.remove('show');
     makeTournament();
-    await initAfterTournamentBuild(); // server timers persist; fresh ones only start if missing
+    await initAfterTournamentBuild();
     toast('Reset complete');
   });
 
@@ -617,22 +538,28 @@
     buildList(sel);
   });
 
-  /********* Init *********/
+  /* ===== Init ===== */
   async function initAfterTournamentBuild(){
-    await ensureRowsExist();      // make sure slug rows exist first
-    await loadServerState();      // hydrate ends/decided + votes
-    for (const m of flat) await startFreshTimerIfReady(m); // starts only if server accepts
+    await ensureRowsExist();
+    await loadServerState();
+    for (const m of flat) await startFreshTimerIfReady(m);
     buildList();
     if (!tickHandle) tickHandle = setInterval(globalTick, 250);
   }
 
   async function init(){
-    clearVoteLocks();
+    // don’t clear local timers here — they preserve across refresh!
     makeTournament();
     subscribeRealtime();
     await initAfterTournamentBuild();
   }
   init();
+
+  // Fullscreen helpers
+  function requestFS(el){ try{ return el.requestFullscreen?.({navigationUI:'hide'})||el.webkitRequestFullscreen?.()||el.msRequestFullscreen?.(); }catch{} }
+  function wireFS(imgEl, btnEl){ btnEl.addEventListener('click', ()=> requestFS(imgEl)); let last=0; imgEl.addEventListener('click', ()=>{ const n=Date.now(); if(n-last<300) requestFS(imgEl); last=n; }); }
+  wireFS(leftArt, document.getElementById('fsLeft'));
+  wireFS(rightArt, document.getElementById('fsRight'));
 </script>
 </body>
 </html>
