@@ -140,6 +140,14 @@
   const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
   const roundLabel = ['','R32','R16','QF','SF','FINAL'];
 
+  // Robust image loading
+  const FALLBACK_IMG = 'https://placehold.co/800x1000?text=Image';
+  function setImg(el, url){
+    el.onload = null;
+    el.onerror = () => { el.onerror = null; el.src = FALLBACK_IMG; };
+    el.src = url || FALLBACK_IMG;
+  }
+
   // Vote lock + timer fallback (per browser)
   const VOTE_NS='rs_vote_'; const TIMER_NS='rs_timer_';
   const lockKey =(id)=> VOTE_NS+id;
@@ -160,7 +168,12 @@
   let rounds, flat, sel=null, tickHandle=null, chosen=null, showFinished=false;
 
   function makeTournament(){
-    const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
+    // Reliable placeholder images (no rate limits)
+    const entries = Array.from({length:32}, (_,i)=>({
+      name:`Seed ${i+1}`,
+      img:`https://placehold.co/800x1000?text=Seed%20${i+1}`
+    }));
+
     rounds = {1:[],2:[],3:[],4:[],5:[]};
     for (let i=0;i<16;i++){
       rounds[1].push({
@@ -220,7 +233,7 @@
     }
   }
 
-  // UPDATED: use UPSERT so duplicates don’t throw, and only toast on real errors
+  // Use UPSERT so duplicates don’t 409; toast only on real errors
   async function ensureRowsExist() {
     const rows = flat.map(m => ({ slug: m.id, round: m.round, idx: m.index }));
     const { error } = await supabase
@@ -233,7 +246,7 @@
     }
   }
 
-  // UPDATED: if RPC didn't update (ends already set), read and use existing ends
+  // If RPC didn’t update (ends already set), read the existing ends and use it
   async function startFreshTimerIfReady(node){
     if(node.A?.img && node.B?.img && !node.ends && !node.decided){
       const proposedEnds = nowMs() + ROUND_MS;
@@ -253,7 +266,7 @@
         node.ends = new Date(row.ends).getTime();
         setLocalTimer(node.id, node.ends);
       } else {
-        // maybe the timer was already started by someone else — read it
+        // maybe already running — read it
         const { data: existing, error: selErr } = await supabase
           .from(MATCH_TABLE)
           .select('ends, decided')
@@ -265,7 +278,7 @@
           setLocalTimer(node.id, node.ends);
           console.log('[timer] already running; using existing ends', node.id, existing.ends);
         } else {
-          // genuine fallback (e.g., writes blocked or no row)
+          // genuine fallback (no server write & no existing)
           node.ends = proposedEnds;
           setLocalTimer(node.id, node.ends);
           console.warn('[timer] local fallback for', node.id, rpcErr || '(no server update & no existing)');
@@ -325,8 +338,8 @@
     for (const m of items){
       const item=document.createElement('div'); item.className='matchItem'; item.dataset.id=m.id;
       const mini=document.createElement('div'); mini.className='thumbMini';
-      const iA=document.createElement('img'); iA.src=m.A?.img||BLANK;
-      const iB=document.createElement('img'); iB.src=m.B?.img||BLANK;
+      const iA=document.createElement('img'); const iB=document.createElement('img');
+      setImg(iA, m.A?.img); setImg(iB, m.B?.img);
       mini.append(iA,iB);
       const mid=document.createElement('div');
       const title=document.createElement('div'); title.className='title';
@@ -351,8 +364,8 @@
     const m=flat.find(x=>x.id===id); if(!m) return;
     const row=[...listEl.children].find(c=>c.dataset.id===id); if(!row) return;
     const imgs=row.querySelectorAll('.thumbMini img');
-    if(imgs[0]) imgs[0].src=m.A?.img||BLANK;
-    if(imgs[1]) imgs[1].src=m.B?.img||BLANK;
+    if(imgs[0]) setImg(imgs[0], m.A?.img);
+    if(imgs[1]) setImg(imgs[1], m.B?.img);
     const title=row.querySelector('.title'); if(title) title.textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
     const timer=row.querySelector('.timer');
     if(m.ends){timer.dataset.ends=m.ends; timer.textContent=fmt(m.ends-nowMs());}
@@ -378,7 +391,8 @@
     const canVote=!!(m.A.img&&m.B.img);
     detailState.textContent=m.decided?'DECIDED':(m.ends?'OPEN':(canVote?'READY':'TBD'));
 
-    leftArt.src=m.A.img||BLANK; rightArt.src=m.B.img||BLANK;
+    setImg(leftArt,  m.A.img);
+    setImg(rightArt, m.B.img);
     leftTbd.style.display=m.A.img?'none':'flex';
     rightTbd.style.display=m.B.img?'none':'flex';
     leftName.textContent=m.A.name||'TBD'; rightName.textContent=m.B.name||'TBD';
