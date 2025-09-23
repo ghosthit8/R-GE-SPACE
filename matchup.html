@@ -213,7 +213,6 @@
         m.votesA  = row.votesA ?? 0;
         m.votesB  = row.votesB ?? 0;
       }
-      // local fallback if no server ends
       if (!m.ends) {
         const localEnds = getLocalTimer(m.id);
         if (localEnds && localEnds > nowMs()) m.ends = localEnds;
@@ -221,41 +220,59 @@
     }
   }
 
+  // UPDATED: use UPSERT so duplicates don’t throw, and only toast on real errors
   async function ensureRowsExist() {
-    // insert by slug so server rows exist when RPC runs
     const rows = flat.map(m => ({ slug: m.id, round: m.round, idx: m.index }));
     const { error } = await supabase
       .from(MATCH_TABLE)
-      .insert(rows, { onConflict: 'slug', ignoreDuplicates: true });
-    if (error) { console.warn('ensureRowsExist error', error); toast('DB insert blocked (RLS policy?)'); }
+      .upsert(rows, { onConflict: 'slug', ignoreDuplicates: true });
+    if (error) {
+      console.warn('ensureRowsExist error', error);
+      if (String(error.code) !== '23505' && error.code !== '409')
+        toast('DB insert blocked (RLS policy?)');
+    }
   }
 
-  // start a timer (server-first, with local fallback)
+  // UPDATED: if RPC didn't update (ends already set), read and use existing ends
   async function startFreshTimerIfReady(node){
     if(node.A?.img && node.B?.img && !node.ends && !node.decided){
       const proposedEnds = nowMs() + ROUND_MS;
 
-      // Try server RPC
       let row=null, rpcErr=null;
       try{
-        const resp = await supabase.rpc('start_timer_by_slug', { p_slug: node.id, p_ends: toIso(proposedEnds) });
-        console.log('[timer] RPC result', node.id, resp);
+        const resp = await supabase.rpc('start_timer_by_slug', {
+          p_slug: node.id,
+          p_ends: toIso(proposedEnds)
+        });
         if (!resp.error) row = Array.isArray(resp.data) ? resp.data[0] : resp.data;
         else rpcErr = resp.error;
+        console.log('[timer] RPC result', node.id, resp);
       }catch(e){ rpcErr = e; }
 
       if (row?.ends) {
         node.ends = new Date(row.ends).getTime();
         setLocalTimer(node.id, node.ends);
       } else {
-        // Fallback: local persistent timer (so refresh doesn’t reset)
-        node.ends = proposedEnds;
-        setLocalTimer(node.id, node.ends);
-        console.warn('[timer] local fallback for', node.id, rpcErr || '(no server row updated)');
-        // Try to push the same ends in background
-        supabase.rpc('start_timer_by_slug', { p_slug: node.id, p_ends: toIso(node.ends) })
-          .then(r => console.log('[timer] background push', node.id, r))
-          .catch(e => console.warn('[timer] background push failed', e));
+        // maybe the timer was already started by someone else — read it
+        const { data: existing, error: selErr } = await supabase
+          .from(MATCH_TABLE)
+          .select('ends, decided')
+          .eq('slug', node.id)
+          .single();
+
+        if (!selErr && existing?.ends) {
+          node.ends = new Date(existing.ends).getTime();
+          setLocalTimer(node.id, node.ends);
+          console.log('[timer] already running; using existing ends', node.id, existing.ends);
+        } else {
+          // genuine fallback (e.g., writes blocked or no row)
+          node.ends = proposedEnds;
+          setLocalTimer(node.id, node.ends);
+          console.warn('[timer] local fallback for', node.id, rpcErr || '(no server update & no existing)');
+          supabase.rpc('start_timer_by_slug', { p_slug: node.id, p_ends: toIso(node.ends) })
+            .then(r => console.log('[timer] background push', node.id, r))
+            .catch(e => console.warn('[timer] background push failed', e));
+        }
       }
 
       repaintRow(node.id);
@@ -263,14 +280,12 @@
     }
   }
 
-  // decide via RPC (security definer) and clear local timer
   async function decideOnServer(matchSlug, decided=true){
     const { error } = await supabase.rpc('decide_match_by_slug', { p_slug: matchSlug, p_decided: decided });
     if (error) console.warn('decide rpc error', error);
     clearLocalTimer(matchSlug);
   }
 
-  // atomic vote via RPC
   async function castVoteOnServer(matchSlug, side){
     const { data, error } = await supabase
       .rpc('cast_vote_by_slug', { p_slug: matchSlug, p_side: side });
