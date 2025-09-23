@@ -130,7 +130,7 @@
         <div class="tile" id="tileRight">
           <div class="frame">
             <img id="rightArt" class="art" alt="">
-            <button class="fsIcon" id="fsRight" aria-label="Fullscreen bottom">⤢</button>
+            <button id="fsRight" class="fsIcon" aria-label="Fullscreen bottom">⤢</button>
             <div id="rightTbd" class="tbd" style="display:none">?</div>
           </div>
           <div class="tileMeta">
@@ -370,12 +370,12 @@
       .eq('id', matchId)
       .is('ends', null)
       .eq('decided', false)
-      .select('id, ends, decided, votesA, votesB');
+      .select('id, ends, decided, votesa, votesb');
     if (error) { if(DEBUG) logDbg('setEnds error', error); return { row:null }; }
     if (Array.isArray(data) && data.length) return { row:data[0] };
     const { data: existing, error: e2 } = await supabase
       .from(MATCH_TABLE)
-      .select('id, ends, decided, votesA, votesB')
+      .select('id, ends, decided, votesa, votesb')
       .eq('id', matchId)
       .maybeSingle();
     if (DEBUG && e2) logDbg('setEnds readback error', e2);
@@ -404,8 +404,9 @@
         if (!m) return;
         m.decided = !!payload.new.decided;
         m.ends = payload.new.ends ? new Date(payload.new.ends).getTime() : null;
-        m.votesA = payload.new.votesA ?? 0;
-        m.votesB = payload.new.votesB ?? 0;
+        // LOWERCASE from DB → camelCase in client
+        m.votesA = payload.new.votesa ?? 0;
+        m.votesB = payload.new.votesb ?? 0;
         repaintRow(m.id);
         if (sel === m.id) select(m.id);
       })
@@ -418,8 +419,8 @@
       const { row } = await setEndsOnServer(node.id, targetEnds);
       if (row && row.ends){
         node.ends   = new Date(row.ends).getTime();
-        node.votesA = row.votesA ?? node.votesA;
-        node.votesB = row.votesB ?? node.votesB;
+        node.votesA = row.votesa ?? node.votesA;
+        node.votesB = row.votesb ?? node.votesB;
         node.decided= !!row.decided;
         repaintRow(node.id);
         if(sel===node.id) select(node.id);
@@ -535,7 +536,7 @@
 
   // ======= SERVER SYNC =======
   async function loadServerState() {
-    const { data, error } = await supabase.from(MATCH_TABLE).select('id, ends, decided, votesA, votesB');
+    const { data, error } = await supabase.from(MATCH_TABLE).select('id, ends, decided, votesa, votesb');
     if (error) { if(DEBUG) logDbg('loadState error', error); return; }
     const map = new Map(data.map(r => [r.id, r]));
     for (const m of flat) {
@@ -543,8 +544,8 @@
       if (!row) continue;
       m.decided = !!row.decided;
       m.ends = row.ends ? new Date(row.ends).getTime() : null;
-      m.votesA = row.votesA ?? 0;
-      m.votesB = row.votesB ?? 0;
+      m.votesA = row.votesa ?? 0;
+      m.votesB = row.votesb ?? 0;
     }
   }
 
@@ -572,17 +573,13 @@
   if (DEBUG){
     document.getElementById('dbgHealth').onclick = async ()=>{
       setDbg('checking…');
-      // step 1: select
       const s1 = await supabase.from(MATCH_TABLE).select('count', { count:'exact', head:true });
       logDbg('select count ->', {count:s1.count, error:s1.error});
-      // step 2: upsert ping row
       const ping = { id:'DEBUG_PING', round:0, idx:0, decided:false };
       const u1 = await supabase.from(MATCH_TABLE).upsert(ping);
       logDbg('upsert ping ->', u1.error || 'ok');
-      // step 3: delete ping
       const d1 = await supabase.from(MATCH_TABLE).delete().eq('id','DEBUG_PING');
       logDbg('delete ping ->', d1.error || 'ok');
-      // step 4: try setEnds on first R32
       const first = flat.find(m=>m.id.startsWith('R32_'));
       const { row } = await setEndsOnServer(first.id, nowMs()+60000);
       logDbg('setEnds first ->', row ? {id:row.id, ends:row.ends} : 'no row');
