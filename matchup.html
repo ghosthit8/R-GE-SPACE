@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Tournament (Shared Timers + Realtime Votes)</title>
+<title>Rage Space — Tournament (Shared Timers + Realtime Votes + Debug)</title>
 <style>
   :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707; --pink:#ff1f8f; --blue:#00e5ff; }
   *{box-sizing:border-box}
@@ -68,6 +68,14 @@
   @media (max-width:800px){ .championCard{ grid-template-columns:1fr } }
   .championArt{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:#050505; aspect-ratio:4/5; width:100%; object-fit:cover; transform:translateZ(0); }
   .championMeta{ display:flex; flex-direction:column; gap:12px; justify-content:center; position:relative; }
+
+  /* Debug HUD */
+  #dbg{position:fixed;right:10px;bottom:10px;z-index:99999;display:none;min-width:260px}
+  #dbg.show{display:block}
+  #dbg .card{background:#0a0a0a;border:1px solid #163a16;color:#bfffbf;border-radius:10px;padding:10px;font-size:12px}
+  #dbg .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  #dbg button{border:1px solid #2f6f2f;background:#000;color:#bfffbf;border-radius:8px;padding:6px 8px;cursor:pointer}
+  #dbg pre{max-height:160px;overflow:auto;background:#000;border:1px solid #163a16;padding:8px;border-radius:8px}
 </style>
 </head>
 <body>
@@ -158,6 +166,18 @@
     </div>
   </div>
 
+  <!-- Debug HUD -->
+  <div id="dbg"><div class="card">
+    <div><b>Debug</b> — <span id="dbgStatus">idle</span></div>
+    <div class="row">
+      <button id="dbgHealth">Health check</button>
+      <button id="dbgSeed">Force-seed timers</button>
+      <button id="dbgRows">Show rows</button>
+      <button id="dbgClear">Clear</button>
+    </div>
+    <pre id="dbgLog"></pre>
+  </div></div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
   // ======= CONFIG =======
@@ -169,6 +189,14 @@
   const MATCH_TABLE = 'matches';
 
   // ======= UTILS =======
+  const qs = new URLSearchParams(location.search);
+  const DEBUG = qs.get('debug') === '1';
+  const dbgBox = document.getElementById('dbg');
+  const dbgLog = document.getElementById('dbgLog');
+  const setDbg = (s)=>{ document.getElementById('dbgStatus').textContent = s; };
+  const logDbg = (...a)=>{ console.log('[DBG]', ...a); dbgLog.textContent += a.map(x=> (typeof x==='string'?x:JSON.stringify(x,null,2))).join(' ') + '\n'; dbgLog.scrollTop = dbgLog.scrollHeight; };
+  if (DEBUG) dbgBox.classList.add('show');
+
   const toIso = (ms)=> new Date(ms).toISOString();
   const nowMs = ()=> Date.now();
   const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -209,6 +237,7 @@
       }
     }
     flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
+    if (DEBUG) window.rs = { rounds, flat }; // expose for console
   }
 
   // ======= DOM HOOKS =======
@@ -342,13 +371,14 @@
       .is('ends', null)
       .eq('decided', false)
       .select('id, ends, decided, votesA, votesB');
-    if (error) { console.warn('setEndsOnServer error', error); return { row:null }; }
+    if (error) { if(DEBUG) logDbg('setEnds error', error); return { row:null }; }
     if (Array.isArray(data) && data.length) return { row:data[0] };
-    const { data: existing } = await supabase
+    const { data: existing, error: e2 } = await supabase
       .from(MATCH_TABLE)
       .select('id, ends, decided, votesA, votesB')
       .eq('id', matchId)
       .maybeSingle();
+    if (DEBUG && e2) logDbg('setEnds readback error', e2);
     return { row: existing || null };
   }
 
@@ -356,12 +386,12 @@
     const { error } = await supabase.from(MATCH_TABLE)
       .update({ decided: !!decided, ends: null })
       .eq('id', matchId);
-    if (error) console.warn('setDecidedOnServer error', error);
+    if (error && DEBUG) logDbg('setDecided error', error);
   }
 
   async function castVoteOnServer(matchId, side){
     const { data, error } = await supabase.rpc('cast_vote', { p_id: matchId, p_side: side });
-    if (error) { console.warn('cast_vote error', error); throw error; }
+    if (error) { if(DEBUG) logDbg('cast_vote error', error); throw error; }
     return data;
   }
 
@@ -379,7 +409,7 @@
         repaintRow(m.id);
         if (sel === m.id) select(m.id);
       })
-      .subscribe((status)=>log('realtime', status));
+      .subscribe((status)=>{ if(DEBUG) logDbg('realtime', status); });
   }
 
   async function startFreshTimerIfReady(node){
@@ -447,14 +477,13 @@
     if(anyChanged){ buildList(sel); }
   }
 
-  // ======= BUTTON LOGIC (missing before) =======
+  // ======= BUTTON LOGIC =======
   function choose(side){
     chosen = side;
     btnLeft.classList.toggle('active', side==='A');
     btnRight.classList.toggle('active', side==='B');
     btnSubmit.disabled = false;
   }
-
   btnLeft.addEventListener('click', ()=>{
     const m=flat.find(x=>x.id===sel); if(!m||!m.ends||m.decided) return;
     if(localStorage.getItem(lockKey(m.id))) return;
@@ -470,7 +499,6 @@
     if(!m || !chosen || !m.ends || m.decided) return;
     try{
       await castVoteOnServer(m.id, chosen);
-      // Optimistic bump (realtime will correct if needed)
       if(chosen==='A') m.votesA = (m.votesA||0)+1; else m.votesB = (m.votesB||0)+1;
       repaintRow(m.id); if(sel===m.id) select(m.id);
       localStorage.setItem(lockKey(m.id), '1');
@@ -508,7 +536,7 @@
   // ======= SERVER SYNC =======
   async function loadServerState() {
     const { data, error } = await supabase.from(MATCH_TABLE).select('id, ends, decided, votesA, votesB');
-    if (error) { console.warn('loadServerState error', error); return; }
+    if (error) { if(DEBUG) logDbg('loadState error', error); return; }
     const map = new Map(data.map(r => [r.id, r]));
     for (const m of flat) {
       const row = map.get(m.id);
@@ -520,20 +548,18 @@
     }
   }
 
-  // 🔧 FIXED: use UPSERT with onConflict
+  // 🔧 Use UPSERT (no onConflict arg needed when PK exists)
   async function ensureRowsExist() {
     const rows = flat.map(m => ({ id: m.id, round: m.round, idx: m.index }));
-    const { error } = await supabase
-      .from(MATCH_TABLE)
-      .upsert(rows, { onConflict: 'id' }); // <— this actually creates any missing rows
-    if (error) console.warn('ensureRowsExist error', error);
+    const { error } = await supabase.from(MATCH_TABLE).upsert(rows);
+    if (error && DEBUG) logDbg('ensureRowsExist error', error);
   }
 
   async function initAfterTournamentBuild(){
-    await ensureRowsExist();         // make sure rows exist first
-    await loadServerState();         // pull current ends/votes
+    await ensureRowsExist();
+    await loadServerState();
     for (const m of flat) if (m.A?.img && m.B?.img && !m.ends && !m.decided) await startFreshTimerIfReady(m);
-    await loadServerState();         // pick up any ends we set
+    await loadServerState();
     buildList();
     if (!tickHandle) tickHandle = setInterval(globalTick, 250);
   }
@@ -541,6 +567,41 @@
   function requireFullscreen(el){ if(el.requestFullscreen) el.requestFullscreen(); }
   document.getElementById('fsLeft').onclick = ()=>requireFullscreen(leftArt);
   document.getElementById('fsRight').onclick = ()=>requireFullscreen(rightArt);
+
+  // ======= DEBUG HUD WIRES =======
+  if (DEBUG){
+    document.getElementById('dbgHealth').onclick = async ()=>{
+      setDbg('checking…');
+      // step 1: select
+      const s1 = await supabase.from(MATCH_TABLE).select('count', { count:'exact', head:true });
+      logDbg('select count ->', {count:s1.count, error:s1.error});
+      // step 2: upsert ping row
+      const ping = { id:'DEBUG_PING', round:0, idx:0, decided:false };
+      const u1 = await supabase.from(MATCH_TABLE).upsert(ping);
+      logDbg('upsert ping ->', u1.error || 'ok');
+      // step 3: delete ping
+      const d1 = await supabase.from(MATCH_TABLE).delete().eq('id','DEBUG_PING');
+      logDbg('delete ping ->', d1.error || 'ok');
+      // step 4: try setEnds on first R32
+      const first = flat.find(m=>m.id.startsWith('R32_'));
+      const { row } = await setEndsOnServer(first.id, nowMs()+60000);
+      logDbg('setEnds first ->', row ? {id:row.id, ends:row.ends} : 'no row');
+      setDbg('done');
+    };
+    document.getElementById('dbgSeed').onclick = async ()=>{
+      setDbg('seeding…');
+      for (const m of flat.filter(x=>x.round===1)){
+        await startFreshTimerIfReady(m);
+      }
+      await loadServerState(); buildList(sel);
+      setDbg('seeded');
+    };
+    document.getElementById('dbgRows').onclick = async ()=>{
+      const { data, error } = await supabase.from(MATCH_TABLE).select('*').order('id');
+      logDbg('rows ->', error || data);
+    };
+    document.getElementById('dbgClear').onclick = ()=>{ dbgLog.textContent=''; setDbg('idle'); };
+  }
 
   // ======= BOOT =======
   async function init(){
