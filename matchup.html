@@ -160,14 +160,15 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
-  const ROUND_MS = 30000;
+  // ======= CONFIG =======
+  const ROUND_MS = 30000; // 30s per match
 
-  // ⬇️ Your project
   const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
   const MATCH_TABLE = 'matches';
+
+  // ======= UTILS =======
   const toIso = (ms)=> new Date(ms).toISOString();
   const nowMs = ()=> Date.now();
   const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -186,9 +187,12 @@
            String(Math.floor((s%3600)/60)).padStart(2,'0')+':' +
            String(s%60).padStart(2,'0'); };
   const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
+  const log = (...a)=>console.log('[RageSpace]', ...a);
 
+  // ======= STATE =======
   let rounds, flat, sel=null, tickHandle=null, chosen=null, showFinished=false;
 
+  // ======= TOURNAMENT BUILD =======
   function makeTournament(){
     const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
     rounds = {1:[],2:[],3:[],4:[],5:[]};
@@ -207,6 +211,7 @@
     flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
   }
 
+  // ======= DOM HOOKS =======
   const listEl=document.getElementById('matchList');
   const detailRound=document.getElementById('detailRound');
   const detailIndex=document.getElementById('detailIndex');
@@ -223,6 +228,7 @@
   const roundSummary=document.getElementById('roundSummary');
   const toggleFinished=document.getElementById('toggleFinished');
 
+  // ======= HELPERS =======
   function isRoundComplete(r){ return rounds[r].length>0 && rounds[r].every(m=>m.decided); }
   function currentRound(){ for(let r=1;r<=5;r++){ if(rounds[r].some(m=>!m.decided)) return r; } return 5; }
   function visibleMatches(){ const cur=currentRound(); return flat.filter(m => showFinished ? true : (m.round >= cur)); }
@@ -326,6 +332,7 @@
     if(r==='QF')return`SF_${Math.ceil(idx/2)}`;
     if(r==='SF')return`FINAL_1`; return null;};
 
+  // ======= SERVER OPS =======
   async function setEndsOnServer(matchId, endsMs) {
     if (!endsMs) return { row:null };
     const { data, error } = await supabase
@@ -372,7 +379,7 @@
         repaintRow(m.id);
         if (sel === m.id) select(m.id);
       })
-      .subscribe();
+      .subscribe((status)=>log('realtime', status));
   }
 
   async function startFreshTimerIfReady(node){
@@ -440,6 +447,43 @@
     if(anyChanged){ buildList(sel); }
   }
 
+  // ======= BUTTON LOGIC (missing before) =======
+  function choose(side){
+    chosen = side;
+    btnLeft.classList.toggle('active', side==='A');
+    btnRight.classList.toggle('active', side==='B');
+    btnSubmit.disabled = false;
+  }
+
+  btnLeft.addEventListener('click', ()=>{
+    const m=flat.find(x=>x.id===sel); if(!m||!m.ends||m.decided) return;
+    if(localStorage.getItem(lockKey(m.id))) return;
+    choose('A');
+  });
+  btnRight.addEventListener('click', ()=>{
+    const m=flat.find(x=>x.id===sel); if(!m||!m.ends||m.decided) return;
+    if(localStorage.getItem(lockKey(m.id))) return;
+    choose('B');
+  });
+  btnSubmit.addEventListener('click', async ()=>{
+    const m=flat.find(x=>x.id===sel);
+    if(!m || !chosen || !m.ends || m.decided) return;
+    try{
+      await castVoteOnServer(m.id, chosen);
+      // Optimistic bump (realtime will correct if needed)
+      if(chosen==='A') m.votesA = (m.votesA||0)+1; else m.votesB = (m.votesB||0)+1;
+      repaintRow(m.id); if(sel===m.id) select(m.id);
+      localStorage.setItem(lockKey(m.id), '1');
+      voteLockBadge.style.display='inline-block';
+      btnLeft.disabled = btnRight.disabled = true;
+      btnSubmit.disabled = true;
+      toast('Vote submitted');
+    }catch(e){
+      toast('Vote failed');
+    }
+  });
+
+  // ======= UI CONTROLS =======
   document.getElementById('btnReset').addEventListener('click', async ()=>{
     clearVoteLocks();
     if (tickHandle) { clearInterval(tickHandle); tickHandle=null; }
@@ -461,6 +505,7 @@
   });
   toggleFinished.addEventListener('change', (e)=>{ showFinished = e.target.checked; buildList(sel); });
 
+  // ======= SERVER SYNC =======
   async function loadServerState() {
     const { data, error } = await supabase.from(MATCH_TABLE).select('id, ends, decided, votesA, votesB');
     if (error) { console.warn('loadServerState error', error); return; }
@@ -474,27 +519,37 @@
       m.votesB = row.votesB ?? 0;
     }
   }
+
+  // 🔧 FIXED: use UPSERT with onConflict
   async function ensureRowsExist() {
     const rows = flat.map(m => ({ id: m.id, round: m.round, idx: m.index }));
-    const { error } = await supabase.from(MATCH_TABLE).insert(rows, { onConflict: 'id', ignoreDuplicates: true });
+    const { error } = await supabase
+      .from(MATCH_TABLE)
+      .upsert(rows, { onConflict: 'id' }); // <— this actually creates any missing rows
     if (error) console.warn('ensureRowsExist error', error);
   }
 
   async function initAfterTournamentBuild(){
-    await ensureRowsExist();
-    await loadServerState();
+    await ensureRowsExist();         // make sure rows exist first
+    await loadServerState();         // pull current ends/votes
     for (const m of flat) if (m.A?.img && m.B?.img && !m.ends && !m.decided) await startFreshTimerIfReady(m);
-    await loadServerState();
+    await loadServerState();         // pick up any ends we set
     buildList();
     if (!tickHandle) tickHandle = setInterval(globalTick, 250);
   }
 
+  function requireFullscreen(el){ if(el.requestFullscreen) el.requestFullscreen(); }
+  document.getElementById('fsLeft').onclick = ()=>requireFullscreen(leftArt);
+  document.getElementById('fsRight').onclick = ()=>requireFullscreen(rightArt);
+
+  // ======= BOOT =======
   async function init(){
     clearVoteLocks();
     makeTournament();
     subscribeRealtime();
     buildList();                 // show immediately (SYNC… timers)
     await initAfterTournamentBuild();
+    log('ready');
   }
   init();
 </script>
