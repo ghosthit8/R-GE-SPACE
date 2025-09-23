@@ -13,7 +13,6 @@
   header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px}
   .app{display:grid;grid-template-columns: 360px 1fr;gap:14px;height:calc(100vh - 56px);padding:0 14px 14px}
 
-  /* Left list */
   .listWrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
   .listHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px}
   .listHeadRight{display:flex;align-items:center;gap:10px}
@@ -25,22 +24,18 @@
   .title{color:var(--ink);font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .metaRow{display:flex;gap:8px;align-items:center}
   .badge{font-size:.75rem;border:1px solid var(--border);border-radius:8px;padding:2px 6px;opacity:.85}
-  .timer{font-variant-numeric:tabular-nums;opacity:.85}
+  .timer{font-variant-numeric:tabular-nums;opacity:.9;min-width:72px;display:inline-block}
+  .timer.pending{opacity:.6}
   .selected{outline:2px solid rgba(57,255,20,.55);outline-offset:-2px}
 
-  /* Right detail */
   .detail{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
   .detailHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
   .stage{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:14px}
   @media (max-width:820px){ .stage{ grid-template-columns:1fr; gap:22px; } }
   .tile{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.6);position:relative;display:flex;flex-direction:column}
-
-  /* Frame + image fit */
   .frame{ position:relative; width:100%; aspect-ratio:4/3; background:#050505; border-bottom:1px solid var(--border); overflow:hidden; }
   @media (max-width:1000px){ .frame{ aspect-ratio:3/4; max-height:72vh; } }
-  .art{ position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%;
-        width:auto; height:auto; object-fit:contain; display:block; background:#000; }
-
+  .art{ position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; display:block; background:#000; }
   .tbd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:900;color:rgba(57,255,20,.75);pointer-events:none}
   .tileMeta{display:flex;justify-content:space-between;gap:8px;padding:10px;align-items:center}
 
@@ -50,67 +45,29 @@
   .choice.btn{border-style:solid}
   .choice.btn.active{box-shadow:0 0 0 2px rgba(57,255,20,.6) inset}
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:var(--ink);padding:8px 12px;border-radius:10px;display:none;z-index:50}
-  .timer:not([data-ends]){display:none}
+
   @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
 
-  /* Fullscreen icon */
-  .fsIcon{
-    position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:6px;
-    border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5);
-    display:grid; place-items:center; font-size:12px; line-height:1;
-    opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2;
-  }
+  .fsIcon{ position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:6px;
+    border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5); display:grid; place-items:center; font-size:12px; line-height:1; opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2; }
   .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
 
-  /* Winner overlay */
-  .championOverlay{
-    position:fixed; inset:0; display:none; place-items:center; z-index:9999;
+  .championOverlay{ position:fixed; inset:0; display:none; place-items:center; z-index:9999;
     background: radial-gradient(1000px 600px at 70% -10%, rgba(57,255,20,.09), transparent 60%),
                radial-gradient(900px 700px at 20% 110%, rgba(0,229,255,.08), transparent 60%),
-               rgba(0,0,0,.92);
-    overflow:hidden;
-  }
+               rgba(0,0,0,.92); overflow:hidden; }
   .championOverlay.show{ display:grid; animation:fadeIn .3s ease-out both; }
   @keyframes fadeIn{ from{opacity:0} to{opacity:1} }
-  .scanlines::before{
-    content:""; position:absolute; inset:0;
+  .scanlines::before{ content:""; position:absolute; inset:0;
     background: repeating-linear-gradient(to bottom, rgba(255,255,255,.06), rgba(255,255,255,.06) 1px, transparent 1px, transparent 3px);
-    mix-blend-mode:overlay; pointer-events:none; opacity:.2;
-  }
+    mix-blend-mode:overlay; pointer-events:none; opacity:.2; }
   .crtGlow{ filter: drop-shadow(0 0 16px rgba(57,255,20,.55)) drop-shadow(0 0 32px rgba(0,229,255,.35)); }
-  .championCard{
-    position:relative; width:min(900px, 92vw); border:1px solid var(--green);
+  .championCard{ position:relative; width:min(900px, 92vw); border:1px solid var(--green);
     border-radius:18px; background:linear-gradient(to bottom right, rgba(7,7,7,.85), rgba(7,7,7,.75));
-    padding:18px; display:grid; grid-template-columns: 340px 1fr; gap:18px;
-  }
+    padding:18px; display:grid; grid-template-columns: 340px 1fr; gap:18px; }
   @media (max-width:800px){ .championCard{ grid-template-columns:1fr } }
   .championArt{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:#050505; aspect-ratio:4/5; width:100%; object-fit:cover; transform:translateZ(0); }
   .championMeta{ display:flex; flex-direction:column; gap:12px; justify-content:center; position:relative; }
-  .glitchTitle{
-    font-size: clamp(28px, 5.5vw, 68px); font-weight:900; letter-spacing:.02em;
-    text-transform:uppercase; position:relative; line-height:1;
-  }
-  .glitchTitle::before, .glitchTitle::after{ content:attr(data-text); position:absolute; inset:0; pointer-events:none; }
-  .glitchTitle::before{ left:-2px; text-shadow: -2px 0 var(--pink); animation:glitch 2s infinite ease-in-out alternate-reverse; }
-  .glitchTitle::after{  left: 2px; text-shadow:  2px 0 var(--blue); animation:glitch 2.2s infinite ease-in-out alternate; }
-  @keyframes glitch{
-    0%{clip-path: inset(0 0 85% 0);} 10%{clip-path: inset(10% 0 70% 0);}
-    20%{clip-path: inset(85% 0 0 0);} 30%{clip-path: inset(40% 0 40% 0);}
-    40%{clip-path: inset(0 0 85% 0);} 50%{clip-path: inset(60% 0 20% 0);}
-    60%{clip-path: inset(20% 0 60% 0);} 70%{clip-path: inset(0 0 85% 0);}
-    80%{clip-path: inset(80% 0 5% 0);} 100%{clip-path: inset(10% 0 70% 0);}
-  }
-  .winnerName{ font-size: clamp(16px, 2.2vw, 24px); color:var(--ink); border:1px solid var(--border); padding:8px 10px; border-radius:10px; display:inline-block; background: rgba(0,0,0,.35); }
-  .subBadge{ display:inline-flex; gap:8px; align-items:center; font-size:.9rem; border:1px solid var(--border); padding:6px 10px; border-radius:999px; opacity:.85; }
-
-  /* Fullscreen fit */
-  img.art:fullscreen,
-  img.art:-webkit-full-screen,
-  img.art:-ms-fullscreen{
-    width:100vw !important; height:100vh !important;
-    max-width:100vw !important; max-height:100vh !important;
-    object-fit:contain !important; aspect-ratio:auto !important; background:#000;
-  }
 </style>
 </head>
 <body>
@@ -147,10 +104,9 @@
         <span class="badge" id="detailState">—</span>
       </div>
 
-      <div class="countdown">Decision in: <span class="timer" id="detailClock">00:00:00</span></div>
+      <div class="countdown">Decision in: <span class="timer pending" id="detailClock">SYNC…</span></div>
 
       <div class="stage">
-        <!-- TOP tile -->
         <div class="tile" id="tileLeft">
           <div class="frame">
             <img id="leftArt" class="art" alt="">
@@ -163,7 +119,6 @@
           </div>
         </div>
 
-        <!-- BOTTOM tile -->
         <div class="tile" id="tileRight">
           <div class="frame">
             <img id="rightArt" class="art" alt="">
@@ -189,8 +144,7 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- Winner Overlay -->
-  <div id="championOverlay" class="championOverlay scanlines">
+  <div id="championOverlay" class="championOverlay">
     <button id="btnCloseChampion" class="btnClose">✖</button>
     <div class="championCard crtGlow">
       <img id="championArt" class="championArt" alt="Champion art">
@@ -204,26 +158,21 @@
     </div>
   </div>
 
-  <!-- Supabase client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <script type="module">
-  /********* Config *********/
-  const ROUND_MS = 30000; // 30 seconds per match
+  const ROUND_MS = 30000;
 
-  /********* Supabase *********/
-  const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';   // <-- replace
-  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';               // <-- replace
+  // ⬇️ Your project
+  const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
   const MATCH_TABLE = 'matches';
   const toIso = (ms)=> new Date(ms).toISOString();
   const nowMs = ()=> Date.now();
-
-  /********* Helpers *********/
   const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
   const roundLabel = ['','R32','R16','QF','SF','FINAL'];
 
-  // Vote-lock (per-browser)
   const VOTE_NS = 'rs_stack_vote_v2_';
   const LEGACY_NS = 'rs_stack_vote_';
   const lockKey = (id)=> `${VOTE_NS}${id}`;
@@ -236,34 +185,28 @@
     return String(Math.floor(s/3600)).padStart(2,'0')+':' +
            String(Math.floor((s%3600)/60)).padStart(2,'0')+':' +
            String(s%60).padStart(2,'0'); };
-
   const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
 
-  /********* Tournament data *********/
   let rounds, flat, sel=null, tickHandle=null, chosen=null, showFinished=false;
 
   function makeTournament(){
     const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
     rounds = {1:[],2:[],3:[],4:[],5:[]};
     for (let i=0;i<16;i++){
-      rounds[1].push({
-        id:`R32_${i+1}`, round:1, index:i+1,
+      rounds[1].push({ id:`R32_${i+1}`, round:1, index:i+1,
         A:{name:entries[2*i].name, img:entries[2*i].img},
         B:{name:entries[2*i+1].name, img:entries[2*i+1].img},
-        votesA:0, votesB:0, ends:null, decided:false,
-      });
+        votesA:0, votesB:0, ends:null, decided:false });
     }
     for (let r=2, size=8; r<=5; r++, size=Math.max(1, size/2)){
       for (let i=0;i<size;i++){
         rounds[r].push({ id: `${roundLabel[r]}_${i+1}`, round:r, index:i+1,
-          A:{}, B:{}, votesA:0, votesB:0, ends:null, decided:false
-        });
+          A:{}, B:{}, votesA:0, votesB:0, ends:null, decided:false });
       }
     }
     flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
   }
 
-  /********* DOM refs *********/
   const listEl=document.getElementById('matchList');
   const detailRound=document.getElementById('detailRound');
   const detailIndex=document.getElementById('detailIndex');
@@ -280,102 +223,11 @@
   const roundSummary=document.getElementById('roundSummary');
   const toggleFinished=document.getElementById('toggleFinished');
 
-  // Overlay refs
-  const overlay = document.getElementById('championOverlay');
-  const championArt = document.getElementById('championArt');
-  const championName = document.getElementById('championName');
-  const championTitle = document.getElementById('championTitle');
-  const fxLayer = document.getElementById('fxLayer');
-
-  // Fullscreen buttons
-  const fsLeft = document.getElementById('fsLeft');
-  const fsRight = document.getElementById('fsRight');
-
-  /********* Supabase sync (timers + votes) *********/
-  async function loadServerState() {
-    const { data, error } = await supabase
-      .from(MATCH_TABLE)
-      .select('id, ends, decided, votesA, votesB');
-    if (error) { console.warn('loadServerState error', error); return; }
-    const map = new Map(data.map(r => [r.id, r]));
-    for (const m of flat) {
-      const row = map.get(m.id);
-      if (!row) continue;
-      m.decided = !!row.decided;
-      m.ends = row.ends ? new Date(row.ends).getTime() : null;
-      m.votesA = row.votesA ?? 0;
-      m.votesB = row.votesB ?? 0;
-    }
-  }
-
-  // only insert missing rows; never overwrite existing server values
-  async function ensureRowsExist() {
-    const rows = flat.map(m => ({ id: m.id, round: m.round, idx: m.index }));
-    const { error } = await supabase
-      .from(MATCH_TABLE)
-      .insert(rows, { onConflict: 'id', ignoreDuplicates: true });
-    if (error) console.warn('ensureRowsExist error', error);
-  }
-
-  // Update ends ONLY if it's currently NULL (server truthy write)
-  async function setEndsOnServer(matchId, endsMs) {
-    if (!endsMs) return { updated: false, row: null };
-    const { data, error } = await supabase
-      .from(MATCH_TABLE)
-      .update({ ends: toIso(endsMs) })
-      .eq('id', matchId)
-      .is('ends', null)
-      .eq('decided', false)
-      .select('id, ends, decided, votesA, votesB'); // returns row IF updated
-    if (error) { console.warn('setEndsOnServer error', error); return { updated:false, row:null }; }
-    if (Array.isArray(data) && data.length) return { updated:true, row:data[0] };
-    // No update happened -> fetch existing row so we reflect the true server value
-    const { data: existing } = await supabase
-      .from(MATCH_TABLE)
-      .select('id, ends, decided, votesA, votesB')
-      .eq('id', matchId)
-      .maybeSingle();
-    return { updated:false, row: existing || null };
-  }
-
-  async function setDecidedOnServer(matchId, decided) {
-    const { error } = await supabase.from(MATCH_TABLE)
-      .update({ decided: !!decided, ends: null })
-      .eq('id', matchId);
-    if (error) console.warn('setDecidedOnServer error', error);
-  }
-
-  // Atomic server-side vote increment via RPC
-  async function castVoteOnServer(matchId, side){
-    const { data, error } = await supabase.rpc('cast_vote', { p_id: matchId, p_side: side });
-    if (error) { console.warn('cast_vote error', error); throw error; }
-    return data; // table row {id, votesa, votesb, ends, decided}
-  }
-
-  function subscribeRealtime() {
-    supabase.channel('matches-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: MATCH_TABLE }, payload => {
-        const row = payload.new || payload.old;
-        if (!row || !payload.new) return;
-        const m = flat.find(x => x.id === row.id);
-        if (!m) return;
-        m.decided = !!payload.new.decided;
-        m.ends = payload.new.ends ? new Date(payload.new.ends).getTime() : null;
-        m.votesA = payload.new.votesA ?? 0;
-        m.votesB = payload.new.votesB ?? 0;
-        repaintRow(m.id);
-        if (sel === m.id) select(m.id);
-      })
-      .subscribe();
-  }
-
-  /********* Round helpers *********/
   function isRoundComplete(r){ return rounds[r].length>0 && rounds[r].every(m=>m.decided); }
   function currentRound(){ for(let r=1;r<=5;r++){ if(rounds[r].some(m=>!m.decided)) return r; } return 5; }
   function visibleMatches(){ const cur=currentRound(); return flat.filter(m => showFinished ? true : (m.round >= cur)); }
   function updateRoundBreadcrumb(){ const cur=currentRound(); roundSummary.textContent = `${roundLabel[cur]} → Final`; }
 
-  /********* Build list *********/
   function buildList(preserveId){
     listEl.innerHTML='';
     const items = visibleMatches();
@@ -391,7 +243,8 @@
       const row=document.createElement('div'); row.className='metaRow';
       const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
       const timer=document.createElement('span'); timer.className='timer';
-      if(m.ends){timer.dataset.ends=m.ends; timer.textContent=fmt(m.ends-nowMs());}
+      if(m.ends){ timer.dataset.ends=m.ends; timer.classList.remove('pending'); timer.textContent=fmt(m.ends-nowMs()); }
+      else { timer.textContent='SYNC…'; timer.classList.add('pending'); }
       row.append(badge,timer); mid.append(title,row);
       const score=document.createElement('div'); score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
       item.append(mini,mid,score);
@@ -412,8 +265,8 @@
     if(imgs[1]) imgs[1].src=m.B?.img||BLANK;
     const title=row.querySelector('.title'); if(title) title.textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
     const timer=row.querySelector('.timer');
-    if(m.ends){timer.dataset.ends=m.ends; timer.textContent=fmt(m.ends-nowMs());}
-    else{timer.removeAttribute('data-ends'); timer.textContent='';}
+    if(m.ends){ timer.dataset.ends=m.ends; timer.classList.remove('pending'); timer.textContent=fmt(m.ends-nowMs()); }
+    else{ timer.removeAttribute('data-ends'); timer.classList.add('pending'); timer.textContent='SYNC…'; }
     const score=row.children[row.children.length-1]; score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
   }
 
@@ -423,7 +276,6 @@
     listEl.scrollTo({top: row.offsetTop - 12, behavior:'smooth'});
   }
 
-  /********* Selection *********/
   function select(id){
     sel=id; chosen=null;
     [...listEl.children].forEach(li=>li.classList.toggle('selected',li.dataset.id===id));
@@ -447,40 +299,86 @@
     voteLockBadge.style.display=already?'inline-block':'none';
     btnLeft.classList.remove('active'); btnRight.classList.remove('active');
 
-    if(m.ends){detailClock.dataset.ends=m.ends;} else {detailClock.removeAttribute('data-ends');}
-    updateClock();
+    if(m.ends){
+      detailClock.dataset.ends=m.ends;
+      detailClock.classList.remove('pending');
+      detailClock.textContent=fmt(m.ends-nowMs());
+    } else {
+      detailClock.removeAttribute('data-ends');
+      detailClock.classList.add('pending');
+      detailClock.textContent='SYNC…';
+    }
 
     if(tickHandle) clearInterval(tickHandle);
     tickHandle=setInterval(updateClock,1000);
   }
-  function updateClock(){const m=flat.find(x=>x.id===sel); if(!m) return;
-    const ms=(m.ends||0)-nowMs(); detailClock.textContent=fmt(ms>0?ms:0);}
-
-  /********* Winner FX *********/
-  function showChampion(winner){
-    championArt.src = winner.img || BLANK;
-    championName.textContent = winner.name || 'Champion';
-    championTitle.setAttribute('data-text','CHAMPION');
-    championTitle.textContent = 'CHAMPION';
-    fxLayer.innerHTML='';
-    overlay.classList.add('show');
+  function updateClock(){
+    const m=flat.find(x=>x.id===sel); if(!m) return;
+    const el=detailClock;
+    if(!m.ends){ el.textContent='SYNC…'; el.classList.add('pending'); return; }
+    const ms=(m.ends||0)-nowMs();
+    el.textContent=fmt(ms>0?ms:0); el.classList.remove('pending');
   }
-  document.getElementById('btnCloseChampion').addEventListener('click', ()=> overlay.classList.remove('show'));
-  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.classList.remove('show'); });
 
-  /********* Progression *********/
   const nextId=(id)=>{const [r,i]=id.split('_');const idx=parseInt(i||'1',10);
     if(r==='R32')return`R16_${Math.ceil(idx/2)}`;
     if(r==='R16')return`QF_${Math.ceil(idx/2)}`;
     if(r==='QF')return`SF_${Math.ceil(idx/2)}`;
     if(r==='SF')return`FINAL_1`; return null;};
 
-  // ❗ Do NOT set node.ends locally. Only write to server, then re-read.
+  async function setEndsOnServer(matchId, endsMs) {
+    if (!endsMs) return { row:null };
+    const { data, error } = await supabase
+      .from(MATCH_TABLE)
+      .update({ ends: toIso(endsMs) })
+      .eq('id', matchId)
+      .is('ends', null)
+      .eq('decided', false)
+      .select('id, ends, decided, votesA, votesB');
+    if (error) { console.warn('setEndsOnServer error', error); return { row:null }; }
+    if (Array.isArray(data) && data.length) return { row:data[0] };
+    const { data: existing } = await supabase
+      .from(MATCH_TABLE)
+      .select('id, ends, decided, votesA, votesB')
+      .eq('id', matchId)
+      .maybeSingle();
+    return { row: existing || null };
+  }
+
+  async function setDecidedOnServer(matchId, decided) {
+    const { error } = await supabase.from(MATCH_TABLE)
+      .update({ decided: !!decided, ends: null })
+      .eq('id', matchId);
+    if (error) console.warn('setDecidedOnServer error', error);
+  }
+
+  async function castVoteOnServer(matchId, side){
+    const { data, error } = await supabase.rpc('cast_vote', { p_id: matchId, p_side: side });
+    if (error) { console.warn('cast_vote error', error); throw error; }
+    return data;
+  }
+
+  function subscribeRealtime() {
+    supabase.channel('matches-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: MATCH_TABLE }, payload => {
+        const row = payload.new || payload.old;
+        if (!row || !payload.new) return;
+        const m = flat.find(x => x.id === row.id);
+        if (!m) return;
+        m.decided = !!payload.new.decided;
+        m.ends = payload.new.ends ? new Date(payload.new.ends).getTime() : null;
+        m.votesA = payload.new.votesA ?? 0;
+        m.votesB = payload.new.votesB ?? 0;
+        repaintRow(m.id);
+        if (sel === m.id) select(m.id);
+      })
+      .subscribe();
+  }
+
   async function startFreshTimerIfReady(node){
     if(node.A?.img && node.B?.img && !node.ends && !node.decided){
-      const targetEnds = nowMs() + ROUND_MS; // compute desired ends
-      const { updated, row } = await setEndsOnServer(node.id, targetEnds);
-      // row contains either the newly-updated row or the pre-existing row
+      const targetEnds = nowMs() + ROUND_MS;
+      const { row } = await setEndsOnServer(node.id, targetEnds);
       if (row && row.ends){
         node.ends   = new Date(row.ends).getTime();
         node.votesA = row.votesA ?? node.votesA;
@@ -492,23 +390,20 @@
     }
   }
 
-  // Random tie-break when equal votes
   function pickWinnerObj(m){ const a=m.votesA||0, b=m.votesB||0; if(a>b) return m.A; if(b>a) return m.B; return (Math.random()<0.5)?m.A:m.B; }
-
   function advanceWinner(m){
     const winner=pickWinnerObj(m);
     const nid=nextId(m.id);
-    if(!nid){ showChampion(winner); toast(`🏆 ${winner.name} is CHAMPION`); return; }
+    if(!nid){ document.getElementById('championOverlay').classList.add('show'); toast(`🏆 ${winner.name} is CHAMPION`); return; }
     const nr=flat.find(x=>x.id===nid); if(!nr) return;
     let slot='A';
     if(!nr.A.img){ nr.A={...winner}; slot='A'; }
     else if(!nr.B.img){ nr.B={...winner}; slot='B'; }
     repaintRow(nr.id);
-    startFreshTimerIfReady(nr); // server will only set if NULL
+    startFreshTimerIfReady(nr);
     if(isRoundComplete(m.round)){ buildList(nr.id); } else { select(nr.id); scrollToRow(nr.id); }
     toast(`Advanced to ${roundLabel[nr.round]}_${nr.index} (slot ${slot})`);
   }
-
   function finalizeMatch(m){
     if(m.decided) return false;
     m.decided=true; m.ends=null;
@@ -526,8 +421,11 @@
         const left=m.ends-nowMs();
         const row=[...listEl.children].find(c=>c.dataset.id===m.id);
         const t=row?.querySelector('.timer');
-        if(t){ t.textContent=fmt(left>0?left:0); t.dataset.ends=m.ends; }
+        if(t){ t.textContent=fmt(left>0?left:0); t.dataset.ends=m.ends; t.classList.remove('pending'); }
         if(left<=0){ anyChanged = finalizeMatch(m) || anyChanged; }
+      } else {
+        const t=[...listEl.children].find(c=>c.dataset.id===m.id)?.querySelector('.timer');
+        if(t){ t.textContent='SYNC…'; t.classList.add('pending'); }
       }
     }
     if(sel){
@@ -542,73 +440,13 @@
     if(anyChanged){ buildList(sel); }
   }
 
-  /********* Voting (shared) *********/
-  function setChoice(side){
-    if (btnLeft.disabled || btnRight.disabled) return;
-    chosen = side; // 'A' or 'B'
-    btnLeft.classList.toggle('active', side==='A');
-    btnRight.classList.toggle('active', side==='B');
-    btnSubmit.disabled = false;
-  }
-  btnLeft.addEventListener('click', () => setChoice('A'));
-  btnRight.addEventListener('click', () => setChoice('B'));
-
-  btnSubmit.addEventListener('click', async () => {
-    const m = flat.find(x => x.id === sel);
-    if (!m) return;
-    if (!m.ends || m.decided){ toast('Voting closed for this match'); return; }
-
-    const key = lockKey(m.id);
-    if (localStorage.getItem(key)){ toast('You already voted here'); return; }
-    if (!chosen){ toast('Pick a side first'); return; }
-
-    try{
-      const row = await castVoteOnServer(m.id, chosen); // atomic increment on server
-      m.votesA = row.votesa ?? row.votesA ?? m.votesA;
-      m.votesB = row.votesb ?? row.votesB ?? m.votesB;
-
-      localStorage.setItem(key, chosen);
-      voteLockBadge.style.display = 'inline-block';
-      btnLeft.disabled = btnRight.disabled = true;
-      btnSubmit.disabled = true;
-
-      leftVotes.textContent = m.votesA || 0;
-      rightVotes.textContent = m.votesB || 0;
-      repaintRow(m.id);
-      toast('Vote submitted');
-    }catch(e){
-      toast('Could not submit vote');
-    }
-  });
-
-  /********* Fullscreen *********/
-  async function requestFS(el){
-    try{
-      if (el.requestFullscreen) await el.requestFullscreen({ navigationUI:'hide' });
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-      else if (el.msRequestFullscreen) el.msRequestFullscreen();
-      else throw new Error('Fullscreen API unavailable');
-    }catch(e){
-      const src = (el.tagName==='IMG' ? el.src : el.querySelector('img')?.src);
-      if(src) window.open(src, '_blank');
-    }
-  }
-  function wireFS(imgEl, btnEl){
-    btnEl.addEventListener('click', ()=> requestFS(imgEl));
-    let last=0; imgEl.addEventListener('click', ()=>{ const now=Date.now(); if(now-last<300) requestFS(imgEl); last=now; });
-  }
-  wireFS(leftArt,  fsLeft); wireFS(rightArt, fsRight);
-
-  /********* Controls *********/
   document.getElementById('btnReset').addEventListener('click', async ()=>{
     clearVoteLocks();
     if (tickHandle) { clearInterval(tickHandle); tickHandle=null; }
-    overlay.classList.remove('show');
     makeTournament();
-    await initAfterTournamentBuild(); // timers won’t reset: client never sets ends locally
-    toast('Reset complete (fresh timers if missing + local votes cleared)');
+    await initAfterTournamentBuild();
+    toast('Reset complete');
   });
-
   document.getElementById('btnForce').addEventListener('click', ()=>{
     const m=flat.find(x=>x.id===sel);
     if (!m) return;
@@ -616,35 +454,36 @@
     m.ends = nowMs();
     finalizeMatch(m);
   });
-
   document.getElementById('btnClearVotes').addEventListener('click', ()=>{
-    clearVoteLocks();
-    voteLockBadge.style.display='none';
-    if(sel){
-      const m=flat.find(x=>x.id===sel);
-      if(m && m.ends && !m.decided){
-        btnLeft.disabled = btnRight.disabled = false;
-      }
-    }
+    clearVoteLocks(); voteLockBadge.style.display='none';
+    if(sel){ const m=flat.find(x=>x.id===sel); if(m && m.ends && !m.decided){ btnLeft.disabled = btnRight.disabled = false; } }
     toast('Your local votes were cleared');
   });
+  toggleFinished.addEventListener('change', (e)=>{ showFinished = e.target.checked; buildList(sel); });
 
-  toggleFinished.addEventListener('change', (e)=>{
-    showFinished = e.target.checked;
-    buildList(sel);
-  });
-
-  /********* Init *********/
-  async function initAfterTournamentBuild(){
-    await ensureRowsExist();      // 1) make sure rows exist
-    await loadServerState();      // 2) pull current server ends/decided/votes
-    // 3) Start timers only for matches that are READY but have no server 'ends'
-    for (const m of flat){
-      if (m.A?.img && m.B?.img && !m.ends && !m.decided){
-        await startFreshTimerIfReady(m);
-      }
+  async function loadServerState() {
+    const { data, error } = await supabase.from(MATCH_TABLE).select('id, ends, decided, votesA, votesB');
+    if (error) { console.warn('loadServerState error', error); return; }
+    const map = new Map(data.map(r => [r.id, r]));
+    for (const m of flat) {
+      const row = map.get(m.id);
+      if (!row) continue;
+      m.decided = !!row.decided;
+      m.ends = row.ends ? new Date(row.ends).getTime() : null;
+      m.votesA = row.votesA ?? 0;
+      m.votesB = row.votesB ?? 0;
     }
-    // 4) Pull again to ensure local mirrors server truth
+  }
+  async function ensureRowsExist() {
+    const rows = flat.map(m => ({ id: m.id, round: m.round, idx: m.index }));
+    const { error } = await supabase.from(MATCH_TABLE).insert(rows, { onConflict: 'id', ignoreDuplicates: true });
+    if (error) console.warn('ensureRowsExist error', error);
+  }
+
+  async function initAfterTournamentBuild(){
+    await ensureRowsExist();
+    await loadServerState();
+    for (const m of flat) if (m.A?.img && m.B?.img && !m.ends && !m.decided) await startFreshTimerIfReady(m);
     await loadServerState();
     buildList();
     if (!tickHandle) tickHandle = setInterval(globalTick, 250);
@@ -654,6 +493,7 @@
     clearVoteLocks();
     makeTournament();
     subscribeRealtime();
+    buildList();                 // show immediately (SYNC… timers)
     await initAfterTournamentBuild();
   }
   init();
