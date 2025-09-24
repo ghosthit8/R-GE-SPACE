@@ -364,21 +364,26 @@
   // ======= SERVER OPS =======
   async function setEndsOnServer(matchId, endsMs) {
     if (!endsMs) return { row:null };
-    const { data, error } = await supabase
+
+    // Update without ends-null guard; log count for debug
+    const { data, error, count } = await supabase
       .from(MATCH_TABLE)
       .update({ ends: toIso(endsMs) })
       .eq('id', matchId)
-      .is('ends', null)
       .eq('decided', false)
-      .select('id, ends, decided, votesa, votesb');
-    if (error) { if(DEBUG) logDbg('setEnds error', error); return { row:null }; }
-    if (Array.isArray(data) && data.length) return { row:data[0] };
+      .select('id, ends, decided, votesa, votesb', { count: 'exact' });
+
+    if (DEBUG) logDbg('setEnds update ->', { matchId, error, updated: count });
+
+    if (!error && Array.isArray(data) && data.length) return { row: data[0] };
+
     const { data: existing, error: e2 } = await supabase
       .from(MATCH_TABLE)
       .select('id, ends, decided, votesa, votesb')
       .eq('id', matchId)
       .maybeSingle();
-    if (DEBUG && e2) logDbg('setEnds readback error', e2);
+
+    if (DEBUG) logDbg('setEnds readback ->', e2 || existing);
     return { row: existing || null };
   }
 
@@ -549,7 +554,7 @@
     }
   }
 
-  // 🔧 Use UPSERT (no onConflict arg needed when PK exists)
+  // Use UPSERT (PK exists)
   async function ensureRowsExist() {
     const rows = flat.map(m => ({ id: m.id, round: m.round, idx: m.index }));
     const { error } = await supabase.from(MATCH_TABLE).upsert(rows);
