@@ -329,20 +329,14 @@
     if(r==='SF')return`FINAL_1`; return null;};
 
   // ======= SERVER OPS =======
+  // 🔁 Server-driven ends: DB uses now() + duration
   async function setEndsOnServer(matchId, endsMs) {
-    if (!endsMs) return { row:null };
     const { data, error } = await supabase.rpc('start_timer', {
       p_id: matchId,
-      p_ends: new Date(endsMs).toISOString()
+      p_duration_ms: ROUND_MS
     });
-    if (DEBUG) logDbg('start_timer ->', error || data);
-
-    const { data: row, error: e2 } = await supabase
-      .from(MATCH_TABLE)
-      .select('id, ends, decided, votesa, votesb')
-      .eq('id', matchId)
-      .maybeSingle();
-    if (DEBUG) logDbg('readback after start_timer ->', e2 || row);
+    if (error) { if (DEBUG) logDbg('start_timer error', error); return { row:null }; }
+    const row = Array.isArray(data) ? data[0] : data;
     return { row: row || null };
   }
 
@@ -361,7 +355,7 @@
 
   // ======= REALTIME (with fallback polling) =======
   function startPollingFallback(){
-    if (pollTimer) return; // already polling
+    if (pollTimer) return;
     if (DEBUG) logDbg('Starting polling fallback (5s)');
     pollTimer = setInterval(async ()=>{
       await loadServerState();
@@ -370,7 +364,7 @@
   }
 
   function subscribeRealtime() {
-    const channel = supabase.channel('matches-realtime')
+    supabase.channel('matches-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: MATCH_TABLE }, payload => {
         const row = payload.new || payload.old;
         if (!row || !payload.new) return;
@@ -393,8 +387,7 @@
 
   async function startFreshTimerIfReady(node){
     if(node.A?.img && node.B?.img && !node.ends && !node.decided){
-      const targetEnds = nowMs() + ROUND_MS;
-      const { row } = await setEndsOnServer(node.id, targetEnds);
+      const { row } = await setEndsOnServer(node.id, nowMs() + ROUND_MS);
       if (row && row.ends){
         node.ends   = new Date(row.ends).getTime();
         node.votesA = row.votesa ?? node.votesA;
@@ -527,12 +520,12 @@
     }
   }
 
-  // ✅ INSERT + ignoreDuplicates
+  // ✅ use UPSERT to avoid dupe errors
   async function ensureRowsExist(){
     const rows = flat.map(m => ({ id: m.id, round: m.round, idx: m.index }));
     const { error } = await supabase
       .from(MATCH_TABLE)
-      .insert(rows, { onConflict: 'id', ignoreDuplicates: true });
+      .upsert(rows, { onConflict: 'id' });
     if (error && DEBUG) logDbg('ensureRowsExist error', error);
   }
 
@@ -547,18 +540,14 @@
 
   // ======= DEBUG WIRES =======
   if (DEBUG){
-    dbgBox.classList.add('show');
+    document.getElementById('dbg').classList.add('show');
     document.getElementById('dbgHealth').onclick = async ()=>{
       setDbg('checking…');
       const s1 = await supabase.from(MATCH_TABLE).select('count', { count:'exact', head:true });
       logDbg('select count ->', {count:s1.count, error:s1.error});
-      const ping = { id:'DEBUG_PING', round:0, idx:0, decided:false };
-      const i1 = await supabase.from(MATCH_TABLE).insert(ping, { ignoreDuplicates:true });
-      logDbg('insert ping ->', i1.error || 'ok');
-      await supabase.from(MATCH_TABLE).delete().eq('id','DEBUG_PING');
       const first = flat.find(m=>m.id.startsWith('R32_'));
       const { row } = await setEndsOnServer(first.id, nowMs()+60000);
-      logDbg('start_timer(first) ->', row ? {id:row.id, ends:row.ends} : 'no row');
+      logDbg('readback after start_timer ->', row);
       setDbg('done');
     };
     document.getElementById('dbgSeed').onclick = async ()=>{
