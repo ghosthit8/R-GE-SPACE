@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Tournament (Round-Aware Global Timer + Auto-Advance + Full Reset + Winner FX)</title>
+<title>Rage Space — Tournament (Persistent State + Round-Aware Timer + Winner FX)</title>
 <style>
   :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707; --pink:#ff1f8f; --blue:#00e5ff; }
   *{box-sizing:border-box}
@@ -59,8 +59,6 @@
     z-index:9999; cursor:pointer; overflow:hidden;
   }
   .winFx.show{ display:grid; animation: fxFade 250ms ease-out; }
-
-  /* scanlines + subtle grain */
   .winFx::before{
     content:''; position:absolute; inset:0;
     background:
@@ -69,8 +67,6 @@
     mix-blend-mode: screen; pointer-events:none;
     animation: scanSweep 2.2s linear infinite;
   }
-
-  /* chromatic aberration duplicates */
   .winCard{
     position:relative; text-align:center; padding:28px 36px;
     border:2px solid #39ff14; border-radius:18px; background:#020402;
@@ -79,20 +75,13 @@
   }
   .winCard::before, .winCard::after{
     content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-    border:2px solid #39ff14;
-    filter: blur(0.6px);
+    border:2px solid #39ff14; filter: blur(0.6px);
   }
   .winCard::before{ transform: translate(-2px, 0); box-shadow: 0 0 0 2px rgba(255,0,80,.7) inset; mix-blend-mode: screen; }
   .winCard::after { transform: translate( 2px, 0); box-shadow: 0 0 0 2px rgba(0,180,255,.7) inset; mix-blend-mode: screen; }
-
-  /* text */
   .winTitle{ margin:0 0 6px; letter-spacing:.22em; font-weight:800; }
   .winName{ font-size:1.9rem; font-weight:900; text-shadow: 0 0 10px rgba(57,255,20,.9); }
-
-  /* tiny “tap to dismiss” */
   .winHint{ opacity:.8; font-size:.9rem; margin-top:10px }
-
-  /* jitter/glitch keyframes */
   @keyframes fxFade{ from{opacity:0} to{opacity:1} }
   @keyframes scanSweep{ 0%{background-position-y:-40px} 100%{background-position-y:40px} }
   @keyframes textJitter{
@@ -102,16 +91,12 @@
     60% { transform: translateY(-0.6px); }
     80% { transform: translateY(0.6px); }
   }
-
-  /* confetti particles */
   .confetti{
     position:absolute; top:-10px; width:8px; height:10px; opacity:0.95; pointer-events:none;
     transform: translate3d(0,0,0) rotate(0deg);
     animation: fall linear forwards;
   }
-  @keyframes fall{
-    to { transform: translate3d(var(--dx,0), 105vh, 0) rotate(var(--rot,360deg)); opacity:1; }
-  }
+  @keyframes fall{ to { transform: translate3d(var(--dx,0), 105vh, 0) rotate(var(--rot,360deg)); opacity:1; } }
 
   /* Debug HUD (toggle with ?debug=1) */
   #dbg{position:fixed;right:10px;bottom:10px;z-index:99999;display:none;min-width:260px}
@@ -156,7 +141,6 @@
         <span class="badge" id="detailState">—</span>
       </div>
 
-      <!-- Uses the global shared_timer clock -->
       <div class="countdown">Decision in: <span class="timer pending" id="globalClock">SYNC…</span></div>
 
       <div class="stage">
@@ -197,7 +181,7 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- Winner FX overlay (old style) -->
+  <!-- Winner FX overlay -->
   <div id="winFx" class="winFx" role="dialog" aria-modal="true" title="Tap to dismiss">
     <div class="winCard">
       <h2 class="winTitle">🏆 CHAMPION</h2>
@@ -221,17 +205,22 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
   // ======= CONFIG =======
-  const ROUND_SECONDS = 5;      // change this for test length
+  const ROUND_SECONDS = 30;      // set to 5 for quick tests
   const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
 
+  // ======= TABLES / KEYS =======
   const MATCH_TABLE = 'matches';       // (placeholder; client-side demo)
   const TIMER_TABLE = 'shared_timer';
+  const STATE_KEY   = 'rs_stack_state_v1';   // local persistent bracket state
+  const VOTE_NS     = 'rs_stack_vote_v2_';   // vote locks per match
 
-  // round → timer id mapping
+  // round ↔ id mapping
   const ROUND_ID = { 1:'r32', 2:'r16', 3:'qf', 4:'sf', 5:'final' };
-  let timerChannel = null;     // active realtime channel for the current round's timer
+  const ID_ROUND = { r32:1, r16:2, qf:3, sf:4, final:5 };
+
+  let timerChannel = null; // realtime timer channel
   let globalTicker=null, _finalized=false;
 
   // ======= DEBUG =======
@@ -251,27 +240,60 @@
   const roundLabel = ['','R32','R16','QF','SF','FINAL'];
   const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
 
+  // ======= PERSISTENCE (local state) =======
+  let rounds, flat; // will be (re)hydrated
+  function saveState(){
+    try{
+      const minimal = { rounds };
+      localStorage.setItem(STATE_KEY, JSON.stringify(minimal));
+    }catch(e){ if(DEBUG) logDbg('saveState err', e); }
+  }
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STATE_KEY);
+      if(!raw) return false;
+      const parsed = JSON.parse(raw);
+      if(!parsed?.rounds) return false;
+      rounds = parsed.rounds;
+      flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
+      return true;
+    }catch(e){ if(DEBUG) logDbg('loadState err', e); return false; }
+  }
+  function clearState(){
+    localStorage.removeItem(STATE_KEY);
+  }
+
   // ======= GLOBAL TIMER (shared_timer) =======
   const globalClockEl = document.getElementById('globalClock');
 
-  async function resetTimer(seconds=ROUND_SECONDS, round=currentRound()){
+  async function resetTimer(seconds, round){
     const id = ROUND_ID[round];
     const endAt = new Date(Date.now() + seconds*1000).toISOString();
     const { error } = await supabase
       .from(TIMER_TABLE)
       .upsert({ id, end_at: endAt, duration_seconds: seconds, updated_at: new Date().toISOString() }, { onConflict: 'id' });
     if (DEBUG && error) logDbg('resetTimer error', error);
-
-    // tick immediately
     _finalized = false;
     tickGlobal(endAt);
   }
 
   async function getTimerForRound(round){
     const id = ROUND_ID[round];
-    const { data, error } = await supabase.from(TIMER_TABLE).select('end_at, duration_seconds').eq('id', id).single();
+    const { data, error } = await supabase.from(TIMER_TABLE).select('end_at, duration_seconds').eq('id', id).maybeSingle();
     if (DEBUG && error) logDbg('getTimerForRound error', error);
     return data;
+  }
+
+  async function detectActiveRoundFromTimers(){
+    const ids = Object.values(ROUND_ID);
+    const { data, error } = await supabase.from(TIMER_TABLE).select('id,end_at').in('id', ids);
+    if (DEBUG && error) logDbg('detectActive error', error);
+    const now = Date.now();
+    const live = (data||[]).filter(r => r.end_at && new Date(r.end_at).getTime() > now);
+    if (!live.length) return null;
+    // choose the "latest" round if multiple live rows exist
+    const best = live.sort((a,b)=> ID_ROUND[a.id]-ID_ROUND[b.id]).pop();
+    return ID_ROUND[best.id] || null;
   }
 
   function unsubscribeTimer(){
@@ -307,21 +329,7 @@
     }, 200);
   }
 
-  // R32-safe boot: seed a fresh deadline if missing OR expired
-  async function bootGlobalTimer(){
-    const r = currentRound();               // 1 for R32 on first load
-    subscribeTimerForRound(r);
-    const t = await getTimerForRound(r);
-    const now = Date.now();
-    if (!t?.end_at || new Date(t.end_at).getTime() <= now) {
-      await resetTimer(ROUND_SECONDS, r);   // seed fresh (e.g., 30s or 5s)
-    } else {
-      tickGlobal(t.end_at);
-    }
-  }
-
-  // ======= TOURNAMENT (client-side demo) =======
-  let rounds, flat, sel=null, chosen=null, showFinished=false;
+  // ======= TOURNAMENT (seed or hydrate) =======
   function makeTournament(){
     const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
     rounds = {1:[],2:[],3:[],4:[],5:[]};
@@ -362,14 +370,13 @@
   const winFx = document.getElementById('winFx');
   const winName = document.getElementById('winName');
 
-  // fullscreen handlers
+  // fullscreen
   function reqFS(el){ if(el.requestFullscreen) el.requestFullscreen(); else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen(); }
   fsLeftBtn.addEventListener('click', ()=>reqFS(frameLeft));
   fsRightBtn.addEventListener('click', ()=>reqFS(frameRight));
 
-  // --- Winner FX (old style) ---
+  // Winner FX
   function spawnConfetti(burst = 120){
-    const fx = document.getElementById('winFx');
     const colors = ['#39ff14', '#00e5ff', '#ff1f8f', '#e5ffe5', '#fff'];
     for(let i=0;i<burst;i++){
       const d = document.createElement('div');
@@ -381,14 +388,13 @@
       d.style.setProperty('--dx', dx);
       d.style.setProperty('--rot', rot);
       d.style.animationDuration = (1.8 + Math.random()*1.6) + 's';
-      fx.appendChild(d);
+      winFx.appendChild(d);
       d.addEventListener('animationend', ()=> d.remove());
     }
   }
   function showWinner(name){
     winName.textContent = name || 'Champion';
     winFx.classList.add('show');
-    // subtle text jitter
     winName.style.animation = 'textJitter 1200ms steps(2) infinite';
     spawnConfetti(140);
     clearTimeout(showWinner._auto);
@@ -402,11 +408,10 @@
   winFx.addEventListener('click', hideWinner);
 
   // ======= VOTE LOCKS =======
-  const VOTE_NS = 'rs_stack_vote_v2_';
   const lockKey = (id)=> `${VOTE_NS}${id}`;
   const clearVoteLocks = ()=>{ const keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.startsWith(VOTE_NS)) keys.push(k); } keys.forEach(k=>localStorage.removeItem(k)); };
 
-  // ======= LIST/SELECT =======
+  // ======= HELPERS =======
   function isRoundComplete(r){ return rounds[r].length>0 && rounds[r].every(m=>m.decided); }
   function currentRound(){ for(let r=1;r<=5;r++){ if(rounds[r].some(m=>!m.decided)) return r; } return 5; }
   function visibleMatches(){ const cur=currentRound(); return flat.filter(m => showFinished ? true : (m.round >= cur)); }
@@ -439,7 +444,7 @@
   }
 
   function select(id){
-    sel=id; chosen=null;
+    window.sel=id; window.chosen=null;
     [...listEl.children].forEach(li=>li.classList.toggle('selected',li.dataset.id===id));
     const m=flat.find(x=>x.id===id); if(!m) return;
 
@@ -474,15 +479,16 @@
     const winner=pickWinnerObj(m);
     const nid=nextId(m.id);
     if(!nid){
-      // Champion!
       toast(`🏆 ${winner.name} is CHAMPION`);
       showWinner(winner.name);
+      saveState();
       return;
     }
     const nr=flat.find(x=>x.id===nid); if(!nr) return;
     if(!nr.A.img){ nr.A={...winner}; }
     else if(!nr.B.img){ nr.B={...winner}; }
     if(isRoundComplete(m.round)) buildList(nr.id); else { select(nr.id); }
+    saveState();
   }
   function finalizeMatch(m){
     if(m.decided || !(m.A.img&&m.B.img)) return false;
@@ -494,12 +500,12 @@
   function finalizeRound(r){
     let changed=false;
     for(const m of rounds[r]) changed = finalizeMatch(m) || changed;
-    if(changed){ buildList(sel); toast('⏱ Time! Winners advanced.'); }
+    if(changed){ buildList(window.sel); toast('⏱ Time! Winners advanced.'); saveState(); }
     return changed;
   }
 
   async function onTimerExpiredOnce(){
-    const r = currentRound();          // whichever round is active when clock hits 0
+    const r = currentRound();          // active when clock hits 0 (based on saved state)
     finalizeRound(r);
 
     // If we’re not at Final, prep the next round’s timer
@@ -510,83 +516,74 @@
     }
   }
 
-  // ======= VOTING (client-side counts; replace with RPCs if you want) =======
-  btnLeft.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('A'); });
-  btnRight.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('B'); });
-  function choose(side){ chosen=side; btnLeft.classList.toggle('active',side==='A'); btnRight.classList.toggle('active',side==='B'); btnSubmit.disabled=false; }
+  // ======= VOTING =======
+  btnLeft.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===window.sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('A'); });
+  btnRight.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===window.sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('B'); });
+  function choose(side){ window.chosen=side; btnLeft.classList.toggle('active',side==='A'); btnRight.classList.toggle('active',side==='B'); btnSubmit.disabled=false; }
   btnSubmit.addEventListener('click', ()=>{
-    const m=flat.find(x=>x.id===sel); if(!m || !chosen || m.decided) return;
-    if(chosen==='A') m.votesA=(m.votesA||0)+1; else m.votesB=(m.votesB||0)+1;
+    const m=flat.find(x=>x.id===window.sel); if(!m || !window.chosen || m.decided) return;
+    if(window.chosen==='A') m.votesA=(m.votesA||0)+1; else m.votesB=(m.votesB||0)+1;
     leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
     localStorage.setItem(lockKey(m.id),'1'); voteLockBadge.style.display='inline-block';
     btnLeft.disabled=btnRight.disabled=true; btnSubmit.disabled=true;
+    saveState();
     toast('Vote submitted');
   });
 
   // ======= FULL RESET =======
   async function fullReset(){
-    // 1) clear any winner FX
     hideWinner();
-
-    // 2) clear vote locks
     clearVoteLocks();
-
-    // 3) rebuild a pristine tournament (all votes 0/undecided)
+    clearState();
     makeTournament();
-    showFinished = false;
-    const chk = document.getElementById('toggleFinished');
-    if (chk) chk.checked = false;
-
-    // 4) refresh UI and select first active match
     buildList();
-
-    // 5) hard-reset global timer + subscription to R32
     unsubscribeTimer();
     subscribeTimerForRound(1);
     await resetTimer(ROUND_SECONDS, 1);
-
+    saveState();
     toast('🔁 Fresh bracket: votes cleared, timer reset to R32');
   }
 
   // ======= UI CONTROLS =======
   document.getElementById('btnReset').addEventListener('click', fullReset);
   document.getElementById('btnForce').addEventListener('click', ()=>{
-    const m=flat.find(x=>x.id===sel); if(!m) return;
+    const m=flat.find(x=>x.id===window.sel); if(!m) return;
     if(m.decided){ toast('Match already decided'); return; }
     finalizeMatch(m);
-    buildList(sel);
+    buildList(window.sel);
+    saveState();
   });
   document.getElementById('btnClearVotes').addEventListener('click', ()=>{
     clearVoteLocks(); voteLockBadge.style.display='none';
-    const m=flat.find(x=>x.id===sel);
+    const m=flat.find(x=>x.id===window.sel);
     if(m && !m.decided && m.A.img && m.B.img){ btnLeft.disabled=btnRight.disabled=false; }
     toast('Your local votes were cleared');
   });
-  toggleFinished.addEventListener('change', (e)=>{ showFinished = e.target.checked; buildList(sel); });
-
-  // ======= DEBUG WIRES =======
-  if (DEBUG){
-    document.getElementById('dbgHealth').onclick = async ()=>{
-      setDbg('checking…');
-      const t = await getTimerForRound(currentRound()); logDbg('timer ->', t);
-      setDbg('done');
-    };
-    document.getElementById('dbgSeed').onclick = async ()=>{
-      await resetTimer(ROUND_SECONDS, currentRound());
-      setDbg('seeded');
-    };
-    document.getElementById('dbgRows').onclick = async ()=>{
-      const { data, error } = await supabase.from(MATCH_TABLE).select('*').order('id');
-      logDbg('matches ->', error || data);
-    };
-    document.getElementById('dbgClear').onclick = ()=>{ dbgLog.textContent=''; setDbg('idle'); };
-  }
+  toggleFinished.addEventListener('change', (e)=>{ window.showFinished = e.target.checked; buildList(window.sel); });
 
   // ======= BOOT =======
   async function init(){
-    makeTournament();
+    // 1) Load saved bracket if any; otherwise seed a new one
+    if (!loadState()) { makeTournament(); saveState(); }
+
+    // 2) Build the UI from saved/seeded state
     buildList();
-    await bootGlobalTimer();
+
+    // 3) Find active round from Supabase timer rows (so a refresh mid-R16 stays on R16)
+    let roundFromTimers = await detectActiveRoundFromTimers();
+    let roundFromState  = currentRound();
+    const roundToUse    = roundFromTimers || roundFromState;
+
+    // 4) Subscribe to that round's timer and ensure it’s ticking
+    subscribeTimerForRound(roundToUse);
+    const t = await getTimerForRound(roundToUse);
+    const now = Date.now();
+    if (!t?.end_at || new Date(t.end_at).getTime() <= now) {
+      // no live deadline => seed a fresh one so everyone keeps moving
+      await resetTimer(ROUND_SECONDS, roundToUse);
+    } else {
+      tickGlobal(t.end_at);
+    }
   }
   init();
 </script>
