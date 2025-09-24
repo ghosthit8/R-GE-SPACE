@@ -52,6 +52,31 @@
     border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5); display:grid; place-items:center; font-size:12px; line-height:1; opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2; }
   .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
 
+  /* ===== Fullscreen behavior ===== */
+  .frame:fullscreen,
+  .frame:-webkit-full-screen,
+  .frame:-moz-full-screen {
+    width:100vw;
+    height:100vh;
+    aspect-ratio:auto;
+    background:#000;
+  }
+  .frame:fullscreen .art,
+  .frame:-webkit-full-screen .art,
+  .frame:-moz-full-screen .art {
+    width:100%;
+    height:100%;
+    max-width:none;
+    max-height:none;
+    object-fit:contain;
+  }
+  .frame:fullscreen .fsIcon,
+  .frame:-webkit-full-screen .fsIcon,
+  .frame:-moz-full-screen .fsIcon {
+    position:absolute;
+    top:10px; right:10px;
+  }
+
   /* Debug HUD */
   #dbg{position:fixed;right:10px;bottom:10px;z-index:99999;display:none;min-width:260px}
   #dbg.show{display:block}
@@ -223,6 +248,35 @@
   const btnReset=document.getElementById('btnReset'), btnForce=document.getElementById('btnForce'), btnClearVotes=document.getElementById('btnClearVotes');
   const roundSummary=document.getElementById('roundSummary');
   const toggleFinished=document.getElementById('toggleFinished');
+
+  // ======= FULLSCREEN HOOKS =======
+  const frameLeft  = document.querySelector('#tileLeft .frame');
+  const frameRight = document.querySelector('#tileRight .frame');
+  const fsLeftBtn  = document.getElementById('fsLeft');
+  const fsRightBtn = document.getElementById('fsRight');
+
+  function requestFS(el){
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (req) req.call(el);
+  }
+  function exitFS(){
+    const ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if (ex) ex.call(document);
+  }
+  function isFS(){
+    return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+  }
+  function toggleFS(target){
+    const cur = isFS();
+    if (cur && cur !== target){ exitFS(); setTimeout(()=>requestFS(target), 60); }
+    else if (cur) { exitFS(); }
+    else { requestFS(target); }
+  }
+  fsLeftBtn.addEventListener('click',  () => toggleFS(frameLeft));
+  fsRightBtn.addEventListener('click', () => toggleFS(frameRight));
+  // Optional: double-click to toggle
+  frameLeft.addEventListener('dblclick',  () => toggleFS(frameLeft));
+  frameRight.addEventListener('dblclick', () => toggleFS(frameRight));
 
   // ======= HELPERS =======
   function isRoundComplete(r){ return rounds[r].length>0 && rounds[r].every(m=>m.decided); }
