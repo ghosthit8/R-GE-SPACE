@@ -52,27 +52,66 @@
     border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5); display:grid; place-items:center; font-size:12px; line-height:1; opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2; }
   .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
 
-  /* Winner FX overlay */
+  /* Winner FX overlay — OLD STYLE (CRT + chroma split + confetti) */
   .winFx{
-    position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.7);
-    z-index:9999; backdrop-filter: blur(2px);
-    animation: fadeBg 300ms ease-out;
+    position:fixed; inset:0; display:none; place-items:center;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,.75), rgba(0,0,0,.95));
+    z-index:9999; cursor:pointer; overflow:hidden;
   }
-  .winFx.show{ display:grid; }
+  .winFx.show{ display:grid; animation: fxFade 250ms ease-out; }
+
+  /* scanlines + subtle grain */
+  .winFx::before{
+    content:''; position:absolute; inset:0;
+    background:
+      repeating-linear-gradient(to bottom, rgba(57,255,20,.06), rgba(57,255,20,.06) 2px, transparent 2px, transparent 4px),
+      radial-gradient(circle at 50% 0%, rgba(57,255,20,.08), transparent 60%);
+    mix-blend-mode: screen; pointer-events:none;
+    animation: scanSweep 2.2s linear infinite;
+  }
+
+  /* chromatic aberration duplicates */
   .winCard{
-    border:2px solid var(--green); border-radius:16px; padding:24px 28px; background:#020402;
-    text-align:center; box-shadow:0 0 24px rgba(57,255,20,.25), inset 0 0 24px rgba(57,255,20,.15);
-    animation: flicker 1400ms infinite steps(2);
+    position:relative; text-align:center; padding:28px 36px;
+    border:2px solid #39ff14; border-radius:18px; background:#020402;
+    box-shadow: 0 0 24px rgba(57,255,20,.25), inset 0 0 24px rgba(57,255,20,.15);
+    transform: translateZ(0);
   }
-  .winCard h2{ margin:0 0 6px; letter-spacing:.2em }
-  .winName{ font-size:1.6rem; font-weight:900; text-shadow:0 0 8px rgba(57,255,20,.8) }
-  .scan{ position:absolute; inset:0; background:linear-gradient(transparent 40%, rgba(57,255,20,.15) 50%, transparent 60%); animation: scan 2.4s linear infinite; pointer-events:none }
-  @keyframes scan{ 0%{transform:translateY(-100%)} 100%{transform:translateY(100%)} }
-  @keyframes flicker{
-    0%,19%,21%,23%,25%,54%,56%,100%{ filter: none; opacity:1 }
-    20%,24%,55%{ filter: hue-rotate(40deg) saturate(140%); opacity:.9 }
+  .winCard::before, .winCard::after{
+    content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    border:2px solid #39ff14;
+    filter: blur(0.6px);
   }
-  @keyframes fadeBg{ from{opacity:0} to{opacity:1} }
+  .winCard::before{ transform: translate(-2px, 0); box-shadow: 0 0 0 2px rgba(255,0,80,.7) inset; mix-blend-mode: screen; }
+  .winCard::after { transform: translate( 2px, 0); box-shadow: 0 0 0 2px rgba(0,180,255,.7) inset; mix-blend-mode: screen; }
+
+  /* text */
+  .winTitle{ margin:0 0 6px; letter-spacing:.22em; font-weight:800; }
+  .winName{ font-size:1.9rem; font-weight:900; text-shadow: 0 0 10px rgba(57,255,20,.9); }
+
+  /* tiny “tap to dismiss” */
+  .winHint{ opacity:.8; font-size:.9rem; margin-top:10px }
+
+  /* jitter/glitch keyframes */
+  @keyframes fxFade{ from{opacity:0} to{opacity:1} }
+  @keyframes scanSweep{ 0%{background-position-y:-40px} 100%{background-position-y:40px} }
+  @keyframes textJitter{
+    0%,100%{ transform:none; }
+    20% { transform: translateX(-0.6px); }
+    40% { transform: translateX(0.6px); }
+    60% { transform: translateY(-0.6px); }
+    80% { transform: translateY(0.6px); }
+  }
+
+  /* confetti particles */
+  .confetti{
+    position:absolute; top:-10px; width:8px; height:10px; opacity:0.95; pointer-events:none;
+    transform: translate3d(0,0,0) rotate(0deg);
+    animation: fall linear forwards;
+  }
+  @keyframes fall{
+    to { transform: translate3d(var(--dx,0), 105vh, 0) rotate(var(--rot,360deg)); opacity:1; }
+  }
 
   /* Debug HUD (toggle with ?debug=1) */
   #dbg{position:fixed;right:10px;bottom:10px;z-index:99999;display:none;min-width:260px}
@@ -158,13 +197,12 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- Winner FX overlay -->
-  <div id="winFx" class="winFx" role="dialog" aria-modal="true">
-    <div class="scan"></div>
+  <!-- Winner FX overlay (old style) -->
+  <div id="winFx" class="winFx" role="dialog" aria-modal="true" title="Tap to dismiss">
     <div class="winCard">
-      <h2>🏆 CHAMPION</h2>
+      <h2 class="winTitle">🏆 CHAMPION</h2>
       <div id="winName" class="winName">—</div>
-      <div style="opacity:.8;font-size:.9rem;margin-top:8px">tap to dismiss</div>
+      <div class="winHint">tap to dismiss</div>
     </div>
   </div>
 
@@ -183,7 +221,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
   // ======= CONFIG =======
-  const ROUND_SECONDS = 5;      // change to 5 for 5s tests
+  const ROUND_SECONDS = 5;      // change this for test length
   const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
@@ -329,12 +367,38 @@
   fsLeftBtn.addEventListener('click', ()=>reqFS(frameLeft));
   fsRightBtn.addEventListener('click', ()=>reqFS(frameRight));
 
-  // Winner FX handlers
+  // --- Winner FX (old style) ---
+  function spawnConfetti(burst = 120){
+    const fx = document.getElementById('winFx');
+    const colors = ['#39ff14', '#00e5ff', '#ff1f8f', '#e5ffe5', '#fff'];
+    for(let i=0;i<burst;i++){
+      const d = document.createElement('div');
+      d.className = 'confetti';
+      d.style.left = Math.random()*100 + 'vw';
+      d.style.background = colors[Math.floor(Math.random()*colors.length)];
+      const dx = (Math.random()*60 - 30) + 'vw';
+      const rot = (Math.random()*720 - 360) + 'deg';
+      d.style.setProperty('--dx', dx);
+      d.style.setProperty('--rot', rot);
+      d.style.animationDuration = (1.8 + Math.random()*1.6) + 's';
+      fx.appendChild(d);
+      d.addEventListener('animationend', ()=> d.remove());
+    }
+  }
   function showWinner(name){
     winName.textContent = name || 'Champion';
     winFx.classList.add('show');
+    // subtle text jitter
+    winName.style.animation = 'textJitter 1200ms steps(2) infinite';
+    spawnConfetti(140);
+    clearTimeout(showWinner._auto);
+    showWinner._auto = setTimeout(()=>hideWinner(), 4200);
   }
-  function hideWinner(){ winFx.classList.remove('show'); }
+  function hideWinner(){
+    winFx.classList.remove('show');
+    winName.style.animation = 'none';
+    winFx.querySelectorAll('.confetti').forEach(n => n.remove());
+  }
   winFx.addEventListener('click', hideWinner);
 
   // ======= VOTE LOCKS =======
