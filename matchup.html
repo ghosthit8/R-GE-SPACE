@@ -362,29 +362,23 @@
     if(r==='SF')return`FINAL_1`; return null;};
 
   // ======= SERVER OPS =======
+  // Use RPC to start timers (bypasses tough RLS update cases)
   async function setEndsOnServer(matchId, endsMs) {
     if (!endsMs) return { row:null };
+    const { data, error } = await supabase.rpc('start_timer', {
+      p_id: matchId,
+      p_ends: new Date(endsMs).toISOString()
+    });
+    if (DEBUG) logDbg('start_timer ->', error || data);
 
-    // Update without ends-null guard; log count for debug
-    const { data, error, count } = await supabase
-      .from(MATCH_TABLE)
-      .update({ ends: toIso(endsMs) })
-      .eq('id', matchId)
-      .eq('decided', false)
-      .select('id, ends, decided, votesa, votesb', { count: 'exact' });
-
-    if (DEBUG) logDbg('setEnds update ->', { matchId, error, updated: count });
-
-    if (!error && Array.isArray(data) && data.length) return { row: data[0] };
-
-    const { data: existing, error: e2 } = await supabase
+    // Read back the row so we sync votesa/votesb/decided too
+    const { data: row, error: e2 } = await supabase
       .from(MATCH_TABLE)
       .select('id, ends, decided, votesa, votesb')
       .eq('id', matchId)
       .maybeSingle();
-
-    if (DEBUG) logDbg('setEnds readback ->', e2 || existing);
-    return { row: existing || null };
+    if (DEBUG) logDbg('readback after start_timer ->', e2 || row);
+    return { row: row || null };
   }
 
   async function setDecidedOnServer(matchId, decided) {
@@ -409,7 +403,7 @@
         if (!m) return;
         m.decided = !!payload.new.decided;
         m.ends = payload.new.ends ? new Date(payload.new.ends).getTime() : null;
-        // LOWERCASE from DB → camelCase in client
+        // lowercase DB → camelCase client
         m.votesA = payload.new.votesa ?? 0;
         m.votesB = payload.new.votesb ?? 0;
         repaintRow(m.id);
@@ -587,7 +581,7 @@
       logDbg('delete ping ->', d1.error || 'ok');
       const first = flat.find(m=>m.id.startsWith('R32_'));
       const { row } = await setEndsOnServer(first.id, nowMs()+60000);
-      logDbg('setEnds first ->', row ? {id:row.id, ends:row.ends} : 'no row');
+      logDbg('start_timer(first) ->', row ? {id:row.id, ends:row.ends} : 'no row');
       setDbg('done');
     };
     document.getElementById('dbgSeed').onclick = async ()=>{
