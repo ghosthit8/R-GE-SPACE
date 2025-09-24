@@ -362,7 +362,6 @@
     if(r==='SF')return`FINAL_1`; return null;};
 
   // ======= SERVER OPS =======
-  // Use RPC to start timers (bypasses tough RLS update cases)
   async function setEndsOnServer(matchId, endsMs) {
     if (!endsMs) return { row:null };
     const { data, error } = await supabase.rpc('start_timer', {
@@ -371,7 +370,6 @@
     });
     if (DEBUG) logDbg('start_timer ->', error || data);
 
-    // Read back the row so we sync votesa/votesb/decided too
     const { data: row, error: e2 } = await supabase
       .from(MATCH_TABLE)
       .select('id, ends, decided, votesa, votesb')
@@ -403,7 +401,6 @@
         if (!m) return;
         m.decided = !!payload.new.decided;
         m.ends = payload.new.ends ? new Date(payload.new.ends).getTime() : null;
-        // lowercase DB → camelCase client
         m.votesA = payload.new.votesa ?? 0;
         m.votesB = payload.new.votesb ?? 0;
         repaintRow(m.id);
@@ -548,10 +545,12 @@
     }
   }
 
-  // Use UPSERT (PK exists)
-  async function ensureRowsExist() {
+  // INSERT + ignoreDuplicates to avoid RLS UPDATE path
+  async function ensureRowsExist(){
     const rows = flat.map(m => ({ id: m.id, round: m.round, idx: m.index }));
-    const { error } = await supabase.from(MATCH_TABLE).upsert(rows);
+    const { error } = await supabase
+      .from(MATCH_TABLE)
+      .insert(rows, { onConflict: 'id', ignoreDuplicates: true });
     if (error && DEBUG) logDbg('ensureRowsExist error', error);
   }
 
@@ -575,8 +574,8 @@
       const s1 = await supabase.from(MATCH_TABLE).select('count', { count:'exact', head:true });
       logDbg('select count ->', {count:s1.count, error:s1.error});
       const ping = { id:'DEBUG_PING', round:0, idx:0, decided:false };
-      const u1 = await supabase.from(MATCH_TABLE).upsert(ping);
-      logDbg('upsert ping ->', u1.error || 'ok');
+      const u1 = await supabase.from(MATCH_TABLE).insert(ping, { ignoreDuplicates:true });
+      logDbg('insert ping ->', u1.error || 'ok');
       const d1 = await supabase.from(MATCH_TABLE).delete().eq('id','DEBUG_PING');
       logDbg('delete ping ->', d1.error || 'ok');
       const first = flat.find(m=>m.id.startsWith('R32_'));
