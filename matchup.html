@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Tournament (Round-Aware Global Timer + Auto-Advance)</title>
+<title>Rage Space — Tournament (Round-Aware Global Timer + Auto-Advance + Full Reset + Winner FX)</title>
 <style>
   :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707; --pink:#ff1f8f; --blue:#00e5ff; }
   *{box-sizing:border-box}
@@ -52,6 +52,28 @@
     border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5); display:grid; place-items:center; font-size:12px; line-height:1; opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2; }
   .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
 
+  /* Winner FX overlay */
+  .winFx{
+    position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.7);
+    z-index:9999; backdrop-filter: blur(2px);
+    animation: fadeBg 300ms ease-out;
+  }
+  .winFx.show{ display:grid; }
+  .winCard{
+    border:2px solid var(--green); border-radius:16px; padding:24px 28px; background:#020402;
+    text-align:center; box-shadow:0 0 24px rgba(57,255,20,.25), inset 0 0 24px rgba(57,255,20,.15);
+    animation: flicker 1400ms infinite steps(2);
+  }
+  .winCard h2{ margin:0 0 6px; letter-spacing:.2em }
+  .winName{ font-size:1.6rem; font-weight:900; text-shadow:0 0 8px rgba(57,255,20,.8) }
+  .scan{ position:absolute; inset:0; background:linear-gradient(transparent 40%, rgba(57,255,20,.15) 50%, transparent 60%); animation: scan 2.4s linear infinite; pointer-events:none }
+  @keyframes scan{ 0%{transform:translateY(-100%)} 100%{transform:translateY(100%)} }
+  @keyframes flicker{
+    0%,19%,21%,23%,25%,54%,56%,100%{ filter: none; opacity:1 }
+    20%,24%,55%{ filter: hue-rotate(40deg) saturate(140%); opacity:.9 }
+  }
+  @keyframes fadeBg{ from{opacity:0} to{opacity:1} }
+
   /* Debug HUD (toggle with ?debug=1) */
   #dbg{position:fixed;right:10px;bottom:10px;z-index:99999;display:none;min-width:260px}
   #dbg.show{display:block}
@@ -65,7 +87,7 @@
   <header>
     <h1 style="margin:0">R<span style="letter-spacing:.03em">Ⓐ</span>GE SPACE — TOURNAMENT</h1>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button id="btnReset" class="btn">🔁 Reset test</button>
+      <button id="btnReset" class="btn">🔁 Reset test (fresh bracket)</button>
       <button id="btnForce" class="btn">⚡ Force decide (selected)</button>
       <button id="btnClearVotes" class="btn">🧹 Clear my votes</button>
       <a class="btn" href="#" onclick="return false">🏁 Bracket (coming soon)</a>
@@ -136,6 +158,16 @@
 
   <div id="toast" class="toast"></div>
 
+  <!-- Winner FX overlay -->
+  <div id="winFx" class="winFx" role="dialog" aria-modal="true">
+    <div class="scan"></div>
+    <div class="winCard">
+      <h2>🏆 CHAMPION</h2>
+      <div id="winName" class="winName">—</div>
+      <div style="opacity:.8;font-size:.9rem;margin-top:8px">tap to dismiss</div>
+    </div>
+  </div>
+
   <!-- Debug HUD -->
   <div id="dbg"><div class="card">
     <div><b>Debug</b> — <span id="dbgStatus">idle</span></div>
@@ -151,7 +183,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
   // ======= CONFIG =======
-  const ROUND_SECONDS = 30;      // change to 5 for 5s tests
+  const ROUND_SECONDS = 5;      // change to 5 for 5s tests
   const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
@@ -162,6 +194,7 @@
   // round → timer id mapping
   const ROUND_ID = { 1:'r32', 2:'r16', 3:'qf', 4:'sf', 5:'final' };
   let timerChannel = null;     // active realtime channel for the current round's timer
+  let globalTicker=null, _finalized=false;
 
   // ======= DEBUG =======
   const qs = new URLSearchParams(location.search);
@@ -182,7 +215,6 @@
 
   // ======= GLOBAL TIMER (shared_timer) =======
   const globalClockEl = document.getElementById('globalClock');
-  let globalTicker=null, _finalized=false;
 
   async function resetTimer(seconds=ROUND_SECONDS, round=currentRound()){
     const id = ROUND_ID[round];
@@ -192,7 +224,7 @@
       .upsert({ id, end_at: endAt, duration_seconds: seconds, updated_at: new Date().toISOString() }, { onConflict: 'id' });
     if (DEBUG && error) logDbg('resetTimer error', error);
 
-    // IMPORTANT: tick immediately so the button "feels" instant
+    // tick immediately
     _finalized = false;
     tickGlobal(endAt);
   }
@@ -202,6 +234,12 @@
     const { data, error } = await supabase.from(TIMER_TABLE).select('end_at, duration_seconds').eq('id', id).single();
     if (DEBUG && error) logDbg('getTimerForRound error', error);
     return data;
+  }
+
+  function unsubscribeTimer(){
+    if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; }
+    clearInterval(globalTicker);
+    globalTicker = null;
   }
 
   function subscribeTimerForRound(round){
@@ -283,11 +321,21 @@
   const fsRightBtn = document.getElementById('fsRight');
   const frameLeft = document.getElementById('frameLeft');
   const frameRight = document.getElementById('frameRight');
+  const winFx = document.getElementById('winFx');
+  const winName = document.getElementById('winName');
 
   // fullscreen handlers
   function reqFS(el){ if(el.requestFullscreen) el.requestFullscreen(); else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen(); }
   fsLeftBtn.addEventListener('click', ()=>reqFS(frameLeft));
   fsRightBtn.addEventListener('click', ()=>reqFS(frameRight));
+
+  // Winner FX handlers
+  function showWinner(name){
+    winName.textContent = name || 'Champion';
+    winFx.classList.add('show');
+  }
+  function hideWinner(){ winFx.classList.remove('show'); }
+  winFx.addEventListener('click', hideWinner);
 
   // ======= VOTE LOCKS =======
   const VOTE_NS = 'rs_stack_vote_v2_';
@@ -361,7 +409,12 @@
   function advanceWinner(m){
     const winner=pickWinnerObj(m);
     const nid=nextId(m.id);
-    if(!nid){ toast(`🏆 ${winner.name} is CHAMPION`); return; }
+    if(!nid){
+      // Champion!
+      toast(`🏆 ${winner.name} is CHAMPION`);
+      showWinner(winner.name);
+      return;
+    }
     const nr=flat.find(x=>x.id===nid); if(!nr) return;
     if(!nr.A.img){ nr.A={...winner}; }
     else if(!nr.B.img){ nr.B={...winner}; }
@@ -406,11 +459,33 @@
     toast('Vote submitted');
   });
 
+  // ======= FULL RESET =======
+  async function fullReset(){
+    // 1) clear any winner FX
+    hideWinner();
+
+    // 2) clear vote locks
+    clearVoteLocks();
+
+    // 3) rebuild a pristine tournament (all votes 0/undecided)
+    makeTournament();
+    showFinished = false;
+    const chk = document.getElementById('toggleFinished');
+    if (chk) chk.checked = false;
+
+    // 4) refresh UI and select first active match
+    buildList();
+
+    // 5) hard-reset global timer + subscription to R32
+    unsubscribeTimer();
+    subscribeTimerForRound(1);
+    await resetTimer(ROUND_SECONDS, 1);
+
+    toast('🔁 Fresh bracket: votes cleared, timer reset to R32');
+  }
+
   // ======= UI CONTROLS =======
-  document.getElementById('btnReset').addEventListener('click', async ()=>{
-    await resetTimer(ROUND_SECONDS);                 // true global reset for current round
-    toast(`Global timer reset to ${ROUND_SECONDS}s`);
-  });
+  document.getElementById('btnReset').addEventListener('click', fullReset);
   document.getElementById('btnForce').addEventListener('click', ()=>{
     const m=flat.find(x=>x.id===sel); if(!m) return;
     if(m.decided){ toast('Match already decided'); return; }
