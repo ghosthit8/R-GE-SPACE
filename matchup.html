@@ -52,23 +52,6 @@
     border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5); display:grid; place-items:center; font-size:12px; line-height:1; opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2; }
   .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
 
-  .championOverlay{ position:fixed; inset:0; display:none; place-items:center; z-index:9999;
-    background: radial-gradient(1000px 600px at 70% -10%, rgba(57,255,20,.09), transparent 60%),
-               radial-gradient(900px 700px at 20% 110%, rgba(0,229,255,.08), transparent 60%),
-               rgba(0,0,0,.92); overflow:hidden; }
-  .championOverlay.show{ display:grid; animation:fadeIn .3s ease-out both; }
-  @keyframes fadeIn{ from{opacity:0} to{opacity:1} }
-  .scanlines::before{ content:""; position:absolute; inset:0;
-    background: repeating-linear-gradient(to bottom, rgba(255,255,255,.06), rgba(255,255,255,.06) 1px, transparent 1px, transparent 3px);
-    mix-blend-mode:overlay; pointer-events:none; opacity:.2; }
-  .crtGlow{ filter: drop-shadow(0 0 16px rgba(57,255,20,.55)) drop-shadow(0 0 32px rgba(0,229,255,.35)); }
-  .championCard{ position:relative; width:min(900px, 92vw); border:1px solid var(--green);
-    border-radius:18px; background:linear-gradient(to bottom right, rgba(7,7,7,.85), rgba(7,7,7,.75));
-    padding:18px; display:grid; grid-template-columns: 340px 1fr; gap:18px; }
-  @media (max-width:800px){ .championCard{ grid-template-columns:1fr } }
-  .championArt{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:#050505; aspect-ratio:4/5; width:100%; object-fit:cover; transform:translateZ(0); }
-  .championMeta{ display:flex; flex-direction:column; gap:12px; justify-content:center; position:relative; }
-
   /* Debug HUD */
   #dbg{position:fixed;right:10px;bottom:10px;z-index:99999;display:none;min-width:260px}
   #dbg.show{display:block}
@@ -152,20 +135,6 @@
 
   <div id="toast" class="toast"></div>
 
-  <div id="championOverlay" class="championOverlay">
-    <button id="btnCloseChampion" class="btnClose">✖</button>
-    <div class="championCard crtGlow">
-      <img id="championArt" class="championArt" alt="Champion art">
-      <div class="championMeta">
-        <div class="subBadge">🏆 FINAL — WINNER</div>
-        <div id="championTitle" class="glitchTitle" data-text="CHAMPION">CHAMPION</div>
-        <div id="championName" class="winnerName">—</div>
-        <div style="opacity:.8">Glory to the machine. Your art devours the bracket.</div>
-      </div>
-      <div id="fxLayer" class="fxBurst"></div>
-    </div>
-  </div>
-
   <!-- Debug HUD -->
   <div id="dbg"><div class="card">
     <div><b>Debug</b> — <span id="dbgStatus">idle</span></div>
@@ -182,7 +151,6 @@
 <script type="module">
   // ======= CONFIG =======
   const ROUND_MS = 30000; // 30s per match
-
   const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
@@ -194,8 +162,7 @@
   const dbgBox = document.getElementById('dbg');
   const dbgLog = document.getElementById('dbgLog');
   const setDbg = (s)=>{ document.getElementById('dbgStatus').textContent = s; };
-  const logDbg = (...a)=>{ console.log('[DBG]', ...a); dbgLog.textContent += a.map(x=> (typeof x==='string'?x:JSON.stringify(x,null,2))).join(' ') + '\n'; dbgLog.scrollTop = dbgLog.scrollHeight; };
-  if (DEBUG) dbgBox.classList.add('show');
+  const logDbg = (...a)=>{ if(!DEBUG) return; console.log('[DBG]', ...a); dbgLog.textContent += a.map(x=> (typeof x==='string'?x:JSON.stringify(x,null,2))).join(' ') + '\n'; dbgLog.scrollTop = dbgLog.scrollHeight; };
 
   const toIso = (ms)=> new Date(ms).toISOString();
   const nowMs = ()=> Date.now();
@@ -215,10 +182,10 @@
            String(Math.floor((s%3600)/60)).padStart(2,'0')+':' +
            String(s%60).padStart(2,'0'); };
   const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
-  const log = (...a)=>console.log('[RageSpace]', ...a);
 
   // ======= STATE =======
   let rounds, flat, sel=null, tickHandle=null, chosen=null, showFinished=false;
+  let pollTimer = null; // fallback poll
 
   // ======= TOURNAMENT BUILD =======
   function makeTournament(){
@@ -237,7 +204,7 @@
       }
     }
     flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
-    if (DEBUG) window.rs = { rounds, flat }; // expose for console
+    if (DEBUG) window.rs = { rounds, flat };
   }
 
   // ======= DOM HOOKS =======
@@ -392,8 +359,18 @@
     return data;
   }
 
+  // ======= REALTIME (with fallback polling) =======
+  function startPollingFallback(){
+    if (pollTimer) return; // already polling
+    if (DEBUG) logDbg('Starting polling fallback (5s)');
+    pollTimer = setInterval(async ()=>{
+      await loadServerState();
+      buildList(sel);
+    }, 5000);
+  }
+
   function subscribeRealtime() {
-    supabase.channel('matches-realtime')
+    const channel = supabase.channel('matches-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: MATCH_TABLE }, payload => {
         const row = payload.new || payload.old;
         if (!row || !payload.new) return;
@@ -406,7 +383,12 @@
         repaintRow(m.id);
         if (sel === m.id) select(m.id);
       })
-      .subscribe((status)=>{ if(DEBUG) logDbg('realtime', status); });
+      .subscribe((status) => {
+        if (DEBUG) logDbg('Realtime status:', status);
+        if (status === 'TIMED_OUT' || status === 'CLOSED') {
+          startPollingFallback();
+        }
+      });
   }
 
   async function startFreshTimerIfReady(node){
@@ -428,7 +410,7 @@
   function advanceWinner(m){
     const winner=pickWinnerObj(m);
     const nid=nextId(m.id);
-    if(!nid){ document.getElementById('championOverlay').classList.add('show'); toast(`🏆 ${winner.name} is CHAMPION`); return; }
+    if(!nid){ toast(`🏆 ${winner.name} is CHAMPION`); return; }
     const nr=flat.find(x=>x.id===nid); if(!nr) return;
     let slot='A';
     if(!nr.A.img){ nr.A={...winner}; slot='A'; }
@@ -545,7 +527,7 @@
     }
   }
 
-  // INSERT + ignoreDuplicates to avoid RLS UPDATE path
+  // ✅ INSERT + ignoreDuplicates
   async function ensureRowsExist(){
     const rows = flat.map(m => ({ id: m.id, round: m.round, idx: m.index }));
     const { error } = await supabase
@@ -563,21 +545,17 @@
     if (!tickHandle) tickHandle = setInterval(globalTick, 250);
   }
 
-  function requireFullscreen(el){ if(el.requestFullscreen) el.requestFullscreen(); }
-  document.getElementById('fsLeft').onclick = ()=>requireFullscreen(leftArt);
-  document.getElementById('fsRight').onclick = ()=>requireFullscreen(rightArt);
-
-  // ======= DEBUG HUD WIRES =======
+  // ======= DEBUG WIRES =======
   if (DEBUG){
+    dbgBox.classList.add('show');
     document.getElementById('dbgHealth').onclick = async ()=>{
       setDbg('checking…');
       const s1 = await supabase.from(MATCH_TABLE).select('count', { count:'exact', head:true });
       logDbg('select count ->', {count:s1.count, error:s1.error});
       const ping = { id:'DEBUG_PING', round:0, idx:0, decided:false };
-      const u1 = await supabase.from(MATCH_TABLE).insert(ping, { ignoreDuplicates:true });
-      logDbg('insert ping ->', u1.error || 'ok');
-      const d1 = await supabase.from(MATCH_TABLE).delete().eq('id','DEBUG_PING');
-      logDbg('delete ping ->', d1.error || 'ok');
+      const i1 = await supabase.from(MATCH_TABLE).insert(ping, { ignoreDuplicates:true });
+      logDbg('insert ping ->', i1.error || 'ok');
+      await supabase.from(MATCH_TABLE).delete().eq('id','DEBUG_PING');
       const first = flat.find(m=>m.id.startsWith('R32_'));
       const { row } = await setEndsOnServer(first.id, nowMs()+60000);
       logDbg('start_timer(first) ->', row ? {id:row.id, ends:row.ends} : 'no row');
@@ -585,9 +563,7 @@
     };
     document.getElementById('dbgSeed').onclick = async ()=>{
       setDbg('seeding…');
-      for (const m of flat.filter(x=>x.round===1)){
-        await startFreshTimerIfReady(m);
-      }
+      for (const m of flat.filter(x=>x.round===1)){ await startFreshTimerIfReady(m); }
       await loadServerState(); buildList(sel);
       setDbg('seeded');
     };
@@ -605,7 +581,6 @@
     subscribeRealtime();
     buildList();                 // show immediately (SYNC… timers)
     await initAfterTournamentBuild();
-    log('ready');
   }
   init();
 </script>
