@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Tournament (Global Timer + Auto-Advance)</title>
+<title>Rage Space — Tournament (Round-Aware Global Timer + Auto-Advance)</title>
 <style>
   :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707; --pink:#ff1f8f; --blue:#00e5ff; }
   *{box-sizing:border-box}
@@ -100,7 +100,7 @@
 
       <div class="stage">
         <div class="tile" id="tileLeft">
-          <div class="frame">
+          <div class="frame" id="frameLeft">
             <img id="leftArt" class="art" alt="">
             <button class="fsIcon" id="fsLeft" aria-label="Fullscreen top">⤢</button>
             <div id="leftTbd" class="tbd" style="display:none">?</div>
@@ -112,7 +112,7 @@
         </div>
 
         <div class="tile" id="tileRight">
-          <div class="frame">
+          <div class="frame" id="frameRight">
             <img id="rightArt" class="art" alt="">
             <button id="fsRight" class="fsIcon" aria-label="Fullscreen bottom">⤢</button>
             <div id="rightTbd" class="tbd" style="display:none">?</div>
@@ -151,25 +151,27 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
   // ======= CONFIG =======
-  const ROUND_SECONDS = 5;      // shared round length
+  const ROUND_SECONDS = 8;      // change to 5 for 5s tests
   const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
 
-  const MATCH_TABLE = 'matches';
+  const MATCH_TABLE = 'matches';       // not used in this client-only demo
   const TIMER_TABLE = 'shared_timer';
-  const TIMER_ID    = 'r32';     // use different ids if you add multiple round clocks
+
+  // round → timer id mapping
+  const ROUND_ID = { 1:'r32', 2:'r16', 3:'qf', 4:'sf', 5:'final' };
+  let timerChannel = null;     // active realtime channel for the current round's timer
 
   // ======= DEBUG =======
   const qs = new URLSearchParams(location.search);
   const DEBUG = qs.get('debug') === '1';
-  const dbgBox = document.getElementById('dbg');
+  if (DEBUG) document.getElementById('dbg').classList.add('show');
   const dbgLog = document.getElementById('dbgLog');
-  const setDbg = (s)=>{ document.getElementById('dbgStatus').textContent = s; };
+  const setDbg = (s)=>{ const el=document.getElementById('dbgStatus'); if(el) el.textContent = s; };
   const logDbg = (...a)=>{ if(!DEBUG) return; console.log('[DBG]', ...a); dbgLog.textContent += a.map(x=> (typeof x==='string'?x:JSON.stringify(x,null,2))).join(' ') + '\n'; dbgLog.scrollTop = dbgLog.scrollHeight; };
 
   // ======= SMALL UTILS =======
-  const nowMs = ()=> Date.now();
   const fmt = (ms)=>{ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000);
     return String(Math.floor(s/3600)).padStart(2,'0')+':' +
            String(Math.floor((s%3600)/60)).padStart(2,'0')+':' +
@@ -182,52 +184,66 @@
   const globalClockEl = document.getElementById('globalClock');
   let globalTicker=null, _finalized=false;
 
-  async function resetTimer(seconds=ROUND_SECONDS){
+  async function resetTimer(seconds=ROUND_SECONDS, round=currentRound()){
+    const id = ROUND_ID[round];
     const endAt = new Date(Date.now() + seconds*1000).toISOString();
     const { error } = await supabase
       .from(TIMER_TABLE)
-      .upsert({ id: TIMER_ID, end_at: endAt, duration_seconds: seconds, updated_at: new Date().toISOString() }, { onConflict: 'id' });
-    if (error && DEBUG) logDbg('resetTimer error', error);
-    _finalized = false; // allow next finalize at 0
+      .upsert({ id, end_at: endAt, duration_seconds: seconds, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+    if (DEBUG && error) logDbg('resetTimer error', error);
+
+    // IMPORTANT: tick immediately so the button "feels" instant
+    _finalized = false;
+    tickGlobal(endAt);
   }
-  async function getTimer(){
-    const { data, error } = await supabase.from(TIMER_TABLE).select('end_at,duration_seconds').eq('id',TIMER_ID).single();
-    if (error) { if(DEBUG) logDbg('getTimer error', error); return null; }
+
+  async function getTimerForRound(round){
+    const id = ROUND_ID[round];
+    const { data, error } = await supabase.from(TIMER_TABLE).select('end_at, duration_seconds').eq('id', id).single();
+    if (DEBUG && error) logDbg('getTimerForRound error', error);
     return data;
   }
+
+  function subscribeTimerForRound(round){
+    const id = ROUND_ID[round];
+    if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; }
+    timerChannel = supabase
+      .channel('timer-'+id)
+      .on('postgres_changes', { event:'*', schema:'public', table:TIMER_TABLE, filter:`id=eq.${id}` },
+        (payload)=>{
+          const endAt = (payload.new ?? payload.old)?.end_at;
+          if (endAt) tickGlobal(endAt);
+        })
+      .subscribe();
+  }
+
   function tickGlobal(endISO){
     const endMs = new Date(endISO).getTime();
     clearInterval(globalTicker);
+    globalClockEl.classList.remove('pending');
     globalTicker = setInterval(()=>{
       const left = Math.max(0, endMs - Date.now());
       globalClockEl.textContent = fmt(left);
-      globalClockEl.classList.remove('pending');
       if(left<=0){
         clearInterval(globalTicker);
         if(!_finalized){ _finalized=true; onTimerExpiredOnce(); }
       }
-    }, 250);
+    }, 200);
   }
-  function subscribeTimerRealtime(){
-    supabase.channel('timer')
-      .on('postgres_changes',{event:'*',schema:'public',table:TIMER_TABLE,filter:`id=eq.${TIMER_ID}`},
-        payload=>{
-          const endAt = (payload.new ?? payload.old)?.end_at;
-          if(endAt) tickGlobal(endAt);
-        })
-      .subscribe();
-  }
+
   async function bootGlobalTimer(){
-    const t = await getTimer();
-    if(!t){ await resetTimer(ROUND_SECONDS); }
-    const latest = await getTimer();
-    if (latest?.end_at) tickGlobal(latest.end_at);
-    subscribeTimerRealtime();
+    const r = currentRound();
+    subscribeTimerForRound(r);
+    const t = await getTimerForRound(r);
+    if (!t?.end_at) {
+      await resetTimer(ROUND_SECONDS, r); // seed
+    } else {
+      tickGlobal(t.end_at);
+    }
   }
 
-  // ======= YOUR EXISTING TOURNAMENT STATE =======
-  let rounds, flat, sel=null, tickHandle=null, chosen=null, showFinished=false;
-
+  // ======= TOURNAMENT (client-side demo) =======
+  let rounds, flat, sel=null, chosen=null, showFinished=false;
   function makeTournament(){
     const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
     rounds = {1:[],2:[],3:[],4:[],5:[]};
@@ -261,6 +277,15 @@
   const btnReset=document.getElementById('btnReset'), btnForce=document.getElementById('btnForce'), btnClearVotes=document.getElementById('btnClearVotes');
   const roundSummary=document.getElementById('roundSummary');
   const toggleFinished=document.getElementById('toggleFinished');
+  const fsLeftBtn = document.getElementById('fsLeft');
+  const fsRightBtn = document.getElementById('fsRight');
+  const frameLeft = document.getElementById('frameLeft');
+  const frameRight = document.getElementById('frameRight');
+
+  // fullscreen handlers
+  function reqFS(el){ if(el.requestFullscreen) el.requestFullscreen(); else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen(); }
+  fsLeftBtn.addEventListener('click', ()=>reqFS(frameLeft));
+  fsRightBtn.addEventListener('click', ()=>reqFS(frameRight));
 
   // ======= VOTE LOCKS =======
   const VOTE_NS = 'rs_stack_vote_v2_';
@@ -336,9 +361,8 @@
     const nid=nextId(m.id);
     if(!nid){ toast(`🏆 ${winner.name} is CHAMPION`); return; }
     const nr=flat.find(x=>x.id===nid); if(!nr) return;
-    let slot='A';
-    if(!nr.A.img){ nr.A={...winner}; slot='A'; }
-    else if(!nr.B.img){ nr.B={...winner}; slot='B'; }
+    if(!nr.A.img){ nr.A={...winner}; }
+    else if(!nr.B.img){ nr.B={...winner}; }
     if(isRoundComplete(m.round)) buildList(nr.id); else { select(nr.id); }
   }
   function finalizeMatch(m){
@@ -348,14 +372,23 @@
     return true;
   }
 
-  // ======= AUTO-ADVANCE TRIGGERED BY GLOBAL TIMER =======
-  async function onTimerExpiredOnce(){
-    // Close all OPEN R32 matches (round 1) and advance winners
+  function finalizeRound(r){
     let changed=false;
-    for(const m of rounds[1]){ changed = finalizeMatch(m) || changed; }
+    for(const m of rounds[r]) changed = finalizeMatch(m) || changed;
     if(changed){ buildList(sel); toast('⏱ Time! Winners advanced.'); }
-    // Optionally: immediately restart timer for the next phase
-    // await resetTimer(ROUND_SECONDS);
+    return changed;
+  }
+
+  async function onTimerExpiredOnce(){
+    const r = currentRound();          // whichever round is active when clock hits 0
+    finalizeRound(r);
+
+    // If we’re not at Final, prep the next round’s timer
+    if (r < 5) {
+      const next = r + 1;
+      subscribeTimerForRound(next);
+      await resetTimer(ROUND_SECONDS, next);
+    }
   }
 
   // ======= VOTING (client-side counts; replace with RPCs if you want) =======
@@ -373,8 +406,8 @@
 
   // ======= UI CONTROLS =======
   document.getElementById('btnReset').addEventListener('click', async ()=>{
-    await resetTimer(ROUND_SECONDS);                 // true global reset
-    toast('Global timer reset to 30s');
+    await resetTimer(ROUND_SECONDS);                 // true global reset for current round
+    toast(`Global timer reset to ${ROUND_SECONDS}s`);
   });
   document.getElementById('btnForce').addEventListener('click', ()=>{
     const m=flat.find(x=>x.id===sel); if(!m) return;
@@ -392,16 +425,13 @@
 
   // ======= DEBUG WIRES =======
   if (DEBUG){
-    document.getElementById('dbg').classList.add('show');
     document.getElementById('dbgHealth').onclick = async ()=>{
       setDbg('checking…');
-      const s1 = await supabase.from(MATCH_TABLE).select('count', { count:'exact', head:true });
-      logDbg('rows in matches ->', {count:s1.count, error:s1.error});
-      const t = await getTimer(); logDbg('timer ->', t);
+      const t = await getTimerForRound(currentRound()); logDbg('timer ->', t);
       setDbg('done');
     };
     document.getElementById('dbgSeed').onclick = async ()=>{
-      await resetTimer(ROUND_SECONDS);
+      await resetTimer(ROUND_SECONDS, currentRound());
       setDbg('seeded');
     };
     document.getElementById('dbgRows').onclick = async ()=>{
