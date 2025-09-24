@@ -151,12 +151,12 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
   // ======= CONFIG =======
-  const ROUND_SECONDS = 8;      // change to 5 for 5s tests
+  const ROUND_SECONDS = 30;      // change to 5 for 5s tests
   const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
 
-  const MATCH_TABLE = 'matches';       // not used in this client-only demo
+  const MATCH_TABLE = 'matches';       // (placeholder; client-side demo)
   const TIMER_TABLE = 'shared_timer';
 
   // round → timer id mapping
@@ -231,12 +231,14 @@
     }, 200);
   }
 
+  // R32-safe boot: seed a fresh deadline if missing OR expired
   async function bootGlobalTimer(){
-    const r = currentRound();
+    const r = currentRound();               // 1 for R32 on first load
     subscribeTimerForRound(r);
     const t = await getTimerForRound(r);
-    if (!t?.end_at) {
-      await resetTimer(ROUND_SECONDS, r); // seed
+    const now = Date.now();
+    if (!t?.end_at || new Date(t.end_at).getTime() <= now) {
+      await resetTimer(ROUND_SECONDS, r);   // seed fresh (e.g., 30s or 5s)
     } else {
       tickGlobal(t.end_at);
     }
