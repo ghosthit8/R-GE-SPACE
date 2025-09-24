@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Tournament (Persistent + Cyberpunk Winner FX)</title>
+<title>Rage Space — Tournament (Cyberpunk Winner FX)</title>
 <style>
   :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707; --pink:#ff1f8f; --blue:#00e5ff; }
   *{box-sizing:border-box}
@@ -12,7 +12,6 @@
   a.btn,button.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
   header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px}
   .app{display:grid;grid-template-columns: 360px 1fr;gap:14px;height:calc(100vh - 56px);padding:0 14px 14px}
-
   .listWrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
   .listHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px}
   .listHeadRight{display:flex;align-items:center;gap:10px}
@@ -27,7 +26,6 @@
   .timer{font-variant-numeric:tabular-nums;opacity:.9;min-width:72px;display:inline-block}
   .timer.pending{opacity:.6}
   .selected{outline:2px solid rgba(57,255,20,.55);outline-offset:-2px}
-
   .detail{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
   .detailHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
   .stage{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:14px}
@@ -38,113 +36,134 @@
   .art{ position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; display:block; background:#000; }
   .tbd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:900;color:rgba(57,255,20,.75);pointer-events:none}
   .tileMeta{display:flex;justify-content:space-between;gap:8px;padding:10px;align-items:center}
-
   .countdown{padding:0 14px 10px}
   .actions{padding:0 14px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .hint{opacity:.75;padding:0 14px 14px}
   .choice.btn{border-style:solid}
   .choice.btn.active{box-shadow:0 0 0 2px rgba(57,255,20,.6) inset}
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:var(--ink);padding:8px 12px;border-radius:10px;display:none;z-index:60}
-
   @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
-
   .fsIcon{ position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:6px;
     border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5); display:grid; place-items:center; font-size:12px; line-height:1; opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2; }
   .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
 
-  /* ===== Winner FX — CYBERPUNK with image, CRT, chroma split, confetti ===== */
+  /* ===== Winner FX — full-image fit + cyberpunk frame + glitch caption ===== */
   .winFx{
-    --winbg:none;
     position:fixed; inset:0; display:none; place-items:center;
-    background:radial-gradient(ellipse at center, rgba(0,0,0,.30), rgba(0,0,0,.85) 70%);
+    background: radial-gradient(ellipse at center, rgba(0,0,0,.25), rgba(0,0,0,.9) 70%);
     z-index:100000; cursor:pointer; overflow:hidden; pointer-events:auto;
   }
   .winFx.show{ display:grid; animation: fxFade 220ms ease-out; }
 
-  .winArt,
-  .winArt::before,
-  .winArt::after{
-    position:absolute; inset:0;
-    background-image: var(--winbg);
-    background-size: cover; background-position: center;
-  }
-  .winArt{
-    filter: saturate(1.35) contrast(1.1) brightness(1.03);
-    transform: scale(1.02);
-    animation: slowPan 9s ease-in-out infinite alternate;
-  }
-  /* chromatic aberration layers */
-  .winArt::before{
-    content:"";
-    mix-blend-mode: screen;
-    filter: saturate(1.2) hue-rotate(20deg) blur(.2px);
-    transform: translateX(-2px);
-    opacity:.85;
-  }
-  .winArt::after{
-    content:"";
-    mix-blend-mode: screen;
-    filter: saturate(1.2) hue-rotate(-20deg) blur(.2px);
-    transform: translateX(2px);
-    opacity:.85;
-  }
-
-  /* scanlines + glitch bars */
-  .scanlines{
-    position:absolute; inset:0; pointer-events:none;
+  /* Persistent scanlines in background */
+  .winFx::before{
+    content:''; position:absolute; inset:0; pointer-events:none;
     background:
-      repeating-linear-gradient(to bottom, rgba(57,255,20,.06), rgba(57,255,20,.06) 2px, transparent 2px, transparent 4px),
-      linear-gradient(180deg, rgba(0,0,0,.0), rgba(0,0,0,.35) 55%, rgba(0,0,0,.6));
+      repeating-linear-gradient(to bottom, rgba(57,255,20,.055), rgba(57,255,20,.055) 2px, transparent 2px, transparent 4px),
+      radial-gradient(circle at 50% -10%, rgba(57,255,20,.08), transparent 60%);
     mix-blend-mode: screen;
-    animation: scanSweep 2.4s linear infinite;
+    animation: scanSweep 2.6s linear infinite;
   }
 
-  .vignette{
-    position:absolute; inset:-10%;
-    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,.65));
-    pointer-events:none;
+  .winViewport{
+    position:relative; z-index:2;
+    display:flex; flex-direction:column; align-items:center; gap:12px;
+    max-width: min(92vw, 1200px);
   }
 
-  .winGlass{
-    position:relative; z-index:2; text-align:center;
-    padding:26px 34px; border-radius:18px;
-    background: rgba(2,4,2,.35);
-    border:1px solid rgba(57,255,20,.5);
-    box-shadow: 0 0 22px rgba(57,255,20,.15), inset 0 0 22px rgba(57,255,20,.12);
-    backdrop-filter: blur(6px);
+  /* Neon Cyber frame */
+  .neonFrame{
+    position:relative;
+    width:100%;
+    border-radius:22px;
+    padding:12px; /* bezel */
+    background:
+      linear-gradient(135deg, rgba(0,229,255,.18), rgba(255,31,143,.18));
+    box-shadow:
+      0 0 40px rgba(0,229,255,.25),
+      0 0 40px rgba(255,31,143,.25) inset;
+    border:1px solid rgba(57,255,20,.35);
   }
-  .winTitle{ margin:0 0 6px; letter-spacing:.22em; font-weight:800; text-shadow:0 0 8px rgba(57,255,20,.75); }
-  .winName{ font-size:2rem; font-weight:900; text-shadow:
-      0 0 10px rgba(57,255,20,.9),
-      0 0 20px rgba(0,229,255,.4),
-      0 0 20px rgba(255,31,143,.4);
-    animation: textJitter 1200ms steps(2) infinite;
+  .neonFrame::before,
+  .neonFrame::after{
+    content:''; position:absolute; inset:-2px; border-radius:24px; pointer-events:none;
   }
-  .winHint{ opacity:.85; font-size:.9rem; margin-top:10px }
+  .neonFrame::before{ border:2px solid rgba(0,229,255,.35); filter:blur(.6px); mix-blend-mode:screen; }
+  .neonFrame::after { border:2px solid rgba(255,31,143,.35); filter:blur(.6px); mix-blend-mode:screen; }
 
-  /* confetti */
+  .winCanvas{
+    position:relative; overflow:hidden; border-radius:14px;
+    background:#000;
+  }
+
+  /* The image must FIT fully on screen */
+  .winImg{
+    display:block;
+    max-width: calc(92vw - 32px);
+    max-height: calc(70vh - 8px);
+    width:auto; height:auto; object-fit:contain;
+    margin:auto;
+    filter: saturate(1.18) contrast(1.05) brightness(1.04);
+    transform: translateZ(0);
+  }
+
+  /* subtle CRT chroma layers (non-cropping) */
+  .chromaWrap{ position:relative; }
+  .chromaWrap::before, .chromaWrap::after{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    border-radius:14px;
+    mix-blend-mode:screen; filter: blur(.3px) saturate(1.1);
+  }
+  .chromaWrap::before{ box-shadow: 0 0 0 2px rgba(255,0,80,.35) inset; transform: translateX(-1.5px); }
+  .chromaWrap::after { box-shadow: 0 0 0 2px rgba(0,180,255,.35) inset; transform: translateX( 1.5px); }
+
+  /* Glitch caption */
+  .glitch{
+    position:relative; text-align:center; font-weight:900; letter-spacing:.03em;
+    font-size: clamp(16px, 2.2vw, 24px);
+    color:#d9ffd9;
+    text-shadow: 0 0 8px rgba(57,255,20,.6), 0 0 18px rgba(0,229,255,.4);
+    padding:8px 12px; border-radius:10px;
+    border:1px solid rgba(57,255,20,.35);
+    background:rgba(2,4,2,.35); backdrop-filter: blur(6px);
+  }
+  .glitch::before, .glitch::after{
+    content: attr(data-text);
+    position:absolute; inset:0; pointer-events:none;
+  }
+  .glitch::before{
+    left:-1.5px; top:0; color:#ff1f8f; clip-path: polygon(0 0,100% 0,100% 40%,0 60%);
+    animation: g1 1.4s infinite steps(2);
+    opacity:.85;
+  }
+  .glitch::after{
+    left:1.5px; top:0; color:#00e5ff; clip-path: polygon(0 60%,100% 40%,100% 100%,0 100%);
+    animation: g2 1.4s infinite steps(2);
+    opacity:.85;
+  }
+
+  .winHint{ opacity:.85; font-size:.9rem; margin-top:4px }
+
+  /* Confetti */
   .confetti{
-    position:absolute; top:-10px; width:8px; height:10px; opacity:0.95; pointer-events:none;
+    position:absolute; top:-10px; width:9px; height:11px; opacity:0.95; pointer-events:none;
     transform: translate3d(0,0,0) rotate(0deg);
     animation: fall linear forwards;
   }
 
-  /* keyframes */
+  /* Keyframes */
   @keyframes fxFade{ from{opacity:0} to{opacity:1} }
   @keyframes scanSweep{ 0%{background-position-y:-40px} 100%{background-position-y:40px} }
-  @keyframes textJitter{
-    0%,100%{ transform:none; }
-    20% { transform: translateX(-0.8px); }
-    40% { transform: translateX(0.8px); }
-    60% { transform: translateY(-0.8px); }
-    80% { transform: translateY(0.8px); }
+  @keyframes g1{
+    0%{ transform: translate(0,0); } 20%{ transform: translate(-1px,-0.5px);} 40%{ transform: translate(1px,0.5px); }
+    60%{ transform: translate(-1px,0.5px);} 80%{ transform: translate(1px,-0.5px);} 100%{ transform: translate(0,0); }
   }
-  @keyframes slowPan{
-    0% { transform: scale(1.02) translate3d(-1%, -1%, 0); }
-    100%{ transform: scale(1.06) translate3d(1%, 1%, 0); }
+  @keyframes g2{
+    0%{ transform: translate(0,0); } 20%{ transform: translate(1px,0.5px);} 40%{ transform: translate(-1px,-0.5px); }
+    60%{ transform: translate(1px,-0.5px);} 80%{ transform: translate(-1px,0.5px);} 100%{ transform: translate(0,0); }
   }
   @keyframes fall{
-    to { transform: translate3d(var(--dx,0), 105vh, 0) rotate(var(--rot,360deg)); opacity:1; }
+    to { transform: translate3d(var(--dx,0), 106vh, 0) rotate(var(--rot,360deg)); opacity:1; }
   }
 
   /* Debug HUD (toggle with ?debug=1) */
@@ -230,14 +249,18 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- Winner FX overlay (CYBERPUNK) -->
+  <!-- Winner FX overlay -->
   <div id="winFx" class="winFx" role="dialog" aria-modal="true" title="Tap to dismiss">
-    <div class="winArt" id="winArt"></div>
-    <div class="scanlines"></div>
-    <div class="vignette"></div>
-    <div class="winGlass">
-      <h2 class="winTitle">🏆 CHAMPION</h2>
-      <div id="winName" class="winName">—</div>
+    <div class="winViewport">
+      <div class="neonFrame">
+        <div class="winCanvas chromaWrap">
+          <img id="winImg" class="winImg" alt="Champion artwork">
+        </div>
+      </div>
+      <div id="winGlitch" class="glitch"
+           data-text="Glory to the machine. Your art devours the bracket">
+        Glory to the machine. Your art devours the bracket
+      </div>
       <div class="winHint">tap to dismiss</div>
     </div>
   </div>
@@ -257,7 +280,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
   // ======= CONFIG =======
-  const ROUND_SECONDS = 5;      // set to 5 for quick tests
+  const ROUND_SECONDS = 5; // set 5 for quick tests
   const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
@@ -398,16 +421,17 @@
   const fsRightBtn = document.getElementById('fsRight');
   const frameLeft = document.getElementById('frameLeft');
   const frameRight = document.getElementById('frameRight');
-  const winFx = document.getElementById('winFx');
-  const winArt = document.getElementById('winArt');
-  const winName = document.getElementById('winName');
+
+  // Winner FX handles
+  const winFx   = document.getElementById('winFx');
+  const winImg  = document.getElementById('winImg');
 
   function reqFS(el){ if(el.requestFullscreen) el.requestFullscreen(); else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen(); }
   fsLeftBtn.addEventListener('click', ()=>reqFS(frameLeft));
   fsRightBtn.addEventListener('click', ()=>reqFS(frameRight));
 
   // ======= CYBERPUNK Winner FX =======
-  function spawnConfetti(burst = 160){
+  function spawnConfetti(burst = 180){
     const colors = ['#39ff14', '#00e5ff', '#ff1f8f', '#e5ffe5', '#fff'];
     for(let i=0;i<burst;i++){
       const d = document.createElement('div');
@@ -423,16 +447,13 @@
       d.addEventListener('animationend', ()=> d.remove());
     }
   }
-  function showWinner(name, img){
-    clearTimeout(showWinner._auto);
-    winName.textContent = name || 'Champion';
-    if (img) {
-      // Set CSS var for image so pseudo-layers can use it too
-      winFx.style.setProperty('--winbg', `url("${img}")`);
-    }
+  function showWinnerImage(img, name){
+    clearTimeout(showWinnerImage._auto);
+    winImg.src = img || '';
     winFx.classList.add('show');
-    spawnConfetti(160);
-    showWinner._auto = setTimeout(()=>hideWinner(), 4500);
+    // Confetti fires at the beginning
+    spawnConfetti(200);
+    showWinnerImage._auto = setTimeout(()=>hideWinner(), 5200);
   }
   function hideWinner(){
     winFx.classList.remove('show');
@@ -502,17 +523,19 @@
 
   // ======= Bracket flow =======
   const nextId=(id)=>{const [r,i]=id.split('_');const idx=parseInt(i||'1',10);
-    if(r==='R32')return`R16_${Math.ceil(idx/2)}`; if(r==='R16')return`QF_${Math.ceil(idx/2)}`;
-    if(r==='QF')return`SF_${Math.ceil(idx/2)}`; if(r==='SF')return`FINAL_1`; return null;};
+    if(r==='R32')return`R16_${Math.ceil(idx/2)}`;
+    if(r==='R16')return`QF_${Math.ceil(idx/2)}`;
+    if(r==='QF')return`SF_${Math.ceil(idx/2)}`;
+    if(r==='SF')return`FINAL_1`; return null;};
 
   function pickWinnerObj(m){ const a=m.votesA||0, b=m.votesB||0; if(a>b) return m.A; if(b>a) return m.B; return (Math.random()<0.5)?m.A:m.B; }
   function advanceWinner(m){
     const winner=pickWinnerObj(m);
     const nid=nextId(m.id);
     if(!nid){
-      // === CHAMPION === -> show image + neon FX
+      // === CHAMPION -> show full-image cyberpunk frame + glitch caption ===
       toast(`🏆 ${winner.name} is CHAMPION`);
-      showWinner(winner.name, winner.img);
+      showWinnerImage(winner.img, winner.name);
       saveState();
       return;
     }
