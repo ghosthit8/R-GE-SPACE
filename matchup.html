@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Tournament (Round-Aware Global Timer + Auto-Advance + Full Reset + Winner FX)</title>
+<title>Rage Space — Tournament (Persistent + Cyberpunk Winner FX)</title>
 <style>
   :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707; --pink:#ff1f8f; --blue:#00e5ff; }
   *{box-sizing:border-box}
@@ -44,7 +44,7 @@
   .hint{opacity:.75;padding:0 14px 14px}
   .choice.btn{border-style:solid}
   .choice.btn.active{box-shadow:0 0 0 2px rgba(57,255,20,.6) inset}
-  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:var(--ink);padding:8px 12px;border-radius:10px;display:none;z-index:50}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:var(--ink);padding:8px 12px;border-radius:10px;display:none;z-index:60}
 
   @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
 
@@ -52,69 +52,103 @@
     border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5); display:grid; place-items:center; font-size:12px; line-height:1; opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2; }
   .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
 
-  /* Winner FX overlay — OLD STYLE (CRT + chroma split + confetti) */
+  /* ===== Winner FX — CYBERPUNK with image, CRT, chroma split, confetti ===== */
   .winFx{
+    --winbg:none;
     position:fixed; inset:0; display:none; place-items:center;
-    background:radial-gradient(ellipse at center, rgba(0,0,0,.75), rgba(0,0,0,.95));
-    z-index:9999; cursor:pointer; overflow:hidden;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,.30), rgba(0,0,0,.85) 70%);
+    z-index:100000; cursor:pointer; overflow:hidden; pointer-events:auto;
   }
-  .winFx.show{ display:grid; animation: fxFade 250ms ease-out; }
+  .winFx.show{ display:grid; animation: fxFade 220ms ease-out; }
 
-  /* scanlines + subtle grain */
-  .winFx::before{
-    content:''; position:absolute; inset:0;
+  .winArt,
+  .winArt::before,
+  .winArt::after{
+    position:absolute; inset:0;
+    background-image: var(--winbg);
+    background-size: cover; background-position: center;
+  }
+  .winArt{
+    filter: saturate(1.35) contrast(1.1) brightness(1.03);
+    transform: scale(1.02);
+    animation: slowPan 9s ease-in-out infinite alternate;
+  }
+  /* chromatic aberration layers */
+  .winArt::before{
+    content:"";
+    mix-blend-mode: screen;
+    filter: saturate(1.2) hue-rotate(20deg) blur(.2px);
+    transform: translateX(-2px);
+    opacity:.85;
+  }
+  .winArt::after{
+    content:"";
+    mix-blend-mode: screen;
+    filter: saturate(1.2) hue-rotate(-20deg) blur(.2px);
+    transform: translateX(2px);
+    opacity:.85;
+  }
+
+  /* scanlines + glitch bars */
+  .scanlines{
+    position:absolute; inset:0; pointer-events:none;
     background:
       repeating-linear-gradient(to bottom, rgba(57,255,20,.06), rgba(57,255,20,.06) 2px, transparent 2px, transparent 4px),
-      radial-gradient(circle at 50% 0%, rgba(57,255,20,.08), transparent 60%);
-    mix-blend-mode: screen; pointer-events:none;
-    animation: scanSweep 2.2s linear infinite;
+      linear-gradient(180deg, rgba(0,0,0,.0), rgba(0,0,0,.35) 55%, rgba(0,0,0,.6));
+    mix-blend-mode: screen;
+    animation: scanSweep 2.4s linear infinite;
   }
 
-  /* chromatic aberration duplicates */
-  .winCard{
-    position:relative; text-align:center; padding:28px 36px;
-    border:2px solid #39ff14; border-radius:18px; background:#020402;
-    box-shadow: 0 0 24px rgba(57,255,20,.25), inset 0 0 24px rgba(57,255,20,.15);
-    transform: translateZ(0);
-  }
-  .winCard::before, .winCard::after{
-    content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-    border:2px solid #39ff14;
-    filter: blur(0.6px);
-  }
-  .winCard::before{ transform: translate(-2px, 0); box-shadow: 0 0 0 2px rgba(255,0,80,.7) inset; mix-blend-mode: screen; }
-  .winCard::after { transform: translate( 2px, 0); box-shadow: 0 0 0 2px rgba(0,180,255,.7) inset; mix-blend-mode: screen; }
-
-  /* text */
-  .winTitle{ margin:0 0 6px; letter-spacing:.22em; font-weight:800; }
-  .winName{ font-size:1.9rem; font-weight:900; text-shadow: 0 0 10px rgba(57,255,20,.9); }
-
-  /* tiny “tap to dismiss” */
-  .winHint{ opacity:.8; font-size:.9rem; margin-top:10px }
-
-  /* jitter/glitch keyframes */
-  @keyframes fxFade{ from{opacity:0} to{opacity:1} }
-  @keyframes scanSweep{ 0%{background-position-y:-40px} 100%{background-position-y:40px} }
-  @keyframes textJitter{
-    0%,100%{ transform:none; }
-    20% { transform: translateX(-0.6px); }
-    40% { transform: translateX(0.6px); }
-    60% { transform: translateY(-0.6px); }
-    80% { transform: translateY(0.6px); }
+  .vignette{
+    position:absolute; inset:-10%;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,.65));
+    pointer-events:none;
   }
 
-  /* confetti particles */
+  .winGlass{
+    position:relative; z-index:2; text-align:center;
+    padding:26px 34px; border-radius:18px;
+    background: rgba(2,4,2,.35);
+    border:1px solid rgba(57,255,20,.5);
+    box-shadow: 0 0 22px rgba(57,255,20,.15), inset 0 0 22px rgba(57,255,20,.12);
+    backdrop-filter: blur(6px);
+  }
+  .winTitle{ margin:0 0 6px; letter-spacing:.22em; font-weight:800; text-shadow:0 0 8px rgba(57,255,20,.75); }
+  .winName{ font-size:2rem; font-weight:900; text-shadow:
+      0 0 10px rgba(57,255,20,.9),
+      0 0 20px rgba(0,229,255,.4),
+      0 0 20px rgba(255,31,143,.4);
+    animation: textJitter 1200ms steps(2) infinite;
+  }
+  .winHint{ opacity:.85; font-size:.9rem; margin-top:10px }
+
+  /* confetti */
   .confetti{
     position:absolute; top:-10px; width:8px; height:10px; opacity:0.95; pointer-events:none;
     transform: translate3d(0,0,0) rotate(0deg);
     animation: fall linear forwards;
+  }
+
+  /* keyframes */
+  @keyframes fxFade{ from{opacity:0} to{opacity:1} }
+  @keyframes scanSweep{ 0%{background-position-y:-40px} 100%{background-position-y:40px} }
+  @keyframes textJitter{
+    0%,100%{ transform:none; }
+    20% { transform: translateX(-0.8px); }
+    40% { transform: translateX(0.8px); }
+    60% { transform: translateY(-0.8px); }
+    80% { transform: translateY(0.8px); }
+  }
+  @keyframes slowPan{
+    0% { transform: scale(1.02) translate3d(-1%, -1%, 0); }
+    100%{ transform: scale(1.06) translate3d(1%, 1%, 0); }
   }
   @keyframes fall{
     to { transform: translate3d(var(--dx,0), 105vh, 0) rotate(var(--rot,360deg)); opacity:1; }
   }
 
   /* Debug HUD (toggle with ?debug=1) */
-  #dbg{position:fixed;right:10px;bottom:10px;z-index:99999;display:none;min-width:260px}
+  #dbg{position:fixed;right:10px;bottom:10px;z-index:100001;display:none;min-width:260px}
   #dbg.show{display:block}
   #dbg .card{background:#0a0a0a;border:1px solid #163a16;color:#bfffbf;border-radius:10px;padding:10px;font-size:12px}
   #dbg .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
@@ -156,7 +190,6 @@
         <span class="badge" id="detailState">—</span>
       </div>
 
-      <!-- Uses the global shared_timer clock -->
       <div class="countdown">Decision in: <span class="timer pending" id="globalClock">SYNC…</span></div>
 
       <div class="stage">
@@ -197,9 +230,12 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- Winner FX overlay (old style) -->
+  <!-- Winner FX overlay (CYBERPUNK) -->
   <div id="winFx" class="winFx" role="dialog" aria-modal="true" title="Tap to dismiss">
-    <div class="winCard">
+    <div class="winArt" id="winArt"></div>
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div class="winGlass">
       <h2 class="winTitle">🏆 CHAMPION</h2>
       <div id="winName" class="winName">—</div>
       <div class="winHint">tap to dismiss</div>
@@ -221,36 +257,23 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
   // ======= CONFIG =======
-  const ROUND_SECONDS = 10;      // change to 5 for quick tests
+  const ROUND_SECONDS = 5;      // set to 5 for quick tests
   const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
 
-  const MATCH_TABLE = 'matches';       // (placeholder; client-side demo)
+  // ======= TABLES / KEYS =======
+  const MATCH_TABLE = 'matches';       // demo only
   const TIMER_TABLE = 'shared_timer';
+  const STATE_KEY   = 'rs_stack_state_v1';
+  const VOTE_NS     = 'rs_stack_vote_v2_';
 
-  // round ↔ timer id mapping
+  // round id maps
+  const roundLabel = ['','R32','R16','QF','SF','FINAL'];
   const ROUND_ID = { 1:'r32', 2:'r16', 3:'qf', 4:'sf', 5:'final' };
   const ID_ROUND = { r32:1, r16:2, qf:3, sf:4, final:5 };
 
-  // ======= PERSISTENCE (local device) =======
-  const STATE_KEY = 'rs_stack_state_v1'; // saves { rounds }
-  function saveState(){ try{ localStorage.setItem(STATE_KEY, JSON.stringify({rounds})); }catch(e){} }
-  function loadState(){
-    try{
-      const raw = localStorage.getItem(STATE_KEY);
-      if(!raw) return false;
-      const parsed = JSON.parse(raw);
-      if(!parsed?.rounds) return false;
-      rounds = parsed.rounds;
-      flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
-      return true;
-    }catch(e){ return false; }
-  }
-  function clearState(){ localStorage.removeItem(STATE_KEY); }
-
-  let timerChannel = null;     // active realtime channel for the current round's timer
-  let globalTicker=null, _finalized=false;
+  let timerChannel=null, globalTicker=null, _finalized=false, showFinished=false;
 
   // ======= DEBUG =======
   const qs = new URLSearchParams(location.search);
@@ -266,61 +289,63 @@
            String(Math.floor((s%3600)/60)).padStart(2,'0')+':' +
            String(s%60).padStart(2,'0'); };
   const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
-  const roundLabel = ['','R32','R16','QF','SF','FINAL'];
   const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
 
-  // ======= GLOBAL TIMER (shared_timer) =======
+  // ======= PERSISTENCE =======
+  let rounds, flat, sel=null, chosen=null;
+  function saveState(){ try{ localStorage.setItem(STATE_KEY, JSON.stringify({rounds})); }catch{} }
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STATE_KEY);
+      if(!raw) return false;
+      const parsed = JSON.parse(raw);
+      if(!parsed?.rounds) return false;
+      rounds = parsed.rounds;
+      flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
+      return true;
+    }catch{ return false; }
+  }
+  function clearState(){ localStorage.removeItem(STATE_KEY); }
+
+  // ======= GLOBAL TIMER =======
   const globalClockEl = document.getElementById('globalClock');
 
   async function resetTimer(seconds=ROUND_SECONDS, round=currentRound()){
     const id = ROUND_ID[round];
     const endAt = new Date(Date.now() + seconds*1000).toISOString();
-    const { error } = await supabase
+    await supabase
       .from(TIMER_TABLE)
       .upsert({ id, end_at: endAt, duration_seconds: seconds, updated_at: new Date().toISOString() }, { onConflict: 'id' });
-    if (DEBUG && error) logDbg('resetTimer error', error);
     _finalized = false;
     tickGlobal(endAt);
   }
-
   async function getTimerForRound(round){
     const id = ROUND_ID[round];
-    const { data, error } = await supabase.from(TIMER_TABLE).select('end_at, duration_seconds').eq('id', id).single();
-    if (DEBUG && error) logDbg('getTimerForRound error', error);
+    const { data } = await supabase.from(TIMER_TABLE).select('end_at, duration_seconds').eq('id', id).maybeSingle();
     return data;
   }
-
   async function detectActiveRoundFromTimers(){
     const ids = Object.values(ROUND_ID);
-    const { data, error } = await supabase.from(TIMER_TABLE).select('id,end_at').in('id', ids);
-    if (DEBUG && error) logDbg('detectActive error', error);
+    const { data } = await supabase.from(TIMER_TABLE).select('id,end_at').in('id', ids);
     const now = Date.now();
     const live = (data||[]).filter(r => r.end_at && new Date(r.end_at).getTime() > now);
     if (!live.length) return null;
-    // choose the highest (latest) round if multiple live rows exist
     const best = live.sort((a,b)=> ID_ROUND[a.id]-ID_ROUND[b.id]).pop();
     return ID_ROUND[best.id] || null;
   }
-
   function unsubscribeTimer(){
     if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; }
-    clearInterval(globalTicker);
-    globalTicker = null;
+    clearInterval(globalTicker); globalTicker=null;
   }
-
   function subscribeTimerForRound(round){
     const id = ROUND_ID[round];
     if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; }
     timerChannel = supabase
       .channel('timer-'+id)
       .on('postgres_changes', { event:'*', schema:'public', table:TIMER_TABLE, filter:`id=eq.${id}` },
-        (payload)=>{
-          const endAt = (payload.new ?? payload.old)?.end_at;
-          if (endAt) tickGlobal(endAt);
-        })
+        (payload)=>{ const endAt = (payload.new ?? payload.old)?.end_at; if (endAt) tickGlobal(endAt); })
       .subscribe();
   }
-
   function tickGlobal(endISO){
     const endMs = new Date(endISO).getTime();
     clearInterval(globalTicker);
@@ -335,8 +360,7 @@
     }, 200);
   }
 
-  // ======= TOURNAMENT (client-side demo) =======
-  let rounds, flat, sel=null, chosen=null, showFinished=false;
+  // ======= TOURNAMENT SEED =======
   function makeTournament(){
     const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
     rounds = {1:[],2:[],3:[],4:[],5:[]};
@@ -355,7 +379,7 @@
     flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
   }
 
-  // ======= DOM HOOKS =======
+  // ======= DOM =======
   const listEl=document.getElementById('matchList');
   const detailRound=document.getElementById('detailRound');
   const detailIndex=document.getElementById('detailIndex');
@@ -375,16 +399,15 @@
   const frameLeft = document.getElementById('frameLeft');
   const frameRight = document.getElementById('frameRight');
   const winFx = document.getElementById('winFx');
+  const winArt = document.getElementById('winArt');
   const winName = document.getElementById('winName');
 
-  // fullscreen handlers
   function reqFS(el){ if(el.requestFullscreen) el.requestFullscreen(); else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen(); }
   fsLeftBtn.addEventListener('click', ()=>reqFS(frameLeft));
   fsRightBtn.addEventListener('click', ()=>reqFS(frameRight));
 
-  // --- Winner FX (old style) ---
-  function spawnConfetti(burst = 120){
-    const fx = document.getElementById('winFx');
+  // ======= CYBERPUNK Winner FX =======
+  function spawnConfetti(burst = 160){
     const colors = ['#39ff14', '#00e5ff', '#ff1f8f', '#e5ffe5', '#fff'];
     for(let i=0;i<burst;i++){
       const d = document.createElement('div');
@@ -395,32 +418,33 @@
       const rot = (Math.random()*720 - 360) + 'deg';
       d.style.setProperty('--dx', dx);
       d.style.setProperty('--rot', rot);
-      d.style.animationDuration = (1.8 + Math.random()*1.6) + 's';
-      fx.appendChild(d);
+      d.style.animationDuration = (1.8 + Math.random()*1.8) + 's';
+      winFx.appendChild(d);
       d.addEventListener('animationend', ()=> d.remove());
     }
   }
-  function showWinner(name){
-    winName.textContent = name || 'Champion';
-    winFx.classList.add('show');
-    winName.style.animation = 'textJitter 1200ms steps(2) infinite';
-    spawnConfetti(140);
+  function showWinner(name, img){
     clearTimeout(showWinner._auto);
-    showWinner._auto = setTimeout(()=>hideWinner(), 4200);
+    winName.textContent = name || 'Champion';
+    if (img) {
+      // Set CSS var for image so pseudo-layers can use it too
+      winFx.style.setProperty('--winbg', `url("${img}")`);
+    }
+    winFx.classList.add('show');
+    spawnConfetti(160);
+    showWinner._auto = setTimeout(()=>hideWinner(), 4500);
   }
   function hideWinner(){
     winFx.classList.remove('show');
-    winName.style.animation = 'none';
     winFx.querySelectorAll('.confetti').forEach(n => n.remove());
   }
   winFx.addEventListener('click', hideWinner);
 
-  // ======= VOTE LOCKS =======
-  const VOTE_NS = 'rs_stack_vote_v2_';
+  // ======= Vote locks =======
   const lockKey = (id)=> `${VOTE_NS}${id}`;
   const clearVoteLocks = ()=>{ const keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.startsWith(VOTE_NS)) keys.push(k); } keys.forEach(k=>localStorage.removeItem(k)); };
 
-  // ======= LIST/SELECT =======
+  // ======= Helpers =======
   function isRoundComplete(r){ return rounds[r].length>0 && rounds[r].every(m=>m.decided); }
   function currentRound(){ for(let r=1;r<=5;r++){ if(rounds[r].some(m=>!m.decided)) return r; } return 5; }
   function visibleMatches(){ const cur=currentRound(); return flat.filter(m => showFinished ? true : (m.round >= cur)); }
@@ -476,20 +500,19 @@
     btnLeft.classList.remove('active'); btnRight.classList.remove('active');
   }
 
-  // ======= BRACKET FLOW =======
+  // ======= Bracket flow =======
   const nextId=(id)=>{const [r,i]=id.split('_');const idx=parseInt(i||'1',10);
-    if(r==='R32')return`R16_${Math.ceil(idx/2)}`;
-    if(r==='R16')return`QF_${Math.ceil(idx/2)}`;
-    if(r==='QF')return`SF_${Math.ceil(idx/2)}`;
-    if(r==='SF')return`FINAL_1`; return null;};
+    if(r==='R32')return`R16_${Math.ceil(idx/2)}`; if(r==='R16')return`QF_${Math.ceil(idx/2)}`;
+    if(r==='QF')return`SF_${Math.ceil(idx/2)}`; if(r==='SF')return`FINAL_1`; return null;};
 
   function pickWinnerObj(m){ const a=m.votesA||0, b=m.votesB||0; if(a>b) return m.A; if(b>a) return m.B; return (Math.random()<0.5)?m.A:m.B; }
   function advanceWinner(m){
     const winner=pickWinnerObj(m);
     const nid=nextId(m.id);
     if(!nid){
+      // === CHAMPION === -> show image + neon FX
       toast(`🏆 ${winner.name} is CHAMPION`);
-      showWinner(winner.name);
+      showWinner(winner.name, winner.img);
       saveState();
       return;
     }
@@ -514,10 +537,8 @@
   }
 
   async function onTimerExpiredOnce(){
-    const r = currentRound();          // whichever round is active when clock hits 0 (from saved state)
+    const r = currentRound();
     finalizeRound(r);
-
-    // If we’re not at Final, prep the next round’s timer
     if (r < 5) {
       const next = r + 1;
       subscribeTimerForRound(next);
@@ -525,7 +546,7 @@
     }
   }
 
-  // ======= VOTING =======
+  // ======= Voting =======
   btnLeft.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('A'); });
   btnRight.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('B'); });
   function choose(side){ chosen=side; btnLeft.classList.toggle('active',side==='A'); btnRight.classList.toggle('active',side==='B'); btnSubmit.disabled=false; }
@@ -539,14 +560,12 @@
     toast('Vote submitted');
   });
 
-  // ======= FULL RESET =======
+  // ======= Full Reset =======
   async function fullReset(){
     hideWinner();
     clearVoteLocks();
-    clearState();                 // <- wipe saved bracket
+    clearState();
     makeTournament();
-    showFinished = false;
-    const chk = document.getElementById('toggleFinished'); if (chk) chk.checked = false;
     buildList();
     unsubscribeTimer();
     subscribeTimerForRound(1);
@@ -555,7 +574,7 @@
     toast('🔁 Fresh bracket: votes cleared, timer reset to R32');
   }
 
-  // ======= UI CONTROLS =======
+  // ======= UI wires =======
   document.getElementById('btnReset').addEventListener('click', fullReset);
   document.getElementById('btnForce').addEventListener('click', ()=>{
     const m=flat.find(x=>x.id===sel); if(!m) return;
@@ -572,19 +591,14 @@
   });
   toggleFinished.addEventListener('change', (e)=>{ showFinished = e.target.checked; buildList(sel); });
 
-  // ======= BOOT =======
+  // ======= Boot =======
   async function init(){
-    // 1) Load saved bracket if present; else seed a new one
     if (!loadState()) { makeTournament(); saveState(); }
-
-    // 2) Build UI
     buildList();
 
-    // 3) Detect active round from Supabase timers; if none, keep the saved round
     let roundFromTimers = await detectActiveRoundFromTimers();
     let roundToUse = roundFromTimers || currentRound();
 
-    // 4) Subscribe to that round's timer and ensure it’s ticking
     subscribeTimerForRound(roundToUse);
     const t = await getTimerForRound(roundToUse);
     const now = Date.now();
