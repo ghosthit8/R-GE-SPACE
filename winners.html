@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rage Space — Winners</title>
+<link rel="icon" href="favicon.ico" />
+<style>
+  :root{ --green:#39ff14; --ink:#e5ffe5; --bg:#000; --card:#0a0a0a; }
+  *{ box-sizing:border-box }
+  body{ margin:0; background:#000; color:var(--ink); font-family:ui-sans-serif,system-ui,Arial }
+  header{ padding:14px 16px; position:sticky; top:0; background:linear-gradient(#000, rgba(0,0,0,.75)); border-bottom:1px solid rgba(57,255,20,.25) }
+  h1{ margin:0; color:var(--green); text-shadow:0 0 10px rgba(57,255,20,.6) }
+  .wrap{ padding:14px 14px 48px; max-width:1100px; margin:0 auto }
+  table{ width:100%; border-collapse:collapse; background:var(--card); border:1px solid rgba(57,255,20,.25); box-shadow:0 0 24px rgba(57,255,20,.08); }
+  th,td{ padding:10px 8px; border-bottom:1px solid rgba(57,255,20,.18); vertical-align:middle; }
+  th{ text-align:left; color:var(--green); font-weight:700; letter-spacing:.04em; text-transform:uppercase; font-size:12px }
+  tbody tr:hover{ background:#0d0d0d }
+  .thumb{ width:70px; height:70px; object-fit:cover; border:1px solid rgba(57,255,20,.35); border-radius:10px }
+  .pill{ display:inline-block; padding:3px 8px; border:1px solid rgba(57,255,20,.35); border-radius:999px; color:var(--green); font-size:12px }
+  .btn{ display:inline-block; padding:8px 12px; border:1px solid var(--green); color:var(--green); text-decoration:none; border-radius:10px; margin-right:8px }
+  .muted{ opacity:.8 }
+</style>
+</head>
+<body>
+  <header>
+    <a class="btn" href="matchup.html">← Back</a>
+    <h1>🏆 Champions</h1>
+  </header>
+
+  <div class="wrap">
+    <p class="muted">Soft launch: shows winners as they’re recorded; we’ll add artist names & submission flow later.</p>
+
+    <table id="winnersTable">
+      <thead>
+        <tr>
+          <th>Won</th>
+          <th>Preview</th>
+          <th>Match</th>
+          <th>Submitted By</th>
+        </tr>
+      </thead>
+      <tbody id="winnersBody">
+        <!-- rows injected -->
+      </tbody>
+    </table>
+  </div>
+
+<script type="module">
+  // --- Supabase bootstrap (reuse your existing env/global if present)
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  const supabaseUrl = window.SUPABASE_URL || 'YOUR_SUPABASE_URL';
+  const supabaseKey = window.SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
+  const supabase = window.supabaseClient || createClient(supabaseUrl, supabaseKey);
+
+  // Fetch winners (latest first)
+  async function loadWinners(){
+    const { data, error } = await supabase
+      .from('winners')
+      .select('id, match_id, image_url, submitted_by, won_at')
+      .order('won_at', { ascending:false })
+      .limit(200);
+    if(error){ console.error(error); return; }
+
+    const body = document.getElementById('winnersBody');
+    body.innerHTML = '';
+
+    data.forEach(row=>{
+      const tr = document.createElement('tr');
+
+      const date = new Date(row.won_at);
+      const dateTd = document.createElement('td');
+      dateTd.textContent = date.toLocaleString();
+      tr.appendChild(dateTd);
+
+      const imgTd = document.createElement('td');
+      const img = document.createElement('img');
+      img.src = row.image_url;
+      img.alt = 'Winning piece';
+      img.className = 'thumb';
+      imgTd.appendChild(img);
+      tr.appendChild(imgTd);
+
+      const matchTd = document.createElement('td');
+      matchTd.innerHTML = `<span class="pill">Match ${row.match_id ?? '—'}</span>`;
+      tr.appendChild(matchTd);
+
+      const subTd = document.createElement('td');
+      subTd.textContent = row.submitted_by || '—';
+      tr.appendChild(subTd);
+
+      body.appendChild(tr);
+    });
+  }
+
+  loadWinners();
+  // Optional: live updates
+  try {
+    supabase.channel('winners-stream')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'winners' },
+        payload => { loadWinners(); })
+      .subscribe();
+  } catch(e) { /* realtime not critical for soft launch */ }
+</script>
+</body>
+</html>
