@@ -471,6 +471,12 @@
   function visibleMatches(){ const cur=currentRound(); return flat.filter(m => showFinished ? true : (m.round >= cur)); }
   function updateRoundBreadcrumb(){ const cur=currentRound(); roundSummary.textContent = `${roundLabel[cur]} → Final`; }
 
+  // NEW: find & update the list row score for a match
+  function updateRowScore(m){
+    const el = listEl.querySelector(`.matchItem[data-id="${m.id}"] .score`);
+    if (el) el.textContent = `${m.votesA||0} - ${m.votesB||0}`;
+  }
+
   function buildList(preserveId){
     listEl.innerHTML='';
     const items = visibleMatches();
@@ -487,7 +493,7 @@
       const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
       const timer=document.createElement('span'); timer.className='timer'; timer.textContent='uses global';
       row.append(badge,timer); mid.append(title,row);
-      const score=document.createElement('div'); score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
+      const score=document.createElement('div'); score.className='score'; score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
       item.append(mini,mid,score);
       item.addEventListener('click',()=>select(m.id));
       listEl.appendChild(item);
@@ -513,6 +519,9 @@
     rightTbd.style.display=m.B.img?'none':'flex';
     leftName.textContent=m.A.name||'TBD'; rightName.textContent=m.B.name||'TBD';
     leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
+
+    // keep list score in sync on selection too
+    updateRowScore(m);
 
     const already=!!localStorage.getItem(lockKey(m.id));
     btnLeft.disabled=btnRight.disabled=already||m.decided||!canVote;
@@ -576,7 +585,13 @@
   btnSubmit.addEventListener('click', ()=>{
     const m=flat.find(x=>x.id===sel); if(!m || !chosen || m.decided) return;
     if(chosen==='A') m.votesA=(m.votesA||0)+1; else m.votesB=(m.votesB||0)+1;
+
+    // Update the detail counters
     leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
+
+    // *** NEW: immediately sync the list row "0 - 0" text ***
+    updateRowScore(m);
+
     localStorage.setItem(lockKey(m.id),'1'); voteLockBadge.style.display='inline-block';
     btnLeft.disabled=btnRight.disabled=true; btnSubmit.disabled=true;
     saveState();
