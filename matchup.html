@@ -486,25 +486,47 @@
   function buildList(preserveId){
     listEl.innerHTML='';
     const items = visibleMatches();
+
+    // Get the global clock element once for syncing
+    const globalClockEl = document.getElementById('globalClock');
+
     for (const m of items){
       const item=document.createElement('div'); item.className='matchItem'; item.dataset.id=m.id;
+
       const mini=document.createElement('div'); mini.className='thumbMini';
       const iA=document.createElement('img'); iA.src=m.A?.img||BLANK;
       const iB=document.createElement('img'); iB.src=m.B?.img||BLANK;
       mini.append(iA,iB);
+
       const mid=document.createElement('div');
       const title=document.createElement('div'); title.className='title';
       title.textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
+
       const row=document.createElement('div'); row.className='metaRow';
       const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
-      const timer=document.createElement('span'); timer.className='timer'; timer.textContent='uses global';
-      row.append(badge,timer); mid.append(title,row);
+
+      // --- changed: show "uses global · <time>" and keep it synced ---
+      const uses=document.createElement('span'); uses.className='badge'; uses.textContent='uses global';
+      const timer=document.createElement('span'); timer.className='timer';
+      timer.textContent = globalClockEl.textContent ? `· ${globalClockEl.textContent}` : '· SYNC…';
+
+      // keep the per-row timer mirrored to the global clock as it updates
+      const observer=new MutationObserver(()=>{
+        timer.textContent = `· ${globalClockEl.textContent}`;
+      });
+      observer.observe(globalClockEl,{childList:true,characterData:true,subtree:true});
+
+      row.append(badge,uses,timer);
+      mid.append(title,row);
+
       const score=document.createElement('div'); score.className='score'; score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
+
       item.append(mini,mid,score);
       item.addEventListener('click',()=>select(m.id));
       listEl.appendChild(item);
     }
     updateRoundBreadcrumb();
+
     let targetId = preserveId && items.some(x=>x.id===preserveId) ? preserveId : (items.find(x=>x.A.img&&x.B.img)||items[0])?.id;
     if(targetId) select(targetId);
   }
