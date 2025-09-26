@@ -39,8 +39,25 @@
   .countdown{padding:0 14px 10px}
   .actions{padding:0 14px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .hint{opacity:.75;padding:0 14px 14px}
-  .choice.btn{border-style:solid}
+
+  /* old subtle state */
+  .choice.btn{border-style:solid;transition:transform .06s ease, box-shadow .12s ease, background .12s ease, color .12s ease, border-color .12s ease}
   .choice.btn.active{box-shadow:0 0 0 2px rgba(57,255,20,.6) inset}
+
+  /* NEW: make the chosen vote button scream green */
+  .choice.btn.selected{
+    background: var(--green);
+    color:#000;
+    border-color: var(--green);
+    box-shadow: 0 0 18px rgba(57,255,20,.55), inset 0 0 10px rgba(0,0,0,.6);
+    transform: translateY(-1px);
+    animation: neonPulse 1.2s ease-in-out 2;
+  }
+  @keyframes neonPulse{
+    0%,100% { box-shadow: 0 0 12px rgba(57,255,20,.45), inset 0 0 8px rgba(0,0,0,.65); }
+    50%     { box-shadow: 0 0 22px rgba(57,255,20,.8),  inset 0 0 10px rgba(0,0,0,.7); }
+  }
+
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:var(--ink);padding:8px 12px;border-radius:10px;display:none;z-index:60}
   @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
   .fsIcon{ position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:6px;
@@ -505,8 +522,7 @@
       const row=document.createElement('div'); row.className='metaRow';
       const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
 
-      // --- changed: show "uses global · <time>" and keep it synced ---
-      const uses=document.createElement('span'); uses.className='badge'; uses.textContent='uses global';
+      // --- CHANGED: removed the "uses global" badge entirely ---
       const timer=document.createElement('span'); timer.className='timer';
       timer.textContent = globalClockEl.textContent ? `· ${globalClockEl.textContent}` : '· SYNC…';
 
@@ -516,7 +532,7 @@
       });
       observer.observe(globalClockEl,{childList:true,characterData:true,subtree:true});
 
-      row.append(badge,uses,timer);
+      row.append(badge,timer);
       mid.append(title,row);
 
       const score=document.createElement('div'); score.className='score'; score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
@@ -555,7 +571,7 @@
     btnLeft.disabled=btnRight.disabled=already||m.decided||!canVote;
     btnSubmit.disabled=true;
     voteLockBadge.style.display=already?'inline-block':'none';
-    btnLeft.classList.remove('active'); btnRight.classList.remove('active');
+    btnLeft.classList.remove('active','selected'); btnRight.classList.remove('active','selected');
   }
 
   // ======= Bracket flow =======
@@ -609,7 +625,18 @@
   // ======= Voting =======
   btnLeft.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('A'); });
   btnRight.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('B'); });
-  function choose(side){ chosen=side; btnLeft.classList.toggle('active',side==='A'); btnRight.classList.toggle('active',side==='B'); btnSubmit.disabled=false; }
+  function choose(side){
+    chosen=side;
+    // keep old .active for compatibility
+    btnLeft.classList.toggle('active',side==='A');
+    btnRight.classList.toggle('active',side==='B');
+    // NEW neon-selected state
+    btnLeft.classList.toggle('selected',side==='A');
+    btnRight.classList.toggle('selected',side==='B');
+    btnLeft.setAttribute('aria-pressed', side==='A' ? 'true' : 'false');
+    btnRight.setAttribute('aria-pressed', side==='B' ? 'true' : 'false');
+    btnSubmit.disabled=false;
+  }
   btnSubmit.addEventListener('click', ()=>{
     const m=flat.find(x=>x.id===sel); if(!m || !chosen || m.decided) return;
     if(chosen==='A') m.votesA=(m.votesA||0)+1; else m.votesB=(m.votesB||0)+1;
