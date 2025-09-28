@@ -2,9 +2,9 @@ name: Supabase Edge Cron (advance-timer)
 
 on:
   schedule:
-    # runs every 5 minutes; change to "* * * * *" for every minute
-    - cron: "*/5 * * * *"
-  workflow_dispatch: {}  # lets you run it manually from the Actions tab
+    # runs every 1 minute
+    - cron: "* * * * *"
+  workflow_dispatch: {}  # lets you run manually from Actions tab
 
 jobs:
   ping-function:
@@ -12,14 +12,12 @@ jobs:
     steps:
       - name: Call Supabase Edge Function
         env:
-          FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}  # e.g. https://YOURPROJECT.supabase.co/functions/v1/advance-timer
-          AUTH_TOKEN:  ${{ secrets.SUPABASE_ANON_KEY }}       # optional if your function doesn't require auth
+          FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          AUTH_TOKEN:  ${{ secrets.SUPABASE_ANON_KEY }}   # optional if not needed
         run: |
           if [ -z "$FUNCTION_URL" ]; then
             echo "Missing secret SUPABASE_FUNCTION_URL"; exit 1
           fi
-          # Hit the function; add Authorization header if you set one
-          # (Most simple functions accept unauthenticated calls; if yours does, you can drop the -H line.)
           curl -fsS -m 20 --retry 3 --retry-all-errors \
             -H "Content-Type: application/json" \
             ${AUTH_TOKEN:+-H "Authorization: Bearer $AUTH_TOKEN"} \
