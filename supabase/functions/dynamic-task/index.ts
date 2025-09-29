@@ -20,6 +20,7 @@ jobs:
   deploy_and_keepalive:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+
     steps:
       - name: ⬇️ Check out repo
         uses: actions/checkout@v4
@@ -28,14 +29,24 @@ jobs:
         uses: supabase/setup-cli@v1
 
       - name: 🗂️ Show functions tree (debug)
+        run: ls -R supabase/functions || true
+
+      # Assert secrets are present (prints length only; value stays masked)
+      - name: 🔎 Assert required secrets
         run: |
-          ls -R supabase/functions || true
+          PR_LEN=$(printf "%s" "${{ secrets.SUPABASE_PROJECT_REF }}" | wc -c)
+          if [ "$PR_LEN" -le 3 ]; then
+            echo "Missing or short SUPABASE_PROJECT_REF"; exit 1; fi
+          echo "Project ref length: $PR_LEN"
+        shell: bash
 
       - name: 🚀 Deploy Edge Function (dynamic-task)
-        run: supabase functions deploy dynamic-task --project-ref "$SUPABASE_PROJECT_REF"
+        run: |
+          supabase functions deploy dynamic-task \
+            --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" \
+            --debug
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
       - name: 🫀 Keepalive ping
         run: |
