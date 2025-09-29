@@ -7,7 +7,7 @@ on:
       - ".github/workflows/supabase-edge.yml"
   workflow_dispatch:
   schedule:
-    - cron: "*/2 * * * *"
+    - cron: "*/2 * * * *"   # optional keepalive
 
 permissions:
   contents: read
@@ -20,6 +20,7 @@ jobs:
   deploy_and_keepalive:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+
     steps:
       - name: ⬇️ Check out repo
         uses: actions/checkout@v4
@@ -27,31 +28,32 @@ jobs:
       - name: 🧰 Install Supabase CLI
         uses: supabase/setup-cli@v1
 
-      # (Optional) quick debug so we can see your folder layout in logs
-      - name: 🗂️ Show functions tree
-        run: |
-          ls -R
-          echo "----"
-          ls -R supabase/functions || true
+      - name: 🗂️ Show functions tree (debug)
+        run: ls -R supabase/functions || true
 
-      # 🚀 Deploy the function named *dynamic-task*
+      - name: 🔎 Assert required secrets
+        run: |
+          [ -n "${{ secrets.SUPABASE_PROJECT_REF }}" ] || { echo "❌ SUPABASE_PROJECT_REF missing"; exit 1; }
+          [ -n "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ] || { echo "❌ SUPABASE_ACCESS_TOKEN missing"; exit 1; }
+          echo "Project ref length: $(printf "%s" "${{ secrets.SUPABASE_PROJECT_REF }}" | wc -c)"
+
+      # ---------- DEPLOY ----------
       - name: 🚀 Deploy Edge Function (dynamic-task)
-        run: supabase functions deploy dynamic-task --project-ref "$SUPABASE_PROJECT_REF"
+        run: |
+          supabase functions deploy dynamic-task \
+            --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" \
+            --debug
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      # 🫀 Keepalive ping -> /functions/v1/dynamic-task
+      # ---------- KEEPALIVE (optional) ----------
       - name: 🫀 Keepalive ping
         run: |
           set -euo pipefail
-          : "${SUPABASE_URL:=${SUPABASE_FUNCTION_URL}}"
+          URL="${{ secrets.SUPABASE_URL }}"
+          if [ -z "$URL" ]; then URL="${{ secrets.SUPABASE_FUNCTION_URL }}"; fi
+          if [ -z "$URL" ]; then echo "ℹ️ No SUPABASE_URL/FUNCTION_URL secret; skipping ping"; exit 0; fi
           curl -sS -X POST \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Content-Type: application/json" \
-            "$SUPABASE_URL/functions/v1/dynamic-task" \
-            >/dev/null || true
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+            "$URL/functions/v1/dynamic-task" >/dev/null || true
