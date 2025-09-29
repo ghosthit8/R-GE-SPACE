@@ -100,7 +100,7 @@
         <div class="listHeadRight">
           <span class="badge" id="roundSummary">R32 → Final</span>
           <label style="display:inline-flex;align-items:center;gap:6px;font-size:.85rem;opacity:.9">
-            <input type="checkbox" id="toggleFinished"> Show finished rounds
+            <input type="checkbox" id="toggleFinished" checked> Show finished rounds
           </label>
         </div>
       </div>
@@ -184,7 +184,7 @@
 /* =======================
    CONFIG
 ======================= */
-const ROUND_SECONDS = 10; // 10s for your Reset button; live countdown comes from DB end_at
+const ROUND_SECONDS = 10;
 const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
 
@@ -200,7 +200,6 @@ const WINNERS     = 'winners';
 
 const roundLabel = ['','R32','R16','QF','SF','FINAL'];
 const ROUND_ID   = { 1:'r32', 2:'r16', 3:'qf', 4:'sf', 5:'final' };
-const ID_ROUND   = { r32:1, r16:2, qf:3, sf:4, final:5 };
 
 const VOTE_NS = 'rs_stack_vote_v2_';
 const lockKey = (id)=> `${VOTE_NS}${id}`;
@@ -212,7 +211,7 @@ let currentRound = 1;
 let rounds = {1:[],2:[],3:[],4:[],5:[]};
 let flat = [];
 let sel=null, chosen=null;
-let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, timerChannel=null, globalTicker=null, showFinished=false;
+let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, timerChannel=null, globalTicker=null, showFinished=true; // default true
 
 const listEl=document.getElementById('matchList');
 const detailRound=document.getElementById('detailRound');
@@ -301,7 +300,7 @@ async function loadTimerAndTick(){
 function setPauseUI(paused){
   pauseBadge.style.display = paused ? 'inline-block' : 'none';
   btnPause.textContent = paused ? '▶ Resume' : '⏯ Pause';
-  if (paused) globalClockEl.classList.add('pending'); else globalClockEl.classList.remove('pending');
+  globalClockEl.classList.toggle('pending', paused);
 }
 function pauseLocal(){
   LOCAL_PAUSE = true;
@@ -337,7 +336,7 @@ function tickGlobal(endISO){
     if (left<=0){
       clearInterval(globalTicker);
       globalClockEl.textContent = '00:00:00';
-      // Wait for server (Edge Function) to rectify & advance.
+      // wait for Edge Function to advance + reseed
     }
   }, 200);
 }
@@ -346,9 +345,10 @@ function tickGlobal(endISO){
    RENDERING
 ======================= */
 function visibleMatches(){
+  // with showFinished=true (default), show all; if false, show current and future
   const cur=currentRound;
   const all = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
-  return all.filter(m => showFinished ? true : (m.round >= cur));
+  return showFinished ? all : all.filter(m => m.round >= cur);
 }
 function updateRoundBreadcrumb(){ roundSummary.textContent = `${roundLabel[currentRound]} → Final`; }
 function updateRowScore(m){
@@ -447,11 +447,11 @@ document.getElementById('btnClearVotes').addEventListener('click', ()=>{
   toast('Your local votes were cleared');
 });
 
-// Reset everything to fresh R32 & seed timer for testing (10s)
-toast('🔁 Fresh bracket seeded (10s)');
-});
+// NOTE: removed stray test "seed/reset" toast + extra `});` that broke the script
 
-// Force decide selected match (testing)
+/* =======================
+   MANUAL TEST: FORCE DECIDE
+======================= */
 document.getElementById('btnForce').addEventListener('click', async ()=>{
   const m=flat.find(x=>x.id===sel); if(!m) return;
   if(m.decided){ toast('Match already decided'); return; }
