@@ -87,7 +87,6 @@
     <h1 style="margin:0">R<span style="letter-spacing:.03em">Ⓐ</span>GE SPACE — TOURNAMENT</h1>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button id="btnPause" class="btn">⏯ Pause</button>
-      <button id="btnReset" class="btn">🔁 Reset test (fresh bracket)</button>
       <button id="btnForce" class="btn">⚡ Force decide (selected)</button>
       <button id="btnClearVotes" class="btn">🧹 Clear my votes</button>
       <a class="btn" href="winners.html">🏆 Winners</a>
@@ -449,17 +448,7 @@ document.getElementById('btnClearVotes').addEventListener('click', ()=>{
 });
 
 // Reset everything to fresh R32 & seed timer for testing (10s)
-document.getElementById('btnReset').addEventListener('click', async ()=>{
-  await supabase.from(MATCHES).update({ votes_a:0, votes_b:0, decided:false }).eq('round', 1);
-  for (let r=2;r<=5;r++){
-    await supabase.from(MATCHES)
-      .update({ a_name:null,a_img:null,b_name:null,b_img:null,votes_a:0,votes_b:0,decided:false })
-      .eq('round', r);
-  }
-  await supabase.from(META_TABLE).upsert({ id:1, current_round:1, duration_seconds:ROUND_SECONDS });
-  const endAt = new Date(Date.now()+ROUND_SECONDS*1000).toISOString();
-  await supabase.from(TIMER_TABLE).upsert({ id:'r32', end_at:endAt, duration_seconds:ROUND_SECONDS, updated_at:new Date().toISOString() }, { onConflict:'id' });
-  toast('🔁 Fresh bracket seeded (10s)');
+toast('🔁 Fresh bracket seeded (10s)');
 });
 
 // Force decide selected match (testing)
