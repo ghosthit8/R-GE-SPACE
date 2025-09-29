@@ -6,6 +6,7 @@ on:
       - "supabase/functions/**"
       - ".github/workflows/supabase-edge.yml"
   workflow_dispatch:
+  # Optional: keep the function warm / advance rounds even if no one has the page open
   schedule:
     - cron: "*/2 * * * *"
 
@@ -31,15 +32,16 @@ jobs:
       - name: 🗂️ Show functions tree (debug)
         run: ls -R supabase/functions || true
 
-      # Assert secrets are present (prints length only; value stays masked)
+      # Assert secrets exist (prints only lengths; values stay masked)
       - name: 🔎 Assert required secrets
         run: |
-          PR_LEN=$(printf "%s" "${{ secrets.SUPABASE_PROJECT_REF }}" | wc -c)
-          if [ "$PR_LEN" -le 3 ]; then
-            echo "Missing or short SUPABASE_PROJECT_REF"; exit 1; fi
-          echo "Project ref length: $PR_LEN"
-        shell: bash
+          pr="${{ secrets.SUPABASE_PROJECT_REF }}"
+          at="${{ secrets.SUPABASE_ACCESS_TOKEN }}"
+          [ -n "$pr" ] || { echo "❌ SUPABASE_PROJECT_REF is missing"; exit 1; }
+          [ -n "$at" ] || { echo "❌ SUPABASE_ACCESS_TOKEN is missing"; exit 1; }
+          echo "Project ref length: $(printf "%s" "$pr" | wc -c)"
 
+      # —— Deploy the function named *dynamic-task* ——
       - name: 🚀 Deploy Edge Function (dynamic-task)
         run: |
           supabase functions deploy dynamic-task \
@@ -48,16 +50,14 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
+      # Keepalive ping (idempotent). Uses ANON key; safe when timer is live.
       - name: 🫀 Keepalive ping
         run: |
           set -euo pipefail
-          : "${SUPABASE_URL:=${SUPABASE_FUNCTION_URL}}"
+          URL="${{ secrets.SUPABASE_URL }}"
+          if [ -z "$URL" ]; then URL="${{ secrets.SUPABASE_FUNCTION_URL }}"; fi
+          if [ -z "$URL" ]; then echo "ℹ️ No SUPABASE_URL/FUNCTION_URL secret; skipping ping"; exit 0; fi
           curl -sS -X POST \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Content-Type: application/json" \
-            "$SUPABASE_URL/functions/v1/dynamic-task" \
-            >/dev/null || true
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+            "$URL/functions/v1/dynamic-task" >/dev/null || true
