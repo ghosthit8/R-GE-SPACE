@@ -179,11 +179,8 @@
   <!-- Close Fullscreen -->
   <button id="fsClose" class="fsClose" aria-label="Exit fullscreen">×</button>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
-// keep the edge function warm and self-heal the clock
-setInterval(() => { pingAdvance('keepalive'); }, 5000);
-</script>
-<script type="module">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module">
 /* =======================
    CONFIG
 ======================= */
@@ -191,10 +188,12 @@ const ROUND_SECONDS = 10; // UI uses this only for progress width; end_at comes 
 const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
 
-// Edge Function URL (Verify JWT = ON)
-const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/advance-timer`;
+// Edge Function URL (JWT verification ON)
+const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/dynamic-task`;
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  realtime:{ params:{ eventsPerSecond: 5 } }
+});
 
 /* =======================
    TABLES + CONSTANTS
@@ -218,7 +217,6 @@ let rounds = {1:[],2:[],3:[],4:[],5:[]};
 let flat = [];
 let sel=null, chosen=null;
 let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, timerChannel=null, globalTicker=null, showFinished=true;
-let lastPingTs = 0; // debounce for heartbeat
 
 const listEl=document.getElementById('matchList');
 const detailRound=document.getElementById('detailRound');
@@ -273,6 +271,24 @@ function showWinnerImage(url){
 winFx.addEventListener('click', ()=>winFx.classList.remove('show'));
 
 /* =======================
+   EDGE FUNCTION PING
+   (Seeds timer if missing, advances round on expiry, no-op keepalive otherwise)
+======================= */
+async function pingAdvance(reason='ui'){
+  try{
+    await fetch(FUNCTION_URL, {
+      method:'POST',
+      headers:{
+        'content-type':'application/json',
+        'authorization': `Bearer ${SUPABASE_ANON}`,
+        'apikey': SUPABASE_ANON,
+      },
+      body: JSON.stringify({ reason })
+    });
+  }catch(e){ /* silent */ }
+}
+
+/* =======================
    DB LOADERS
 ======================= */
 async function loadMeta(){
@@ -303,10 +319,8 @@ async function loadTimerAndTick(){
     globalClockEl.textContent='SYNC…';
     globalClockEl.classList.add('pending');
 
-    // kick the Edge function (seeds timer if needed, advances round if expired)
     await pingAdvance(!endAt ? 'boot-no-end-at' : 'boot-expired');
 
-    // and re-poll shortly to pick up the new end_at
     setTimeout(loadTimerAndTick, 1200);
     return;
   }
@@ -547,14 +561,16 @@ toggleFinished.addEventListener('change', (e)=>{ showFinished=e.target.checked; 
   await loadMeta();
   await loadMatchesAll();
   buildList();
+
   // ensure a seed even if everyone loads while DB is empty
-  pingAdvance('boot');
+  await pingAdvance('boot');
+
   await loadTimerAndTick();
   subRealtime();
-})();
 
-// keep the edge function warm and self-heal the clock
-setInterval(() => { pingAdvance('keepalive'); }, 5000);
-</script>
+  // keep the edge function warm and self-heal the clock
+  setInterval(() => { pingAdvance('keepalive'); }, 5000);
+})();
+  </script>
 </body>
 </html>
