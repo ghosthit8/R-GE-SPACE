@@ -7,7 +7,7 @@ on:
       - ".github/workflows/supabase-edge.yml"
   workflow_dispatch:
   schedule:
-    - cron: "*/2 * * * *"   # optional keepalive ping
+    - cron: "*/2 * * * *"
 
 permissions:
   contents: read
@@ -20,7 +20,6 @@ jobs:
   deploy_and_keepalive:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-
     steps:
       - name: ⬇️ Check out repo
         uses: actions/checkout@v4
@@ -28,13 +27,20 @@ jobs:
       - name: 🧰 Install Supabase CLI
         uses: supabase/setup-cli@v1
 
-      # 🚀 Deploy WITHOUT linking (just pass --project-ref)
-      - name: 🚀 Deploy Edge Function (advance-tournament)
-        run: supabase functions deploy advance-tournament --project-ref "$SUPABASE_PROJECT_REF"
+      # (Optional) quick debug so we can see your folder layout in logs
+      - name: 🗂️ Show functions tree
+        run: |
+          ls -R
+          echo "----"
+          ls -R supabase/functions || true
+
+      # 🚀 Deploy the function named *dynamic-task*
+      - name: 🚀 Deploy Edge Function (dynamic-task)
+        run: supabase functions deploy dynamic-task --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      # 🫀 Keepalive ping (idempotent; safe when timer is live)
+      # 🫀 Keepalive ping -> /functions/v1/dynamic-task
       - name: 🫀 Keepalive ping
         run: |
           set -euo pipefail
@@ -42,10 +48,9 @@ jobs:
           curl -sS -X POST \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
             -H "Content-Type: application/json" \
-            "$SUPABASE_URL/functions/v1/advance-tournament" \
+            "$SUPABASE_URL/functions/v1/dynamic-task" \
             >/dev/null || true
         env:
-          # Accept either SUPABASE_URL or legacy SUPABASE_FUNCTION_URL
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
