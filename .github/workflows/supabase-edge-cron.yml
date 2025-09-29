@@ -1,87 +1,66 @@
-name: Supabase Edge Functions CI
+name: Supabase Edge Functions (Deploy + Keepalive)
 
 on:
   push:
-    branches: [ main ]
     paths:
-      - 'supabase/functions/**'
+      - "supabase/functions/**"
+      - ".github/workflows/supabase-edge.yml"
+  workflow_dispatch:
+  # Optional keepalive every 2 minutes (safe no-op when timer is live)
   schedule:
-    - cron: "*/1 * * * *"   # every 1 minute (GitHub minimum)
+    - cron: "*/2 * * * *"
+
+permissions:
+  contents: read
+
+# Avoid overlapping deploys
+concurrency:
+  group: supabase-edge
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  deploy_and_keepalive:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
     steps:
-      - uses: actions/checkout@v3
+      - name: ⬇️ Check out repo
+        uses: actions/checkout@v4
 
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
+      - name: 🧰 Install Supabase CLI
+        uses: supabase/setup-cli@v1
 
-      - name: Link project
-        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --password ${{ secrets.SUPABASE_DB_PASSWORD }}
-
-      - name: Deploy Edge Functions
-        run: supabase functions deploy --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-
-      # ===== Failsafe heartbeat (only when expired) =====
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Conditional advance if timer expired
+      # ---------------------------
+      # 🔐 GITHUB SECRETS (CI/CD)
+      #   SUPABASE_ACCESS_TOKEN  -> your Supabase Personal Access Token (PAT)
+      #   SUPABASE_PROJECT_REF   -> e.g. tuqvpcevrhciursxrgav
+      # ---------------------------
+      - name: 🔗 Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}                # e.g. https://tuqvpcevrhciursxrgav.supabase.co
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}      # your anon key
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: 🚀 Deploy Edge Function(s)
+        # deploy just one:
+        run: supabase functions deploy advance-tournament --project-ref "$SUPABASE_PROJECT_REF"
+        # or deploy all functions:
+        # run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      # ---------------------------
+      # 🌡️ Keepalive (idempotent)
+      # Uses ANON key to ping your function. No-op if timer still live.
+      # ---------------------------
+      - name: 🫀 Keepalive ping
         run: |
           set -euo pipefail
-
-          # 1) Get current round from tournament_meta (id=1)
-          META_JSON=$(curl -sS \
-            "${SUPABASE_URL}/rest/v1/tournament_meta?id=eq.1&select=current_round,duration_seconds" \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
-
-          CUR_ROUND=$(echo "$META_JSON" | jq -r '.[0].current_round // 1')
-
-          # Map round number -> timer id
-          case "$CUR_ROUND" in
-            1) RID="r32" ;;
-            2) RID="r16" ;;
-            3) RID="qf" ;;
-            4) RID="sf" ;;
-            5) RID="final" ;;
-            *) RID="r32" ;;
-          esac
-
-          # 2) Read end_at for this round's shared_timer
-          T_JSON=$(curl -sS \
-            "${SUPABASE_URL}/rest/v1/shared_timer?id=eq.${RID}&select=end_at" \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
-
-          END_AT=$(echo "$T_JSON" | jq -r '.[0].end_at // empty')
-
-          if [ -z "$END_AT" ]; then
-            echo "No end_at for ${RID} — calling advance to seed timer."
-            curl -sS -X POST "${SUPABASE_URL}/functions/v1/advance-timer" \
-              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-              -H "Content-Type: application/json" \
-              -d '{"reason":"github-cron-no-end-at"}' \
-              || true
-            exit 0
-          fi
-
-          # 3) Compare times (UTC)
-          NOW_S=$(date -u +%s)
-          END_S=$(date -u -d "$END_AT" +%s || echo 0)
-
-          if [ "$NOW_S" -ge "$END_S" ]; then
-            echo "Timer for ${RID} expired ($END_AT). Advancing…"
-            curl -sS -X POST "${SUPABASE_URL}/functions/v1/advance-timer" \
-              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-              -H "Content-Type: application/json" \
-              -d '{"reason":"github-cron-expired"}' \
-              || true
-          else
-            echo "Timer live for ${RID} until ${END_AT} — skipping."
-          fi
+          curl -sS -X POST \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            "${SUPABASE_URL}/functions/v1/advance-tournament" \
+            >/dev/null || true
+        env:
+          # 🔐 GITHUB SECRETS (runtime for this step)
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
