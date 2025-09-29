@@ -15,13 +15,13 @@ jobs:
     steps:
       - name: Call advance-timer
         env:
-          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }} # e.g. https://<proj>.supabase.co/functions/v1/advance-timer
-          SUPABASE_ANON_KEY:     ${{ secrets.SUPABASE_ANON_KEY }}     # needed if "Verify JWT" is ON
+          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}  # e.g. https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/advance-timer
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}          # leave blank if Verify JWT is OFF
         run: |
           set -euo pipefail
+
           if [ -z "${SUPABASE_FUNCTION_URL:-}" ]; then
-            echo "Missing SUPABASE_FUNCTION_URL secret" >&2
-            exit 1
+            echo "Missing SUPABASE_FUNCTION_URL secret"; exit 1
           fi
 
           CURL_ARGS=(
@@ -31,7 +31,7 @@ jobs:
             -d '{}'
           )
 
-          # Include Authorization header only if a key is provided.
+          # Include Authorization header only if a key is provided (for Verify JWT = ON).
           if [ -n "${SUPABASE_ANON_KEY:-}" ]; then
             CURL_ARGS+=(-H "Authorization: Bearer $SUPABASE_ANON_KEY")
           fi
