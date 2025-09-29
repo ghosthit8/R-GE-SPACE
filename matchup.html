@@ -3,15 +3,18 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Tournament (Looping + Pause + No Auto-Reset)</title>
+<title>Rage Space — Tournament (Live)</title>
 <style>
-  :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707; --pink:#ff1f8f; --blue:#00e5ff; }
+  :root{
+    --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707;
+    --pink:#ff1f8f; --blue:#00e5ff;
+  }
   *{box-sizing:border-box}
   html,body{height:100%}
-  body{margin:0;background:#000;color:var(--green);font-family:ui-sans-serif,system-ui,Arial}
+  body{margin:0;background:var(--bg);color:var(--green);font-family:ui-sans-serif,system-ui,Arial}
   a.btn,button.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
   header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px}
-  .app{display:grid;grid-template-columns: 360px 1fr;gap:14px;height:calc(100vh - 56px);padding:0 14px 14px}
+  .app{display:grid;grid-template-columns:360px 1fr;gap:14px;height:calc(100vh - 56px);padding:0 14px 14px}
   .listWrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
   .listHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px}
   .listHeadRight{display:flex;align-items:center;gap:10px}
@@ -50,11 +53,10 @@
   @keyframes neonPulse{0%,100%{box-shadow:0 0 12px rgba(57,255,20,.45), inset 0 0 8px rgba(0,0,0,.65)}50%{box-shadow:0 0 22px rgba(57,255,20,.8), inset 0 0 10px rgba(0,0,0,.7)}}
 
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:#bfffbf;padding:8px 12px;border-radius:10px;display:none;z-index:60}
+
   @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
   .fsIcon{ position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:6px; border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5); display:grid; place-items:center; font-size:12px; line-height:1; opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2; }
   .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
-
-  /* Close (X) for fullscreen */
   .fsClose{
     position:fixed; top:10px; right:12px; z-index:100001;
     width:34px; height:34px; display:none; place-items:center;
@@ -72,34 +74,12 @@
       radial-gradient(circle at 50% -10%, rgba(57,255,20,.08), transparent 60%); mix-blend-mode: screen; animation: scanSweep 2.6s linear infinite;}
   .winViewport{ position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:12px; max-width: min(92vw, 1200px); }
   .neonFrame{ position:relative; width:100%; border-radius:22px; padding:12px; background: linear-gradient(135deg, rgba(0,229,255,.18), rgba(255,31,143,.18)); box-shadow: 0 0 40px rgba(0,229,255,.25), 0 0 40px rgba(255,31,143,.25) inset; border:1px solid rgba(57,255,20,.35); }
-  .neonFrame::before,.neonFrame::after{ content:''; position:absolute; inset:-2px; border-radius:24px; pointer-events:none; }
-  .neonFrame::before{ border:2px solid rgba(0,229,255,.35); filter:blur(.6px); mix-blend-mode:screen; }
-  .neonFrame::after { border:2px solid rgba(255,31,143,.35); filter:blur(.6px); mix-blend-mode:screen; }
   .badge-champion{ position:absolute; top:10px; left:10px; background: linear-gradient(90deg, #39ff14, #9bffa6); color:#001a00; font-weight:900; letter-spacing:.12em; padding:6px 12px; border-radius:999px; box-shadow:0 0 18px rgba(57,255,20,.55); text-transform:uppercase; font-family:ui-sans-serif,system-ui,Arial; z-index:3; }
   .winCanvas{ position:relative; overflow:hidden; border-radius:14px; background:#000; }
   .winImg{ display:block; max-width: calc(92vw - 32px); max-height: calc(70vh - 8px); width:auto; height:auto; object-fit:contain; margin:auto; filter: saturate(1.18) contrast(1.05) brightness(1.04); transform: translateZ(0); }
-  .chromaWrap{ position:relative; }
-  .chromaWrap::before,.chromaWrap::after{ content:''; position:absolute; inset:0; pointer-events:none; border-radius:14px; mix-blend-mode:screen; filter: blur(.3px) saturate(1.1); }
-  .chromaWrap::before{ box-shadow: 0 0 0 2px rgba(255,0,80,.35) inset; transform: translateX(-1.5px); }
-  .chromaWrap::after { box-shadow: 0 0 0 2px rgba(0,180,255,.35) inset; transform: translateX( 1.5px); }
   .glitch{ position:relative; text-align:center; font-weight:900; letter-spacing:.03em; font-size: clamp(16px, 2.2vw, 24px); color:#cfffcc; text-shadow: 0 0 10px rgba(57,255,20,.9), 0 0 20px rgba(57,255,20,.55); padding:8px 12px; border-radius:10px; border:1px solid rgba(57,255,20,.35); background:rgba(2,4,2,.35); backdrop-filter: blur(6px); }
-  .glitch::before,.glitch::after{ content: attr(data-text); position:absolute; inset:0; pointer-events:none; }
-  .glitch::before{ left:-1.5px; top:0; color:#9bffa6; clip-path: polygon(0 0,100% 0,100% 40%,0 60%); animation: g1 1.2s infinite steps(2); opacity:.95; }
-  .glitch::after { left:1.5px; top:0; color:#39ff14; clip-path: polygon(0 60%,100% 40%,100% 100%,0 100%); animation: g2 1.2s infinite steps(2); opacity:.95; }
-  .winHint{ opacity:.85; font-size:.9rem; margin-top:4px }
-  .confetti{ position:absolute; top:-10px; width:9px; height:11px; opacity:0.95; pointer-events:none; transform: translate3d(0,0,0) rotate(0deg); animation: fall linear forwards; }
   @keyframes fxFade{ from{opacity:0} to{opacity:1} }
   @keyframes scanSweep{ 0%{background-position-y:-40px} 100%{background-position-y:40px} }
-  @keyframes g1{ 0%{ transform: translate(0,0);} 20%{ transform: translate(-1px,-0.5px);} 40%{ transform: translate(1px,0.5px);} 60%{ transform: translate(-1px,0.5px);} 80%{ transform: translate(1px,-0.5px);} 100%{ transform: translate(0,0);} }
-  @keyframes g2{ 0%{ transform: translate(0,0);} 20%{ transform: translate(1px,0.5px);} 40%{ transform: translate(-1px,-0.5px);} 60%{ transform: translate(1px,-0.5px);} 80%{ transform: translate(-1px,0.5px);} 100%{ transform: translate(0,0);} }
-  @keyframes fall{ to { transform: translate3d(var(--dx,0), 106vh, 0) rotate(var(--rot,360deg)); opacity:1; } }
-
-  #dbg{position:fixed;right:10px;bottom:10px;z-index:100001;display:none;min-width:260px}
-  #dbg.show{display:block}
-  #dbg .card{background:#0a0a0a;border:1px solid #163a16;color:#bfffbf;border-radius:10px;padding:10px;font-size:12px}
-  #dbg .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-  #dbg button{border:1px solid #2f6f2f;background:#000;color:#bfffbf;border-radius:8px;padding:6px 8px;cursor:pointer}
-  #dbg pre{max-height:160px;overflow:auto;background:#000;border:1px solid #163a16;padding:8px;border-radius:8px}
 </style>
 </head>
 <body>
@@ -185,7 +165,7 @@
     <div class="winViewport">
       <div class="neonFrame">
         <div class="badge-champion">Champion</div>
-        <div class="winCanvas chromaWrap">
+        <div class="winCanvas">
           <img id="winImg" class="winImg" alt="Champion artwork">
         </div>
       </div>
@@ -197,440 +177,365 @@
     </div>
   </div>
 
-  <!-- Close Fullscreen (appears only while in fullscreen) -->
+  <!-- Close Fullscreen -->
   <button id="fsClose" class="fsClose" aria-label="Exit fullscreen">×</button>
-
-  <!-- Debug HUD -->
-  <div id="dbg"><div class="card">
-    <div><b>Debug</b> — <span id="dbgStatus">idle</span></div>
-    <div class="row">
-      <button id="dbgHealth">Health check</button>
-      <button id="dbgSeed">Force-seed timers</button>
-      <button id="dbgRows">Show rows</button>
-      <button id="dbgClear">Clear</button>
-    </div>
-    <pre id="dbgLog"></pre>
-  </div></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
-  // ======= CONFIG =======
-  const ROUND_SECONDS = 5; // set 86400 for 24h later
-  const INTERMISSION_MS = 1200; // pause before auto-loop reset
-  const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
-  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
+/* =======================
+   CONFIG
+======================= */
+const ROUND_SECONDS = 10; // 10s for your Reset button; live countdown comes from DB end_at
+const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
 
-  // ======= TABLES / KEYS =======
-  const TIMER_TABLE = 'shared_timer';
-  const STATE_KEY   = 'rs_stack_state_v1';
-  const VOTE_NS     = 'rs_stack_vote_v2_';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
 
-  const roundLabel = ['','R32','R16','QF','SF','FINAL'];
-  const ROUND_ID   = { 1:'r32', 2:'r16', 3:'qf', 4:'sf', 5:'final' };
-  const ID_ROUND   = { r32:1, r16:2, qf:3, sf:4, final:5 };
+/* =======================
+   TABLES + CONSTANTS
+======================= */
+const TIMER_TABLE = 'shared_timer';
+const META_TABLE  = 'tournament_meta';
+const MATCHES     = 'matches';
+const WINNERS     = 'winners';
 
-  let timerChannel=null, globalTicker=null, _finalized=false, showFinished=false;
+const roundLabel = ['','R32','R16','QF','SF','FINAL'];
+const ROUND_ID   = { 1:'r32', 2:'r16', 3:'qf', 4:'sf', 5:'final' };
+const ID_ROUND   = { r32:1, r16:2, qf:3, sf:4, final:5 };
 
-  // ======= DEBUG =======
-  const qs = new URLSearchParams(location.search);
-  const DEBUG = qs.get('debug') === '1';
-  if (DEBUG) document.getElementById('dbg').classList.add('show');
-  const dbgLog = document.getElementById('dbgLog');
-  const setDbg = (s)=>{ const el=document.getElementById('dbgStatus'); if(el) el.textContent = s; };
-  const logDbg = (...a)=>{ if(!DEBUG) return; console.log('[DBG]', ...a); dbgLog.textContent += a.map(x=> (typeof x==='string'?x:JSON.stringify(x,null,2))).join(' ') + '\n'; dbgLog.scrollTop = dbgLog.scrollHeight; };
+const VOTE_NS = 'rs_stack_vote_v2_';
+const lockKey = (id)=> `${VOTE_NS}${id}`;
 
-  // ======= UTILS =======
-  const fmt = (ms)=>{ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000);
-    return String(Math.floor(s/3600)).padStart(2,'0')+':' + String(Math.floor((s%3600)/60)).padStart(2,'0')+':' + String(s%60).padStart(2,'0'); };
-  const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
-  const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
+/* =======================
+   STATE / DOM
+======================= */
+let currentRound = 1;
+let rounds = {1:[],2:[],3:[],4:[],5:[]};
+let flat = [];
+let sel=null, chosen=null;
+let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, timerChannel=null, globalTicker=null, showFinished=false;
 
-  // ======= LOCAL STATE (bracket only) =======
-  let rounds, flat, sel=null, chosen=null;
-  function saveState(){ try{ localStorage.setItem(STATE_KEY, JSON.stringify({rounds})); }catch{} }
-  function loadState(){
-    try{
-      const raw = localStorage.getItem(STATE_KEY);
-      if(!raw) return false;
-      const parsed = JSON.parse(raw);
-      if(!parsed?.rounds) return false;
-      rounds = parsed.rounds;
-      flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
-      return true;
-    }catch{ return false; }
+const listEl=document.getElementById('matchList');
+const detailRound=document.getElementById('detailRound');
+const detailIndex=document.getElementById('detailIndex');
+const detailState=document.getElementById('detailState');
+const leftArt=document.getElementById('leftArt'), rightArt=document.getElementById('rightArt');
+const leftTbd=document.getElementById('leftTbd'), rightTbd=document.getElementById('rightTbd');
+const leftName=document.getElementById('leftName'), rightName=document.getElementById('rightName');
+const leftVotes=document.getElementById('leftVotes'), rightVotes=document.getElementById('rightVotes');
+const btnLeft=document.getElementById('btnLeft'), btnRight=document.getElementById('btnRight');
+const btnSubmit=document.getElementById('btnSubmit');
+const voteLockBadge=document.getElementById('voteLock');
+const roundSummary=document.getElementById('roundSummary');
+const toggleFinished=document.getElementById('toggleFinished');
+const globalClockEl=document.getElementById('globalClock');
+const pauseBadge=document.getElementById('pauseBadge');
+const btnPause=document.getElementById('btnPause');
+const winFx=document.getElementById('winFx'); const winImg=document.getElementById('winImg');
+
+const fsLeftBtn = document.getElementById('fsLeft');
+const fsRightBtn = document.getElementById('fsRight');
+const frameLeft = document.getElementById('frameLeft');
+const frameRight = document.getElementById('frameRight');
+const fsClose = document.getElementById('fsClose');
+
+/* =======================
+   UTILS
+======================= */
+const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
+const fmt = (ms)=>{ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000);
+  return String(Math.floor(s/3600)).padStart(2,'0')+':' + String(Math.floor((s%3600)/60)).padStart(2,'0')+':' + String(s%60).padStart(2,'0'); };
+
+/* =======================
+   FULLSCREEN + WINNER FX
+======================= */
+function reqFS(el){
+  if(el.requestFullscreen) el.requestFullscreen();
+  else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  setTimeout(()=>{ if (document.fullscreenElement) fsClose.style.display='grid'; }, 50);
+}
+fsLeftBtn.addEventListener('click', ()=>reqFS(frameLeft));
+fsRightBtn.addEventListener('click', ()=>reqFS(frameRight));
+fsClose.addEventListener('click', ()=>{ if (document.fullscreenElement) document.exitFullscreen?.(); fsClose.style.display='none'; });
+document.addEventListener('fullscreenchange', ()=>{ fsClose.style.display = document.fullscreenElement ? 'grid' : 'none'; });
+
+function showWinnerImage(url){
+  winImg.src = url || '';
+  winFx.classList.add('show');
+  setTimeout(()=>winFx.classList.remove('show'), 5200);
+}
+winFx.addEventListener('click', ()=>winFx.classList.remove('show'));
+
+/* =======================
+   DB LOADERS
+======================= */
+async function loadMeta(){
+  const { data } = await supabase.from(META_TABLE).select('*').eq('id',1).maybeSingle();
+  if (data?.current_round) currentRound = data.current_round;
+}
+async function loadMatchesAll(){
+  const { data } = await supabase.from(MATCHES).select('*').order('round', {ascending:true}).order('idx',{ascending:true});
+  rounds = {1:[],2:[],3:[],4:[],5:[]};
+  (data||[]).forEach(row=>{
+    rounds[row.round].push({
+      id: row.id, round: row.round, index: row.idx,
+      A: { name: row.a_name, img: row.a_img },
+      B: { name: row.b_name, img: row.b_img },
+      votesA: row.votes_a||0, votesB: row.votes_b||0, decided: !!row.decided,
+      next_id: row.next_id || null
+    });
+  });
+  flat = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
+}
+async function loadTimerAndTick(){
+  const id = ROUND_ID[currentRound];
+  const { data } = await supabase.from(TIMER_TABLE).select('end_at').eq('id', id).maybeSingle();
+  const endAt = data?.end_at ? new Date(data.end_at).getTime() : null;
+  if (!endAt) { globalClockEl.textContent='WAITING…'; globalClockEl.classList.add('pending'); return; }
+  tickGlobal(new Date(endAt).toISOString());
+}
+
+/* =======================
+   TICKER / PAUSE
+======================= */
+function setPauseUI(paused){
+  pauseBadge.style.display = paused ? 'inline-block' : 'none';
+  btnPause.textContent = paused ? '▶ Resume' : '⏯ Pause';
+  if (paused) globalClockEl.classList.add('pending'); else globalClockEl.classList.remove('pending');
+}
+function pauseLocal(){
+  LOCAL_PAUSE = true;
+  const parts = (globalClockEl.textContent||'00:00:00').split(':').map(x=>parseInt(x||'0',10));
+  LOCAL_REMAIN_MS = ((parts[0]*3600)+(parts[1]*60)+(parts[2]))*1000;
+  setPauseUI(true);
+}
+function resumeLocal(){
+  LOCAL_PAUSE = false; setPauseUI(false);
+  const endAt = new Date(Date.now() + (LOCAL_REMAIN_MS||0)).toISOString();
+  tickGlobal(endAt);
+}
+btnPause.addEventListener('click', ()=>{ if(!LOCAL_PAUSE) pauseLocal(); else resumeLocal(); });
+
+function unsubscribeTimer(){ if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; } clearInterval(globalTicker); globalTicker=null; }
+function subscribeTimerForRound(round){
+  const id = ROUND_ID[round];
+  if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; }
+  timerChannel = supabase
+    .channel('timer-'+id)
+    .on('postgres_changes', { event:'*', schema:'public', table:TIMER_TABLE, filter:`id=eq.${id}` },
+      (payload)=>{ const endAt = (payload.new ?? payload.old)?.end_at; if (endAt) tickGlobal(endAt); })
+    .subscribe();
+}
+function tickGlobal(endISO){
+  const endMs = new Date(endISO).getTime();
+  clearInterval(globalTicker);
+  globalClockEl.classList.remove('pending');
+  globalTicker = setInterval(async ()=>{
+    if (LOCAL_PAUSE) return;
+    const left = Math.max(0, endMs - Date.now());
+    globalClockEl.textContent = fmt(left);
+    if (left<=0){
+      clearInterval(globalTicker);
+      globalClockEl.textContent = '00:00:00';
+      // Wait for server (Edge Function) to rectify & advance.
+    }
+  }, 200);
+}
+
+/* =======================
+   RENDERING
+======================= */
+function visibleMatches(){
+  const cur=currentRound;
+  const all = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
+  return all.filter(m => showFinished ? true : (m.round >= cur));
+}
+function updateRoundBreadcrumb(){ roundSummary.textContent = `${roundLabel[currentRound]} → Final`; }
+function updateRowScore(m){
+  const el = listEl.querySelector(`.matchItem[data-id="${m.id}"] .score`);
+  if (el) el.textContent = `${m.votesA||0} - ${m.votesB||0}`;
+}
+function buildList(preserveId){
+  listEl.innerHTML='';
+  const items = visibleMatches();
+  for (const m of items){
+    const item=document.createElement('div'); item.className='matchItem'; item.dataset.id=m.id;
+    const mini=document.createElement('div'); mini.className='thumbMini';
+    const iA=document.createElement('img'); iA.src=m.A?.img||BLANK;
+    const iB=document.createElement('img'); iB.src=m.B?.img||BLANK;
+    mini.append(iA,iB);
+
+    const mid=document.createElement('div');
+    const title=document.createElement('div'); title.className='title';
+    title.textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
+
+    const row=document.createElement('div'); row.className='metaRow';
+    const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
+    const timer=document.createElement('span'); timer.className='timer';
+    const isTbd = !(m.A?.img && m.B?.img);
+    if (isTbd) { timer.style.display='none'; } else { timer.textContent='· '+(globalClockEl.textContent||'SYNC…'); }
+    row.append(badge,timer); mid.append(title,row);
+
+    const score=document.createElement('div'); score.className='score'; score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
+    item.append(mini,mid,score);
+    item.addEventListener('click',()=>select(m.id));
+    listEl.appendChild(item);
   }
-  function clearState(){ localStorage.removeItem(STATE_KEY); }
+  updateRoundBreadcrumb();
+  let targetId = preserveId && items.some(x=>x.id===preserveId) ? preserveId : (items.find(x=>x.A.img&&x.B.img)||items[0])?.id;
+  if(targetId) select(targetId);
+}
+function select(id){
+  sel=id; chosen=null;
+  [...listEl.children].forEach(li=>li.classList.toggle('selected',li.dataset.id===id));
+  const m=flat.find(x=>x.id===id); if(!m) return;
 
-  // ======= GLOBAL TIMER =======
-  const globalClockEl = document.getElementById('globalClock');
-  const pauseBadge = document.getElementById('pauseBadge');
-  const btnPause = document.getElementById('btnPause');
-  let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0;
+  detailRound.textContent=roundLabel[m.round];
+  detailIndex.textContent=`Match ${m.index}/${rounds[m.round].length}`;
 
-  function setPauseUI(paused){
-    pauseBadge.style.display = paused ? 'inline-block' : 'none';
-    btnPause.textContent = paused ? '▶ Resume' : '⏯ Pause';
-    if (paused) globalClockEl.classList.add('pending'); else globalClockEl.classList.remove('pending');
-  }
-  function pauseLocal(){
-    LOCAL_PAUSE = true;
-    const parts = (globalClockEl.textContent||'00:00:00').split(':').map(x=>parseInt(x||'0',10));
-    LOCAL_REMAIN_MS = ((parts[0]*3600)+(parts[1]*60)+(parts[2]))*1000;
-    setPauseUI(true);
-  }
-  function resumeLocal(){
-    LOCAL_PAUSE = false;
-    setPauseUI(false);
-    const endAt = new Date(Date.now() + (LOCAL_REMAIN_MS||0)).toISOString();
-    tickGlobal(endAt); // purely local resume (DB timer continues in background)
-  }
-  btnPause.addEventListener('click', ()=>{ if(!LOCAL_PAUSE) pauseLocal(); else resumeLocal(); });
+  const canVote=!!(m.A.img&&m.B.img);
+  detailState.textContent=m.decided?'DECIDED':(canVote?'OPEN':'TBD');
 
-  async function resetTimer(seconds=ROUND_SECONDS, round=currentRound()){
-    const id = ROUND_ID[round];
-    const endAt = new Date(Date.now() + seconds*1000).toISOString();
-    await supabase.from(TIMER_TABLE).upsert(
-      { id, end_at: endAt, duration_seconds: seconds, updated_at: new Date().toISOString() },
-      { onConflict: 'id' }
-    );
-    _finalized = false;
-    setPauseUI(false);
-    tickGlobal(endAt);
+  leftArt.src=m.A.img||BLANK; rightArt.src=m.B.img||BLANK;
+  leftTbd.style.display=m.A.img?'none':'flex';
+  rightTbd.style.display=m.B.img?'none':'flex';
+  leftName.textContent=m.A.name||'TBD'; rightName.textContent=m.B.name||'TBD';
+  leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
+
+  updateRowScore(m);
+
+  const already=!!localStorage.getItem(lockKey(m.id));
+  btnLeft.disabled=btnRight.disabled=already||m.decided||!canVote;
+  btnSubmit.disabled=true;
+  voteLockBadge.style.display=already?'inline-block':'none';
+  btnLeft.classList.remove('active','selected'); btnRight.classList.remove('active','selected');
+}
+
+/* =======================
+   VOTING (DB)
+======================= */
+function choose(side){
+  chosen=side;
+  btnLeft.classList.toggle('active',side==='A'); btnRight.classList.toggle('active',side==='B');
+  btnLeft.classList.toggle('selected',side==='A'); btnRight.classList.toggle('selected',side==='B');
+  btnLeft.setAttribute('aria-pressed', side==='A' ? 'true' : 'false');
+  btnRight.setAttribute('aria-pressed', side==='B' ? 'true' : 'false');
+  btnSubmit.disabled=false;
+}
+btnLeft.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('A'); });
+btnRight.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('B'); });
+btnSubmit.addEventListener('click', async ()=>{
+  const m=flat.find(x=>x.id===sel); if(!m || !chosen || m.decided) return;
+  const { data: cur } = await supabase.from(MATCHES).select('votes_a, votes_b').eq('id', m.id).single();
+  const newA = (cur?.votes_a||0) + (chosen==='A'?1:0);
+  const newB = (cur?.votes_b||0) + (chosen==='B'?1:0);
+  const { error } = await supabase.from(MATCHES).update({ votes_a:newA, votes_b:newB }).eq('id', m.id);
+  if (error) { toast('Vote failed'); return; }
+  localStorage.setItem(lockKey(m.id),'1'); voteLockBadge.style.display='inline-block';
+  btnLeft.disabled=btnRight.disabled=true; btnSubmit.disabled=true;
+  toast('Vote submitted');
+});
+
+/* =======================
+   MANUAL CONTROLS (DB)
+======================= */
+document.getElementById('btnClearVotes').addEventListener('click', ()=>{
+  const keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.startsWith(VOTE_NS)) keys.push(k); }
+  keys.forEach(k=>localStorage.removeItem(k));
+  const m=flat.find(x=>x.id===sel);
+  if(m && !m.decided && m.A.img && m.B.img){ btnLeft.disabled=btnRight.disabled=false; }
+  toast('Your local votes were cleared');
+});
+
+// Reset everything to fresh R32 & seed timer for testing (10s)
+document.getElementById('btnReset').addEventListener('click', async ()=>{
+  await supabase.from(MATCHES).update({ votes_a:0, votes_b:0, decided:false }).eq('round', 1);
+  for (let r=2;r<=5;r++){
+    await supabase.from(MATCHES)
+      .update({ a_name:null,a_img:null,b_name:null,b_img:null,votes_a:0,votes_b:0,decided:false })
+      .eq('round', r);
   }
-  async function getTimerForRound(round){
-    const id = ROUND_ID[round];
-    const { data } = await supabase.from(TIMER_TABLE).select('end_at, duration_seconds').eq('id', id).maybeSingle();
-    return data;
+  await supabase.from(META_TABLE).upsert({ id:1, current_round:1, duration_seconds:ROUND_SECONDS });
+  const endAt = new Date(Date.now()+ROUND_SECONDS*1000).toISOString();
+  await supabase.from(TIMER_TABLE).upsert({ id:'r32', end_at:endAt, duration_seconds:ROUND_SECONDS, updated_at:new Date().toISOString() }, { onConflict:'id' });
+  toast('🔁 Fresh bracket seeded (10s)');
+});
+
+// Force decide selected match (testing)
+document.getElementById('btnForce').addEventListener('click', async ()=>{
+  const m=flat.find(x=>x.id===sel); if(!m) return;
+  if(m.decided){ toast('Match already decided'); return; }
+  if(!(m.A.img && m.B.img)){ toast('TBD pairing'); return; }
+  const a=m.votesA||0, b=m.votesB||0;
+  const winner = (a>b) ? m.A : (b>a) ? m.B : (Math.random()<0.5? m.A : m.B);
+  await supabase.from(MATCHES).update({ decided:true }).eq('id', m.id);
+
+  const nid = m.next_id;
+  if (nid){
+    const { data: next } = await supabase.from(MATCHES).select('*').eq('id', nid).maybeSingle();
+    if (next){
+      if (!next.a_img)
+        await supabase.from(MATCHES).update({ a_name:winner.name, a_img:winner.img }).eq('id', nid);
+      else if (!next.b_img)
+        await supabase.from(MATCHES).update({ b_name:winner.name, b_img:winner.img }).eq('id', nid);
+    }
+  } else {
+    // FINAL — show FX, record winner
+    showWinnerImage(winner.img);
+    try { await supabase.from(WINNERS).insert({ match_id: m.id, image_url: winner.img, won_at: new Date().toISOString() }); } catch {}
   }
-  async function detectActiveRoundFromTimers(){
-    const ids = Object.values(ROUND_ID);
-    const { data } = await supabase.from(TIMER_TABLE).select('id,end_at').in('id', ids);
-    const now = Date.now();
-    const live = (data||[]).filter(r => r.end_at && new Date(r.end_at).getTime() > now);
-    if (!live.length) return null;
-    const best = live.sort((a,b)=> ID_ROUND[a.id]-ID_ROUND[b.id]).pop();
-    return ID_ROUND[best.id] || null;
-  }
-  function unsubscribeTimer(){ if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; } clearInterval(globalTicker); globalTicker=null; }
-  function subscribeTimerForRound(round){
-    const id = ROUND_ID[round];
-    if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; }
-    timerChannel = supabase
-      .channel('timer-'+id)
-      .on('postgres_changes', { event:'*', schema:'public', table:TIMER_TABLE, filter:`id=eq.${id}` },
-        (payload)=>{ const endAt = (payload.new ?? payload.old)?.end_at; if (endAt) tickGlobal(endAt); })
-      .subscribe();
-  }
-  function tickGlobal(endISO){
-    const endMs = new Date(endISO).getTime();
-    clearInterval(globalTicker);
-    globalClockEl.classList.remove('pending');
-    globalTicker = setInterval(()=>{
-      if (LOCAL_PAUSE) return;
-      const left = Math.max(0, endMs - Date.now());
-      globalClockEl.textContent = fmt(left);
-      if(left<=0){
-        clearInterval(globalTicker);
-        if(!_finalized){ _finalized=true; onTimerExpiredOnce(); }
+  toast('⚡ Decided');
+});
+
+/* =======================
+   REALTIME WIRES
+======================= */
+function subRealtime(){
+  // meta (round changes)
+  supabase.channel('rt_meta')
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:META_TABLE, filter:'id=eq.1' }, async (payload)=>{
+      const nxt = payload.new?.current_round;
+      if (typeof nxt==='number' && nxt !== currentRound){
+        currentRound = nxt;
+        await loadMatchesAll();
+        buildList();
+        subscribeTimerForRound(currentRound);
+        await loadTimerAndTick();
+        toast(`➡️ ${roundLabel[currentRound]}`);
       }
-    }, 200);
-  }
+    }).subscribe();
 
-  // ======= BRACKET =======
-  function makeTournament(){
-    const entries = Array.from({length:32}, (_,i)=>({name:`Seed ${i+1}`, img:`https://picsum.photos/seed/e${i+1}/800/1000`}));
-    rounds = {1:[],2:[],3:[],4:[],5:[]};
-    for (let i=0;i<16;i++){
-      rounds[1].push({ id:`R32_${i+1}`, round:1, index:i+1,
-        A:{name:entries[2*i].name, img:entries[2*i].img},
-        B:{name:entries[2*i+1].name, img:entries[2*i+1].img},
-        votesA:0, votesB:0, decided:false });
-    }
-    for (let r=2, size=8; r<=5; r++, size=Math.max(1, size/2)){
-      for (let i=0;i<size;i++){
-        rounds[r].push({ id: `${roundLabel[r]}_${i+1}`, round:r, index:i+1, A:{}, B:{}, votesA:0, votesB:0, decided:false });
+  // matches changes → refresh list/selection
+  supabase.channel('rt_matches_all')
+    .on('postgres_changes', { event:'*', schema:'public', table:MATCHES }, async ()=>{
+      await loadMatchesAll();
+      buildList(sel);
+      // Final decided → show FX
+      const final = rounds[5][0];
+      if (final && final.decided && final.A.img && final.B.img){
+        const a=final.votesA||0, b=final.votesB||0;
+        const champ = (a>b)?final.A: (b>a)?final.B : final.A;
+        showWinnerImage(champ.img);
       }
-    }
-    flat = [...rounds[1], ...rounds[2], ...rounds[3], ...rounds[4], ...rounds[5]];
-  }
+    }).subscribe();
 
-  const listEl=document.getElementById('matchList');
-  const detailRound=document.getElementById('detailRound');
-  const detailIndex=document.getElementById('detailIndex');
-  const detailState=document.getElementById('detailState');
-  const leftArt=document.getElementById('leftArt'), rightArt=document.getElementById('rightArt');
-  const leftTbd=document.getElementById('leftTbd'), rightTbd=document.getElementById('rightTbd');
-  const leftName=document.getElementById('leftName'), rightName=document.getElementById('rightName');
-  const leftVotes=document.getElementById('leftVotes'), rightVotes=document.getElementById('rightVotes');
-  const btnLeft=document.getElementById('btnLeft'), btnRight=document.getElementById('btnRight');
-  const btnSubmit=document.getElementById('btnSubmit');
-  const voteLockBadge=document.getElementById('voteLock');
-  const btnReset=document.getElementById('btnReset'), btnForce=document.getElementById('btnForce'), btnClearVotes=document.getElementById('btnClearVotes');
-  const roundSummary=document.getElementById('roundSummary');
-  const toggleFinished=document.getElementById('toggleFinished');
-  const fsLeftBtn = document.getElementById('fsLeft');
-  const fsRightBtn = document.getElementById('fsRight');
-  const frameLeft = document.getElementById('frameLeft');
-  const frameRight = document.getElementById('frameRight');
-  const fsClose = document.getElementById('fsClose');
+  // timer for current round
+  subscribeTimerForRound(currentRound);
+}
 
-  const winFx   = document.getElementById('winFx');
-  const winImg  = document.getElementById('winImg');
+/* =======================
+   BOOT
+======================= */
+toggleFinished.addEventListener('change', (e)=>{ showFinished=e.target.checked; buildList(sel); });
 
-  function reqFS(el){
-    if(el.requestFullscreen) el.requestFullscreen();
-    else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    // show the X shortly after entering FS
-    setTimeout(()=>{ if (document.fullscreenElement) fsClose.style.display='grid'; }, 50);
-  }
-  fsLeftBtn.addEventListener('click', ()=>reqFS(frameLeft));
-  fsRightBtn.addEventListener('click', ()=>reqFS(frameRight));
-
-  // Close fullscreen with X
-  fsClose.addEventListener('click', ()=>{
-    if (document.fullscreenElement) document.exitFullscreen?.();
-    fsClose.style.display='none';
-  });
-  document.addEventListener('fullscreenchange', ()=>{
-    fsClose.style.display = document.fullscreenElement ? 'grid' : 'none';
-  });
-
-  function spawnConfetti(burst = 180){
-    const colors = ['#39ff14', '#00e5ff', '#ff1f8f', '#e5ffe5', '#fff'];
-    for(let i=0;i<burst;i++){
-      const d = document.createElement('div'); d.className = 'confetti';
-      d.style.left = Math.random()*100 + 'vw'; d.style.background = colors[Math.floor(Math.random()*colors.length)];
-      const dx = (Math.random()*60 - 30) + 'vw'; const rot = (Math.random()*720 - 360) + 'deg';
-      d.style.setProperty('--dx', dx); d.style.setProperty('--rot', rot);
-      d.style.animationDuration = (1.8 + Math.random()*1.8) + 's';
-      winFx.appendChild(d); d.addEventListener('animationend', ()=> d.remove());
-    }
-  }
-  async function showWinnerImage({ img, name, matchId, submittedBy=null }){
-    clearTimeout(showWinnerImage._auto);
-    winImg.src = img || '';
-    winFx.classList.add('show');
-    spawnConfetti(200);
-    try{ await supabase.from('winners').insert({ match_id: matchId || null, image_url: img || null, submitted_by: submittedBy, won_at: new Date().toISOString() }); }catch{}
-    showWinnerImage._auto = setTimeout(()=>hideWinner(), 5200);
-  }
-  function hideWinner(){ winFx.classList.remove('show'); winFx.querySelectorAll('.confetti').forEach(n => n.remove()); }
-  winFx.addEventListener('click', hideWinner);
-
-  const lockKey = (id)=> `${VOTE_NS}${id}`;
-  const clearVoteLocks = ()=>{ const keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.startsWith(VOTE_NS)) keys.push(k); } keys.forEach(k=>localStorage.removeItem(k)); };
-
-  function isRoundComplete(r){ return rounds[r].length>0 && rounds[r].every(m=>m.decided); }
-  function currentRound(){ for(let r=1;r<=5;r++){ if(rounds[r].some(m=>!m.decided)) return r; } return 5; }
-  function visibleMatches(){ const cur=currentRound(); return flat.filter(m => showFinished ? true : (m.round >= cur)); }
-  function updateRoundBreadcrumb(){ const cur=currentRound(); roundSummary.textContent = `${roundLabel[cur]} → Final`; }
-
-  function updateRowScore(m){
-    const el = listEl.querySelector(`.matchItem[data-id="${m.id}"] .score`);
-    if (el) el.textContent = `${m.votesA||0} - ${m.votesB||0}`;
-  }
-
-  function buildList(preserveId){
-    listEl.innerHTML='';
-    const items = visibleMatches();
-    const clockEl = document.getElementById('globalClock');
-
-    for (const m of items){
-      const item=document.createElement('div'); item.className='matchItem'; item.dataset.id=m.id;
-
-      const mini=document.createElement('div'); mini.className='thumbMini';
-      const iA=document.createElement('img'); iA.src=m.A?.img||BLANK;
-      const iB=document.createElement('img'); iB.src=m.B?.img||BLANK;
-      mini.append(iA,iB);
-
-      const mid=document.createElement('div');
-      const title=document.createElement('div'); title.className='title';
-      title.textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
-
-      const row=document.createElement('div'); row.className='metaRow';
-      const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
-
-      const timer=document.createElement('span'); timer.className='timer';
-      // HIDE TIMER on TBD matches
-      const isTbd = !(m.A?.img && m.B?.img);
-      if (isTbd) {
-        timer.style.display = 'none';
-      } else {
-        timer.textContent = clockEl.textContent ? `· ${clockEl.textContent}` : '· SYNC…';
-        const observer=new MutationObserver(()=>{ timer.textContent = `· ${clockEl.textContent}`; });
-        observer.observe(clockEl,{childList:true,characterData:true,subtree:true});
-      }
-
-      row.append(badge,timer); mid.append(title,row);
-
-      const score=document.createElement('div'); score.className='score'; score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
-
-      item.append(mini,mid,score);
-      item.addEventListener('click',()=>select(m.id));
-      listEl.appendChild(item);
-    }
-    updateRoundBreadcrumb();
-    let targetId = preserveId && items.some(x=>x.id===preserveId) ? preserveId : (items.find(x=>x.A.img&&x.B.img)||items[0])?.id;
-    if(targetId) select(targetId);
-  }
-
-  function select(id){
-    sel=id; chosen=null;
-    [...listEl.children].forEach(li=>li.classList.toggle('selected',li.dataset.id===id));
-    const m=flat.find(x=>x.id===id); if(!m) return;
-
-    detailRound.textContent=roundLabel[m.round];
-    detailIndex.textContent=`Match ${m.index}/${rounds[m.round].length}`;
-
-    const canVote=!!(m.A.img&&m.B.img);
-    detailState.textContent=m.decided?'DECIDED':(canVote?'OPEN':'TBD');
-
-    leftArt.src=m.A.img||BLANK; rightArt.src=m.B.img||BLANK;
-    leftTbd.style.display=m.A.img?'none':'flex';
-    rightTbd.style.display=m.B.img?'none':'flex';
-    leftName.textContent=m.A.name||'TBD'; rightName.textContent=m.B.name||'TBD';
-    leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
-
-    updateRowScore(m);
-
-    const already=!!localStorage.getItem(lockKey(m.id));
-    btnLeft.disabled=btnRight.disabled=already||m.decided||!canVote;
-    btnSubmit.disabled=true;
-    voteLockBadge.style.display=already?'inline-block':'none';
-    btnLeft.classList.remove('active','selected'); btnRight.classList.remove('active','selected');
-  }
-
-  const nextId=(id)=>{const [r,i]=id.split('_');const idx=parseInt(i||'1',10);
-    if(r==='R32')return`R16_${Math.ceil(idx/2)}`;
-    if(r==='R16')return`QF_${Math.ceil(idx/2)}`;
-    if(r==='QF')return`SF_${Math.ceil(idx/2)}`;
-    if(r==='SF')return`FINAL_1`; return null;};
-
-  function pickWinnerObj(m){ const a=m.votesA||0, b=m.votesB||0; if(a>b) return m.A; if(b>a) return m.B; return (Math.random()<0.5)?m.A:m.B; }
-
-  function advanceWinner(m){
-    const winner=pickWinnerObj(m);
-    const nid=nextId(m.id);
-    if(!nid){
-      toast(`🏆 ${winner.name} is CHAMPION`);
-      showWinnerImage({ img:winner.img, name:winner.name, matchId:m.id, submittedBy:null });
-      saveState();
-      setTimeout(()=>{ fullReset(); }, INTERMISSION_MS); // auto-loop
-      return;
-    }
-    const nr=flat.find(x=>x.id===nid); if(!nr) return;
-    if(!nr.A.img){ nr.A={...winner}; }
-    else if(!nr.B.img){ nr.B={...winner}; }
-    if(isRoundComplete(m.round)) buildList(nr.id); else { select(nr.id); }
-    saveState();
-  }
-
-  function finalizeMatch(m){ if(m.decided || !(m.A.img&&m.B.img)) return false; m.decided=true; advanceWinner(m); return true; }
-
-  function finalizeRound(r){
-    let changed=false;
-    for(const m of rounds[r]) changed = finalizeMatch(m) || changed;
-    if(changed){ buildList(sel); toast('⏱ Time! Winners advanced.'); saveState(); }
-    return changed;
-  }
-
-  async function onTimerExpiredOnce(){
-    const r = currentRound();
-    finalizeRound(r);
-    if (r < 5) {
-      const next = r + 1;
-      subscribeTimerForRound(next);
-      await resetTimer(ROUND_SECONDS, next);
-    }
-  }
-
-  // ======= Voting =======
-  btnLeft.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('A'); });
-  btnRight.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('B'); });
-  function choose(side){
-    chosen=side;
-    btnLeft.classList.toggle('active',side==='A'); btnRight.classList.toggle('active',side==='B');
-    btnLeft.classList.toggle('selected',side==='A'); btnRight.classList.toggle('selected',side==='B');
-    btnLeft.setAttribute('aria-pressed', side==='A' ? 'true' : 'false');
-    btnRight.setAttribute('aria-pressed', side==='B' ? 'true' : 'false');
-    btnSubmit.disabled=false;
-  }
-  btnSubmit.addEventListener('click', ()=>{
-    const m=flat.find(x=>x.id===sel); if(!m || !chosen || m.decided) return;
-    if(chosen==='A') m.votesA=(m.votesA||0)+1; else m.votesB=(m.votesB||0)+1;
-    leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
-    updateRowScore(m);
-    localStorage.setItem(lockKey(m.id),'1'); voteLockBadge.style.display='inline-block';
-    btnLeft.disabled=btnRight.disabled=true; btnSubmit.disabled=true;
-    saveState(); toast('Vote submitted');
-  });
-
-  // ======= Full Reset (manual + after Final) =======
-  async function fullReset(){
-    hideWinner();
-    clearVoteLocks();
-    clearState();
-    makeTournament();
-    buildList();
-    unsubscribeTimer();
-    subscribeTimerForRound(1);
-    await resetTimer(ROUND_SECONDS, 1);
-    saveState();
-    toast('🔁 Fresh bracket: votes cleared, timer reset to R32');
-  }
-
-  // ======= UI wires =======
-  document.getElementById('btnReset').addEventListener('click', fullReset);
-  document.getElementById('btnForce').addEventListener('click', ()=>{
-    const m=flat.find(x=>x.id===sel); if(!m) return;
-    if(m.decided){ toast('Match already decided'); return; }
-    finalizeMatch(m); buildList(sel); saveState();
-  });
-  document.getElementById('btnClearVotes').addEventListener('click', ()=>{
-    const keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.startsWith(VOTE_NS)) keys.push(k); }
-    keys.forEach(k=>localStorage.removeItem(k)); voteLockBadge.style.display='none';
-    const m=flat.find(x=>x.id===sel);
-    if(m && !m.decided && m.A.img && m.B.img){ btnLeft.disabled=btnRight.disabled=false; }
-    toast('Your local votes were cleared');
-  });
-  document.getElementById('toggleFinished').addEventListener('change', (e)=>{ showFinished = e.target.checked; buildList(sel); });
-
-  // ======= Boot: DO NOT seed on refresh =======
-  async function init(){
-    if (!loadState()) { makeTournament(); saveState(); }
-    buildList();
-
-    // Try to hook into any live timer row
-    let roundFromTimers = await detectActiveRoundFromTimers();
-    let roundToUse = roundFromTimers || currentRound();
-    subscribeTimerForRound(roundToUse);
-
-    const t = await getTimerForRound(roundToUse);
-    const now = Date.now();
-
-    if (t?.end_at && new Date(t.end_at).getTime() > now) {
-      tickGlobal(t.end_at);         // re-use live end_at (no reset)
-    } else {
-      // No live timer — wait for Reset or another client to seed
-      const gc = document.getElementById('globalClock');
-      gc.textContent = 'WAITING…';
-      gc.classList.add('pending');
-    }
-  }
-  init();
-
-  // ===== Optional debug helpers =====
-  document.getElementById('dbgHealth')?.addEventListener('click', async ()=>{
-    const ids = Object.values(ROUND_ID);
-    const { data, error } = await supabase.from(TIMER_TABLE).select('*').in('id', ids);
-    setDbg(error ? 'error' : 'ok'); logDbg('timer rows:', data||error);
-  });
-  document.getElementById('dbgSeed')?.addEventListener('click', async ()=>{
-    const r = currentRound(); await resetTimer(ROUND_SECONDS, r); setDbg('seeded'); logDbg('seeded round', r);
-  });
-  document.getElementById('dbgRows')?.addEventListener('click', ()=>{ setDbg('rows'); logDbg(JSON.parse(JSON.stringify(rounds))); });
-  document.getElementById('dbgClear')?.addEventListener('click', ()=>{ dbgLog.textContent=''; setDbg('cleared'); });
+(async function init(){
+  await loadMeta();
+  await loadMatchesAll();
+  buildList();
+  await loadTimerAndTick();
+  subRealtime();
+})();
 </script>
 </body>
 </html>
