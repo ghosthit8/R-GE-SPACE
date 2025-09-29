@@ -2,23 +2,39 @@ name: Supabase Edge Cron (advance-timer)
 
 on:
   schedule:
-    - cron: "* * * * *"   # runs every minute (GitHub's minimum)
+    - cron: "* * * * *"   # every minute (GitHub's minimum)
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
       - name: Call advance-timer
         env:
-          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}   # e.g. https://<proj>.supabase.co/functions/v1/advance-timer
-          SUPABASE_ANON_KEY:     ${{ secrets.SUPABASE_ANON_KEY }}       # required if Verify JWT is enabled
+          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }} # e.g. https://<proj>.supabase.co/functions/v1/advance-timer
+          SUPABASE_ANON_KEY:     ${{ secrets.SUPABASE_ANON_KEY }}     # needed if "Verify JWT" is ON
         run: |
-          set -e
-          if [ -z "$SUPABASE_FUNCTION_URL" ]; then
-            echo "Missing SUPABASE_FUNCTION_URL secret"; exit 1
+          set -euo pipefail
+          if [ -z "${SUPABASE_FUNCTION_URL:-}" ]; then
+            echo "Missing SUPABASE_FUNCTION_URL secret" >&2
+            exit 1
           fi
-          curl -sS -X POST "$SUPABASE_FUNCTION_URL" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-            -d '{}' | cat
+
+          CURL_ARGS=(
+            -sS --fail-with-body -m 20
+            -X POST "$SUPABASE_FUNCTION_URL"
+            -H "Content-Type: application/json"
+            -d '{}'
+          )
+
+          # Include Authorization header only if a key is provided.
+          if [ -n "${SUPABASE_ANON_KEY:-}" ]; then
+            CURL_ARGS+=(-H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          fi
+
+          echo "Pinging at $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          curl "${CURL_ARGS[@]}"
