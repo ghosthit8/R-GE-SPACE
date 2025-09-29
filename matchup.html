@@ -188,6 +188,9 @@ const ROUND_SECONDS = 10; // UI uses this only for progress width; end_at comes 
 const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
 
+// Edge Function URL (Verify JWT = ON)
+const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/advance-timer`;
+
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond: 5 } } });
 
 /* =======================
@@ -212,6 +215,7 @@ let rounds = {1:[],2:[],3:[],4:[],5:[]};
 let flat = [];
 let sel=null, chosen=null;
 let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, timerChannel=null, globalTicker=null, showFinished=true;
+let lastPingTs = 0; // debounce for heartbeat
 
 const listEl=document.getElementById('matchList');
 const detailRound=document.getElementById('detailRound');
@@ -295,6 +299,31 @@ async function loadTimerAndTick(){
 }
 
 /* =======================
+   HEARTBEAT → Edge Function
+======================= */
+async function pingAdvance(reason='ui-heartbeat'){
+  const now = Date.now();
+  if (now - lastPingTs < 1500) return; // debounce
+  lastPingTs = now;
+  try {
+    const res = await fetch(FUNCTION_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_ANON}`, // Verify JWT = ON
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ reason }),
+      keepalive: true,
+      cache: 'no-store',
+    });
+    const txt = await res.text();
+    console.log('advance-timer:', res.status, txt);
+  } catch(e){
+    console.warn('advance heartbeat failed', e);
+  }
+}
+
+/* =======================
    TICKER / PAUSE
 ======================= */
 function setPauseUI(paused){
@@ -334,14 +363,15 @@ function tickGlobal(endISO){
     const left = Math.max(0, endMs - Date.now());
     globalClockEl.textContent = fmt(left);
 
-    // NEW: mirror ticking time into list rows for the CURRENT round
+    // mirror ticking time into list rows for the CURRENT round
     document.querySelectorAll(`.matchItem .timer[data-round="${currentRound}"]`)
       .forEach(el => { el.textContent = '· ' + globalClockEl.textContent; });
 
     if (left<=0){
       clearInterval(globalTicker);
       globalClockEl.textContent = '00:00:00';
-      // wait for Edge Function to advance + reseed
+      // HEARTBEAT: call the Edge Function immediately so it advances + reseeds
+      pingAdvance('timer-zero');
     }
   }, 200);
 }
@@ -376,7 +406,7 @@ function buildList(preserveId){
     const row=document.createElement('div'); row.className='metaRow';
     const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
     const timer=document.createElement('span'); timer.className='timer';
-    timer.dataset.round = String(m.round); // NEW: mark for live updates
+    timer.dataset.round = String(m.round);
     const isTbd = !(m.A?.img && m.B?.img);
     if (isTbd) { timer.style.display='none'; } else { timer.textContent='· '+(globalClockEl.textContent||'SYNC…'); }
     row.append(badge,timer); mid.append(title,row);
