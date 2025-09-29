@@ -179,7 +179,10 @@
   <!-- Close Fullscreen -->
   <button id="fsClose" class="fsClose" aria-label="Exit fullscreen">×</button>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+// keep the edge function warm and self-heal the clock
+setInterval(() => { pingAdvance('keepalive'); }, 5000);
+</script>
 <script type="module">
 /* =======================
    CONFIG
@@ -294,33 +297,22 @@ async function loadTimerAndTick(){
   const id = ROUND_ID[currentRound];
   const { data } = await supabase.from(TIMER_TABLE).select('end_at').eq('id', id).maybeSingle();
   const endAt = data?.end_at ? new Date(data.end_at).getTime() : null;
-  if (!endAt) { globalClockEl.textContent='WAITING…'; globalClockEl.classList.add('pending'); return; }
-  tickGlobal(new Date(endAt).toISOString());
-}
 
-/* =======================
-   HEARTBEAT → Edge Function
-======================= */
-async function pingAdvance(reason='ui-heartbeat'){
-  const now = Date.now();
-  if (now - lastPingTs < 1500) return; // debounce
-  lastPingTs = now;
-  try {
-    const res = await fetch(FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON}`, // Verify JWT = ON
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ reason }),
-      keepalive: true,
-      cache: 'no-store',
-    });
-    const txt = await res.text();
-    console.log('advance-timer:', res.status, txt);
-  } catch(e){
-    console.warn('advance heartbeat failed', e);
+  // If there is no timer or it has already expired, ask the Edge function to seed/advance it.
+  if (!endAt || endAt <= Date.now()){
+    globalClockEl.textContent='SYNC…';
+    globalClockEl.classList.add('pending');
+
+    // kick the Edge function (seeds timer if needed, advances round if expired)
+    await pingAdvance(!endAt ? 'boot-no-end-at' : 'boot-expired');
+
+    // and re-poll shortly to pick up the new end_at
+    setTimeout(loadTimerAndTick, 1200);
+    return;
   }
+
+  // Happy path: start ticking
+  tickGlobal(new Date(endAt).toISOString());
 }
 
 /* =======================
@@ -555,9 +547,14 @@ toggleFinished.addEventListener('change', (e)=>{ showFinished=e.target.checked; 
   await loadMeta();
   await loadMatchesAll();
   buildList();
+  // ensure a seed even if everyone loads while DB is empty
+  pingAdvance('boot');
   await loadTimerAndTick();
   subRealtime();
 })();
+
+// keep the edge function warm and self-heal the clock
+setInterval(() => { pingAdvance('keepalive'); }, 5000);
 </script>
 </body>
 </html>
