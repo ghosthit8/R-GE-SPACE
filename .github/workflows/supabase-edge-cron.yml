@@ -1,40 +1,33 @@
-name: Supabase Edge Cron (advance-timer)
+name: Supabase Edge Functions CI
 
 on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'supabase/functions/**'
   schedule:
-    - cron: "* * * * *"   # every minute (GitHub's minimum)
-  workflow_dispatch:
-
-permissions:
-  contents: read
+    - cron: "*/1 * * * *"   # every 1 minute (GitHub minimum)
 
 jobs:
-  ping:
+  deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
     steps:
-      - name: Call advance-timer
-        env:
-          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}  # e.g. https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/advance-timer
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}          # leave blank if Verify JWT is OFF
+      - uses: actions/checkout@v3
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link project
+        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --password ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Deploy Edge Functions
+        run: supabase functions deploy --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      # ===== Heartbeat failsafe =====
+      - name: Heartbeat advance (failsafe)
         run: |
-          set -euo pipefail
-
-          if [ -z "${SUPABASE_FUNCTION_URL:-}" ]; then
-            echo "Missing SUPABASE_FUNCTION_URL secret"; exit 1
-          fi
-
-          CURL_ARGS=(
-            -sS --fail-with-body -m 20
-            -X POST "$SUPABASE_FUNCTION_URL"
-            -H "Content-Type: application/json"
-            -d '{}'
-          )
-
-          # Include Authorization header only if a key is provided (for Verify JWT = ON).
-          if [ -n "${SUPABASE_ANON_KEY:-}" ]; then
-            CURL_ARGS+=(-H "Authorization: Bearer $SUPABASE_ANON_KEY")
-          fi
-
-          echo "Pinging at $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          curl "${CURL_ARGS[@]}"
+          curl -s -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/advance-timer" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"reason":"github-cron"}'
