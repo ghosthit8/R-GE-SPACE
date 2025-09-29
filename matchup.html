@@ -184,7 +184,7 @@
 /* =======================
    CONFIG
 ======================= */
-const ROUND_SECONDS = 10;
+const ROUND_SECONDS = 10; // UI uses this only for progress width; end_at comes from DB
 const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
 
@@ -211,7 +211,7 @@ let currentRound = 1;
 let rounds = {1:[],2:[],3:[],4:[],5:[]};
 let flat = [];
 let sel=null, chosen=null;
-let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, timerChannel=null, globalTicker=null, showFinished=true; // default true
+let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, timerChannel=null, globalTicker=null, showFinished=true;
 
 const listEl=document.getElementById('matchList');
 const detailRound=document.getElementById('detailRound');
@@ -333,6 +333,11 @@ function tickGlobal(endISO){
     if (LOCAL_PAUSE) return;
     const left = Math.max(0, endMs - Date.now());
     globalClockEl.textContent = fmt(left);
+
+    // NEW: mirror ticking time into list rows for the CURRENT round
+    document.querySelectorAll(`.matchItem .timer[data-round="${currentRound}"]`)
+      .forEach(el => { el.textContent = '· ' + globalClockEl.textContent; });
+
     if (left<=0){
       clearInterval(globalTicker);
       globalClockEl.textContent = '00:00:00';
@@ -345,7 +350,6 @@ function tickGlobal(endISO){
    RENDERING
 ======================= */
 function visibleMatches(){
-  // with showFinished=true (default), show all; if false, show current and future
   const cur=currentRound;
   const all = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
   return showFinished ? all : all.filter(m => m.round >= cur);
@@ -372,6 +376,7 @@ function buildList(preserveId){
     const row=document.createElement('div'); row.className='metaRow';
     const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
     const timer=document.createElement('span'); timer.className='timer';
+    timer.dataset.round = String(m.round); // NEW: mark for live updates
     const isTbd = !(m.A?.img && m.B?.img);
     if (isTbd) { timer.style.display='none'; } else { timer.textContent='· '+(globalClockEl.textContent||'SYNC…'); }
     row.append(badge,timer); mid.append(title,row);
@@ -446,8 +451,6 @@ document.getElementById('btnClearVotes').addEventListener('click', ()=>{
   if(m && !m.decided && m.A.img && m.B.img){ btnLeft.disabled=btnRight.disabled=false; }
   toast('Your local votes were cleared');
 });
-
-// NOTE: removed stray test "seed/reset" toast + extra `});` that broke the script
 
 /* =======================
    MANUAL TEST: FORCE DECIDE
