@@ -184,12 +184,10 @@
 /* =======================
    CONFIG
 ======================= */
-const ROUND_SECONDS = 10; // UI uses this only for progress width; end_at comes from DB
+const ROUND_SECONDS = 10; // UI only; server provides end_at
 const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
-
-// Edge Function URL (JWT verification ON)
-const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/dynamic-task`;
+const FUNCTION_URL  = `${SUPABASE_URL}/functions/v1/dynamic-task`;
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
   realtime:{ params:{ eventsPerSecond: 5 } }
@@ -205,7 +203,6 @@ const WINNERS     = 'winners';
 
 const roundLabel = ['','R32','R16','QF','SF','FINAL'];
 const ROUND_ID   = { 1:'r32', 2:'r16', 3:'qf', 4:'sf', 5:'final' };
-
 const VOTE_NS = 'rs_stack_vote_v2_';
 const lockKey = (id)=> `${VOTE_NS}${id}`;
 
@@ -217,7 +214,8 @@ let rounds = {1:[],2:[],3:[],4:[],5:[]};
 let flat = [];
 let sel=null, chosen=null;
 let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, timerChannel=null, globalTicker=null, showFinished=true;
-let loopLock=false; // <<< prevents duplicate restarts
+let loopLock=false;     // prevents duplicate restarts
+let decideLock=false;   // prevents duplicate fallback decides
 
 const listEl=document.getElementById('matchList');
 const detailRound=document.getElementById('detailRound');
@@ -236,7 +234,6 @@ const globalClockEl=document.getElementById('globalClock');
 const pauseBadge=document.getElementById('pauseBadge');
 const btnPause=document.getElementById('btnPause');
 const winFx=document.getElementById('winFx'); const winImg=document.getElementById('winImg');
-
 const fsLeftBtn = document.getElementById('fsLeft');
 const fsRightBtn = document.getElementById('fsRight');
 const frameLeft = document.getElementById('frameLeft');
@@ -273,7 +270,6 @@ winFx.addEventListener('click', ()=>winFx.classList.remove('show'));
 
 /* =======================
    EDGE FUNCTION PING
-   (Seeds timer if missing, advances round on expiry, no-op keepalive otherwise)
 ======================= */
 async function pingAdvance(reason='ui'){
   try{
@@ -315,18 +311,13 @@ async function loadTimerAndTick(){
   const { data } = await supabase.from(TIMER_TABLE).select('end_at').eq('id', id).maybeSingle();
   const endAt = data?.end_at ? new Date(data.end_at).getTime() : null;
 
-  // If there is no timer or it has already expired, ask the Edge function to seed/advance it.
   if (!endAt || endAt <= Date.now()){
     globalClockEl.textContent='SYNC…';
     globalClockEl.classList.add('pending');
-
     await pingAdvance(!endAt ? 'boot-no-end-at' : 'boot-expired');
-
     setTimeout(loadTimerAndTick, 1200);
     return;
   }
-
-  // Happy path: start ticking
   tickGlobal(new Date(endAt).toISOString());
 }
 
@@ -377,8 +368,10 @@ function tickGlobal(endISO){
     if (left<=0){
       clearInterval(globalTicker);
       globalClockEl.textContent = '00:00:00';
-      // HEARTBEAT: call the Edge Function immediately so it advances + reseeds
+      // Primary: ask Edge fn to advance
       pingAdvance('timer-zero');
+      // Fallback: if Edge fn doesn't decide, do it client-side
+      setTimeout(decideOneOpenMatchFallback, 1000);
     }
   }, 200);
 }
@@ -510,7 +503,7 @@ document.getElementById('btnForce').addEventListener('click', async ()=>{
         await supabase.from(MATCHES).update({ b_name:winner.name, b_img:winner.img }).eq('id', nid);
     }
   } else {
-    // FINAL — show FX, then LOOP (archive + reset + reseed)
+    // FINAL — show FX, then LOOP
     showWinnerImage(winner.img);
     setTimeout(()=>archiveChampionAndLoop(winner.img), 5400);
   }
@@ -518,22 +511,89 @@ document.getElementById('btnForce').addEventListener('click', async ()=>{
 });
 
 /* =======================
-   === LOOP FIX: ARCHIVE → RESET → RESEED ===
+   FAIL-SAFE: decide one open match if timer hits 0 and server didn’t
+======================= */
+async function maybeAdvanceRound() {
+  const all = rounds[currentRound] || [];
+  if (!all.length) return;
+  const allDecided = all.every(m => m.decided || !(m.A.img && m.B.img));
+  if (!allDecided) return;
+
+  if (currentRound < 5) {
+    await supabase.from(META_TABLE).update({ current_round: currentRound + 1 }).eq('id', 1);
+    await pingAdvance('advance-round');
+  }
+}
+
+async function decideOneOpenMatchFallback() {
+  if (decideLock) return;
+  decideLock = true;
+  try {
+    const { data: rows } = await supabase
+      .from(MATCHES)
+      .select('*')
+      .eq('round', currentRound)
+      .order('idx', { ascending: true });
+
+    if (!rows?.length) return;
+
+    const m = rows.find(r => !r.decided && r.a_img && r.b_img);
+    if (!m) { await maybeAdvanceRound(); return; }
+
+    const a = m.votes_a || 0, b = m.votes_b || 0;
+    const winnerIsA = (a > b) ? true : (b > a) ? false : (Math.random() < 0.5);
+
+    // idempotent: only flip if still undecided
+    const { data: upd } = await supabase
+      .from(MATCHES)
+      .update({ decided: true })
+      .eq('id', m.id)
+      .eq('decided', false)
+      .select('id');
+
+    if (!upd?.length) return; // someone else did it
+
+    if (m.next_id) {
+      const { data: next } = await supabase.from(MATCHES).select('a_img,b_img').eq('id', m.next_id).maybeSingle();
+      if (next && !next.a_img) {
+        await supabase.from(MATCHES).update({
+          a_name: winnerIsA ? m.a_name : m.b_name,
+          a_img:  winnerIsA ? m.a_img  : m.b_img
+        }).eq('id', m.next_id);
+      } else {
+        await supabase.from(MATCHES).update({
+          b_name: winnerIsA ? m.a_name : m.b_name,
+          b_img:  winnerIsA ? m.a_img  : m.b_img
+        }).eq('id', m.next_id);
+      }
+      await maybeAdvanceRound();
+    } else {
+      // FINAL
+      const champImg = winnerIsA ? m.a_img : m.b_img;
+      showWinnerImage(champImg);
+      setTimeout(() => archiveChampionAndLoop(champImg), 5400);
+    }
+  } finally {
+    setTimeout(() => { decideLock = false; }, 1200);
+  }
+}
+
+/* =======================
+   === LOOP: archive → reset → reseed ===
 ======================= */
 async function archiveChampionAndLoop(champImg){
   if (loopLock) return;
   loopLock = true;
 
   try{
-    // Double-check we're at FINAL on the server to avoid accidental resets
+    // confirm we are at FINAL
     const { data: meta } = await supabase.from(META_TABLE).select('current_round').eq('id',1).maybeSingle();
     if (meta && meta.current_round !== 5){ loopLock=false; return; }
 
-    // Archive champ (server-side authority)
+    // archive champ
     if (champImg){
       try { await supabase.from(WINNERS).insert({ image_url: champImg, won_at: new Date().toISOString() }); } catch {}
     } else {
-      // Fallback: compute from DB FINAL row
       const { data: f } = await supabase.from(MATCHES).select('*').eq('round',5).order('idx').limit(1).maybeSingle();
       if (f?.a_img || f?.b_img){
         const a=f?.votes_a||0, b=f?.votes_b||0;
@@ -542,24 +602,24 @@ async function archiveChampionAndLoop(champImg){
       }
     }
 
-    // Reset: keep R32 entrants, clear votes/decisions
+    // reset matches: keep R32 entrants, clear votes/decisions
     await supabase.from(MATCHES).update({
       decided:false, votes_a:0, votes_b:0
     }).eq('round', 1);
 
-    // Clear later rounds completely so they refill naturally
+    // clear later rounds so they refill
     await supabase.from(MATCHES).update({
       decided:false, votes_a:0, votes_b:0,
       a_name:null, a_img:null, b_name:null, b_img:null
     }).gt('round', 1);
 
-    // Reset meta to R32 (guard against duplicate writes)
+    // reset meta back to R32
     await supabase.from(META_TABLE).update({ current_round:1 }).eq('id',1);
 
-    // Ask Edge fn to reseed timer
+    // reseed shared timer via Edge fn
     await pingAdvance('loop-restart');
 
-    // Reload UI
+    // refresh UI
     await loadMeta();
     await loadMatchesAll();
     buildList();
@@ -567,7 +627,6 @@ async function archiveChampionAndLoop(champImg){
     await loadTimerAndTick();
     toast('🔁 Tournament reset');
   } finally {
-    // Let realtime settle before allowing another loop trigger
     setTimeout(()=>{ loopLock=false; }, 3000);
   }
 }
@@ -576,7 +635,6 @@ async function archiveChampionAndLoop(champImg){
    REALTIME WIRES
 ======================= */
 function subRealtime(){
-  // meta (round changes)
   supabase.channel('rt_meta')
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:META_TABLE, filter:'id=eq.1' }, async (payload)=>{
       const nxt = payload.new?.current_round;
@@ -590,12 +648,11 @@ function subRealtime(){
       }
     }).subscribe();
 
-  // matches changes → refresh list/selection
   supabase.channel('rt_matches_all')
     .on('postgres_changes', { event:'*', schema:'public', table:MATCHES }, async ()=>{
       await loadMatchesAll();
       buildList(sel);
-      // Final decided → show FX and LOOP
+      // If FINAL is decided (server or fallback), show FX and loop
       const final = rounds[5][0];
       if (final && final.decided && final.A.img && final.B.img){
         const a=final.votesA||0, b=final.votesB||0;
@@ -605,7 +662,6 @@ function subRealtime(){
       }
     }).subscribe();
 
-  // timer for current round
   subscribeTimerForRound(currentRound);
 }
 
@@ -619,9 +675,7 @@ toggleFinished.addEventListener('change', (e)=>{ showFinished=e.target.checked; 
   await loadMatchesAll();
   buildList();
 
-  // ensure a seed even if everyone loads while DB is empty
-  await pingAdvance('boot');
-
+  await pingAdvance('boot'); // ensure timer row exists
   await loadTimerAndTick();
   subRealtime();
 
