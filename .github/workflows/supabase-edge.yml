@@ -2,8 +2,7 @@ name: Deploy Supabase Edge Function
 
 on:
   push:
-    branches:
-      - main   # or your default branch
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -13,11 +12,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
 
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
