@@ -13,7 +13,7 @@
   html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--green);font-family:ui-sans-serif,system-ui,Arial}
   a.btn,button.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
-  header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;flex-wrap:wrap}
+  header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px}
   .app{display:grid;grid-template-columns:360px 1fr;gap:14px;height:calc(100vh - 56px);padding:0 14px 14px}
   .listWrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
   .listHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px}
@@ -85,13 +85,7 @@
 <body>
   <header>
     <h1 style="margin:0">R<span style="letter-spacing:.03em">Ⓐ</span>GE SPACE — TOURNAMENT</h1>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <!-- NEW: Debug + seed -->
-      <label style="display:inline-flex;align-items:center;gap:6px" title="Prevents auto-advance when timer hits 0">
-        <input type="checkbox" id="toggleDebug"> 🧪 Debug mode (no auto-advance)
-      </label>
-      <button id="btnSeed60" class="btn" title="Set current round 'ends' to +60s">⏱ Seed 60s</button>
-
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button id="btnPause" class="btn">⏯ Pause</button>
       <button id="btnForce" class="btn">⚡ Force decide (selected)</button>
       <button id="btnClearVotes" class="btn">🧹 Clear my votes</button>
@@ -125,7 +119,6 @@
       <div class="countdown">
         Decision in: <span class="timer pending" id="globalClock">SYNC…</span>
         <span class="badge" id="pauseBadge" style="display:none;margin-left:8px;">PAUSED</span>
-        <span class="badge" id="debugBadge" style="display:none;margin-left:8px;background:rgba(255,31,143,.18);border-color:#ff1f8f;">DEBUG</span>
       </div>
 
       <div class="stage">
@@ -191,7 +184,7 @@
 /* =======================
    CONFIG
 ======================= */
-const ROUND_SECONDS = 10; // UI hint only; real end time comes from DB
+const ROUND_SECONDS = 10; // UI uses this only for progress width; end_at comes from DB
 const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
 
@@ -205,11 +198,13 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
 /* =======================
    TABLES + CONSTANTS
 ======================= */
+const TIMER_TABLE = 'shared_timer';
 const META_TABLE  = 'tournament_meta';
 const MATCHES     = 'matches';
 const WINNERS     = 'winners';
 
 const roundLabel = ['','R32','R16','QF','SF','FINAL'];
+const ROUND_ID   = { 1:'r32', 2:'r16', 3:'qf', 4:'sf', 5:'final' };
 
 const VOTE_NS = 'rs_stack_vote_v2_';
 const lockKey = (id)=> `${VOTE_NS}${id}`;
@@ -222,7 +217,6 @@ let rounds = {1:[],2:[],3:[],4:[],5:[]};
 let flat = [];
 let sel=null, chosen=null;
 let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, timerChannel=null, globalTicker=null, showFinished=true;
-let DEBUG=false;
 
 const listEl=document.getElementById('matchList');
 const detailRound=document.getElementById('detailRound');
@@ -240,9 +234,6 @@ const toggleFinished=document.getElementById('toggleFinished');
 const globalClockEl=document.getElementById('globalClock');
 const pauseBadge=document.getElementById('pauseBadge');
 const btnPause=document.getElementById('btnPause');
-const btnSeed60=document.getElementById('btnSeed60');
-const toggleDebug=document.getElementById('toggleDebug');
-const debugBadge=document.getElementById('debugBadge');
 const winFx=document.getElementById('winFx'); const winImg=document.getElementById('winImg');
 
 const fsLeftBtn = document.getElementById('fsLeft');
@@ -258,7 +249,6 @@ const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAO
 const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
 const fmt = (ms)=>{ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000);
   return String(Math.floor(s/3600)).padStart(2,'0')+':' + String(Math.floor((s%3600)/60)).padStart(2,'0')+':' + String(s%60).padStart(2,'0'); };
-const logD = (...a)=>{ if (DEBUG) console.debug('[DEBUG]', ...a); };
 
 /* =======================
    FULLSCREEN + WINNER FX
@@ -281,10 +271,10 @@ function showWinnerImage(url){
 winFx.addEventListener('click', ()=>winFx.classList.remove('show'));
 
 /* =======================
-   EDGE FUNCTION PING  (blocked in DEBUG)
+   EDGE FUNCTION PING
+   (Seeds timer if missing, advances round on expiry, no-op keepalive otherwise)
 ======================= */
 async function pingAdvance(reason='ui'){
-  if (DEBUG) { logD('pingAdvance blocked (debug):', reason); return; }
   try{
     await fetch(FUNCTION_URL, {
       method:'POST',
@@ -304,7 +294,6 @@ async function pingAdvance(reason='ui'){
 async function loadMeta(){
   const { data } = await supabase.from(META_TABLE).select('*').eq('id',1).maybeSingle();
   if (data?.current_round) currentRound = data.current_round;
-  logD('meta current_round →', currentRound);
 }
 async function loadMatchesAll(){
   const { data } = await supabase.from(MATCHES).select('*').order('round', {ascending:true}).order('idx',{ascending:true});
@@ -315,109 +304,29 @@ async function loadMatchesAll(){
       A: { name: row.a_name, img: row.a_img },
       B: { name: row.b_name, img: row.b_img },
       votesA: row.votes_a||0, votesB: row.votes_b||0, decided: !!row.decided,
-      next_id: row.next_id || null,
-      ends: row.ends
+      next_id: row.next_id || null
     });
   });
   flat = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
-  logD('loaded matches; per-round counts =', Object.fromEntries(Object.entries(rounds).map(([r,a])=>[r,a.length])));
 }
+async function loadTimerAndTick(){
+  const id = ROUND_ID[currentRound];
+  const { data } = await supabase.from(TIMER_TABLE).select('end_at').eq('id', id).maybeSingle();
+  const endAt = data?.end_at ? new Date(data.end_at).getTime() : null;
 
-/* =======================
-   ACTIVE ROUND SELECTION
-======================= */
-function recomputeActiveRound(prefMeta){
-  const unfinished = flat.filter(m => m.decided !== true);
-  let fromData = unfinished.length ? Math.min(...unfinished.map(m=>m.round)) :
-                                     (flat.length ? Math.min(...flat.map(m=>m.round)) : 1);
-  if (typeof prefMeta === 'number' && !Number.isNaN(prefMeta)){
-    currentRound = Math.min(prefMeta, fromData);
-  } else {
-    currentRound = fromData;
-  }
-  logD('active round =', currentRound, '(meta:', prefMeta, '; earliest unfinished:', fromData, ')');
-}
-
-/* =======================
-   TIMER (uses matches.ends)
-======================= */
-// Reads the round's shared end time from the `matches` table (per-round timer)
-async function loadTimerAndTick() {
-  const { data, error } = await supabase
-    .from(MATCHES)
-    .select('ends, decided')
-    .eq('round', currentRound)
-    .not('ends', 'is', null);
-
-  if (error) {
-    console.warn('loadTimer error', error);
-    globalClockEl.textContent = 'SYNC…';
+  // If there is no timer or it has already expired, ask the Edge function to seed/advance it.
+  if (!endAt || endAt <= Date.now()){
+    globalClockEl.textContent='SYNC…';
     globalClockEl.classList.add('pending');
-    return;
-  }
 
-  const endsArray = (data || [])
-    .filter(r => r.ends != null && r.decided !== true)
-    .map(r => new Date(r.ends).getTime());
+    await pingAdvance(!endAt ? 'boot-no-end-at' : 'boot-expired');
 
-  const endMs = endsArray.length ? Math.max(...endsArray) : null;
-
-  if (!endMs || endMs <= Date.now()) {
-    globalClockEl.textContent = 'SYNC…';
-    globalClockEl.classList.add('pending');
-    logD('no valid endMs — calling pingAdvance?', !DEBUG, { endMs });
-    await pingAdvance(!endMs ? 'boot-no-end-at' : 'boot-expired');
     setTimeout(loadTimerAndTick, 1200);
     return;
   }
 
-  tickGlobal(new Date(endMs).toISOString());
-}
-
-// Listen for any match change in the current round and refresh the clock
-function subscribeTimerForRound(round) {
-  if (timerChannel) {
-    supabase.removeChannel(timerChannel);
-    timerChannel = null;
-  }
-
-  timerChannel = supabase
-    .channel(`timer-round-${round}`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: MATCHES, filter: `round=eq.${round}` },
-      () => { logD('realtime: matches change → reload timer'); loadTimerAndTick(); }
-    )
-    .subscribe();
-}
-
-function tickGlobal(endISO) {
-  const endMs = new Date(endISO).getTime();
-  clearInterval(globalTicker);
-  globalClockEl.classList.remove('pending');
-
-  globalTicker = setInterval(async () => {
-    if (LOCAL_PAUSE) return;
-    const left = Math.max(0, endMs - Date.now());
-    globalClockEl.textContent = fmt(left);
-
-    // mirror into list timers for this round
-    document
-      .querySelectorAll(`.matchItem .timer[data-round="${currentRound}"]`)
-      .forEach(el => { el.textContent = '· ' + globalClockEl.textContent; });
-
-    if (left <= 0) {
-      clearInterval(globalTicker);
-      globalClockEl.textContent = '00:00:00';
-      logD('timer hit zero; DEBUG=', DEBUG);
-      if (!DEBUG) {
-        pingAdvance('timer-zero');            // ask Edge to advance & reseed next round ends
-        setTimeout(loadTimerAndTick, 800);    // reload the round clock shortly
-      } else {
-        toast('⏱ Timer reached 0 (debug, no advance)');
-      }
-    }
-  }, 200);
+  // Happy path: start ticking
+  tickGlobal(new Date(endAt).toISOString());
 }
 
 /* =======================
@@ -441,13 +350,45 @@ function resumeLocal(){
 }
 btnPause.addEventListener('click', ()=>{ if(!LOCAL_PAUSE) pauseLocal(); else resumeLocal(); });
 
+function unsubscribeTimer(){ if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; } clearInterval(globalTicker); globalTicker=null; }
+function subscribeTimerForRound(round){
+  const id = ROUND_ID[round];
+  if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; }
+  timerChannel = supabase
+    .channel('timer-'+id)
+    .on('postgres_changes', { event:'*', schema:'public', table:TIMER_TABLE, filter:`id=eq.${id}` },
+      (payload)=>{ const endAt = (payload.new ?? payload.old)?.end_at; if (endAt) tickGlobal(endAt); })
+    .subscribe();
+}
+function tickGlobal(endISO){
+  const endMs = new Date(endISO).getTime();
+  clearInterval(globalTicker);
+  globalClockEl.classList.remove('pending');
+  globalTicker = setInterval(async ()=>{
+    if (LOCAL_PAUSE) return;
+    const left = Math.max(0, endMs - Date.now());
+    globalClockEl.textContent = fmt(left);
+
+    // mirror ticking time into list rows for the CURRENT round
+    document.querySelectorAll(`.matchItem .timer[data-round="${currentRound}"]`)
+      .forEach(el => { el.textContent = '· ' + globalClockEl.textContent; });
+
+    if (left<=0){
+      clearInterval(globalTicker);
+      globalClockEl.textContent = '00:00:00';
+      // HEARTBEAT: call the Edge Function immediately so it advances + reseeds
+      pingAdvance('timer-zero');
+    }
+  }, 200);
+}
+
 /* =======================
    RENDERING
 ======================= */
 function visibleMatches(){
   const cur=currentRound;
   const all = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
-  return showFinished ? all : all.filter(m => m.round === cur);
+  return showFinished ? all : all.filter(m => m.round >= cur);
 }
 function updateRoundBreadcrumb(){ roundSummary.textContent = `${roundLabel[currentRound]} → Final`; }
 function updateRowScore(m){
@@ -547,16 +488,6 @@ document.getElementById('btnClearVotes').addEventListener('click', ()=>{
   toast('Your local votes were cleared');
 });
 
-/* NEW: seed 60s of time for current round */
-btnSeed60.addEventListener('click', async ()=>{
-  const { error } = await supabase.from(MATCHES)
-    .update({ ends: new Date(Date.now()+60000).toISOString(), decided: false })
-    .eq('round', currentRound);
-  if (error) { toast('Seed failed'); console.warn(error); return; }
-  toast('⏱ Seeded 60s');
-  loadTimerAndTick();
-});
-
 /* =======================
    MANUAL TEST: FORCE DECIDE
 ======================= */
@@ -589,31 +520,24 @@ document.getElementById('btnForce').addEventListener('click', async ()=>{
    REALTIME WIRES
 ======================= */
 function subRealtime(){
-  // meta (round changes) — prefer earliest unfinished
+  // meta (round changes)
   supabase.channel('rt_meta')
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:META_TABLE, filter:'id=eq.1' }, async (payload)=>{
-      const metaRound = typeof payload.new?.current_round === 'number' ? payload.new.current_round : undefined;
-      await loadMatchesAll();
-      const before = currentRound;
-      recomputeActiveRound(metaRound);
-      if (currentRound !== before){
+      const nxt = payload.new?.current_round;
+      if (typeof nxt==='number' && nxt !== currentRound){
+        currentRound = nxt;
+        await loadMatchesAll();
+        buildList();
         subscribeTimerForRound(currentRound);
         await loadTimerAndTick();
+        toast(`➡️ ${roundLabel[currentRound]}`);
       }
-      buildList(sel);
-      toast(`➡️ ${roundLabel[currentRound]}`);
     }).subscribe();
 
-  // matches changes → refresh list/selection and recompute round
+  // matches changes → refresh list/selection
   supabase.channel('rt_matches_all')
     .on('postgres_changes', { event:'*', schema:'public', table:MATCHES }, async ()=>{
       await loadMatchesAll();
-      const before = currentRound;
-      recomputeActiveRound(currentRound);
-      if (currentRound !== before){
-        subscribeTimerForRound(currentRound);
-        await loadTimerAndTick();
-      }
       buildList(sel);
       // Final decided → show FX
       const final = rounds[5][0];
@@ -624,7 +548,7 @@ function subRealtime(){
       }
     }).subscribe();
 
-  // timer for current round (from matches table)
+  // timer for current round
   subscribeTimerForRound(currentRound);
 }
 
@@ -632,12 +556,10 @@ function subRealtime(){
    BOOT
 ======================= */
 toggleFinished.addEventListener('change', (e)=>{ showFinished=e.target.checked; buildList(sel); });
-toggleDebug.addEventListener('change', (e)=>{ DEBUG = !!e.target.checked; debugBadge.style.display = DEBUG ? 'inline-block' : 'none'; logD('Debug mode ON'); });
 
 (async function init(){
-  await loadMeta();          // may set currentRound from meta
-  await loadMatchesAll();    // load all rows
-  recomputeActiveRound(currentRound);
+  await loadMeta();
+  await loadMatchesAll();
   buildList();
 
   // ensure a seed even if everyone loads while DB is empty
