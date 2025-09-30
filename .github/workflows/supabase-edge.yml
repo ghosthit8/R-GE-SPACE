@@ -1,59 +1,29 @@
-name: Supabase Edge Functions (Deploy + Keepalive)
+name: Deploy Supabase Edge Function
 
 on:
   push:
-    paths:
-      - "supabase/functions/**"
-      - ".github/workflows/supabase-edge.yml"
+    branches:
+      - main   # or your default branch
   workflow_dispatch:
-  schedule:
-    - cron: "*/2 * * * *"   # optional keepalive
-
-permissions:
-  contents: read
-
-concurrency:
-  group: supabase-edge
-  cancel-in-progress: true
 
 jobs:
-  deploy_and_keepalive:
+  deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
 
     steps:
-      - name: ⬇️ Check out repo
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: 🧰 Install Supabase CLI
-        uses: supabase/setup-cli@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
 
-      - name: 🗂️ Show functions tree (debug)
-        run: ls -R supabase/functions || true
+      - name: Install Supabase CLI
+        run: npm install -g supabase
 
-      - name: 🔎 Assert required secrets
-        run: |
-          [ -n "${{ secrets.SUPABASE_PROJECT_REF }}" ] || { echo "❌ SUPABASE_PROJECT_REF missing"; exit 1; }
-          [ -n "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ] || { echo "❌ SUPABASE_ACCESS_TOKEN missing"; exit 1; }
-          echo "Project ref length: $(printf "%s" "${{ secrets.SUPABASE_PROJECT_REF }}" | wc -c)"
-
-      # ---------- DEPLOY ----------
-      - name: 🚀 Deploy Edge Function (dynamic-task)
-        run: |
-          supabase functions deploy dynamic-task \
-            --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" \
-            --debug
+      - name: Deploy Edge Function
+        run: supabase functions deploy dynamic-task --project-ref "$PROJECT_REF"
         env:
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_ID }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      # ---------- KEEPALIVE (optional) ----------
-      - name: 🫀 Keepalive ping
-        run: |
-          set -euo pipefail
-          URL="${{ secrets.SUPABASE_URL }}"
-          if [ -z "$URL" ]; then URL="${{ secrets.SUPABASE_FUNCTION_URL }}"; fi
-          if [ -z "$URL" ]; then echo "ℹ️ No SUPABASE_URL/FUNCTION_URL secret; skipping ping"; exit 0; fi
-          curl -sS -X POST \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Content-Type: application/json" \
-            "$URL/functions/v1/dynamic-task" >/dev/null || true
