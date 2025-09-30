@@ -88,6 +88,7 @@
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button id="btnPause" class="btn">⏯ Pause</button>
       <button id="btnForce" class="btn">⚡ Force decide (selected)</button>
+      <button id="btnKick" class="btn">🫀 Kick heartbeat</button>
       <button id="btnClearVotes" class="btn">🧹 Clear my votes</button>
       <a class="btn" href="winners.html">🏆 Winners</a>
     </div>
@@ -184,10 +185,8 @@
 /* =======================
    CONFIG
 ======================= */
-const ROUND_SECONDS = 10; // UI only; server provides end_at
 const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
-const FUNCTION_URL  = `${SUPABASE_URL}/functions/v1/dynamic-task`;
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
   realtime:{ params:{ eventsPerSecond: 5 } }
@@ -196,13 +195,10 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
 /* =======================
    TABLES + CONSTANTS
 ======================= */
-const TIMER_TABLE = 'shared_timer';
 const META_TABLE  = 'tournament_meta';
 const MATCHES     = 'matches';
 const WINNERS     = 'winners';
-
 const roundLabel = ['','R32','R16','QF','SF','FINAL'];
-const ROUND_ID   = { 1:'r32', 2:'r16', 3:'qf', 4:'sf', 5:'final' };
 const VOTE_NS = 'rs_stack_vote_v2_';
 const lockKey = (id)=> `${VOTE_NS}${id}`;
 
@@ -213,9 +209,7 @@ let currentRound = 1;
 let rounds = {1:[],2:[],3:[],4:[],5:[]};
 let flat = [];
 let sel=null, chosen=null;
-let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, timerChannel=null, globalTicker=null, showFinished=true;
-let loopLock=false;     // prevents duplicate restarts
-let decideLock=false;   // prevents duplicate fallback decides
+let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, globalTicker=null, showFinished=true;
 
 const listEl=document.getElementById('matchList');
 const detailRound=document.getElementById('detailRound');
@@ -233,6 +227,7 @@ const toggleFinished=document.getElementById('toggleFinished');
 const globalClockEl=document.getElementById('globalClock');
 const pauseBadge=document.getElementById('pauseBadge');
 const btnPause=document.getElementById('btnPause');
+const btnKick=document.getElementById('btnKick');
 const winFx=document.getElementById('winFx'); const winImg=document.getElementById('winImg');
 const fsLeftBtn = document.getElementById('fsLeft');
 const fsRightBtn = document.getElementById('fsRight');
@@ -269,23 +264,6 @@ function showWinnerImage(url){
 winFx.addEventListener('click', ()=>winFx.classList.remove('show'));
 
 /* =======================
-   EDGE FUNCTION PING
-======================= */
-async function pingAdvance(reason='ui'){
-  try{
-    await fetch(FUNCTION_URL, {
-      method:'POST',
-      headers:{
-        'content-type':'application/json',
-        'authorization': `Bearer ${SUPABASE_ANON}`,
-        'apikey': SUPABASE_ANON,
-      },
-      body: JSON.stringify({ reason })
-    });
-  }catch(e){ /* silent */ }
-}
-
-/* =======================
    DB LOADERS
 ======================= */
 async function loadMeta(){
@@ -306,24 +284,31 @@ async function loadMatchesAll(){
   });
   flat = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
 }
-async function loadTimerAndTick(){
-  const id = ROUND_ID[currentRound];
-  const { data } = await supabase.from(TIMER_TABLE).select('end_at').eq('id', id).maybeSingle();
-  const endAt = data?.end_at ? new Date(data.end_at).getTime() : null;
-
-  if (!endAt || endAt <= Date.now()){
-    globalClockEl.textContent='SYNC…';
-    globalClockEl.classList.add('pending');
-    await pingAdvance(!endAt ? 'boot-no-end-at' : 'boot-expired');
-    setTimeout(loadTimerAndTick, 1200);
-    return;
-  }
-  tickGlobal(new Date(endAt).toISOString());
-}
 
 /* =======================
-   TICKER / PAUSE
+   GLOBAL TIMER (READ-ONLY)
 ======================= */
+function startTicker(endISO){
+  stopTicker();
+  const endMs = new Date(endISO).getTime();
+  globalClockEl.classList.remove('pending');
+  globalTicker = setInterval(()=>{
+    if (LOCAL_PAUSE) return;
+    const left = Math.max(0, endMs - Date.now());
+    globalClockEl.textContent = fmt(left);
+
+    // mirror ticking time into list rows for CURRENT round
+    document.querySelectorAll(`.matchItem .timer[data-round="${currentRound}"]`)
+      .forEach(el => { el.textContent = '· ' + globalClockEl.textContent; });
+  }, 200);
+}
+function stopTicker(){
+  clearInterval(globalTicker); globalTicker=null;
+  globalClockEl.textContent = '00:00:00';
+  globalClockEl.classList.add('pending');
+}
+
+// Pause only affects local display
 function setPauseUI(paused){
   pauseBadge.style.display = paused ? 'inline-block' : 'none';
   btnPause.textContent = paused ? '▶ Resume' : '⏯ Pause';
@@ -338,43 +323,9 @@ function pauseLocal(){
 function resumeLocal(){
   LOCAL_PAUSE = false; setPauseUI(false);
   const endAt = new Date(Date.now() + (LOCAL_REMAIN_MS||0)).toISOString();
-  tickGlobal(endAt);
+  startTicker(endAt);
 }
 btnPause.addEventListener('click', ()=>{ if(!LOCAL_PAUSE) pauseLocal(); else resumeLocal(); });
-
-function unsubscribeTimer(){ if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; } clearInterval(globalTicker); globalTicker=null; }
-function subscribeTimerForRound(round){
-  const id = ROUND_ID[round];
-  if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; }
-  timerChannel = supabase
-    .channel('timer-'+id)
-    .on('postgres_changes', { event:'*', schema:'public', table:TIMER_TABLE, filter:`id=eq.${id}` },
-      (payload)=>{ const endAt = (payload.new ?? payload.old)?.end_at; if (endAt) tickGlobal(endAt); })
-    .subscribe();
-}
-function tickGlobal(endISO){
-  const endMs = new Date(endISO).getTime();
-  clearInterval(globalTicker);
-  globalClockEl.classList.remove('pending');
-  globalTicker = setInterval(async ()=>{
-    if (LOCAL_PAUSE) return;
-    const left = Math.max(0, endMs - Date.now());
-    globalClockEl.textContent = fmt(left);
-
-    // mirror ticking time into list rows for the CURRENT round
-    document.querySelectorAll(`.matchItem .timer[data-round="${currentRound}"]`)
-      .forEach(el => { el.textContent = '· ' + globalClockEl.textContent; });
-
-    if (left<=0){
-      clearInterval(globalTicker);
-      globalClockEl.textContent = '00:00:00';
-      // Primary: ask Edge fn to advance
-      pingAdvance('timer-zero');
-      // Fallback: if Edge fn doesn't decide, do it client-side
-      setTimeout(decideOneOpenMatchFallback, 1000);
-    }
-  }, 200);
-}
 
 /* =======================
    RENDERING
@@ -472,7 +423,7 @@ btnSubmit.addEventListener('click', async ()=>{
 });
 
 /* =======================
-   MANUAL CONTROLS (DB)
+   MANUAL CONTROLS (DB + HEARTBEAT)
 ======================= */
 document.getElementById('btnClearVotes').addEventListener('click', ()=>{
   const keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.startsWith(VOTE_NS)) keys.push(k); }
@@ -480,6 +431,16 @@ document.getElementById('btnClearVotes').addEventListener('click', ()=>{
   const m=flat.find(x=>x.id===sel);
   if(m && !m.decided && m.A.img && m.B.img){ btnLeft.disabled=btnRight.disabled=false; }
   toast('Your local votes were cleared');
+});
+
+// Force server heartbeat (useful if cron is slow)
+btnKick.addEventListener('click', async ()=>{
+  try{
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/dynamic-task`, { method:'POST' });
+    const body = await res.json().catch(()=> ({}));
+    toast(`Heartbeat: ${res.status} ${body?.state ?? ''}`);
+    console.log('heartbeat', res.status, body);
+  }catch(e){ toast('Heartbeat failed'); console.error(e); }
 });
 
 /* =======================
@@ -503,133 +464,11 @@ document.getElementById('btnForce').addEventListener('click', async ()=>{
         await supabase.from(MATCHES).update({ b_name:winner.name, b_img:winner.img }).eq('id', nid);
     }
   } else {
-    // FINAL — show FX, then LOOP
+    // FINAL — show FX (no auto-loop here; server stops the global timer)
     showWinnerImage(winner.img);
-    setTimeout(()=>archiveChampionAndLoop(winner.img), 5400);
   }
   toast('⚡ Decided');
 });
-
-/* =======================
-   FAIL-SAFE: decide one open match if timer hits 0 and server didn’t
-======================= */
-async function maybeAdvanceRound() {
-  const all = rounds[currentRound] || [];
-  if (!all.length) return;
-  const allDecided = all.every(m => m.decided || !(m.A.img && m.B.img));
-  if (!allDecided) return;
-
-  if (currentRound < 5) {
-    await supabase.from(META_TABLE).update({ current_round: currentRound + 1 }).eq('id', 1);
-    await pingAdvance('advance-round');
-  }
-}
-
-async function decideOneOpenMatchFallback() {
-  if (decideLock) return;
-  decideLock = true;
-  try {
-    const { data: rows } = await supabase
-      .from(MATCHES)
-      .select('*')
-      .eq('round', currentRound)
-      .order('idx', { ascending: true });
-
-    if (!rows?.length) return;
-
-    const m = rows.find(r => !r.decided && r.a_img && r.b_img);
-    if (!m) { await maybeAdvanceRound(); return; }
-
-    const a = m.votes_a || 0, b = m.votes_b || 0;
-    const winnerIsA = (a > b) ? true : (b > a) ? false : (Math.random() < 0.5);
-
-    // idempotent: only flip if still undecided
-    const { data: upd } = await supabase
-      .from(MATCHES)
-      .update({ decided: true })
-      .eq('id', m.id)
-      .eq('decided', false)
-      .select('id');
-
-    if (!upd?.length) return; // someone else did it
-
-    if (m.next_id) {
-      const { data: next } = await supabase.from(MATCHES).select('a_img,b_img').eq('id', m.next_id).maybeSingle();
-      if (next && !next.a_img) {
-        await supabase.from(MATCHES).update({
-          a_name: winnerIsA ? m.a_name : m.b_name,
-          a_img:  winnerIsA ? m.a_img  : m.b_img
-        }).eq('id', m.next_id);
-      } else {
-        await supabase.from(MATCHES).update({
-          b_name: winnerIsA ? m.a_name : m.b_name,
-          b_img:  winnerIsA ? m.a_img  : m.b_img
-        }).eq('id', m.next_id);
-      }
-      await maybeAdvanceRound();
-    } else {
-      // FINAL
-      const champImg = winnerIsA ? m.a_img : m.b_img;
-      showWinnerImage(champImg);
-      setTimeout(() => archiveChampionAndLoop(champImg), 5400);
-    }
-  } finally {
-    setTimeout(() => { decideLock = false; }, 1200);
-  }
-}
-
-/* =======================
-   === LOOP: archive → reset → reseed ===
-======================= */
-async function archiveChampionAndLoop(champImg){
-  if (loopLock) return;
-  loopLock = true;
-
-  try{
-    // confirm we are at FINAL
-    const { data: meta } = await supabase.from(META_TABLE).select('current_round').eq('id',1).maybeSingle();
-    if (meta && meta.current_round !== 5){ loopLock=false; return; }
-
-    // archive champ
-    if (champImg){
-      try { await supabase.from(WINNERS).insert({ image_url: champImg, won_at: new Date().toISOString() }); } catch {}
-    } else {
-      const { data: f } = await supabase.from(MATCHES).select('*').eq('round',5).order('idx').limit(1).maybeSingle();
-      if (f?.a_img || f?.b_img){
-        const a=f?.votes_a||0, b=f?.votes_b||0;
-        const img = (a>=b) ? f?.a_img : f?.b_img;
-        if (img) { try { await supabase.from(WINNERS).insert({ image_url: img, won_at: new Date().toISOString() }); } catch {} }
-      }
-    }
-
-    // reset matches: keep R32 entrants, clear votes/decisions
-    await supabase.from(MATCHES).update({
-      decided:false, votes_a:0, votes_b:0
-    }).eq('round', 1);
-
-    // clear later rounds so they refill
-    await supabase.from(MATCHES).update({
-      decided:false, votes_a:0, votes_b:0,
-      a_name:null, a_img:null, b_name:null, b_img:null
-    }).gt('round', 1);
-
-    // reset meta back to R32
-    await supabase.from(META_TABLE).update({ current_round:1 }).eq('id',1);
-
-    // reseed shared timer via Edge fn
-    await pingAdvance('loop-restart');
-
-    // refresh UI
-    await loadMeta();
-    await loadMatchesAll();
-    buildList();
-    subscribeTimerForRound(currentRound);
-    await loadTimerAndTick();
-    toast('🔁 Tournament reset');
-  } finally {
-    setTimeout(()=>{ loopLock=false; }, 3000);
-  }
-}
 
 /* =======================
    REALTIME WIRES
@@ -642,8 +481,6 @@ function subRealtime(){
         currentRound = nxt;
         await loadMatchesAll();
         buildList();
-        subscribeTimerForRound(currentRound);
-        await loadTimerAndTick();
         toast(`➡️ ${roundLabel[currentRound]}`);
       }
     }).subscribe();
@@ -652,17 +489,32 @@ function subRealtime(){
     .on('postgres_changes', { event:'*', schema:'public', table:MATCHES }, async ()=>{
       await loadMatchesAll();
       buildList(sel);
-      // If FINAL is decided (server or fallback), show FX and loop
+      // If FINAL row decided, show FX
       const final = rounds[5][0];
       if (final && final.decided && final.A.img && final.B.img){
         const a=final.votesA||0, b=final.votesB||0;
         const champ = (a>b)?final.A: (b>a)?final.B : final.A;
         showWinnerImage(champ.img);
-        setTimeout(()=>archiveChampionAndLoop(champ.img), 5400);
       }
     }).subscribe();
 
-  subscribeTimerForRound(currentRound);
+  // ===== GLOBAL TIMER SUBSCRIPTION =====
+  (async () => {
+    const { data: gt } = await supabase
+      .from('global_timer')
+      .select('end_at, paused')
+      .eq('id','global')
+      .maybeSingle();
+    if (gt?.end_at) startTicker(gt.end_at); else stopTicker();
+  })();
+
+  supabase.channel('global-timer')
+    .on('postgres_changes', { event:'*', schema:'public', table:'global_timer', filter:'id=eq.global' },
+      (payload) => {
+        const endAt = (payload.new ?? payload.old)?.end_at;
+        if (endAt) startTicker(endAt); else stopTicker();
+      })
+    .subscribe();
 }
 
 /* =======================
@@ -674,13 +526,7 @@ toggleFinished.addEventListener('change', (e)=>{ showFinished=e.target.checked; 
   await loadMeta();
   await loadMatchesAll();
   buildList();
-
-  await pingAdvance('boot'); // ensure timer row exists
-  await loadTimerAndTick();
   subRealtime();
-
-  // keep the edge function warm and self-heal the clock
-  setInterval(() => { pingAdvance('keepalive'); }, 5000);
 })();
   </script>
 </body>
