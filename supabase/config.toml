@@ -1,3 +1,0 @@
-project_id = "tuqvpcevrhciursxrgav"
-api_url = "https://api.supabase.com"
-db_url = "postgres://postgres:postgres@localhost:54322/postgres"
