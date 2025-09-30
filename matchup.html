@@ -433,10 +433,13 @@ document.getElementById('btnClearVotes').addEventListener('click', ()=>{
   toast('Your local votes were cleared');
 });
 
-// Force server heartbeat (useful if cron is slow)
+// Force server heartbeat (with Authorization header)
 btnKick.addEventListener('click', async ()=>{
   try{
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/dynamic-task`, { method:'POST' });
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/dynamic-task`, {
+      method:'POST',
+      headers: { 'Authorization': `Bearer ${SUPABASE_ANON}` }
+    });
     const body = await res.json().catch(()=> ({}));
     toast(`Heartbeat: ${res.status} ${body?.state ?? ''}`);
     console.log('heartbeat', res.status, body);
@@ -531,3 +534,4 @@ toggleFinished.addEventListener('change', (e)=>{ showFinished=e.target.checked; 
   </script>
 </body>
 </html>
+```1
