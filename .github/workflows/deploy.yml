@@ -3,7 +3,7 @@ name: Deploy Supabase Edge Function
 on:
   push:
     branches:
-      - main   # or change to your default branch
+      - main  # change if your default branch is different
 
 jobs:
   deploy:
@@ -13,19 +13,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Installs the Supabase CLI correctly (no npm -g)
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      # (Optional) Sync function secrets from GitHub → Supabase
-      # Add these repo secrets in GitHub:
-      #  - SUPABASE_ACCESS_TOKEN
-      #  - SUPABASE_PROJECT_ID
-      #  - SUPABASE_URL
-      #  - SUPABASE_SERVICE_ROLE_KEY
+      # Safely set function secrets ONLY if the repo secrets are present
       - name: Set Supabase Function Secrets
+        if: env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != '' && env.SUPABASE_PROJECT_ID != '' && env.SUPABASE_ACCESS_TOKEN != ''
         run: |
           supabase secrets set \
             SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
@@ -33,6 +28,9 @@ jobs:
             --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
 
       - name: Deploy Edge Function
         run: supabase functions deploy dynamic-task --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
