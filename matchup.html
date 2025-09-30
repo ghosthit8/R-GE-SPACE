@@ -217,6 +217,7 @@ let rounds = {1:[],2:[],3:[],4:[],5:[]};
 let flat = [];
 let sel=null, chosen=null;
 let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, timerChannel=null, globalTicker=null, showFinished=true;
+let loopLock=false; // <<< prevents duplicate restarts
 
 const listEl=document.getElementById('matchList');
 const detailRound=document.getElementById('detailRound');
@@ -509,12 +510,57 @@ document.getElementById('btnForce').addEventListener('click', async ()=>{
         await supabase.from(MATCHES).update({ b_name:winner.name, b_img:winner.img }).eq('id', nid);
     }
   } else {
-    // FINAL — show FX, record winner
+    // FINAL — show FX, record winner and LOOP
     showWinnerImage(winner.img);
     try { await supabase.from(WINNERS).insert({ match_id: m.id, image_url: winner.img, won_at: new Date().toISOString() }); } catch {}
+    setTimeout(()=>archiveChampionAndLoop(winner.img), 5400); // <-- loop after FX
   }
   toast('⚡ Decided');
 });
+
+/* =======================
+   === LOOP FIX: ARCHIVE → RESET → RESEED ===
+======================= */
+async function archiveChampionAndLoop(champImg){
+  if (loopLock) return; // prevent duplicate triggers
+  loopLock = true;
+
+  try{
+    // 1) Archive (if not already provided)
+    if (champImg){
+      try { await supabase.from(WINNERS).insert({ image_url: champImg, won_at:new Date().toISOString() }); } catch {}
+    }
+
+    // 2) Reset matches
+    // Keep R32 entrants, just clear votes/decided
+    await supabase.from(MATCHES).update({
+      decided:false, votes_a:0, votes_b:0
+    }).eq('round', 1);
+
+    // Clear later rounds completely so they refill naturally
+    await supabase.from(MATCHES).update({
+      decided:false, votes_a:0, votes_b:0,
+      a_name:null, a_img:null, b_name:null, b_img:null
+    }).gt('round', 1);
+
+    // 3) Reset meta to R32
+    await supabase.from(META_TABLE).update({ current_round:1 }).eq('id',1);
+
+    // 4) Ask Edge function to reseed timer for R32
+    await pingAdvance('loop-restart');
+
+    // 5) Reload UI
+    await loadMeta();
+    await loadMatchesAll();
+    buildList();
+    subscribeTimerForRound(currentRound);
+    await loadTimerAndTick();
+    toast('🔁 Tournament reset');
+  } finally {
+    // Let realtime settle before allowing another loop trigger
+    setTimeout(()=>{ loopLock=false; }, 3000);
+  }
+}
 
 /* =======================
    REALTIME WIRES
@@ -539,12 +585,13 @@ function subRealtime(){
     .on('postgres_changes', { event:'*', schema:'public', table:MATCHES }, async ()=>{
       await loadMatchesAll();
       buildList(sel);
-      // Final decided → show FX
+      // Final decided → show FX and LOOP
       const final = rounds[5][0];
       if (final && final.decided && final.A.img && final.B.img){
         const a=final.votesA||0, b=final.votesB||0;
         const champ = (a>b)?final.A: (b>a)?final.B : final.A;
         showWinnerImage(champ.img);
+        setTimeout(()=>archiveChampionAndLoop(champ.img), 5400);
       }
     }).subscribe();
 
