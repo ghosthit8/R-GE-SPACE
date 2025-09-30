@@ -1,7 +1,8 @@
 name: Ping dynamic-task
+
 on:
   schedule:
-    - cron: "*/1 * * * *"   # every 1 minute (GitHub Actions minimum)
+    - cron: "*/1 * * * *"  # every 1 minute (GitHub Actions minimum)
   workflow_dispatch: {}
 
 jobs:
@@ -10,6 +11,5 @@ jobs:
     steps:
       - name: Curl Supabase Edge Function
         run: |
-          curl -sS -X POST \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+          curl -sS --fail -X POST \
             https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/dynamic-task
