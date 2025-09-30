@@ -309,23 +309,39 @@ async function loadMatchesAll(){
   });
   flat = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
 }
+
+/* =======================
+   ACTIVE ROUND SELECTION (fix for "stuck on Final")
+   Prefer earliest unfinished; if none, use lowest round present.
+======================= */
+function recomputeActiveRound(prefMeta){
+  // Earliest unfinished from data
+  const unfinished = flat.filter(m => m.decided !== true);
+  let fromData = unfinished.length ? Math.min(...unfinished.map(m=>m.round)) :
+                                     (flat.length ? Math.min(...flat.map(m=>m.round)) : 1);
+  // If meta provided, do NOT allow it to push you past the earliest unfinished
+  if (typeof prefMeta === 'number' && !Number.isNaN(prefMeta)){
+    currentRound = Math.min(prefMeta, fromData);
+  } else {
+    currentRound = fromData;
+  }
+}
+
+/* =======================
+   TIMER LOAD & TICK
+======================= */
 async function loadTimerAndTick(){
   const id = ROUND_ID[currentRound];
   const { data } = await supabase.from(TIMER_TABLE).select('end_at').eq('id', id).maybeSingle();
   const endAt = data?.end_at ? new Date(data.end_at).getTime() : null;
 
-  // If there is no timer or it has already expired, ask the Edge function to seed/advance it.
   if (!endAt || endAt <= Date.now()){
     globalClockEl.textContent='SYNC…';
     globalClockEl.classList.add('pending');
-
     await pingAdvance(!endAt ? 'boot-no-end-at' : 'boot-expired');
-
     setTimeout(loadTimerAndTick, 1200);
     return;
   }
-
-  // Happy path: start ticking
   tickGlobal(new Date(endAt).toISOString());
 }
 
@@ -368,16 +384,13 @@ function tickGlobal(endISO){
     if (LOCAL_PAUSE) return;
     const left = Math.max(0, endMs - Date.now());
     globalClockEl.textContent = fmt(left);
-
     // mirror ticking time into list rows for the CURRENT round
     document.querySelectorAll(`.matchItem .timer[data-round="${currentRound}"]`)
       .forEach(el => { el.textContent = '· ' + globalClockEl.textContent; });
-
     if (left<=0){
       clearInterval(globalTicker);
       globalClockEl.textContent = '00:00:00';
-      // HEARTBEAT: call the Edge Function immediately so it advances + reseeds
-      pingAdvance('timer-zero');
+      pingAdvance('timer-zero'); // ask Edge to advance + reseed
     }
   }, 200);
 }
@@ -388,7 +401,8 @@ function tickGlobal(endISO){
 function visibleMatches(){
   const cur=currentRound;
   const all = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
-  return showFinished ? all : all.filter(m => m.round >= cur);
+  // FIX: when unchecked, show ONLY the active round (not current+later)
+  return showFinished ? all : all.filter(m => m.round === cur);
 }
 function updateRoundBreadcrumb(){ roundSummary.textContent = `${roundLabel[currentRound]} → Final`; }
 function updateRowScore(m){
@@ -520,24 +534,31 @@ document.getElementById('btnForce').addEventListener('click', async ()=>{
    REALTIME WIRES
 ======================= */
 function subRealtime(){
-  // meta (round changes)
+  // meta (round changes) — prefer earliest unfinished
   supabase.channel('rt_meta')
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:META_TABLE, filter:'id=eq.1' }, async (payload)=>{
-      const nxt = payload.new?.current_round;
-      if (typeof nxt==='number' && nxt !== currentRound){
-        currentRound = nxt;
-        await loadMatchesAll();
-        buildList();
+      const metaRound = typeof payload.new?.current_round === 'number' ? payload.new.current_round : undefined;
+      await loadMatchesAll();
+      const before = currentRound;
+      recomputeActiveRound(metaRound);       // <- never lets meta push you past earliest unfinished
+      if (currentRound !== before){
         subscribeTimerForRound(currentRound);
         await loadTimerAndTick();
-        toast(`➡️ ${roundLabel[currentRound]}`);
       }
+      buildList(sel);
+      toast(`➡️ ${roundLabel[currentRound]}`);
     }).subscribe();
 
-  // matches changes → refresh list/selection
+  // matches changes → refresh list/selection and recompute round
   supabase.channel('rt_matches_all')
     .on('postgres_changes', { event:'*', schema:'public', table:MATCHES }, async ()=>{
       await loadMatchesAll();
+      const before = currentRound;
+      recomputeActiveRound(currentRound); // prefer earliest unfinished against current value
+      if (currentRound !== before){
+        subscribeTimerForRound(currentRound);
+        await loadTimerAndTick();
+      }
       buildList(sel);
       // Final decided → show FX
       const final = rounds[5][0];
@@ -558,8 +579,9 @@ function subRealtime(){
 toggleFinished.addEventListener('change', (e)=>{ showFinished=e.target.checked; buildList(sel); });
 
 (async function init(){
-  await loadMeta();
-  await loadMatchesAll();
+  await loadMeta();          // may set currentRound from meta
+  await loadMatchesAll();    // load all rows
+  recomputeActiveRound(currentRound); // <-- prefer earliest unfinished over meta
   buildList();
 
   // ensure a seed even if everyone loads while DB is empty
