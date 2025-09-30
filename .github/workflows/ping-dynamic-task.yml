@@ -1,4 +1,5 @@
 name: Ping dynamic-task
+
 on:
   schedule:
     - cron: "*/1 * * * *"
@@ -8,8 +9,13 @@ jobs:
   call-fn:
     runs-on: ubuntu-latest
     steps:
+      - name: Check required secrets
+        run: |
+          test -n "${{ secrets.SUPABASE_PROJECT_REF }}" || (echo "Missing SUPABASE_PROJECT_REF" && exit 1)
+          test -n "${{ secrets.SUPABASE_ANON_KEY }}"    || (echo "Missing SUPABASE_ANON_KEY" && exit 1)
+
       - name: Curl Supabase Edge Function
         run: |
           curl -sS --fail -X POST \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
             https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/dynamic-task
