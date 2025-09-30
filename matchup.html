@@ -184,7 +184,7 @@
 /* =======================
    CONFIG
 ======================= */
-const ROUND_SECONDS = 10; // UI uses this only for progress width; end_at comes from DB
+const ROUND_SECONDS = 10; // UI hint only; real end time comes from DB
 const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
 
@@ -198,13 +198,11 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
 /* =======================
    TABLES + CONSTANTS
 ======================= */
-const TIMER_TABLE = 'shared_timer';
 const META_TABLE  = 'tournament_meta';
 const MATCHES     = 'matches';
 const WINNERS     = 'winners';
 
 const roundLabel = ['','R32','R16','QF','SF','FINAL'];
-const ROUND_ID   = { 1:'r32', 2:'r16', 3:'qf', 4:'sf', 5:'final' };
 
 const VOTE_NS = 'rs_stack_vote_v2_';
 const lockKey = (id)=> `${VOTE_NS}${id}`;
@@ -272,7 +270,6 @@ winFx.addEventListener('click', ()=>winFx.classList.remove('show'));
 
 /* =======================
    EDGE FUNCTION PING
-   (Seeds timer if missing, advances round on expiry, no-op keepalive otherwise)
 ======================= */
 async function pingAdvance(reason='ui'){
   try{
@@ -311,15 +308,12 @@ async function loadMatchesAll(){
 }
 
 /* =======================
-   ACTIVE ROUND SELECTION (fix for "stuck on Final")
-   Prefer earliest unfinished; if none, use lowest round present.
+   ACTIVE ROUND SELECTION
 ======================= */
 function recomputeActiveRound(prefMeta){
-  // Earliest unfinished from data
   const unfinished = flat.filter(m => m.decided !== true);
   let fromData = unfinished.length ? Math.min(...unfinished.map(m=>m.round)) :
                                      (flat.length ? Math.min(...flat.map(m=>m.round)) : 1);
-  // If meta provided, do NOT allow it to push you past the earliest unfinished
   if (typeof prefMeta === 'number' && !Number.isNaN(prefMeta)){
     currentRound = Math.min(prefMeta, fromData);
   } else {
@@ -328,21 +322,79 @@ function recomputeActiveRound(prefMeta){
 }
 
 /* =======================
-   TIMER LOAD & TICK
+   TIMER (uses matches.ends)
 ======================= */
-async function loadTimerAndTick(){
-  const id = ROUND_ID[currentRound];
-  const { data } = await supabase.from(TIMER_TABLE).select('end_at').eq('id', id).maybeSingle();
-  const endAt = data?.end_at ? new Date(data.end_at).getTime() : null;
+// Reads the round's shared end time from the `matches` table (per-round timer)
+async function loadTimerAndTick() {
+  const { data, error } = await supabase
+    .from(MATCHES)
+    .select('ends, decided')
+    .eq('round', currentRound)
+    .not('ends', 'is', null);
 
-  if (!endAt || endAt <= Date.now()){
-    globalClockEl.textContent='SYNC…';
+  if (error) {
+    console.warn('loadTimer error', error);
+    globalClockEl.textContent = 'SYNC…';
     globalClockEl.classList.add('pending');
-    await pingAdvance(!endAt ? 'boot-no-end-at' : 'boot-expired');
+    return;
+  }
+
+  const endsArray = (data || [])
+    .filter(r => r.ends != null && r.decided !== true)
+    .map(r => new Date(r.ends).getTime());
+
+  const endMs = endsArray.length ? Math.max(...endsArray) : null;
+
+  if (!endMs || endMs <= Date.now()) {
+    globalClockEl.textContent = 'SYNC…';
+    globalClockEl.classList.add('pending');
+    await pingAdvance(!endMs ? 'boot-no-end-at' : 'boot-expired');
     setTimeout(loadTimerAndTick, 1200);
     return;
   }
-  tickGlobal(new Date(endAt).toISOString());
+
+  tickGlobal(new Date(endMs).toISOString());
+}
+
+// Listen for any match change in the current round and refresh the clock
+function subscribeTimerForRound(round) {
+  if (timerChannel) {
+    supabase.removeChannel(timerChannel);
+    timerChannel = null;
+  }
+
+  timerChannel = supabase
+    .channel(`timer-round-${round}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: MATCHES, filter: `round=eq.${round}` },
+      () => loadTimerAndTick()
+    )
+    .subscribe();
+}
+
+function tickGlobal(endISO) {
+  const endMs = new Date(endISO).getTime();
+  clearInterval(globalTicker);
+  globalClockEl.classList.remove('pending');
+
+  globalTicker = setInterval(async () => {
+    if (LOCAL_PAUSE) return;
+    const left = Math.max(0, endMs - Date.now());
+    globalClockEl.textContent = fmt(left);
+
+    // mirror into list timers for this round
+    document
+      .querySelectorAll(`.matchItem .timer[data-round="${currentRound}"]`)
+      .forEach(el => { el.textContent = '· ' + globalClockEl.textContent; });
+
+    if (left <= 0) {
+      clearInterval(globalTicker);
+      globalClockEl.textContent = '00:00:00';
+      pingAdvance('timer-zero');            // ask Edge to advance & reseed next round ends
+      setTimeout(loadTimerAndTick, 800);    // reload the round clock shortly
+    }
+  }, 200);
 }
 
 /* =======================
@@ -366,42 +418,12 @@ function resumeLocal(){
 }
 btnPause.addEventListener('click', ()=>{ if(!LOCAL_PAUSE) pauseLocal(); else resumeLocal(); });
 
-function unsubscribeTimer(){ if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; } clearInterval(globalTicker); globalTicker=null; }
-function subscribeTimerForRound(round){
-  const id = ROUND_ID[round];
-  if (timerChannel) { supabase.removeChannel(timerChannel); timerChannel = null; }
-  timerChannel = supabase
-    .channel('timer-'+id)
-    .on('postgres_changes', { event:'*', schema:'public', table:TIMER_TABLE, filter:`id=eq.${id}` },
-      (payload)=>{ const endAt = (payload.new ?? payload.old)?.end_at; if (endAt) tickGlobal(endAt); })
-    .subscribe();
-}
-function tickGlobal(endISO){
-  const endMs = new Date(endISO).getTime();
-  clearInterval(globalTicker);
-  globalClockEl.classList.remove('pending');
-  globalTicker = setInterval(async ()=>{
-    if (LOCAL_PAUSE) return;
-    const left = Math.max(0, endMs - Date.now());
-    globalClockEl.textContent = fmt(left);
-    // mirror ticking time into list rows for the CURRENT round
-    document.querySelectorAll(`.matchItem .timer[data-round="${currentRound}"]`)
-      .forEach(el => { el.textContent = '· ' + globalClockEl.textContent; });
-    if (left<=0){
-      clearInterval(globalTicker);
-      globalClockEl.textContent = '00:00:00';
-      pingAdvance('timer-zero'); // ask Edge to advance + reseed
-    }
-  }, 200);
-}
-
 /* =======================
    RENDERING
 ======================= */
 function visibleMatches(){
   const cur=currentRound;
   const all = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
-  // FIX: when unchecked, show ONLY the active round (not current+later)
   return showFinished ? all : all.filter(m => m.round === cur);
 }
 function updateRoundBreadcrumb(){ roundSummary.textContent = `${roundLabel[currentRound]} → Final`; }
@@ -540,7 +562,7 @@ function subRealtime(){
       const metaRound = typeof payload.new?.current_round === 'number' ? payload.new.current_round : undefined;
       await loadMatchesAll();
       const before = currentRound;
-      recomputeActiveRound(metaRound);       // <- never lets meta push you past earliest unfinished
+      recomputeActiveRound(metaRound);
       if (currentRound !== before){
         subscribeTimerForRound(currentRound);
         await loadTimerAndTick();
@@ -554,7 +576,7 @@ function subRealtime(){
     .on('postgres_changes', { event:'*', schema:'public', table:MATCHES }, async ()=>{
       await loadMatchesAll();
       const before = currentRound;
-      recomputeActiveRound(currentRound); // prefer earliest unfinished against current value
+      recomputeActiveRound(currentRound);
       if (currentRound !== before){
         subscribeTimerForRound(currentRound);
         await loadTimerAndTick();
@@ -569,7 +591,7 @@ function subRealtime(){
       }
     }).subscribe();
 
-  // timer for current round
+  // timer for current round (from matches table)
   subscribeTimerForRound(currentRound);
 }
 
@@ -581,7 +603,7 @@ toggleFinished.addEventListener('change', (e)=>{ showFinished=e.target.checked; 
 (async function init(){
   await loadMeta();          // may set currentRound from meta
   await loadMatchesAll();    // load all rows
-  recomputeActiveRound(currentRound); // <-- prefer earliest unfinished over meta
+  recomputeActiveRound(currentRound);
   buildList();
 
   // ensure a seed even if everyone loads while DB is empty
