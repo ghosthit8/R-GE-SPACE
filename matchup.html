@@ -510,10 +510,9 @@ document.getElementById('btnForce').addEventListener('click', async ()=>{
         await supabase.from(MATCHES).update({ b_name:winner.name, b_img:winner.img }).eq('id', nid);
     }
   } else {
-    // FINAL — show FX, record winner and LOOP
+    // FINAL — show FX, then LOOP (archive + reset + reseed)
     showWinnerImage(winner.img);
-    try { await supabase.from(WINNERS).insert({ match_id: m.id, image_url: winner.img, won_at: new Date().toISOString() }); } catch {}
-    setTimeout(()=>archiveChampionAndLoop(winner.img), 5400); // <-- loop after FX
+    setTimeout(()=>archiveChampionAndLoop(winner.img), 5400);
   }
   toast('⚡ Decided');
 });
@@ -522,17 +521,28 @@ document.getElementById('btnForce').addEventListener('click', async ()=>{
    === LOOP FIX: ARCHIVE → RESET → RESEED ===
 ======================= */
 async function archiveChampionAndLoop(champImg){
-  if (loopLock) return; // prevent duplicate triggers
+  if (loopLock) return;
   loopLock = true;
 
   try{
-    // 1) Archive (if not already provided)
+    // Double-check we're at FINAL on the server to avoid accidental resets
+    const { data: meta } = await supabase.from(META_TABLE).select('current_round').eq('id',1).maybeSingle();
+    if (meta && meta.current_round !== 5){ loopLock=false; return; }
+
+    // Archive champ (server-side authority)
     if (champImg){
-      try { await supabase.from(WINNERS).insert({ image_url: champImg, won_at:new Date().toISOString() }); } catch {}
+      try { await supabase.from(WINNERS).insert({ image_url: champImg, won_at: new Date().toISOString() }); } catch {}
+    } else {
+      // Fallback: compute from DB FINAL row
+      const { data: f } = await supabase.from(MATCHES).select('*').eq('round',5).order('idx').limit(1).maybeSingle();
+      if (f?.a_img || f?.b_img){
+        const a=f?.votes_a||0, b=f?.votes_b||0;
+        const img = (a>=b) ? f?.a_img : f?.b_img;
+        if (img) { try { await supabase.from(WINNERS).insert({ image_url: img, won_at: new Date().toISOString() }); } catch {} }
+      }
     }
 
-    // 2) Reset matches
-    // Keep R32 entrants, just clear votes/decided
+    // Reset: keep R32 entrants, clear votes/decisions
     await supabase.from(MATCHES).update({
       decided:false, votes_a:0, votes_b:0
     }).eq('round', 1);
@@ -543,13 +553,13 @@ async function archiveChampionAndLoop(champImg){
       a_name:null, a_img:null, b_name:null, b_img:null
     }).gt('round', 1);
 
-    // 3) Reset meta to R32
+    // Reset meta to R32 (guard against duplicate writes)
     await supabase.from(META_TABLE).update({ current_round:1 }).eq('id',1);
 
-    // 4) Ask Edge function to reseed timer for R32
+    // Ask Edge fn to reseed timer
     await pingAdvance('loop-restart');
 
-    // 5) Reload UI
+    // Reload UI
     await loadMeta();
     await loadMatchesAll();
     buildList();
