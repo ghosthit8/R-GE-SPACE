@@ -309,7 +309,13 @@
       if (votesA>votesB) who='A'; else if (votesB>votesA) who='B'; else who=Math.random()<0.5?'A':'B';
       markWinnerUI(who);
       const b=BATTLES[idx]; const picked=(who==='A')?b.A:b.B;
+
+      // Save winner
       pushWinner({ ts:Date.now(), id:picked.id, name:picked.name, color:picked.color });
+
+      // 🔔 NEW: ping other tabs (Winners page) so they update instantly
+      localStorage.setItem('rs_winners_ping_v1', String(Date.now()));
+
       confettiBurst();
     }
 
