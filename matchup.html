@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (Stacked Demo)</title>
+  <title>Rage Space — Matchup (Auto-Decide Every 10s)</title>
   <style>
     :root{
       --green:#39ff14; --green-bright:#7dff62; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --card:#070707; --border:#0f2510;
@@ -90,22 +90,31 @@
     .label{ color:var(--ink); opacity:.8 }
     .vote-row{ margin-top:16px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
 
+    .counts{ display:flex; gap:12px; align-items:center; justify-content:center; margin-top:10px; font-variant-numeric:tabular-nums; }
+    .count-chip{ border:1px solid var(--border); border-radius:999px; padding:4px 10px; color:var(--ink); opacity:.9 }
+
     .toast{
       position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#0a0a0a; color:#e5ffe5;
       border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:none;
       box-shadow:0 0 18px rgba(57,255,20,.2); z-index:9999;
     }
 
-    /* confetti canvas sits on top */
-    #confetti {
-      position: fixed; inset: 0; pointer-events: none; z-index: 9998;
+    /* Winner ribbon */
+    .winner-ribbon{
+      position:absolute; top:10px; left:10px; background:#0a0a0a; border:1px solid var(--border);
+      border-radius:10px; padding:6px 10px; color:var(--ink); font-weight:700; display:none;
+      box-shadow:0 0 18px rgba(57,255,20,.25);
     }
+    .tile.win .winner-ribbon{ display:block }
+
+    /* confetti canvas sits on top */
+    #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 9998; }
   </style>
 </head>
 <body>
   <header class="wrap">
     <h1>R<span class="anarchy">Ⓐ</span>GE SPACE — MATCHUP</h1>
-    <div class="badge">Stacked demo · Red vs Blue · voting enabled (local only)</div>
+    <div class="badge">Stacked demo · Red vs Blue · winner decided every 10s</div>
   </header>
 
   <div class="wrap">
@@ -118,6 +127,11 @@
 
       <div class="badge">Round <span id="roundNum">1</span>, Match <span id="battleIndex">1</span>/<span id="battleTotal">1</span></div>
 
+      <div class="badge counts">
+        <span class="count-chip">Red votes: <b id="countRed">0</b></span>
+        <span class="count-chip">Blue votes: <b id="countBlue">0</b></span>
+      </div>
+
       <!-- Global Pause/Resume -->
       <button class="btn" id="pauseBtn" title="Pause or resume global timer">⏯️ Pause</button>
     </div>
@@ -125,6 +139,7 @@
     <!-- Stacked entries -->
     <div class="stack" id="stack">
       <div class="tile" id="topTile">
+        <div class="winner-ribbon">🏆 Winner</div>
         <div class="art red" id="topArt" aria-label="Top entry — RED"></div>
         <div class="meta">
           <span class="label" id="topLabel">Entry — RED</span>
@@ -133,6 +148,7 @@
       </div>
 
       <div class="tile" id="bottomTile">
+        <div class="winner-ribbon">🏆 Winner</div>
         <div class="art blue" id="bottomArt" aria-label="Bottom entry — BLUE"></div>
         <div class="meta">
           <span class="label" id="bottomLabel">Entry — BLUE</span>
@@ -143,7 +159,8 @@
 
     <div class="vote-row">
       <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
-      <a class="btn" href="winners_test.html" target="_blank">📝 Winners Test Log</a>
+      <a class="btn" href=".html" target="_blank">🏁 </a>
+      <a class="btn" href="_test.html" target="_blank">📝  Test Log</a>
     </div>
   </div>
 
@@ -152,14 +169,19 @@
 
   <script>
     // ===== Small global timer + Pause/Resume (uses your edge function) =====
+    // This expects your edge function "global-timer" that returns:
+    // { state: { phase_end_at, period_sec, paused, remaining_sec } }
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
 
-    let serverPhaseEndISO = null;
-    let periodSec = 10;
+    let serverPhaseEndISO = null;  // changes every 10s phase; used to detect rollover
+    let periodSec = 10;            // server-provided; default 10s for tests
     let paused = false;
     let remainingSec = null;
     let lastSyncAt = 0;
     let rafId = null;
+
+    // Winner handling uses this to avoid double-deciding within the same phase:
+    let decidedForPhaseKey = null; // equals serverPhaseEndISO when we've decided
 
     const tinyClock = document.getElementById('tinyClock');
     const tinyState = document.getElementById('tinyState');
@@ -185,12 +207,21 @@
     async function fetchState(){
       const json = await callEdge('GET'); // {state:{phase_end_at,period_sec,paused,remaining_sec}}
       const s = json.state;
-      serverPhaseEndISO = s.phase_end_at ?? null;
+      // Detect NEW phase → reset per-round stuff
+      const newPhaseISO = s.phase_end_at ?? null;
+      const phaseChanged = !!serverPhaseEndISO && newPhaseISO && newPhaseISO !== serverPhaseEndISO;
+
+      serverPhaseEndISO = newPhaseISO;
       periodSec = s.period_sec ?? 10;
       paused = !!s.paused;
       remainingSec = s.remaining_sec ?? null;
       lastSyncAt = Date.now();
       setTinyState();
+
+      if (phaseChanged){
+        // Reset per-round
+        beginNewRound();
+      }
       return s;
     }
     function stopTiny(){ if (rafId) cancelAnimationFrame(rafId); rafId = null; }
@@ -207,8 +238,18 @@
             const secs  = Math.ceil(remMs / 1000);
             tinyClock.textContent = String(secs);
 
-            // resync at rollover or every ~5s
-            if (remMs <= 0 || Date.now() - lastSyncAt > 5000) {
+            // === Phase rollover handling ===
+            if (remMs <= 0) {
+              // Make a winner decision exactly once for this phase key
+              if (serverPhaseEndISO && decidedForPhaseKey !== serverPhaseEndISO) {
+                decidedForPhaseKey = serverPhaseEndISO;
+                decideWinnerNow(); // will also save to LocalStorage for  page
+              }
+              // Resync right after rollover so a new phase begins
+              const s = await fetchState();
+              if (s.paused) tinyClock.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
+            } else if (Date.now() - lastSyncAt > 5000) {
+              // mid-phase light resync
               const s = await fetchState();
               if (s.paused) tinyClock.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
             }
@@ -220,16 +261,11 @@
     }
     pauseBtn.addEventListener('click', async ()=>{
       try{
-        if (paused) {
-          await callEdge('POST', { action: 'resume' });
-        } else {
-          await callEdge('POST', { action: 'pause' });
-        }
+        if (paused) { await callEdge('POST', { action: 'resume' }); }
+        else        { await callEdge('POST', { action: 'pause'  }); }
         await fetchState(); // reflect latest
       }catch(e){ showTinyError(e.message); }
     });
-
-    (async ()=>{ try{ await fetchState(); await startTiny(); } catch(e){ showTinyError(e.message); } })();
 
     // ===== Simulated single battle + voting =====
     const roundNumEl = document.getElementById('roundNum');
@@ -241,19 +277,31 @@
     const voteBottomBtn = document.getElementById('voteBottom');
     const submitBtn = document.getElementById('submitBtn');
     const toastEl = document.getElementById('toast');
+    const countRedEl = document.getElementById('countRed');
+    const countBlueEl= document.getElementById('countBlue');
 
     const BATTLES = [{
       id:'SIM_1',
       round:1, indexInRound:1, total:1,
-      A:{ id:'RED',   name:'RED'   },
-      B:{ id:'BLUE',  name:'BLUE'  }
+      A:{ id:'RED',   name:'RED',  color:'red'  },
+      B:{ id:'BLUE',  name:'BLUE', color:'blue' }
     }];
 
     let idx = 0;
-    let chosen = null;
+    let chosen = null;      // 'A' or 'B' before submit
+    let submitted = false;  // lock for this client
+    let votesA = 0;         // local demo counters
+    let votesB = 0;
 
     const lockKey = (id)=> `rs_vote_${id}`;
-    function showToast(msg){ toastEl.textContent = msg; toastEl.style.display = 'block'; clearTimeout(showToast._t); showToast._t = setTimeout(()=> toastEl.style.display='none', 1400); }
+    const Key = 'rs__v1'; // local  history
+
+    function showToast(msg){
+      toastEl.textContent = msg;
+      toastEl.style.display = 'block';
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(()=> toastEl.style.display='none', 1400);
+    }
 
     function setButtonHighlight(){
       voteTopBtn.classList.toggle('selected', chosen==='A');
@@ -262,24 +310,53 @@
       bottomTile.classList.toggle('chosen', chosen==='B');
     }
 
+    function updateCountsUI(){
+      countRedEl.textContent  = String(votesA);
+      countBlueEl.textContent = String(votesB);
+    }
+
+    function clearWinnerUI(){
+      topTile.classList.remove('win');
+      bottomTile.classList.remove('win');
+    }
+
+    function markWinnerUI(who){ // 'A' or 'B'
+      clearWinnerUI();
+      if (who === 'A') topTile.classList.add('win');
+      if (who === 'B') bottomTile.classList.add('win');
+    }
+
+    function read(){
+      try{ return JSON.parse(localStorage.getItem(Key) || '[]') }catch{ return [] }
+    }
+    function pushWinner(w){
+      const arr = read();
+      arr.unshift(w);
+      localStorage.setItem(Key, JSON.stringify(arr.slice(0, 500))); // keep last 500
+    }
+
     function render(){
       const b = BATTLES[idx];
       roundNumEl.textContent   = b.round;
       battleIndexEl.textContent= b.indexInRound;
       battleTotalEl.textContent= b.total;
 
-      // Allow switching until submit
       chosen = null;
+      submitted = false;
       submitBtn.disabled = true;
+      submitBtn.textContent = '✅ Submit Vote';
       setButtonHighlight();
+      clearWinnerUI();
 
-      const voted = !!localStorage.getItem(lockKey(b.id));
-      voteTopBtn.disabled = voted; voteBottomBtn.disabled = voted;
-      if (voted){
-        submitBtn.textContent = '🎉 Vote submitted!'; submitBtn.disabled = true;
-      } else {
-        submitBtn.textContent = '✅ Submit Vote';
-      }
+      // counters reset per round
+      votesA = 0;
+      votesB = 0;
+      updateCountsUI();
+
+      // unlock client vote for this new round
+      localStorage.removeItem(lockKey(b.id));
+      voteTopBtn.disabled = false; 
+      voteBottomBtn.disabled = false;
     }
 
     voteTopBtn.addEventListener('click', ()=>{
@@ -299,9 +376,13 @@
 
     submitBtn.addEventListener('click', ()=>{
       const b = BATTLES[idx];
-      if (!chosen) return;
+      if (!chosen || submitted) return;
 
-      // lock this battle locally (no DB yet)
+      // In this demo, "submit" applies exactly one local vote
+      if (chosen === 'A') votesA += 1; else votesB += 1;
+      updateCountsUI();
+
+      submitted = true;
       localStorage.setItem(lockKey(b.id), chosen);
       submitBtn.textContent = '🎉 Vote submitted!';
       submitBtn.disabled = true;
@@ -310,13 +391,39 @@
       voteTopBtn.disabled = true;
       voteBottomBtn.disabled = true;
 
-      // Confetti!
+      // Confetti for submitting
       confettiBurst();
-
       showToast(`Vote submitted: ${chosen==='A'?'RED':'BLUE'}`);
     });
 
-    render();
+    // Called when the phase hits 0s (detected in the tiny timer loop)
+    function decideWinnerNow(){
+      // Decide based on vote counts; tie → random
+      let who = null; // 'A' or 'B'
+      if (votesA > votesB) who = 'A';
+      else if (votesB > votesA) who = 'B';
+      else who = Math.random() < 0.5 ? 'A' : 'B';
+
+      markWinnerUI(who);
+
+      // Persist for  page
+      const b = BATTLES[idx];
+      const picked = (who==='A') ? b.A : b.B;
+      pushWinner({
+        ts: Date.now(),
+        id: picked.id,
+        name: picked.name,
+        color: picked.color // 'red' | 'blue'
+      });
+
+      // Tiny celebratory pop
+      confettiBurst();
+    }
+
+    function beginNewRound(){
+      // Reset the local voting round & UI
+      render();
+    }
 
     // ===== Minimal confetti (no libs) =====
     function confettiBurst(){
@@ -370,6 +477,15 @@
       })();
       window.addEventListener('resize', resize, { once:true });
     }
+
+    // Boot
+    (async ()=>{ 
+      try{ 
+        await fetchState();     // seed state (and trigger beginNewRound on first change)
+        beginNewRound();        // initial render
+        await startTiny();      // start the live countdown
+      } catch(e){ showTinyError(e.message); } 
+    })();
   </script>
 </body>
 </html>
