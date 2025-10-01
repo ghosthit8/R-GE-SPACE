@@ -6,7 +6,7 @@
   <title>Rage Space — Matchup (Stacked Demo)</title>
   <style>
     :root{
-      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --card:#070707; --border:#0f2510;
+      --green:#39ff14; --green-bright:#7dff62; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --card:#070707; --border:#0f2510;
       --muted:#8aff8a; --maxw:980px;
     }
     *{ box-sizing:border-box }
@@ -24,15 +24,34 @@
       display:flex; gap:12px; align-items:center; justify-content:space-between;
       border:1px solid var(--border); padding:8px 12px; border-radius:10px;
       background:rgba(7,7,7,.6); box-shadow:0 0 18px rgba(57,255,20,.08) inset;
+      flex-wrap: wrap;
     }
     .badge{ font-size:.9rem; color:var(--ink); opacity:.78 }
     .tag{ font-size:.8rem; padding:3px 10px; border:1px solid var(--border); border-radius:999px; opacity:.9 }
     .btn{
       border:1px solid var(--green); color:var(--green); text-decoration:none; padding:8px 12px;
       border-radius:10px; display:inline-flex; align-items:center; gap:8px; background:transparent; cursor:pointer;
+      transition: transform .08s ease, box-shadow .15s ease, background-color .15s ease, color .15s ease, border-color .15s ease, filter .15s ease;
     }
     .btn.primary{ background:rgba(57,255,20,.08) }
+    .btn:hover:not(:disabled){ transform: translateY(-1px); box-shadow:0 0 14px rgba(57,255,20,.18) }
+    .btn:active:not(:disabled){ transform: translateY(0) scale(.99) }
     .btn:disabled{ opacity:.45; cursor:not-allowed }
+
+    /* Selected state — brighter green + soft pulse */
+    .btn.primary.selected{
+      background:rgba(57,255,20,.22);
+      color:var(--green-bright);
+      border-color: var(--green-bright);
+      box-shadow: 0 0 22px rgba(125,255,98,.35), inset 0 0 18px rgba(57,255,20,.15);
+      filter: saturate(120%);
+      animation: pulse-green .9s ease-out 1;
+    }
+    @keyframes pulse-green{
+      0%   { box-shadow: 0 0 0 rgba(125,255,98,.0) }
+      40%  { box-shadow: 0 0 26px rgba(125,255,98,.45), inset 0 0 22px rgba(57,255,20,.25) }
+      100% { box-shadow: 0 0 22px rgba(125,255,98,.35), inset 0 0 18px rgba(57,255,20,.15) }
+    }
 
     /* Small green timer (old-matchup vibe) */
     .tiny-timer{
@@ -49,10 +68,18 @@
     .stack{ margin-top:16px; display:grid; grid-template-columns:1fr; gap:16px; }
     .tile{
       border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(7,7,7,.6); position:relative;
+      transition: box-shadow .2s ease, transform .18s ease;
     }
-    .art{
-      aspect-ratio: 4/3; width:100%; display:block;
+    .tile.chosen{
+      outline:2px solid var(--green);
+      box-shadow:0 0 18px rgba(57,255,20,.35) inset, 0 0 14px rgba(57,255,20,.25);
+      animation: throb 1.2s ease-in-out infinite;
     }
+    @keyframes throb{
+      0%,100% { transform: scale(1) }
+      50%     { transform: scale(1.01) }
+    }
+    .art{ aspect-ratio: 4/3; width:100%; display:block; }
     .art.red{ background: repeating-linear-gradient(45deg, #3a0000 0, #3a0000 12px, #5a0000 12px, #5a0000 24px), #a60000; }
     .art.blue{ background: repeating-linear-gradient(45deg, #001c3a 0, #001c3a 12px, #00325a 12px, #00325a 24px), #0058a6; }
 
@@ -61,7 +88,7 @@
       padding:10px 12px; border-top:1px solid var(--border);
     }
     .label{ color:var(--ink); opacity:.8 }
-    .vote-row{ margin-top:16px; display:flex; gap:10px; align-items:center; justify-content:center; }
+    .vote-row{ margin-top:16px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
 
     .toast{
       position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#0a0a0a; color:#e5ffe5;
@@ -69,8 +96,10 @@
       box-shadow:0 0 18px rgba(57,255,20,.2); z-index:9999;
     }
 
-    /* Selection highlight for the chosen side */
-    .chosen{ outline:2px solid var(--green); box-shadow:0 0 18px rgba(57,255,20,.35) inset; }
+    /* confetti canvas sits on top */
+    #confetti {
+      position: fixed; inset: 0; pointer-events: none; z-index: 9998;
+    }
   </style>
 </head>
 <body>
@@ -86,7 +115,11 @@
         <span id="tinyClock" class="tiny-clock">—</span>
         <span id="tinyState" class="tag">LIVE</span>
       </div>
+
       <div class="badge">Round <span id="roundNum">1</span>, Match <span id="battleIndex">1</span>/<span id="battleTotal">1</span></div>
+
+      <!-- Global Pause/Resume -->
+      <button class="btn" id="pauseBtn" title="Pause or resume global timer">⏯️ Pause</button>
     </div>
 
     <!-- Stacked entries -->
@@ -114,11 +147,11 @@
     </div>
   </div>
 
+  <canvas id="confetti"></canvas>
   <div id="toast" class="toast"></div>
 
   <script>
-    // ===== Small global timer (reads your Edge function state) =====
-    // Based on your global timer test page logic, compacted for the tiny badge. 4
+    // ===== Small global timer + Pause/Resume (uses your edge function) =====
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
 
     let serverPhaseEndISO = null;
@@ -130,9 +163,11 @@
 
     const tinyClock = document.getElementById('tinyClock');
     const tinyState = document.getElementById('tinyState');
+    const pauseBtn  = document.getElementById('pauseBtn');
 
     function setTinyState() {
       tinyState.textContent = paused ? "PAUSED" : "LIVE";
+      pauseBtn.textContent  = paused ? "▶️ Resume" : "⏸️ Pause";
       tinyClock.classList.toggle('paused', paused);
     }
     function showTinyError(msg){
@@ -148,7 +183,7 @@
       return json;
     }
     async function fetchState(){
-      const json = await callEdge('GET'); // state: {phase_end_at, period_sec, paused, remaining_sec}
+      const json = await callEdge('GET'); // {state:{phase_end_at,period_sec,paused,remaining_sec}}
       const s = json.state;
       serverPhaseEndISO = s.phase_end_at ?? null;
       periodSec = s.period_sec ?? 10;
@@ -172,6 +207,7 @@
             const secs  = Math.ceil(remMs / 1000);
             tinyClock.textContent = String(secs);
 
+            // resync at rollover or every ~5s
             if (remMs <= 0 || Date.now() - lastSyncAt > 5000) {
               const s = await fetchState();
               if (s.paused) tinyClock.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
@@ -182,11 +218,20 @@
       };
       rafId = requestAnimationFrame(draw);
     }
+    pauseBtn.addEventListener('click', async ()=>{
+      try{
+        if (paused) {
+          await callEdge('POST', { action: 'resume' });
+        } else {
+          await callEdge('POST', { action: 'pause' });
+        }
+        await fetchState(); // reflect latest
+      }catch(e){ showTinyError(e.message); }
+    });
 
     (async ()=>{ try{ await fetchState(); await startTiny(); } catch(e){ showTinyError(e.message); } })();
 
-    // ===== Simulated single battle + voting behavior (old-matchup style) =====
-    // Keep the feel from your previous voting flow (select, enable submit, lock via localStorage). 5
+    // ===== Simulated single battle + voting =====
     const roundNumEl = document.getElementById('roundNum');
     const battleIndexEl = document.getElementById('battleIndex');
     const battleTotalEl = document.getElementById('battleTotal');
@@ -197,7 +242,6 @@
     const submitBtn = document.getElementById('submitBtn');
     const toastEl = document.getElementById('toast');
 
-    // Single simulated battle
     const BATTLES = [{
       id:'SIM_1',
       round:1, indexInRound:1, total:1,
@@ -211,18 +255,24 @@
     const lockKey = (id)=> `rs_vote_${id}`;
     function showToast(msg){ toastEl.textContent = msg; toastEl.style.display = 'block'; clearTimeout(showToast._t); showToast._t = setTimeout(()=> toastEl.style.display='none', 1400); }
 
+    function setButtonHighlight(){
+      voteTopBtn.classList.toggle('selected', chosen==='A');
+      voteBottomBtn.classList.toggle('selected', chosen==='B');
+      topTile.classList.toggle('chosen', chosen==='A');
+      bottomTile.classList.toggle('chosen', chosen==='B');
+    }
+
     function render(){
       const b = BATTLES[idx];
       roundNumEl.textContent   = b.round;
       battleIndexEl.textContent= b.indexInRound;
       battleTotalEl.textContent= b.total;
 
-      // reset UI
+      // Allow switching until submit
       chosen = null;
       submitBtn.disabled = true;
-      topTile.classList.remove('chosen'); bottomTile.classList.remove('chosen');
+      setButtonHighlight();
 
-      // honor "already voted" locally
       const voted = !!localStorage.getItem(lockKey(b.id));
       voteTopBtn.disabled = voted; voteBottomBtn.disabled = voted;
       if (voted){
@@ -236,30 +286,90 @@
       if (voteTopBtn.disabled) return;
       chosen = 'A';
       submitBtn.disabled = false;
-      topTile.classList.add('chosen');  bottomTile.classList.remove('chosen');
+      setButtonHighlight();
       showToast('Selected: RED');
     });
     voteBottomBtn.addEventListener('click', ()=>{
       if (voteBottomBtn.disabled) return;
       chosen = 'B';
       submitBtn.disabled = false;
-      bottomTile.classList.add('chosen'); topTile.classList.remove('chosen');
+      setButtonHighlight();
       showToast('Selected: BLUE');
     });
 
     submitBtn.addEventListener('click', ()=>{
       const b = BATTLES[idx];
       if (!chosen) return;
-      // (Demo) lock locally like your old flow. No DB writes yet.
+
+      // lock this battle locally (no DB yet)
       localStorage.setItem(lockKey(b.id), chosen);
       submitBtn.textContent = '🎉 Vote submitted!';
       submitBtn.disabled = true;
+
+      // Disable further changes after submit
       voteTopBtn.disabled = true;
       voteBottomBtn.disabled = true;
+
+      // Confetti!
+      confettiBurst();
+
       showToast(`Vote submitted: ${chosen==='A'?'RED':'BLUE'}`);
     });
 
     render();
+
+    // ===== Minimal confetti (no libs) =====
+    function confettiBurst(){
+      const canvas = document.getElementById('confetti');
+      const ctx = canvas.getContext('2d');
+      const DPR = Math.max(1, window.devicePixelRatio || 1);
+      function resize(){
+        canvas.width = Math.floor(window.innerWidth * DPR);
+        canvas.height = Math.floor(window.innerHeight * DPR);
+      }
+      resize();
+      let particles = [];
+      const N = 120;
+      for (let i=0;i<N;i++){
+        particles.push({
+          x: canvas.width/2 + (Math.random()-0.5)*canvas.width*0.2,
+          y: canvas.height*0.3 + (Math.random()-0.5)*canvas.height*0.1,
+          vx: (Math.random()-0.5)*6*DPR,
+          vy: (Math.random()*-4 -2)*DPR,
+          g: 0.25*DPR,
+          a: 1,
+          r: Math.random()*3*DPR + 2*DPR,
+          life: 900 + Math.random()*400
+        });
+      }
+      const start = performance.now();
+      (function tick(t0){
+        const t = performance.now();
+        const dt = (t - (tick._last||t))/16.67; tick._last = t;
+
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        particles.forEach(p=>{
+          p.vx *= 0.99;
+          p.vy += p.g;
+          p.x += p.vx*dt;
+          p.y += p.vy*dt;
+          p.a *= 0.986;
+          ctx.globalAlpha = Math.max(0, p.a);
+          ctx.fillStyle = (Math.random()<0.5) ? '#39ff14' : '#7dff62';
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+
+        // trim and continue
+        particles = particles.filter(p=> p.a>0.04 && p.y<canvas.height+40*DPR);
+        if (t - start < 1200 && particles.length){
+          requestAnimationFrame(tick);
+        } else {
+          ctx.clearRect(0,0,canvas.width,canvas.height);
+        }
+      })();
+      window.addEventListener('resize', resize, { once:true });
+    }
   </script>
 </body>
 </html>
