@@ -1,179 +1,230 @@
-// supabase/functions/global-timer/index.ts
+// Minimal global timer with true global pause/resume.
+//
+// Table expected (single row with id=1):
+//   id int primary key default 1
+//   phase_end_at timestamptz
+//   period_sec int not null default 10
+//   paused boolean not null default false
+//   paused_remaining_sec int null
+//   updated_at timestamptz
+//
+// The function returns:
+//   { state: { phase_end_at, period_sec, paused, remaining_sec } }
+//
+// POST body supports:
+//   { action: "pause" }      -> freeze now
+//   { action: "resume" }     -> resume from frozen remaining
+//   { force: true }          -> roll forward by one period (also clears pause)
+
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-type State = {
-  phase_end_at: string | null;
-  period_sec: number;
-  paused: boolean;
-  paused_remaining_sec: number | null;
-};
-
-const cors = {
+// --- CORS ---
+const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Content-Type": "application/json",
 };
 
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+// --- Helpers ---
+const nowIso = () => new Date().toISOString();
 
+function secondsUntil(iso: string | null): number {
+  if (!iso) return 0;
+  const ms = new Date(iso).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / 1000));
+}
+
+type Row = {
+  id: number;
+  phase_end_at: string | null;
+  period_sec: number;
+  paused: boolean;
+  paused_remaining_sec: number | null;
+  updated_at: string | null;
+};
+
+type State = {
+  phase_end_at: string;     // authoritative next end
+  period_sec: number;
+  paused: boolean;
+  remaining_sec: number;    // what clients should show *right now*
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Edge env
   const url = Deno.env.get("SUPABASE_URL")!;
-  const key = Deno.env.get("SERVICE_ROLE_KEY")!; // or SUPABASE_SERVICE_ROLE_KEY, if you prefer
-  const db = createClient(url, key);
+  const serviceRole = Deno.env.get("SERVICE_ROLE_KEY")!;
+  const client = createClient(url, serviceRole);
 
-  async function getState(): Promise<State> {
-    const { data, error } = await db
+  // Ensure singleton row exists
+  const { data: s0, error: e0 } = await client
+    .from("tournament_state")
+    .select(
+      "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
+    )
+    .eq("id", 1)
+    .single();
+
+  let s = s0 as Row | null;
+
+  if (!s || e0) {
+    const period = 10;
+    const end = new Date(Date.now() + period * 1000).toISOString();
+    const { data: upserted, error: ue } = await client
       .from("tournament_state")
-      .select("phase_end_at, period_sec, paused, paused_remaining_sec")
-      .eq("id", 1)
-      .maybeSingle();
-    if (error || !data) throw new Error(error?.message ?? "state row missing");
-    return {
-      phase_end_at: data.phase_end_at,
-      period_sec: data.period_sec ?? 10,
-      paused: !!data.paused,
-      paused_remaining_sec: data.paused_remaining_sec ?? null,
-    };
+      .upsert({
+        id: 1,
+        phase_end_at: end,
+        period_sec: period,
+        paused: false,
+        paused_remaining_sec: null,
+        updated_at: nowIso(),
+      })
+      .select(
+        "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
+      )
+      .single();
+    if (ue) {
+      return new Response(JSON.stringify({ error: ue.message }), {
+        status: 500,
+        headers: corsHeaders,
+      });
+    }
+    s = upserted as Row;
   }
 
-  function nowUTC() {
-    return new Date();
-  }
+  // Handle POST actions
+  if (req.method === "POST") {
+    const body = await req.json().catch(() => ({} as any));
 
-  function secondsUntil(endISO: string | null): number {
-    if (!endISO) return 0;
-    const diff = Date.parse(endISO) - Date.now();
-    return Math.max(0, Math.ceil(diff / 1000));
-  }
-
-  try {
-    // POST: mutate (pause/resume/force)
-    if (req.method === "POST") {
-      const body = await req.json().catch(() => ({} as any));
-      const wantedPause: boolean | undefined = body.pause;
-      const force: boolean | undefined = body.force;
-
-      // Read current
-      let s = await getState();
-
-      // Toggle pause
-      if (typeof wantedPause === "boolean") {
-        if (wantedPause && !s.paused) {
-          // Going from LIVE -> PAUSED: freeze remaining on the server
-          const remaining = s.paused_remaining_sec ?? secondsUntil(s.phase_end_at) || s.period_sec;
-          const { data, error } = await db
-            .from("tournament_state")
-            .update({
-              paused: true,
-              paused_remaining_sec: remaining,
-              updated_at: nowUTC().toISOString(),
-            })
-            .eq("id", 1)
-            .select("phase_end_at, period_sec, paused, paused_remaining_sec")
-            .single();
-          if (error) throw new Error(error.message);
-          s = {
-            phase_end_at: data.phase_end_at,
-            period_sec: data.period_sec ?? 10,
-            paused: !!data.paused,
-            paused_remaining_sec: data.paused_remaining_sec ?? null,
-          };
-        } else if (!wantedPause && s.paused) {
-          // Going from PAUSED -> LIVE: resume from frozen remaining
-          const remaining = s.paused_remaining_sec ?? s.period_sec;
-          const newEnd = new Date(Date.now() + remaining * 1000).toISOString();
-          const { data, error } = await db
-            .from("tournament_state")
-            .update({
-              paused: false,
-              paused_remaining_sec: null,
-              phase_end_at: newEnd,
-              updated_at: nowUTC().toISOString(),
-            })
-            .eq("id", 1)
-            .select("phase_end_at, period_sec, paused, paused_remaining_sec")
-            .single();
-          if (error) throw new Error(error.message);
-          s = {
-            phase_end_at: data.phase_end_at,
-            period_sec: data.period_sec ?? 10,
-            paused: !!data.paused,
-            paused_remaining_sec: data.paused_remaining_sec ?? null,
-          };
-        }
+    // Admin "force" -> always jump one period from *now*, clear pause
+    if (body?.force === true) {
+      const newEnd = new Date(Date.now() + s!.period_sec * 1000).toISOString();
+      const { data: upd, error: ue } = await client
+        .from("tournament_state")
+        .update({
+          phase_end_at: newEnd,
+          paused: false,
+          paused_remaining_sec: null,
+          updated_at: nowIso(),
+        })
+        .eq("id", 1)
+        .select(
+          "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
+        )
+        .single();
+      if (ue) {
+        return new Response(JSON.stringify({ error: ue.message }), {
+          status: 500,
+          headers: corsHeaders,
+        });
       }
+      s = upd as Row;
+    }
 
-      // Optional: force jump to next period (works regardless of paused)
-      if (force === true) {
-        const period = s.period_sec ?? 10;
-        const newEnd = new Date(Date.now() + period * 1000).toISOString();
-        const { data, error } = await db
+    // Pause immediately -> freeze remaining seconds *now*
+    if (body?.action === "pause") {
+      if (!s!.paused) {
+        const remainingNow = secondsUntil(s!.phase_end_at);
+        const { data: upd, error: ue } = await client
+          .from("tournament_state")
+          .update({
+            paused: true,
+            paused_remaining_sec: remainingNow,
+            updated_at: nowIso(),
+          })
+          .eq("id", 1)
+          .select(
+            "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
+          )
+          .single();
+        if (ue) {
+          return new Response(JSON.stringify({ error: ue.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+        s = upd as Row;
+      }
+    }
+
+    // Resume -> schedule end = now + frozen remaining, clear pause
+    if (body?.action === "resume") {
+      if (s!.paused) {
+        const remaining =
+          (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at));
+        const newEnd = new Date(Date.now() + remaining * 1000).toISOString();
+        const { data: upd, error: ue } = await client
           .from("tournament_state")
           .update({
             phase_end_at: newEnd,
-            updated_at: nowUTC().toISOString(),
+            paused: false,
+            paused_remaining_sec: null,
+            updated_at: nowIso(),
           })
           .eq("id", 1)
-          .select("phase_end_at, period_sec, paused, paused_remaining_sec")
+          .select(
+            "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
+          )
           .single();
-        if (error) throw new Error(error.message);
-        s = {
-          phase_end_at: data.phase_end_at,
-          period_sec: data.period_sec ?? 10,
-          paused: !!data.paused,
-          paused_remaining_sec: data.paused_remaining_sec ?? null,
-        };
-      }
-
-      return new Response(JSON.stringify({ state: s }), { headers: cors });
-    }
-
-    // GET: read + roll if expired and not paused
-    let s = await getState();
-
-    if (!s.paused) {
-      if (!s.phase_end_at || Date.now() >= Date.parse(s.phase_end_at)) {
-        const next = new Date(Date.now() + (s.period_sec ?? 10) * 1000).toISOString();
-        const { data, error } = await db
-          .from("tournament_state")
-          .update({
-            phase_end_at: next,
-            updated_at: nowUTC().toISOString(),
-          })
-          .eq("id", 1)
-          .select("phase_end_at, period_sec, paused, paused_remaining_sec")
-          .single();
-        if (error) throw new Error(error.message);
-        s = {
-          phase_end_at: data.phase_end_at,
-          period_sec: data.period_sec ?? 10,
-          paused: !!data.paused,
-          paused_remaining_sec: data.paused_remaining_sec ?? null,
-        };
-      }
-    } else {
-      // While paused: ensure paused_remaining_sec is set (in case older rows existed)
-      if (s.paused_remaining_sec == null) {
-        const remaining = secondsUntil(s.phase_end_at) || s.period_sec;
-        await db
-          .from("tournament_state")
-          .update({
-            paused_remaining_sec: remaining,
-            updated_at: nowUTC().toISOString(),
-          })
-          .eq("id", 1);
-        s.paused_remaining_sec = remaining;
+        if (ue) {
+          return new Response(JSON.stringify({ error: ue.message }), {
+            status: 500,
+            headers: corsHeaders,
+          });
+        }
+        s = upd as Row;
       }
     }
-
-    return new Response(JSON.stringify({ state: s }), { headers: cors });
-  } catch (e: any) {
-    console.error(e);
-    return new Response(JSON.stringify({ error: e.message ?? String(e) }), {
-      status: 500,
-      headers: cors,
-    });
   }
+
+  // Auto-roll if not paused and time has elapsed
+  if (!s!.paused) {
+    const ended = secondsUntil(s!.phase_end_at) <= 0;
+    if (ended) {
+      const newEnd = new Date(Date.now() + s!.period_sec * 1000).toISOString();
+      const { data: upd, error: ue } = await client
+        .from("tournament_state")
+        .update({
+          phase_end_at: newEnd,
+          updated_at: nowIso(),
+        })
+        .eq("id", 1)
+        .select(
+          "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
+        )
+        .single();
+      if (ue) {
+        return new Response(JSON.stringify({ error: ue.message }), {
+          status: 500,
+          headers: corsHeaders,
+        });
+      }
+      s = upd as Row;
+    }
+  }
+
+  // Compose response state
+  const remaining = s!.paused
+    ? (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at))
+    : secondsUntil(s!.phase_end_at);
+
+  // NOTE: Wrap the ?? expression in parens to satisfy the Deno TS parser.
+  const state: State = {
+    phase_end_at: s!.phase_end_at ?? new Date().toISOString(),
+    period_sec: s!.period_sec,
+    paused: s!.paused,
+    remaining_sec: (s!.paused
+      ? (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at))
+      : secondsUntil(s!.phase_end_at)),
+  };
+
+  return new Response(JSON.stringify({ state }), { headers: corsHeaders });
 });
