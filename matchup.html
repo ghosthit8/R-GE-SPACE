@@ -37,8 +37,8 @@
     // Your deployed Edge Function URL:
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
 
-    // Supabase project + anon key (you shared these earlier)
-    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+    // Supabase project + anon key
+    const SUPABASE_URL  = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -119,7 +119,6 @@
           .from('zero_rollovers')
           .insert({ rollover_at: rolloverAt, phase_end_at: phaseISO || null, source: 'matchup' });
         if (error) throw error;
-        // mark as logged for this phase so we don't duplicate
         loggedForPhaseISO = phaseISO || loggedForPhaseISO || null;
       } catch (e) {
         console.error('logZero failed:', e.message);
@@ -142,8 +141,8 @@
             const secs  = Math.ceil(remMs / 1000);
             clockEl.textContent = String(secs);
 
-            // Hit zero? Log once per phase, then re-sync.
-            if (secs === 0 && serverPhaseEndISO && loggedForPhaseISO !== serverPhaseEndISO) {
+            // Log once per phase at/after zero, even if the frame is late
+            if (remMs <= 0 && serverPhaseEndISO && loggedForPhaseISO !== serverPhaseEndISO) {
               await logZero(serverPhaseEndISO);
               loggedForPhaseISO = serverPhaseEndISO;
             }
