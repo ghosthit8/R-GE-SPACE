@@ -17,7 +17,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY")!; // service role ONLY on server
+  const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!; // service role ONLY on server
   const client = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   // Fetch current state (single row id=1)
@@ -32,7 +32,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const now = new Date();
-  const periodSec = data.period_sec ?? 10;
+  const periodSec = data.period_sec ?? 10; // default to 10 sec if not set
   let end = data.phase_end_at ? new Date(data.phase_end_at) : null;
 
   // If no end set, or time is up, roll forward by one period from *now*
@@ -40,7 +40,10 @@ Deno.serve(async (req: Request) => {
     const newEnd = new Date(now.getTime() + periodSec * 1000);
     const { error: upErr } = await client
       .from("tournament_state")
-      .update({ phase_end_at: newEnd.toISOString(), updated_at: new Date().toISOString() })
+      .update({
+        phase_end_at: newEnd.toISOString(),
+        updated_at: new Date().toISOString()
+      })
       .eq("id", 1);
 
     if (upErr) {
@@ -54,8 +57,12 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     if (body?.force === true) {
       const newEnd = new Date(Date.now() + periodSec * 1000);
-      await client.from("tournament_state")
-        .update({ phase_end_at: newEnd.toISOString(), updated_at: new Date().toISOString() })
+      await client
+        .from("tournament_state")
+        .update({
+          phase_end_at: newEnd.toISOString(),
+          updated_at: new Date().toISOString()
+        })
         .eq("id", 1);
       end = newEnd;
     }
