@@ -119,13 +119,11 @@
     function subscribe(){
       supabase
         .channel('zero_rollovers_live')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'zero_rollovers' }, async (payload) => {
-          const current = Array.from(listEl.querySelectorAll('.item')).length ? null : await fetchRows();
-          // simplest path: re-fetch (table is small)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'zero_rollovers' }, async () => {
           const rows = await fetchRows();
           renderList(rows);
         })
-        .subscribe((status) => console.log('realtime status:', status));
+        .subscribe();
     }
 
     document.getElementById('btnRefresh').addEventListener('click', async ()=>{
