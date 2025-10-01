@@ -29,162 +29,155 @@
   </div>
 
   <script>
-    // Your Edge Function URL (public or include auth headers if Verify JWT is ON)
+    // Your deployed Edge Function URL:
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
-    // If Verify JWT is ON, uncomment and add headers in fetch calls:
-    // const ANON = "YOUR_SUPABASE_ANON_KEY";
-    // const AUTH = { apikey: ANON, Authorization: `Bearer ${ANON}` };
 
-    let phaseEndISO = null;     // authoritative end time from server
-    let periodSec   = 10;
-    let serverPaused = false;   // authoritative pause flag from server
-    let lastSyncAt  = 0;
+    // Authoritative state from server
+    let serverPhaseEndISO = null;  // string
+    let periodSec = 10;
+    let paused = false;
+    let remainingSec = null;       // number when paused, null otherwise
 
-    // UI + freeze buffer
-    const clockEl  = document.getElementById('clock');
-    const infoEl   = document.getElementById('info');
+    // local loop control
+    let rafId = null;
+    let lastSyncAt = 0;
+
+    // els
+    const clockEl = document.getElementById('clock');
+    const infoEl  = document.getElementById('info');
     const statusEl = document.getElementById('status');
     const pauseBtn = document.getElementById('pause');
-    let frozenSecs = null;      // number to display while paused (frozen)
 
-    function remainingSecsFromNow() {
-      if (!phaseEndISO) return null;
-      const endMs = Date.parse(phaseEndISO);
-      const remMs = Math.max(0, endMs - Date.now());
-      return Math.ceil(remMs / 1000);
+    // helpers
+    function renderInfo() {
+      infoEl.textContent = `period=${periodSec}s | phase_end_at=${serverPhaseEndISO ?? "—"} | paused=${paused}`;
+      statusEl.textContent = paused ? "PAUSED" : "LIVE";
+      pauseBtn.textContent = paused ? "Resume" : "Pause";
     }
 
-    function setPausedUI() {
-      statusEl.textContent = 'PAUSED';
-      pauseBtn.textContent = 'Resume';
-    }
-    function setLiveUI() {
-      statusEl.textContent = 'LIVE';
-      pauseBtn.textContent = 'Pause';
+    function showError(msg) {
+      clockEl.textContent = 'ERR';
+      infoEl.textContent = msg || 'Error';
+      infoEl.classList.add('error');
+      console.error(msg);
     }
 
-    function applyState(json) {
-      const s = json.state;
-      phaseEndISO  = s.phase_end_at;
-      periodSec    = s.period_sec;
-      const wasPaused = serverPaused;
-      serverPaused = !!s.paused;
-
-      // if we just transitioned into paused (from server or after POST), capture the current number
-      if (!wasPaused && serverPaused) {
-        frozenSecs = remainingSecsFromNow();
-      }
-      // if we just resumed, clear the freeze
-      if (wasPaused && !serverPaused) {
-        frozenSecs = null;
-      }
-
-      if (serverPaused) setPausedUI(); else setLiveUI();
-
-      infoEl.textContent =
-        `period=${periodSec}s | phase_end_at=${phaseEndISO} | paused=${serverPaused}`;
-      lastSyncAt = Date.now();
-    }
-
-    async function callAPI(method = 'GET', body = null) {
+    async function callEdge(method='GET', body=null) {
       const res = await fetch(EDGE_URL, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-          // ...AUTH,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: body ? JSON.stringify(body) : null
       });
-      const txt = await res.text();
-      let json;
-      try { json = JSON.parse(txt); } catch { throw new Error('Server did not return JSON'); }
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || res.statusText);
       return json;
     }
 
     async function fetchState() {
-      const json = await callAPI('GET');
-      applyState(json);
+      const json = await callEdge('GET');
+      const s = json.state;
+      serverPhaseEndISO = s.phase_end_at ?? null;
+      periodSec = s.period_sec ?? 10;
+      paused = !!s.paused;
+      // remaining_sec present when paused (number), else undefined
+      remainingSec = (s.remaining_sec ?? null);
+      lastSyncAt = Date.now();
+      renderInfo();
+      return s;
     }
 
-    function tick() {
-      if (serverPaused) {
-        // show the exact frozen number captured at pause time
-        if (typeof frozenSecs === 'number' && isFinite(frozenSecs)) {
-          clockEl.textContent = String(frozenSecs);
-        } else {
-          // fallback if we didn't capture yet
-          const nowFreeze = remainingSecsFromNow();
-          frozenSecs = nowFreeze ?? 0;
-          clockEl.textContent = String(frozenSecs);
-        }
-      } else if (phaseEndISO) {
-        const secs = remainingSecsFromNow();
-        clockEl.textContent = String(secs ?? '…');
-
-        // re-sync at zero so the server can roll forward
-        if ((secs ?? 0) <= 0) {
-          fetchState().catch(console.error);
-        }
-      } else {
-        clockEl.textContent = '…';
-      }
-
-      // background re-sync every ~5s to catch external changes
-      if (Date.now() - lastSyncAt > 5000) {
-        fetchState().catch(console.warn);
-      }
-
-      requestAnimationFrame(tick);
+    function stopLoop() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
     }
 
-    // Buttons
-    document.getElementById('refresh').addEventListener('click', () =>
-      fetchState().catch(err => alert(err.message))
-    );
+    async function startLoop() {
+      stopLoop();
 
-    document.getElementById('force').addEventListener('click', async () => {
+      const draw = async () => {
+        try {
+          if (paused) {
+            // Freeze display at remainingSec (authoritative)
+            const n = Math.max(0, Math.ceil(Number(remainingSec ?? 0)));
+            clockEl.textContent = String(n);
+            // No local countdown while paused.
+          } else {
+            // Live countdown from phase_end_at
+            const endMs = Date.parse(serverPhaseEndISO);
+            const remMs = Math.max(0, endMs - Date.now());
+            const secs = Math.ceil(remMs / 1000);
+            clockEl.textContent = String(secs);
+
+            // If hit zero or drifted, re-sync
+            if (remMs <= 0 || Date.now() - lastSyncAt > 5000) {
+              const s = await fetchState();
+              // if newly paused, render frozen immediately
+              if (s.paused) {
+                clockEl.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
+              }
+            }
+          }
+        } catch (e) {
+          showError(e.message);
+          return;
+        }
+        rafId = requestAnimationFrame(draw);
+      };
+
+      rafId = requestAnimationFrame(draw);
+    }
+
+    // UI actions
+    document.getElementById('refresh').addEventListener('click', async () => {
       try {
-        const json = await callAPI('POST', { force: true });
-        applyState(json);
+        await fetchState();
+        await startLoop();
       } catch (e) { alert(e.message); }
     });
 
-    // Toggle GLOBAL pause/resume
+    document.getElementById('force').addEventListener('click', async () => {
+      try {
+        const s = (await callEdge('POST', { action: 'force' })).state;
+        // update local snapshot from response
+        serverPhaseEndISO = s.phase_end_at ?? null;
+        periodSec = s.period_sec ?? 10;
+        paused = !!s.paused;
+        remainingSec = s.remaining_sec ?? null;
+        renderInfo();
+        await startLoop();
+      } catch (e) { alert(e.message); }
+    });
+
     pauseBtn.addEventListener('click', async () => {
       try {
-        const desired = !serverPaused;
+        const nextAction = paused ? 'resume' : 'pause';
+        const s = (await callEdge('POST', { action: nextAction })).state;
 
-        // optimistic UI: capture number and flip immediately
-        if (desired) {
-          frozenSecs = remainingSecsFromNow();
-          setPausedUI();
+        // Apply server-truth immediately so UI freezes/resumes right away
+        serverPhaseEndISO = s.phase_end_at ?? null;
+        periodSec = s.period_sec ?? 10;
+        paused = !!s.paused;
+        remainingSec = s.remaining_sec ?? null;
+        renderInfo();
+
+        // If paused now, stop local loop (no countdown). If resumed, restart loop.
+        if (paused) {
+          stopLoop();
+          // show frozen number
+          clockEl.textContent = String(Math.max(0, Math.ceil(Number(remainingSec ?? 0))));
         } else {
-          frozenSecs = null;
-          setLiveUI();
+          await startLoop();
         }
-        serverPaused = desired;
-
-        // tell the server
-        const json = await callAPI('POST', { pause: desired });
-        // reconcile with server truth (in case of race)
-        applyState(json);
-      } catch (e) {
-        alert(e.message);
-        // recover by pulling the authoritative state
-        fetchState().catch(console.error);
-      }
+      } catch (e) { alert(e.message); }
     });
 
     // boot
-    fetchState().then(draw).catch((e) => {
-      clockEl.textContent = 'ERR';
-      infoEl.textContent = e.message;
-      infoEl.classList.add('error');
-      console.error(e);
-    });
-
-    function draw() { tick(); } // alias for readability
+    (async () => {
+      try {
+        await fetchState();
+        await startLoop();
+      } catch (e) { showError(e.message); }
+    })();
   </script>
 </body>
 </html>
