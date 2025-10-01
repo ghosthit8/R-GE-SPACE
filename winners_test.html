@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Winners Test — Zero-Hit Logger</title>
+  <style>
+    :root { color-scheme: dark; }
+    html,body { height:100%; margin:0; font-family: system-ui, Arial, sans-serif; background:#0b0b0b; color:#fff; }
+    .page { min-height:100%; display:grid; grid-template-rows:auto 1fr auto; }
+    header, footer { padding:14px 16px; border-bottom:1px solid #222; }
+    footer { border-top:1px solid #222; border-bottom:none; }
+    h1 { font-size:20px; margin:0 0 6px; }
+    .muted { opacity:.75; font-size:12px; }
+    .content { padding:16px; display:grid; gap:16px; }
+    .clock { font-size: clamp(40px, 10vw, 120px); font-weight:800; letter-spacing:.02em; text-align:center; }
+    .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    button { background:#161616; color:#fff; border:1px solid #333; border-radius:10px; padding:8px 12px; cursor:pointer; }
+    button:hover { background:#1f1f1f; }
+    .tag { font-size:12px; padding:2px 6px; border:1px solid #444; border-radius:999px; }
+    .panel { border:1px solid #222; border-radius:14px; padding:12px; background:#0f0f0f; }
+    .list { max-height:50vh; overflow:auto; border-top:1px solid #222; margin-top:8px; }
+    .item { display:flex; justify-content:space-between; padding:10px 6px; border-bottom:1px solid #1a1a1a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; }
+    .item .idx { opacity:.6; width:3ch; }
+    .empty { padding:10px 6px; opacity:.7; }
+    .error { color:#ff6b6b; }
+    a { color:#9ae6b4; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>Winners Test — Zero-Hit Logger</h1>
+      <div class="muted">Logs every moment the global countdown reaches 0 (phase rollover). Uses localStorage for now.</div>
+    </header>
+
+    <main class="content">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between; align-items:baseline;">
+          <div class="row">
+            <span class="tag" id="status">LIVE</span>
+            <span class="tag" id="period">period=—</span>
+            <span class="tag" id="phase">phase_end_at=—</span>
+          </div>
+          <div class="row">
+            <button id="btnSync">Sync</button>
+            <button id="btnForce">Force next (test)</button>
+            <button id="btnPause">Pause</button>
+            <a href="matchup.html" target="_blank"><button>Open matchup</button></a>
+          </div>
+        </div>
+        <div class="clock" id="clock">—</div>
+        <div class="muted" id="info"></div>
+      </div>
+
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;">
+          <strong>Zero-Hit Log</strong>
+          <div class="row">
+            <button id="btnExport">Export CSV</button>
+            <button id="btnClear">Clear Log</button>
+          </div>
+        </div>
+        <div class="list" id="list"></div>
+      </div>
+    </main>
+
+    <footer class="muted">
+      Tip: we record on the **actual rollover**. If paused, nothing logs until resumed and the clock reaches 0.
+    </footer>
+  </div>
+
+  <script>
+    // === CONFIG ===
+    // Same Edge Function your matchup uses:
+    const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
+
+    // === STATE ===
+    let serverPhaseEndISO = null;   // current phase_end_at from server
+    let periodSec = 10;
+    let paused = false;
+    let remainingSec = null;
+
+    let lastSyncAt = 0;
+    let rafId = null;
+
+    // We mark when we've already logged for the current phase_end_at
+    let loggedForPhaseISO = null;
+
+    // === UI ===
+    const clockEl  = document.getElementById('clock');
+    const infoEl   = document.getElementById('info');
+    const statusEl = document.getElementById('status');
+    const periodEl = document.getElementById('period');
+    const phaseEl  = document.getElementById('phase');
+    const listEl   = document.getElementById('list');
+
+    function showError(msg) {
+      clockEl.textContent = 'ERR';
+      infoEl.textContent = msg || 'Error';
+      infoEl.classList.add('error');
+      console.error(msg);
+    }
+
+    function renderMeta() {
+      statusEl.textContent = paused ? "PAUSED" : "LIVE";
+      periodEl.textContent = `period=${periodSec}s`;
+      phaseEl.textContent  = `phase_end_at=${serverPhaseEndISO ?? "—"}`;
+      infoEl.textContent = `lastSync=${new Date(lastSyncAt).toLocaleString()} | loggedForPhase=${loggedForPhaseISO ?? "—"}`;
+    }
+
+    async function callEdge(method='GET', body=null) {
+      const res = await fetch(EDGE_URL, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : null
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || res.statusText);
+      return json;
+    }
+
+    async function fetchState() {
+      const json = await callEdge('GET');
+      const s = json.state || {};
+      serverPhaseEndISO = s.phase_end_at ?? null;
+      periodSec = s.period_sec ?? 10;
+      paused = !!s.paused;
+      remainingSec = (s.remaining_sec ?? null);
+
+      // If phase changed, reset the "already logged" flag
+      if (loggedForPhaseISO && serverPhaseEndISO && loggedForPhaseISO !== serverPhaseEndISO) {
+        loggedForPhaseISO = null;
+      }
+
+      lastSyncAt = Date.now();
+      renderMeta();
+      return s;
+    }
+
+    function stopLoop(){ if (rafId) cancelAnimationFrame(rafId); rafId = null; }
+
+    // === LOG STORAGE ===
+    const LS_KEY = 'winners_test_zero_hits';
+    function readLog(){
+      try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; }
+    }
+    function writeLog(arr){ localStorage.setItem(LS_KEY, JSON.stringify(arr)); }
+    function addLog(rolloverAtISO){
+      const nowISO = new Date().toISOString();
+      const rows = readLog();
+      rows.unshift({ recorded_at: nowISO, rollover_at: rolloverAtISO }); // newest first
+      writeLog(rows);
+      renderList();
+    }
+    function renderList(){
+      const rows = readLog();
+      listEl.innerHTML = '';
+      if (!rows.length){
+        const div = document.createElement('div');
+        div.className = 'empty';
+        div.textContent = 'No zero events recorded yet.';
+        listEl.appendChild(div);
+        return;
+      }
+      rows.forEach((r, i) => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        const left = document.createElement('div');
+        left.innerHTML = `<span class="idx">#${String(rows.length - i).padStart(2,'0')}</span> ${new Date(r.recorded_at).toLocaleString()}`;
+        const right = document.createElement('div');
+        right.textContent = r.rollover_at ? new Date(r.rollover_at).toLocaleString() : '—';
+        div.appendChild(left);
+        div.appendChild(right);
+        listEl.appendChild(div);
+      });
+    }
+
+    function exportCSV(){
+      const rows = readLog();
+      const header = ['recorded_at_iso','recorded_at_local','rollover_at_iso','rollover_at_local'];
+      const lines = [header.join(',')];
+      rows.slice().reverse().forEach(r => {
+        const recLocal = new Date(r.recorded_at).toLocaleString();
+        const rollLocal = r.rollover_at ? new Date(r.rollover_at).toLocaleString() : '';
+        lines.push([r.recorded_at, recLocal, (r.rollover_at||''), rollLocal].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
+      });
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'winners_zero_hits.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    // === LOOP ===
+    async function startLoop(){
+      stopLoop();
+      const tick = async () => {
+        try {
+          if (paused){
+            // Show frozen number
+            const n = Math.max(0, Math.ceil(Number(remainingSec ?? 0)));
+            clockEl.textContent = String(n);
+          } else {
+            const endMs = Date.parse(serverPhaseEndISO);
+            const remMs = Math.max(0, endMs - Date.now());
+            const secs = Math.ceil(remMs / 1000);
+            clockEl.textContent = String(secs);
+
+            // When we hit zero for THIS phase and haven't logged it yet → record it
+            if (secs === 0 && serverPhaseEndISO && loggedForPhaseISO !== serverPhaseEndISO){
+              addLog(serverPhaseEndISO);      // record official rollover time
+              loggedForPhaseISO = serverPhaseEndISO;
+              // pull fresh state so we can watch the next phase
+              await fetchState();
+            }
+
+            // Periodic drift re-sync
+            if (remMs <= 0 || Date.now() - lastSyncAt > 5000){
+              await fetchState();
+            }
+          }
+        } catch (e) {
+          showError(e.message);
+          return;
+        }
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+    }
+
+    // === WIRES ===
+    document.getElementById('btnSync').addEventListener('click', async () => { try { await fetchState(); await startLoop(); } catch(e){ alert(e.message); }});
+    document.getElementById('btnForce').addEventListener('click', async () => {
+      try {
+        const s = (await callEdge('POST', { action: 'force' })).state;
+        serverPhaseEndISO = s.phase_end_at ?? null;
+        periodSec = s.period_sec ?? 10;
+        paused = !!s.paused;
+        remainingSec = s.remaining_sec ?? null;
+        // Reset log flag since phase likely changed
+        loggedForPhaseISO = null;
+        renderMeta();
+        await startLoop();
+      } catch(e){ alert(e.message); }
+    });
+    document.getElementById('btnPause').addEventListener('click', async () => {
+      try {
+        const action = paused ? 'resume' : 'pause';
+        const s = (await callEdge('POST', { action })).state;
+        serverPhaseEndISO = s.phase_end_at ?? null;
+        periodSec = s.period_sec ?? 10;
+        paused = !!s.paused;
+        remainingSec = s.remaining_sec ?? null;
+        renderMeta();
+        if (paused) stopLoop(); else startLoop();
+      } catch(e){ alert(e.message); }
+    });
+
+    document.getElementById('btnExport').addEventListener('click', exportCSV);
+    document.getElementById('btnClear').addEventListener('click', () => {
+      if (confirm('Clear the zero-hit log?')) { localStorage.removeItem(LS_KEY); renderList(); }
+    });
+
+    // === BOOT ===
+    (async () => {
+      renderList();
+      try {
+        await fetchState();
+        await startLoop();
+      } catch(e){ showError(e.message); }
+    })();
+  </script>
+</body>
+</html>
