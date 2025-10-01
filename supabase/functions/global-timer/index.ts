@@ -60,8 +60,22 @@ Deno.serve(async (req) => {
 
   // Edge env
   const url = Deno.env.get("SUPABASE_URL")!;
+  // NOTE: you called this SERVICE_ROLE_KEY in your file — keep that env var set
   const serviceRole = Deno.env.get("SERVICE_ROLE_KEY")!;
   const client = createClient(url, serviceRole);
+
+  // --- NEW: server-side zero logger (uses service role, bypasses RLS) ---
+  async function logZero(rolledFromISO: string | null) {
+    try {
+      const rollover_at = rolledFromISO ?? nowIso();
+      const { error } = await client
+        .from("zero_rollovers")
+        .insert({ rollover_at, phase_end_at: rolledFromISO, source: "edge-fn" });
+      if (error) console.error("zero_rollovers insert failed:", error.message);
+    } catch (e) {
+      console.error("zero_rollovers insert exception:", (e as Error).message);
+    }
+  }
 
   // Ensure singleton row exists
   const { data: s0, error: e0 } = await client
@@ -106,6 +120,9 @@ Deno.serve(async (req) => {
 
     // Admin "force" -> always jump one period from *now*, clear pause
     if (body?.force === true) {
+      // LOG: write a row for the phase that just ended
+      await logZero(s!.phase_end_at);
+
       const newEnd = new Date(Date.now() + s!.period_sec * 1000).toISOString();
       const { data: upd, error: ue } = await client
         .from("tournament_state")
@@ -189,6 +206,9 @@ Deno.serve(async (req) => {
   if (!s!.paused) {
     const ended = secondsUntil(s!.phase_end_at) <= 0;
     if (ended) {
+      // LOG: write a row for the phase that just ended
+      await logZero(s!.phase_end_at);
+
       const newEnd = new Date(Date.now() + s!.period_sec * 1000).toISOString();
       const { data: upd, error: ue } = await client
         .from("tournament_state")
