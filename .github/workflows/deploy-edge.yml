@@ -1,5 +1,5 @@
+# (unchanged) deploy workflow
 name: Deploy Supabase Edge
-
 on:
   push:
     branches: [ main ]
@@ -7,24 +7,20 @@ on:
       - "supabase/functions/**"
       - ".github/workflows/deploy-edge.yml"
   workflow_dispatch:
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
           version: latest
-
       - name: Link project
         run: supabase link --project-ref "$PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_ID }}
-
       - name: Deploy function "global-timer"
         run: supabase functions deploy global-timer --project-ref "$PROJECT_REF"
         env:
