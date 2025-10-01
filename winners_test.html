@@ -39,6 +39,7 @@
           <div class="row">
             <button id="btnRefresh">Refresh</button>
             <button id="btnExport">Export CSV</button>
+            <button id="btnClear">Clear</button>
           </div>
           <div class="row">
             <a href="matchup.html" target="_blank"><button>Open matchup</button></a>
@@ -51,7 +52,7 @@
   </div>
 
   <script>
-    // Supabase (for reading the log)
+    // Supabase (for reading/clearing the log)
     const SUPABASE_URL  = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -65,6 +66,7 @@
     let pingTimer = null;
     let lastState = null;
 
+    // ---------- UI ----------
     function rowEl(idx, r) {
       const div = document.createElement('div');
       div.className = 'item';
@@ -95,14 +97,21 @@
         return;
       }
       listEl.appendChild(headerEl());
-      rows.forEach((r, i) => listEl.appendChild(rowEl(i+1, r)));
+
+      // Highest number at the top:
+      // numbering counts total..1 as we go down
+      const total = rows.length;
+      rows.forEach((r, i) => {
+        const displayNum = total - i; // top row gets highest #
+        listEl.appendChild(rowEl(displayNum, r));
+      });
     }
 
     async function fetchRows() {
       const { data, error } = await supabase
         .from('zero_rollovers')
         .select('*')
-        .order('recorded_at', { ascending: false })
+        .order('recorded_at', { ascending: false }) // newest first
         .limit(500);
       if (error) { console.error(error); return []; }
       return data || [];
@@ -124,7 +133,16 @@
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
 
-    // ---- Edge pinger ----
+    async function clearAll() {
+      if (!confirm('Clear ALL zero-rollover rows?')) return;
+      const { error } = await supabase.from('zero_rollovers').delete().neq('id', '');
+      if (error) {
+        alert('Clear failed: ' + error.message + '\n\nIf this says RLS/policy, see the note below.');
+      }
+      const rows = await fetchRows(); renderList(rows);
+    }
+
+    // ---------- Edge pinger ----------
     function updatePingStatus(s, nextDelayMs) {
       if (!s) { pingStatusEl.textContent = 'ping: —'; return; }
       if (s.paused) {
@@ -170,13 +188,10 @@
       updatePingStatus(s, delayMs);
 
       pingTimer = setTimeout(async () => {
-        // Call the function (it will catch-up log if needed)
         try { await fetch(EDGE_URL, { method: 'GET' }); } catch {}
-        // Recurse to schedule the next one
         scheduleNextPing(false);
       }, delayMs);
     }
-    // ---------------------
 
     // realtime refresh on new inserts
     function subscribe(){
@@ -185,7 +200,6 @@
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'zero_rollovers' }, async () => {
           const rows = await fetchRows();
           renderList(rows);
-          // If we were paused before and now have activity, re-check schedule
           if (!pingTimer) scheduleNextPing(true);
         })
         .subscribe();
@@ -198,6 +212,7 @@
     document.getElementById('btnExport').addEventListener('click', async ()=>{
       const rows = await fetchRows(); exportCSV(rows);
     });
+    document.getElementById('btnClear').addEventListener('click', clearAll);
 
     (async ()=>{
       const rows = await fetchRows(); renderList(rows);
