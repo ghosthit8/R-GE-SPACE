@@ -3,143 +3,263 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Supabase Global 10s Timer</title>
+  <title>Rage Space — Matchup (Stacked Demo)</title>
   <style>
-    html,body { height:100%; margin:0; font-family:system-ui, Arial, sans-serif; background:#0b0b0b; color:#fff; }
-    .wrap { height:100%; display:grid; place-items:center; gap:16px; }
-    .clock { font-size: clamp(48px, 12vw, 160px); font-weight: 800; letter-spacing: 0.02em; }
-    .row { display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap; }
-    button { background:#1f1f1f; color:#fff; border:1px solid #333; border-radius:10px; padding:8px 12px; cursor:pointer; }
-    button:hover { background:#262626; }
-    .muted { opacity:0.7; font-size:14px; }
-    .tag { font-size:12px; padding:2px 6px; border:1px solid #444; border-radius:999px; }
-    .error { color:#ff6b6b; }
+    :root{
+      --green:#39ff14; --red:#ff0033; --bg:#000; --ink:#e5ffe5; --card:#070707; --border:#0f2510;
+      --muted:#8aff8a; --maxw:980px;
+    }
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{ margin:0; background:var(--bg); color:var(--green);
+      font-family: ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased;
+    }
+
+    .wrap{ max-width:var(--maxw); margin:16px auto 64px; padding:0 16px; }
+    header.wrap{ padding-top:0 }
+    h1{ letter-spacing:.06em; margin:0 0 8px }
+
+    /* scorebar + small timer */
+    .scorebar{
+      display:flex; gap:12px; align-items:center; justify-content:space-between;
+      border:1px solid var(--border); padding:8px 12px; border-radius:10px;
+      background:rgba(7,7,7,.6); box-shadow:0 0 18px rgba(57,255,20,.08) inset;
+    }
+    .badge{ font-size:.9rem; color:var(--ink); opacity:.78 }
+    .tag{ font-size:.8rem; padding:3px 10px; border:1px solid var(--border); border-radius:999px; opacity:.9 }
+    .btn{
+      border:1px solid var(--green); color:var(--green); text-decoration:none; padding:8px 12px;
+      border-radius:10px; display:inline-flex; align-items:center; gap:8px; background:transparent; cursor:pointer;
+    }
+    .btn.primary{ background:rgba(57,255,20,.08) }
+    .btn:disabled{ opacity:.45; cursor:not-allowed }
+
+    /* Small green timer (old-matchup vibe) */
+    .tiny-timer{
+      display:inline-flex; align-items:center; gap:8px; font-variant-numeric:tabular-nums;
+      font-size:12px; color:var(--muted); opacity:.95;
+    }
+    .tiny-clock{
+      font-size:13px; font-weight:700; padding:2px 8px; border:1px solid var(--border); border-radius:8px;
+      text-shadow:0 0 6px rgba(57,255,20,.35);
+    }
+    .paused{ opacity:.65 }
+
+    /* Stacked two-tile layout */
+    .stack{ margin-top:16px; display:grid; grid-template-columns:1fr; gap:16px; }
+    .tile{
+      border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(7,7,7,.6); position:relative;
+    }
+    .art{
+      aspect-ratio: 4/3; width:100%; display:block;
+    }
+    .art.red{ background: repeating-linear-gradient(45deg, #3a0000 0, #3a0000 12px, #5a0000 12px, #5a0000 24px), #a60000; }
+    .art.blue{ background: repeating-linear-gradient(45deg, #001c3a 0, #001c3a 12px, #00325a 12px, #00325a 24px), #0058a6; }
+
+    .meta{
+      display:flex; gap:12px; align-items:center; justify-content:space-between;
+      padding:10px 12px; border-top:1px solid var(--border);
+    }
+    .label{ color:var(--ink); opacity:.8 }
+    .vote-row{ margin-top:16px; display:flex; gap:10px; align-items:center; justify-content:center; }
+
+    .toast{
+      position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#0a0a0a; color:#e5ffe5;
+      border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:none;
+      box-shadow:0 0 18px rgba(57,255,20,.2); z-index:9999;
+    }
+
+    /* Selection highlight for the chosen side */
+    .chosen{ outline:2px solid var(--green); box-shadow:0 0 18px rgba(57,255,20,.35) inset; }
   </style>
 </head>
 <body>
+  <header class="wrap">
+    <h1>R<span class="anarchy">Ⓐ</span>GE SPACE — MATCHUP</h1>
+    <div class="badge">Stacked demo · Red vs Blue · voting enabled (local only)</div>
+  </header>
+
   <div class="wrap">
-    <div class="clock" id="clock">—</div>
-    <div class="row">
-      <button id="refresh">Sync</button>
-      <button id="force">Force next (test)</button>
-      <button id="pause">Pause</button>
-      <button onclick="window.open('winners_test.html','_blank')">Winners Test</button>
-      <span class="muted" id="info"></span>
-      <span class="tag" id="status">LIVE</span>
+    <div class="scorebar">
+      <div class="tiny-timer">
+        <span>Decision in</span>
+        <span id="tinyClock" class="tiny-clock">—</span>
+        <span id="tinyState" class="tag">LIVE</span>
+      </div>
+      <div class="badge">Round <span id="roundNum">1</span>, Match <span id="battleIndex">1</span>/<span id="battleTotal">1</span></div>
+    </div>
+
+    <!-- Stacked entries -->
+    <div class="stack" id="stack">
+      <div class="tile" id="topTile">
+        <div class="art red" id="topArt" aria-label="Top entry — RED"></div>
+        <div class="meta">
+          <span class="label" id="topLabel">Entry — RED</span>
+          <button class="btn primary" id="voteTop">Vote Red (Top)</button>
+        </div>
+      </div>
+
+      <div class="tile" id="bottomTile">
+        <div class="art blue" id="bottomArt" aria-label="Bottom entry — BLUE"></div>
+        <div class="meta">
+          <span class="label" id="bottomLabel">Entry — BLUE</span>
+          <button class="btn primary" id="voteBottom">Vote Blue (Bottom)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="vote-row">
+      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
+      <a class="btn" href="winners_test.html" target="_blank">📝 Winners Test Log</a>
     </div>
   </div>
 
+  <div id="toast" class="toast"></div>
+
   <script>
+    // ===== Small global timer (reads your Edge function state) =====
+    // Based on your global timer test page logic, compacted for the tiny badge. 4
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
 
     let serverPhaseEndISO = null;
     let periodSec = 10;
     let paused = false;
     let remainingSec = null;
-
-    let rafId = null;
     let lastSyncAt = 0;
+    let rafId = null;
 
-    const clockEl  = document.getElementById('clock');
-    const infoEl   = document.getElementById('info');
-    const statusEl = document.getElementById('status');
-    const pauseBtn = document.getElementById('pause');
+    const tinyClock = document.getElementById('tinyClock');
+    const tinyState = document.getElementById('tinyState');
 
-    function renderInfo() {
-      infoEl.textContent = `period=${periodSec}s | phase_end_at=${serverPhaseEndISO ?? "—"} | paused=${paused}`;
-      statusEl.textContent = paused ? "PAUSED" : "LIVE";
-      pauseBtn.textContent = paused ? "Resume" : "Pause";
+    function setTinyState() {
+      tinyState.textContent = paused ? "PAUSED" : "LIVE";
+      tinyClock.classList.toggle('paused', paused);
     }
-
-    function showError(msg) {
-      clockEl.textContent = 'ERR';
-      infoEl.textContent = msg || 'Error';
-      infoEl.classList.add('error');
-      console.error(msg);
+    function showTinyError(msg){
+      tinyClock.textContent = 'ERR'; console.error(msg);
     }
-
     async function callEdge(method='GET', body=null) {
       const res = await fetch(EDGE_URL, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
+        method, headers:{ 'Content-Type':'application/json' },
         body: body ? JSON.stringify(body) : null
       });
-      const json = await res.json().catch(() => ({}));
+      const json = await res.json().catch(()=> ({}));
       if (!res.ok) throw new Error(json?.error || res.statusText);
       return json;
     }
-
-    async function fetchState() {
-      const json = await callEdge('GET');
+    async function fetchState(){
+      const json = await callEdge('GET'); // state: {phase_end_at, period_sec, paused, remaining_sec}
       const s = json.state;
       serverPhaseEndISO = s.phase_end_at ?? null;
-      periodSec         = s.period_sec ?? 10;
-      paused            = !!s.paused;
-      remainingSec      = (s.remaining_sec ?? null);
-      lastSyncAt        = Date.now();
-      renderInfo();
+      periodSec = s.period_sec ?? 10;
+      paused = !!s.paused;
+      remainingSec = s.remaining_sec ?? null;
+      lastSyncAt = Date.now();
+      setTinyState();
       return s;
     }
-
-    function stopLoop(){ if (rafId) cancelAnimationFrame(rafId); rafId = null; }
-
-    async function startLoop() {
-      stopLoop();
+    function stopTiny(){ if (rafId) cancelAnimationFrame(rafId); rafId = null; }
+    async function startTiny(){
+      stopTiny();
       const draw = async () => {
-        try {
-          if (paused) {
+        try{
+          if (paused){
             const n = Math.max(0, Math.ceil(Number(remainingSec ?? 0)));
-            clockEl.textContent = String(n);
-          } else {
+            tinyClock.textContent = String(n);
+          }else{
             const endMs = Date.parse(serverPhaseEndISO);
             const remMs = Math.max(0, endMs - Date.now());
             const secs  = Math.ceil(remMs / 1000);
-            clockEl.textContent = String(secs);
+            tinyClock.textContent = String(secs);
 
             if (remMs <= 0 || Date.now() - lastSyncAt > 5000) {
               const s = await fetchState();
-              if (s.paused) {
-                clockEl.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
-              }
+              if (s.paused) tinyClock.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
             }
           }
-        } catch (e) { showError(e.message); return; }
+        }catch(e){ showTinyError(e.message); return; }
         rafId = requestAnimationFrame(draw);
       };
       rafId = requestAnimationFrame(draw);
     }
 
-    document.getElementById('refresh').addEventListener('click', async () => {
-      try { await fetchState(); await startLoop(); } catch (e) { alert(e.message); }
+    (async ()=>{ try{ await fetchState(); await startTiny(); } catch(e){ showTinyError(e.message); } })();
+
+    // ===== Simulated single battle + voting behavior (old-matchup style) =====
+    // Keep the feel from your previous voting flow (select, enable submit, lock via localStorage). 5
+    const roundNumEl = document.getElementById('roundNum');
+    const battleIndexEl = document.getElementById('battleIndex');
+    const battleTotalEl = document.getElementById('battleTotal');
+    const topTile = document.getElementById('topTile');
+    const bottomTile = document.getElementById('bottomTile');
+    const voteTopBtn = document.getElementById('voteTop');
+    const voteBottomBtn = document.getElementById('voteBottom');
+    const submitBtn = document.getElementById('submitBtn');
+    const toastEl = document.getElementById('toast');
+
+    // Single simulated battle
+    const BATTLES = [{
+      id:'SIM_1',
+      round:1, indexInRound:1, total:1,
+      A:{ id:'RED',   name:'RED'   },
+      B:{ id:'BLUE',  name:'BLUE'  }
+    }];
+
+    let idx = 0;
+    let chosen = null;
+
+    const lockKey = (id)=> `rs_vote_${id}`;
+    function showToast(msg){ toastEl.textContent = msg; toastEl.style.display = 'block'; clearTimeout(showToast._t); showToast._t = setTimeout(()=> toastEl.style.display='none', 1400); }
+
+    function render(){
+      const b = BATTLES[idx];
+      roundNumEl.textContent   = b.round;
+      battleIndexEl.textContent= b.indexInRound;
+      battleTotalEl.textContent= b.total;
+
+      // reset UI
+      chosen = null;
+      submitBtn.disabled = true;
+      topTile.classList.remove('chosen'); bottomTile.classList.remove('chosen');
+
+      // honor "already voted" locally
+      const voted = !!localStorage.getItem(lockKey(b.id));
+      voteTopBtn.disabled = voted; voteBottomBtn.disabled = voted;
+      if (voted){
+        submitBtn.textContent = '🎉 Vote submitted!'; submitBtn.disabled = true;
+      } else {
+        submitBtn.textContent = '✅ Submit Vote';
+      }
+    }
+
+    voteTopBtn.addEventListener('click', ()=>{
+      if (voteTopBtn.disabled) return;
+      chosen = 'A';
+      submitBtn.disabled = false;
+      topTile.classList.add('chosen');  bottomTile.classList.remove('chosen');
+      showToast('Selected: RED');
     });
-    document.getElementById('force').addEventListener('click', async () => {
-      try {
-        const s = (await callEdge('POST', { action: 'force' })).state;
-        serverPhaseEndISO = s.phase_end_at ?? null;
-        periodSec         = s.period_sec ?? 10;
-        paused            = !!s.paused;
-        remainingSec      = s.remaining_sec ?? null;
-        renderInfo();
-        await startLoop();
-      } catch (e) { alert(e.message); }
-    });
-    pauseBtn.addEventListener('click', async () => {
-      try {
-        const nextAction = paused ? 'resume' : 'pause';
-        const s = (await callEdge('POST', { action: nextAction })).state;
-        serverPhaseEndISO = s.phase_end_at ?? null;
-        periodSec         = s.period_sec ?? 10;
-        paused            = !!s.paused;
-        remainingSec      = s.remaining_sec ?? null;
-        renderInfo();
-        if (paused) { stopLoop(); clockEl.textContent = String(Math.max(0, Math.ceil(Number(remainingSec ?? 0)))); }
-        else { await startLoop(); }
-      } catch (e) { alert(e.message); }
+    voteBottomBtn.addEventListener('click', ()=>{
+      if (voteBottomBtn.disabled) return;
+      chosen = 'B';
+      submitBtn.disabled = false;
+      bottomTile.classList.add('chosen'); topTile.classList.remove('chosen');
+      showToast('Selected: BLUE');
     });
 
-    (async () => {
-      try { await fetchState(); await startLoop(); } catch (e) { showError(e.message); }
-    })();
+    submitBtn.addEventListener('click', ()=>{
+      const b = BATTLES[idx];
+      if (!chosen) return;
+      // (Demo) lock locally like your old flow. No DB writes yet.
+      localStorage.setItem(lockKey(b.id), chosen);
+      submitBtn.textContent = '🎉 Vote submitted!';
+      submitBtn.disabled = true;
+      voteTopBtn.disabled = true;
+      voteBottomBtn.disabled = true;
+      showToast(`Vote submitted: ${chosen==='A'?'RED':'BLUE'}`);
+    });
+
+    render();
   </script>
 </body>
 </html>
