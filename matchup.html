@@ -12,8 +12,8 @@
     button { background:#1f1f1f; color:#fff; border:1px solid #333; border-radius:10px; padding:8px 12px; cursor:pointer; }
     button:hover { background:#262626; }
     .muted { opacity:0.7; font-size:14px; }
-    .error { color:#ff6b6b; }
     .tag { font-size:12px; padding:2px 6px; border:1px solid #444; border-radius:999px; }
+    .error { color:#ff6b6b; }
   </style>
 </head>
 <body>
@@ -22,34 +22,51 @@
     <div class="row">
       <button id="refresh">Sync</button>
       <button id="force">Force next (test)</button>
-      <button id="pauseToggle">Pause</button>
+      <button id="pause">Pause</button>
       <span class="muted" id="info"></span>
       <span class="tag" id="status">LIVE</span>
     </div>
   </div>
 
   <script>
-    // Your deployed Edge Function endpoint:
+    // --- CONFIG ---
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
 
-    let phaseEnd = null;   // ISO string from server
+    // If your function has "Verify JWT" ON, uncomment these two lines and add to fetch headers below.
+    // const ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+    // const AUTH_HEADERS = { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` };
+
+    // --- STATE ---
+    let phaseEnd = null;   // ISO string from the server
     let periodSec = 10;
-    let paused = false;    // authoritative flag from server
-    let rafId = null;
     let lastSyncAt = 0;
-    let lastShown = '—';   // remember text while paused
+    let serverPaused = false;
 
     const clockEl  = document.getElementById('clock');
     const infoEl   = document.getElementById('info');
     const statusEl = document.getElementById('status');
-    const btnSync  = document.getElementById('refresh');
-    const btnForce = document.getElementById('force');
-    const btnPause = document.getElementById('pauseToggle');
+    const pauseBtn = document.getElementById('pause');
 
-    async function callEdge(method = 'GET', body = null) {
+    // --- HELPERS ---
+    function applyState(fromServer) {
+      // fromServer: { state: { phase_end_at, period_sec, paused } }
+      phaseEnd    = fromServer.state.phase_end_at;
+      periodSec   = fromServer.state.period_sec;
+      serverPaused = Boolean(fromServer.state.paused);
+
+      pauseBtn.textContent = serverPaused ? "Resume" : "Pause";
+      statusEl.textContent = serverPaused ? "PAUSED" : "LIVE";
+      infoEl.textContent   = `period=${periodSec}s | phase_end_at=${phaseEnd} | paused=${serverPaused}`;
+      lastSyncAt = Date.now();
+    }
+
+    async function callAPI(method = 'GET', body = null) {
       const res = await fetch(EDGE_URL, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // ...AUTH_HEADERS,  // <- uncomment if Verify JWT is ON
+        },
         body: body ? JSON.stringify(body) : null
       });
       const json = await res.json();
@@ -58,42 +75,24 @@
     }
 
     async function fetchState() {
-      const json = await callEdge('GET');
-      phaseEnd = json.state.phase_end_at;
-      periodSec = json.state.period_sec;
-      paused = !!json.state.paused;
-      lastSyncAt = Date.now();
-
-      // Update UI bits
-      infoEl.textContent = `period=${periodSec}s  |  phase_end_at=${phaseEnd}  |  paused=${paused}`;
-      statusEl.textContent = paused ? 'PAUSED' : 'LIVE';
-      btnPause.textContent = paused ? 'Resume' : 'Pause';
+      const json = await callAPI('GET');
+      applyState(json);
     }
 
     function tick() {
       if (!phaseEnd) {
         clockEl.textContent = '…';
-        rafId = requestAnimationFrame(tick);
+        requestAnimationFrame(tick);
         return;
-      }
-
-      if (paused) {
-        // Freeze the display while globally paused
-        if (lastShown !== null) clockEl.textContent = lastShown;
-        statusEl.textContent = 'PAUSED';
-        rafId = requestAnimationFrame(tick);
-        return;
-      } else {
-        statusEl.textContent = 'LIVE';
       }
 
       const endMs = Date.parse(phaseEnd);
       const remMs = Math.max(0, endMs - Date.now());
-      const secs = Math.ceil(remMs / 1000);
-      clockEl.textContent = lastShown = String(secs);
+      const secs  = Math.ceil(remMs / 1000);
+      clockEl.textContent = String(secs);
 
-      // When it hits zero, re-sync authoritative state (server will roll forward if needed)
-      if (remMs <= 0) {
+      // When it hits zero and NOT paused, re-sync (server rolls forward).
+      if (remMs <= 0 && !serverPaused) {
         fetchState().catch(err => {
           console.error(err);
           clockEl.textContent = 'ERR';
@@ -102,58 +101,41 @@
         });
       }
 
-      // Passive resync every 5s to fix drift/tab sleep
+      // Background resync every ~5s to correct drift
       if (Date.now() - lastSyncAt > 5000) {
         fetchState().catch(console.warn);
       }
 
-      rafId = requestAnimationFrame(tick);
+      requestAnimationFrame(tick);
     }
 
-    // Button handlers
-    btnSync.addEventListener('click', () =>
+    // --- UI EVENTS ---
+    document.getElementById('refresh').addEventListener('click', () =>
       fetchState().catch(err => alert(err.message))
     );
 
-    btnForce.addEventListener('click', async () => {
+    document.getElementById('force').addEventListener('click', async () => {
       try {
-        // Force next works even if paused (server overrides)
-        const json = await callEdge('POST', { force: true });
-        phaseEnd = json.state.phase_end_at;
-        periodSec = json.state.period_sec;
-        paused = !!json.state.paused;
-        infoEl.textContent = `period=${periodSec}s  |  phase_end_at=${phaseEnd}  |  paused=${paused}`;
-      } catch (e) {
-        alert(e.message);
-      }
+        const json = await callAPI('POST', { force: true });
+        applyState(json);
+      } catch (e) { alert(e.message); }
     });
 
-    btnPause.addEventListener('click', async () => {
+    // Toggle GLOBAL pause/resume
+    pauseBtn.addEventListener('click', async () => {
       try {
-        // Toggle global pause on the server
-        const wantPause = !paused;
-        const json = await callEdge('POST', { pause: wantPause });
-        phaseEnd = json.state.phase_end_at;   // server may have rolled/bumped
-        periodSec = json.state.period_sec;
-        paused = !!json.state.paused;
-
-        // If just paused, freeze what’s shown now
-        if (paused) lastShown = clockEl.textContent;
-
-        btnPause.textContent = paused ? 'Resume' : 'Pause';
-        statusEl.textContent = paused ? 'PAUSED' : 'LIVE';
-        infoEl.textContent = `period=${periodSec}s  |  phase_end_at=${phaseEnd}  |  paused=${paused}`;
-      } catch (e) {
-        alert(e.message);
-      }
+        const desired = !serverPaused;                    // true -> pause, false -> resume
+        const json = await callAPI('POST', { pause: desired });
+        applyState(json);
+      } catch (e) { alert(e.message); }
     });
 
-    // Boot
+    // --- BOOT ---
     fetchState()
       .then(() => tick())
-      .catch((e) => {
+      .catch(e => {
         clockEl.textContent = 'ERR';
-        infoEl.textContent = e.message;
+        infoEl.textContent  = e.message;
         infoEl.classList.add('error');
         console.error(e);
       });
