@@ -14,8 +14,11 @@
     .muted { opacity:0.7; font-size:14px; }
     .tag { font-size:12px; padding:2px 6px; border:1px solid #444; border-radius:999px; }
     .error { color:#ff6b6b; }
+    /* tiny debug HUD */
+    .hud { position:fixed; left:8px; bottom:8px; right:8px; background:#0f0f0f; border:1px solid #222; border-radius:12px; padding:8px 10px; font-size:12px; line-height:1.3; }
+    .hud .k { opacity:.7; }
+    .hud .v { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   </style>
-  <!-- Supabase JS client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -25,35 +28,44 @@
       <button id="refresh">Sync</button>
       <button id="force">Force next (test)</button>
       <button id="pause">Pause</button>
-      <!-- winners log page -->
       <button onclick="window.open('winners_test.html','_blank')">Winners Test</button>
       <span class="muted" id="info"></span>
       <span class="tag" id="status">LIVE</span>
     </div>
   </div>
 
+  <!-- Debug HUD -->
+  <div class="hud" id="hud" hidden>
+    <div><span class="k">phase_end_at:</span> <span class="v" id="hudPhase">—</span></div>
+    <div><span class="k">loggedForPhase:</span> <span class="v" id="hudLogged">—</span></div>
+    <div><span class="k">lastLogAttempt:</span> <span class="v" id="hudAttempt">—</span></div>
+    <div><span class="k">lastLogError:</span> <span class="v" id="hudErr">—</span></div>
+    <div><span class="k">lastSync:</span> <span class="v" id="hudSync">—</span></div>
+    <div style="margin-top:6px" class="row">
+      <button id="btnForceLog">Debug: Force log</button>
+      <button id="btnHud">Toggle HUD</button>
+    </div>
+  </div>
+
   <script>
     // === CONFIG ===
-    // Your deployed Edge Function URL:
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
-
-    // Supabase project + anon key
     const SUPABASE_URL  = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-    // === Authoritative state from server
-    let serverPhaseEndISO = null;  // string
+    // === TIMER STATE (authoritative from server)
+    let serverPhaseEndISO = null;   // current phase_end_at
+    let prevPhaseEndISO   = null;   // last known phase_end_at (for phase-change logging)
     let periodSec = 10;
     let paused = false;
-    let remainingSec = null;       // number when paused, null otherwise
+    let remainingSec = null;
 
-    // local loop control
+    // local loop
     let rafId = null;
     let lastSyncAt = 0;
 
-    // one-per-phase zero logger guard
+    // one-per-phase guard
     let loggedForPhaseISO = null;
 
     // els
@@ -62,11 +74,29 @@
     const statusEl = document.getElementById('status');
     const pauseBtn = document.getElementById('pause');
 
+    // HUD els
+    const hud = (id)=>document.getElementById(id);
+    const hudBox = hud('hud');
+    const hudPhase = hud('hudPhase');
+    const hudLogged = hud('hudLogged');
+    const hudAttempt = hud('hudAttempt');
+    const hudErr = hud('hudErr');
+    const hudSync = hud('hudSync');
+
+    function setHud() {
+      hudPhase.textContent = serverPhaseEndISO || '—';
+      hudLogged.textContent = loggedForPhaseISO || '—';
+      hudSync.textContent = new Date(lastSyncAt || Date.now()).toLocaleString();
+    }
+    function noteAttempt(msg){ hudAttempt.textContent = msg; }
+    function noteError(msg){ hudErr.textContent = msg || '—'; }
+
     // helpers
     function renderInfo() {
       infoEl.textContent = `period=${periodSec}s | phase_end_at=${serverPhaseEndISO ?? "—"} | paused=${paused}`;
       statusEl.textContent = paused ? "PAUSED" : "LIVE";
       pauseBtn.textContent = paused ? "Resume" : "Pause";
+      setHud();
     }
 
     function showError(msg) {
@@ -74,6 +104,7 @@
       infoEl.textContent = msg || 'Error';
       infoEl.classList.add('error');
       console.error(msg);
+      noteError(msg);
     }
 
     async function callEdge(method='GET', body=null) {
@@ -87,67 +118,70 @@
       return json;
     }
 
+    // Supabase logging
+    async function logZero(phaseISO) {
+      try {
+        const rolloverAt = phaseISO ? new Date(phaseISO).toISOString() : new Date().toISOString();
+        noteAttempt(`insert rollover_at=${rolloverAt}`);
+        const { error } = await supabase
+          .from('zero_rollovers')
+          .insert({ rollover_at: rolloverAt, phase_end_at: phaseISO || null, source: 'matchup' });
+        if (error) { noteError(error.message); throw error; }
+        loggedForPhaseISO = phaseISO || loggedForPhaseISO || null;
+        noteError(''); // clear
+      } catch (e) {
+        console.error('logZero failed:', e.message);
+      }
+      setHud();
+    }
+
     async function fetchState() {
       const json = await callEdge('GET');
       const s = json.state;
-      // apply server state
-      serverPhaseEndISO = s.phase_end_at ?? null;
-      periodSec         = s.period_sec ?? 10;
-      paused            = !!s.paused;
-      remainingSec      = (s.remaining_sec ?? null);
-      lastSyncAt        = Date.now();
 
-      // if phase changed, clear guard so we can log the next 0
-      if (loggedForPhaseISO && serverPhaseEndISO && loggedForPhaseISO !== serverPhaseEndISO) {
-        loggedForPhaseISO = null;
+      // Track previous phase to catch instantaneous rollovers
+      prevPhaseEndISO = serverPhaseEndISO;
+      serverPhaseEndISO = s.phase_end_at ?? null;
+      periodSec  = s.period_sec ?? 10;
+      paused     = !!s.paused;
+      remainingSec = (s.remaining_sec ?? null);
+      lastSyncAt = Date.now();
+
+      // If phase changed and we didn't log the previous one, log it now.
+      if (prevPhaseEndISO && serverPhaseEndISO && prevPhaseEndISO !== serverPhaseEndISO) {
+        if (loggedForPhaseISO !== prevPhaseEndISO) {
+          await logZero(prevPhaseEndISO);
+        }
+        // Reset guard for the new phase
+        loggedForPhaseISO = (loggedForPhaseISO === serverPhaseEndISO) ? loggedForPhaseISO : null;
       }
 
       renderInfo();
       return s;
     }
 
-    function stopLoop() {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = null;
-    }
-
-    // === Supabase logging ===
-    async function logZero(phaseISO) {
-      try {
-        const rolloverAt = phaseISO ? new Date(phaseISO).toISOString() : new Date().toISOString();
-        const { error } = await supabase
-          .from('zero_rollovers')
-          .insert({ rollover_at: rolloverAt, phase_end_at: phaseISO || null, source: 'matchup' });
-        if (error) throw error;
-        loggedForPhaseISO = phaseISO || loggedForPhaseISO || null;
-      } catch (e) {
-        console.error('logZero failed:', e.message);
-      }
-    }
+    function stopLoop(){ if (rafId) cancelAnimationFrame(rafId); rafId = null; }
 
     async function startLoop() {
       stopLoop();
-
       const draw = async () => {
         try {
           if (paused) {
-            // Freeze display at remainingSec (authoritative)
             const n = Math.max(0, Math.ceil(Number(remainingSec ?? 0)));
             clockEl.textContent = String(n);
           } else {
-            // Live countdown from phase_end_at
             const endMs = Date.parse(serverPhaseEndISO);
             const remMs = Math.max(0, endMs - Date.now());
             const secs  = Math.ceil(remMs / 1000);
             clockEl.textContent = String(secs);
 
-            // Log once per phase at/after zero, even if the frame is late
+            // Robust zero trigger: log when we’re at/after zero
             if (remMs <= 0 && serverPhaseEndISO && loggedForPhaseISO !== serverPhaseEndISO) {
               await logZero(serverPhaseEndISO);
               loggedForPhaseISO = serverPhaseEndISO;
             }
 
-            // Re-sync on rollover or drift
+            // Periodic re-sync (and handle rollover)
             if (remMs <= 0 || Date.now() - lastSyncAt > 5000) {
               const s = await fetchState();
               if (s.paused) {
@@ -155,13 +189,9 @@
               }
             }
           }
-        } catch (e) {
-          showError(e.message);
-          return;
-        }
+        } catch (e) { showError(e.message); return; }
         rafId = requestAnimationFrame(draw);
       };
-
       rafId = requestAnimationFrame(draw);
     }
 
@@ -169,42 +199,51 @@
     document.getElementById('refresh').addEventListener('click', async () => {
       try { await fetchState(); await startLoop(); } catch (e) { alert(e.message); }
     });
-
     document.getElementById('force').addEventListener('click', async () => {
       try {
         const s = (await callEdge('POST', { action: 'force' })).state;
+        // Apply immediately
+        prevPhaseEndISO   = serverPhaseEndISO;
         serverPhaseEndISO = s.phase_end_at ?? null;
         periodSec         = s.period_sec ?? 10;
         paused            = !!s.paused;
         remainingSec      = s.remaining_sec ?? null;
+        // If force caused a rollover, log the previous phase if missed
+        if (prevPhaseEndISO && serverPhaseEndISO && prevPhaseEndISO !== serverPhaseEndISO && loggedForPhaseISO !== prevPhaseEndISO) {
+          await logZero(prevPhaseEndISO);
+        }
         renderInfo();
         await startLoop();
       } catch (e) { alert(e.message); }
     });
-
     pauseBtn.addEventListener('click', async () => {
       try {
         const nextAction = paused ? 'resume' : 'pause';
         const s = (await callEdge('POST', { action: nextAction })).state;
-
+        prevPhaseEndISO   = serverPhaseEndISO;
         serverPhaseEndISO = s.phase_end_at ?? null;
         periodSec         = s.period_sec ?? 10;
         paused            = !!s.paused;
         remainingSec      = s.remaining_sec ?? null;
         renderInfo();
-
-        if (paused) {
-          stopLoop();
-          clockEl.textContent = String(Math.max(0, Math.ceil(Number(remainingSec ?? 0))));
-        } else {
-          await startLoop();
-        }
+        if (paused) { stopLoop(); clockEl.textContent = String(Math.max(0, Math.ceil(Number(remainingSec ?? 0)))); }
+        else { await startLoop(); }
       } catch (e) { alert(e.message); }
+    });
+
+    // HUD controls
+    document.getElementById('btnHud').addEventListener('click', ()=>{
+      hudBox.hidden = !hudBox.hidden;
+    });
+    document.getElementById('btnForceLog').addEventListener('click', async ()=>{
+      await logZero(serverPhaseEndISO || new Date().toISOString());
+      alert('Inserted test row (check winners_test)');
     });
 
     // boot
     (async () => {
       try {
+        hudBox.hidden = false; // default ON while debugging
         await fetchState();
         await startLoop();
       } catch (e) { showError(e.message); }
