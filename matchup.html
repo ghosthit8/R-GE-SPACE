@@ -15,6 +15,8 @@
     .tag { font-size:12px; padding:2px 6px; border:1px solid #444; border-radius:999px; }
     .error { color:#ff6b6b; }
   </style>
+  <!-- Supabase JS client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="wrap">
@@ -23,16 +25,25 @@
       <button id="refresh">Sync</button>
       <button id="force">Force next (test)</button>
       <button id="pause">Pause</button>
+      <!-- winners log page -->
+      <button onclick="window.open('winners_test.html','_blank')">Winners Test</button>
       <span class="muted" id="info"></span>
       <span class="tag" id="status">LIVE</span>
     </div>
   </div>
 
   <script>
+    // === CONFIG ===
     // Your deployed Edge Function URL:
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
 
-    // Authoritative state from server
+    // Supabase project + anon key (you shared these earlier)
+    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+    const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+    // === Authoritative state from server
     let serverPhaseEndISO = null;  // string
     let periodSec = 10;
     let paused = false;
@@ -42,9 +53,12 @@
     let rafId = null;
     let lastSyncAt = 0;
 
+    // one-per-phase zero logger guard
+    let loggedForPhaseISO = null;
+
     // els
-    const clockEl = document.getElementById('clock');
-    const infoEl  = document.getElementById('info');
+    const clockEl  = document.getElementById('clock');
+    const infoEl   = document.getElementById('info');
     const statusEl = document.getElementById('status');
     const pauseBtn = document.getElementById('pause');
 
@@ -76,12 +90,18 @@
     async function fetchState() {
       const json = await callEdge('GET');
       const s = json.state;
+      // apply server state
       serverPhaseEndISO = s.phase_end_at ?? null;
-      periodSec = s.period_sec ?? 10;
-      paused = !!s.paused;
-      // remaining_sec present when paused (number), else undefined
-      remainingSec = (s.remaining_sec ?? null);
-      lastSyncAt = Date.now();
+      periodSec         = s.period_sec ?? 10;
+      paused            = !!s.paused;
+      remainingSec      = (s.remaining_sec ?? null);
+      lastSyncAt        = Date.now();
+
+      // if phase changed, clear guard so we can log the next 0
+      if (loggedForPhaseISO && serverPhaseEndISO && loggedForPhaseISO !== serverPhaseEndISO) {
+        loggedForPhaseISO = null;
+      }
+
       renderInfo();
       return s;
     }
@@ -89,6 +109,21 @@
     function stopLoop() {
       if (rafId) cancelAnimationFrame(rafId);
       rafId = null;
+    }
+
+    // === Supabase logging ===
+    async function logZero(phaseISO) {
+      try {
+        const rolloverAt = phaseISO ? new Date(phaseISO).toISOString() : new Date().toISOString();
+        const { error } = await supabase
+          .from('zero_rollovers')
+          .insert({ rollover_at: rolloverAt, phase_end_at: phaseISO || null, source: 'matchup' });
+        if (error) throw error;
+        // mark as logged for this phase so we don't duplicate
+        loggedForPhaseISO = phaseISO || loggedForPhaseISO || null;
+      } catch (e) {
+        console.error('logZero failed:', e.message);
+      }
     }
 
     async function startLoop() {
@@ -100,18 +135,22 @@
             // Freeze display at remainingSec (authoritative)
             const n = Math.max(0, Math.ceil(Number(remainingSec ?? 0)));
             clockEl.textContent = String(n);
-            // No local countdown while paused.
           } else {
             // Live countdown from phase_end_at
             const endMs = Date.parse(serverPhaseEndISO);
             const remMs = Math.max(0, endMs - Date.now());
-            const secs = Math.ceil(remMs / 1000);
+            const secs  = Math.ceil(remMs / 1000);
             clockEl.textContent = String(secs);
 
-            // If hit zero or drifted, re-sync
+            // Hit zero? Log once per phase, then re-sync.
+            if (secs === 0 && serverPhaseEndISO && loggedForPhaseISO !== serverPhaseEndISO) {
+              await logZero(serverPhaseEndISO);
+              loggedForPhaseISO = serverPhaseEndISO;
+            }
+
+            // Re-sync on rollover or drift
             if (remMs <= 0 || Date.now() - lastSyncAt > 5000) {
               const s = await fetchState();
-              // if newly paused, render frozen immediately
               if (s.paused) {
                 clockEl.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
               }
@@ -129,20 +168,16 @@
 
     // UI actions
     document.getElementById('refresh').addEventListener('click', async () => {
-      try {
-        await fetchState();
-        await startLoop();
-      } catch (e) { alert(e.message); }
+      try { await fetchState(); await startLoop(); } catch (e) { alert(e.message); }
     });
 
     document.getElementById('force').addEventListener('click', async () => {
       try {
         const s = (await callEdge('POST', { action: 'force' })).state;
-        // update local snapshot from response
         serverPhaseEndISO = s.phase_end_at ?? null;
-        periodSec = s.period_sec ?? 10;
-        paused = !!s.paused;
-        remainingSec = s.remaining_sec ?? null;
+        periodSec         = s.period_sec ?? 10;
+        paused            = !!s.paused;
+        remainingSec      = s.remaining_sec ?? null;
         renderInfo();
         await startLoop();
       } catch (e) { alert(e.message); }
@@ -153,17 +188,14 @@
         const nextAction = paused ? 'resume' : 'pause';
         const s = (await callEdge('POST', { action: nextAction })).state;
 
-        // Apply server-truth immediately so UI freezes/resumes right away
         serverPhaseEndISO = s.phase_end_at ?? null;
-        periodSec = s.period_sec ?? 10;
-        paused = !!s.paused;
-        remainingSec = s.remaining_sec ?? null;
+        periodSec         = s.period_sec ?? 10;
+        paused            = !!s.paused;
+        remainingSec      = s.remaining_sec ?? null;
         renderInfo();
 
-        // If paused now, stop local loop (no countdown). If resumed, restart loop.
         if (paused) {
           stopLoop();
-          // show frozen number
           clockEl.textContent = String(Math.max(0, Math.ceil(Number(remainingSec ?? 0))));
         } else {
           await startLoop();
