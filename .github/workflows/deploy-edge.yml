@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - "supabase/functions/global-timer/**"
+      - "supabase/functions/**"
       - ".github/workflows/deploy-edge.yml"
   workflow_dispatch:
 
@@ -12,18 +12,35 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - run: npm i -g supabase
-      - name: Link
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ✅ Install Supabase CLI the supported way
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest  # or pin a version like "1.187.6"
+
+      # Link the project each run so the CLI knows your ref
+      - name: Link project
         run: supabase link --project-ref "$PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_ID }}
-      - name: Deploy
+
+      # Deploy your new function
+      - name: Deploy function "global-timer"
         working-directory: ./supabase
         run: supabase functions deploy global-timer --project-ref "$PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+      # (optional) Also redeploy your other function
+      - name: Deploy function "dynamic-task"
+        if: always()
+        working-directory: ./supabase
+        run: supabase functions deploy dynamic-task --project-ref "$PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_ID }}
