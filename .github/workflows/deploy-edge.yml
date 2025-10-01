@@ -15,31 +15,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ✅ Install Supabase CLI the supported way
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest  # or pin a version like "1.187.6"
+          version: latest
 
-      # Link the project each run so the CLI knows your ref
       - name: Link project
         run: supabase link --project-ref "$PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_ID }}
 
-      # Deploy your new function
+      # 👇 No working-directory; run from repo root
       - name: Deploy function "global-timer"
-        working-directory: ./supabase
         run: supabase functions deploy global-timer --project-ref "$PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_ID }}
 
-      # (optional) Also redeploy your other function
+      # optional: also deploy your other function
       - name: Deploy function "dynamic-task"
-        if: always()
-        working-directory: ./supabase
         run: supabase functions deploy dynamic-task --project-ref "$PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
