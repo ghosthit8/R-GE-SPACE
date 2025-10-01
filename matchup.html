@@ -29,14 +29,8 @@
   </div>
 
   <script>
-    // --- CONFIG ---
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
 
-    // If your function has "Verify JWT" ON, uncomment these two lines and add to fetch headers below.
-    // const ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
-    // const AUTH_HEADERS = { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` };
-
-    // --- STATE ---
     let phaseEnd = null;   // ISO string from the server
     let periodSec = 10;
     let lastSyncAt = 0;
@@ -47,26 +41,31 @@
     const statusEl = document.getElementById('status');
     const pauseBtn = document.getElementById('pause');
 
-    // --- HELPERS ---
+    function setPausedUI() {
+      clockEl.textContent = 'PAUSED';
+      statusEl.textContent = 'PAUSED';
+      pauseBtn.textContent = 'Resume';
+    }
+    function setLiveUI() {
+      statusEl.textContent = 'LIVE';
+      pauseBtn.textContent = 'Pause';
+    }
+
     function applyState(fromServer) {
-      // fromServer: { state: { phase_end_at, period_sec, paused } }
       phaseEnd    = fromServer.state.phase_end_at;
       periodSec   = fromServer.state.period_sec;
       serverPaused = Boolean(fromServer.state.paused);
 
-      pauseBtn.textContent = serverPaused ? "Resume" : "Pause";
-      statusEl.textContent = serverPaused ? "PAUSED" : "LIVE";
-      infoEl.textContent   = `period=${periodSec}s | phase_end_at=${phaseEnd} | paused=${serverPaused}`;
+      if (serverPaused) setPausedUI(); else setLiveUI();
+
+      infoEl.textContent = `period=${periodSec}s | phase_end_at=${phaseEnd} | paused=${serverPaused}`;
       lastSyncAt = Date.now();
     }
 
     async function callAPI(method = 'GET', body = null) {
       const res = await fetch(EDGE_URL, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-          // ...AUTH_HEADERS,  // <- uncomment if Verify JWT is ON
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: body ? JSON.stringify(body) : null
       });
       const json = await res.json();
@@ -80,28 +79,21 @@
     }
 
     function tick() {
-      if (!phaseEnd) {
+      if (serverPaused) {
+        setPausedUI();
+      } else if (phaseEnd) {
+        const endMs = Date.parse(phaseEnd);
+        const remMs = Math.max(0, endMs - Date.now());
+        const secs  = Math.ceil(remMs / 1000);
+        clockEl.textContent = String(secs);
+
+        if (remMs <= 0) {
+          fetchState().catch(console.error);
+        }
+      } else {
         clockEl.textContent = '…';
-        requestAnimationFrame(tick);
-        return;
       }
 
-      const endMs = Date.parse(phaseEnd);
-      const remMs = Math.max(0, endMs - Date.now());
-      const secs  = Math.ceil(remMs / 1000);
-      clockEl.textContent = String(secs);
-
-      // When it hits zero and NOT paused, re-sync (server rolls forward).
-      if (remMs <= 0 && !serverPaused) {
-        fetchState().catch(err => {
-          console.error(err);
-          clockEl.textContent = 'ERR';
-          infoEl.textContent = err.message;
-          infoEl.classList.add('error');
-        });
-      }
-
-      // Background resync every ~5s to correct drift
       if (Date.now() - lastSyncAt > 5000) {
         fetchState().catch(console.warn);
       }
@@ -109,7 +101,6 @@
       requestAnimationFrame(tick);
     }
 
-    // --- UI EVENTS ---
     document.getElementById('refresh').addEventListener('click', () =>
       fetchState().catch(err => alert(err.message))
     );
@@ -121,24 +112,27 @@
       } catch (e) { alert(e.message); }
     });
 
-    // Toggle GLOBAL pause/resume
     pauseBtn.addEventListener('click', async () => {
       try {
-        const desired = !serverPaused;                    // true -> pause, false -> resume
+        const desired = !serverPaused;
+        // Flip the UI immediately for instant pause/resume feedback
+        serverPaused = desired;
+        if (serverPaused) setPausedUI(); else setLiveUI();
+
         const json = await callAPI('POST', { pause: desired });
-        applyState(json);
-      } catch (e) { alert(e.message); }
+        applyState(json); // reconcile with server’s truth
+      } catch (e) {
+        alert(e.message);
+        fetchState().catch(console.error);
+      }
     });
 
-    // --- BOOT ---
-    fetchState()
-      .then(() => tick())
-      .catch(e => {
-        clockEl.textContent = 'ERR';
-        infoEl.textContent  = e.message;
-        infoEl.classList.add('error');
-        console.error(e);
-      });
+    fetchState().then(() => tick()).catch((e) => {
+      clockEl.textContent = 'ERR';
+      infoEl.textContent  = e.message;
+      infoEl.classList.add('error');
+      console.error(e);
+    });
   </script>
 </body>
 </html>
