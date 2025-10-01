@@ -1,4 +1,5 @@
 <!doctype html>
+
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -31,27 +32,24 @@
       <h1>Winners Test — Zero Log</h1>
       <div class="muted">Centralized record of each countdown rollover to 0 (from your matchup page).</div>
       <div class="muted" id="pingStatus">ping: —</div>
-    </header>
-
-    <main>
-      <div class="panel">
-        <div class="row" style="justify-content:space-between;">
-          <div class="row">
-            <button id="btnRefresh">Refresh</button>
-            <button id="btnExport">Export CSV</button>
-            <button id="btnClear">Clear</button>
-          </div>
-          <div class="row">
-            <a href="matchup.html" target="_blank"><button>Open matchup</button></a>
-          </div>
-        </div>
-
-        <div class="list" id="list"></div>
+    </header><main>
+  <div class="panel">
+    <div class="row" style="justify-content:space-between;">
+      <div class="row">
+        <button id="btnRefresh">Refresh</button>
+        <button id="btnExport">Export CSV</button>
+        <button id="btnClear">Clear</button>
       </div>
-    </main>
-  </div>
+      <div class="row">
+        <a href="matchup.html" target="_blank"><button>Open matchup</button></a>
+      </div>
+    </div>
 
-  <script>
+    <div class="list" id="list"></div>
+  </div>
+</main>
+
+  </div>  <script>
     // Supabase (for reading/clearing the log)
     const SUPABASE_URL  = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
@@ -99,7 +97,6 @@
       listEl.appendChild(headerEl());
 
       // Highest number at the top:
-      // numbering counts total..1 as we go down
       const total = rows.length;
       rows.forEach((r, i) => {
         const displayNum = total - i; // top row gets highest #
@@ -135,9 +132,12 @@
 
     async function clearAll() {
       if (!confirm('Clear ALL zero-rollover rows?')) return;
-      const { error } = await supabase.from('zero_rollovers').delete().neq('id', '');
+      const { error } = await supabase
+        .from('zero_rollovers')
+        .delete()
+        .not('id', 'is', null); // safer filter
       if (error) {
-        alert('Clear failed: ' + error.message + '\n\nIf this says RLS/policy, see the note below.');
+        alert('Clear failed: ' + error.message);
       }
       const rows = await fetchRows(); renderList(rows);
     }
@@ -219,6 +219,5 @@
       subscribe();
       scheduleNextPing(true); // start the cadence
     })();
-  </script>
-</body>
+  </script></body>
 </html>
