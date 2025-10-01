@@ -1,537 +1,99 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Tournament (Live)</title>
-<style>
-  :root{
-    --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; --card:#070707;
-    --pink:#ff1f8f; --blue:#00e5ff;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--green);font-family:ui-sans-serif,system-ui,Arial}
-  a.btn,button.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
-  header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px}
-  .app{display:grid;grid-template-columns:360px 1fr;gap:14px;height:calc(100vh - 56px);padding:0 14px 14px}
-  .listWrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
-  .listHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px}
-  .listHeadRight{display:flex;align-items:center;gap:10px}
-  .list{overflow:auto;flex:1;min-height:0}
-  .matchItem{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:10px;border-bottom:1px solid rgba(15,37,16,.6);cursor:pointer}
-  .matchItem:hover{background:rgba(57,255,20,.05)}
-  .thumbMini{width:64px;height:64px;background:#050505;border-radius:8px;overflow:hidden;display:flex;flex:0 0 auto}
-  .thumbMini img{width:50%;object-fit:cover}
-  .title{color:var(--ink);font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .metaRow{display:flex;gap:8px;align-items:center}
-  .badge{font-size:.75rem;border:1px solid var(--border);border-radius:8px;padding:2px 6px;opacity:.85}
-  .timer{font-variant-numeric:tabular-nums;opacity:.9;min-width:72px;display:inline-block}
-  .timer.pending{opacity:.6}
-  .selected{outline:2px solid rgba(57,255,20,.55);outline-offset:-2px}
-  .detail{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.55);display:flex;flex-direction:column;min-height:0}
-  .detailHead{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
-  .stage{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:14px}
-  @media (max-width:820px){ .stage{ grid-template-columns:1fr; gap:22px; } }
-  .tile{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:rgba(7,7,7,.6);position:relative;display:flex;flex-direction:column}
-  .frame{ position:relative; width:100%; aspect-ratio:4/3; background:#050505; border-bottom:1px solid var(--border); overflow:hidden; }
-  @media (max-width:1000px){ .frame{ aspect-ratio:3/4; max-height:72vh; } }
-  .art{ position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; display:block; background:#000; }
-  .tbd{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:900;color:rgba(57,255,20,.75);pointer-events:none}
-  .tileMeta{display:flex;justify-content:space-between;gap:8px;padding:10px;align-items:center}
-  .countdown{padding:0 14px 10px}
-  .actions{padding:0 14px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .hint{opacity:.75;padding:0 14px 14px}
-
-  .choice.btn{border-style:solid;transition:transform .06s ease, box-shadow .12s ease, background .12s ease, color .12s ease, border-color .12s ease}
-  .choice.btn.active{box-shadow:0 0 0 2px rgba(57,255,20,.6) inset}
-  .choice.btn.selected{
-    background: var(--green); color:#000; border-color: var(--green);
-    box-shadow: 0 0 18px rgba(57,255,20,.55), inset 0 0 10px rgba(0,0,0,.6);
-    transform: translateY(-1px); animation: neonPulse 1.2s ease-in-out 2;
-  }
-  @keyframes neonPulse{0%,100%{box-shadow:0 0 12px rgba(57,255,20,.45), inset 0 0 8px rgba(0,0,0,.65)}50%{box-shadow:0 0 22px rgba(57,255,20,.8), inset 0 0 10px rgba(0,0,0,.7)}}
-
-  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#0a0a0a;border:1px solid var(--border);color:#bfffbf;padding:8px 12px;border-radius:10px;display:none;z-index:60}
-
-  @media (max-width:900px){ .app{grid-template-columns:1fr;height:auto} .detail{order:-1} }
-  .fsIcon{ position:absolute; top:8px; right:8px; width:22px; height:22px; border-radius:6px; border:1px solid rgba(57,255,20,.7); background:rgba(0,0,0,.5); display:grid; place-items:center; font-size:12px; line-height:1; opacity:.9; backdrop-filter: blur(2px); cursor:pointer; z-index:2; }
-  .fsIcon:hover{opacity:1} .fsIcon:active{transform:scale(.98)}
-  .fsClose{
-    position:fixed; top:10px; right:12px; z-index:100001;
-    width:34px; height:34px; display:none; place-items:center;
-    font-size:20px; font-weight:900; color:var(--green);
-    border:1px solid rgba(57,255,20,.8); border-radius:50%;
-    background:rgba(0,0,0,.55); backdrop-filter:blur(3px); cursor:pointer;
-  }
-  .fsClose:active{transform:scale(.98)}
-
-  /* ===== Winner FX ===== */
-  .winFx{position:fixed; inset:0; display:none; place-items:center; background: radial-gradient(ellipse at center, rgba(0,0,0,.25), rgba(0,0,0,.9) 70%); z-index:100000; cursor:pointer; overflow:hidden; pointer-events:auto;}
-  .winFx.show{ display:grid; animation: fxFade 220ms ease-out; }
-  .winFx::before{content:''; position:absolute; inset:0; pointer-events:none; background:
-      repeating-linear-gradient(to bottom, rgba(57,255,20,.055), rgba(57,255,20,.055) 2px, transparent 2px, transparent 4px),
-      radial-gradient(circle at 50% -10%, rgba(57,255,20,.08), transparent 60%); mix-blend-mode: screen; animation: scanSweep 2.6s linear infinite;}
-  .winViewport{ position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:12px; max-width: min(92vw, 1200px); }
-  .neonFrame{ position:relative; width:100%; border-radius:22px; padding:12px; background: linear-gradient(135deg, rgba(0,229,255,.18), rgba(255,31,143,.18)); box-shadow: 0 0 40px rgba(0,229,255,.25), 0 0 40px rgba(255,31,143,.25) inset; border:1px solid rgba(57,255,20,.35); }
-  .badge-champion{ position:absolute; top:10px; left:10px; background: linear-gradient(90deg, #39ff14, #9bffa6); color:#001a00; font-weight:900; letter-spacing:.12em; padding:6px 12px; border-radius:999px; box-shadow:0 0 18px rgba(57,255,20,.55); text-transform:uppercase; font-family:ui-sans-serif,system-ui,Arial; z-index:3; }
-  .winCanvas{ position:relative; overflow:hidden; border-radius:14px; background:#000; }
-  .winImg{ display:block; max-width: calc(92vw - 32px); max-height: calc(70vh - 8px); width:auto; height:auto; object-fit:contain; margin:auto; filter: saturate(1.18) contrast(1.05) brightness(1.04); transform: translateZ(0); }
-  .glitch{ position:relative; text-align:center; font-weight:900; letter-spacing:.03em; font-size: clamp(16px, 2.2vw, 24px); color:#cfffcc; text-shadow: 0 0 10px rgba(57,255,20,.9), 0 0 20px rgba(57,255,20,.55); padding:8px 12px; border-radius:10px; border:1px solid rgba(57,255,20,.35); background:rgba(2,4,2,.35); backdrop-filter: blur(6px); }
-  @keyframes fxFade{ from{opacity:0} to{opacity:1} }
-  @keyframes scanSweep{ 0%{background-position-y:-40px} 100%{background-position-y:40px} }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Supabase Global 10s Timer</title>
+  <style>
+    html,body { height:100%; margin:0; font-family:system-ui, Arial, sans-serif; background:#0b0b0b; color:#fff; }
+    .wrap { height:100%; display:grid; place-items:center; gap:16px; }
+    .clock { font-size: clamp(48px, 12vw, 160px); font-weight: 800; letter-spacing: 0.02em; }
+    .row { display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap; }
+    button { background:#1f1f1f; color:#fff; border:1px solid #333; border-radius:10px; padding:8px 12px; cursor:pointer; }
+    button:hover { background:#262626; }
+    .muted { opacity:0.7; font-size:14px; }
+    .error { color:#ff6b6b; }
+  </style>
 </head>
 <body>
-  <header>
-    <h1 style="margin:0">R<span style="letter-spacing:.03em">Ⓐ</span>GE SPACE — TOURNAMENT</h1>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button id="btnPause" class="btn">⏯ Pause</button>
-      <button id="btnForce" class="btn">⚡ Force decide (selected)</button>
-      <button id="btnKick" class="btn">🫀 Kick heartbeat</button>
-      <button id="btnClearVotes" class="btn">🧹 Clear my votes</button>
-      <a class="btn" href="winners.html">🏆 Winners</a>
-    </div>
-  </header>
-
-  <div class="app">
-    <section class="listWrap">
-      <div class="listHead">
-        <strong>Bracket</strong>
-        <div class="listHeadRight">
-          <span class="badge" id="roundSummary">R32 → Final</span>
-          <label style="display:inline-flex;align-items:center;gap:6px;font-size:.85rem;opacity:.9">
-            <input type="checkbox" id="toggleFinished" checked> Show finished rounds
-          </label>
-        </div>
-      </div>
-      <div class="list" id="matchList"></div>
-    </section>
-
-    <section class="detail">
-      <div class="detailHead">
-        <div>
-          <span class="badge" id="detailRound">Round –</span>
-          <span class="badge" id="detailIndex">Match –/–</span>
-        </div>
-        <span class="badge" id="detailState">—</span>
-      </div>
-
-      <div class="countdown">
-        Decision in: <span class="timer pending" id="globalClock">SYNC…</span>
-        <span class="badge" id="pauseBadge" style="display:none;margin-left:8px;">PAUSED</span>
-      </div>
-
-      <div class="stage">
-        <div class="tile" id="tileLeft">
-          <div class="frame" id="frameLeft">
-            <img id="leftArt" class="art" alt="">
-            <button class="fsIcon" id="fsLeft" aria-label="Fullscreen top">⤢</button>
-            <div id="leftTbd" class="tbd" style="display:none">?</div>
-          </div>
-          <div class="tileMeta">
-            <span id="leftName">TBD</span>
-            <span class="badge" id="leftVotes">0</span>
-          </div>
-        </div>
-
-        <div class="tile" id="tileRight">
-          <div class="frame" id="frameRight">
-            <img id="rightArt" class="art" alt="">
-            <button id="fsRight" class="fsIcon" aria-label="Fullscreen bottom">⤢</button>
-            <div id="rightTbd" class="tbd" style="display:none">?</div>
-          </div>
-          <div class="tileMeta">
-            <span id="rightName">TBD</span>
-            <span class="badge" id="rightVotes">0</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button id="btnLeft" class="btn choice">Vote TOP</button>
-        <button id="btnRight" class="btn choice">Vote BOTTOM</button>
-        <button id="btnSubmit" class="btn" disabled>✅ Submit Vote</button>
-        <span id="voteLock" class="badge" style="display:none">You voted.</span>
-      </div>
-      <div class="hint">which side are you on... One vote per match.</div>
-    </section>
-  </div>
-
-  <div id="toast" class="toast"></div>
-
-  <!-- Winner FX overlay -->
-  <div id="winFx" class="winFx" role="dialog" aria-modal="true" title="Tap to dismiss">
-    <div class="winViewport">
-      <div class="neonFrame">
-        <div class="badge-champion">Champion</div>
-        <div class="winCanvas">
-          <img id="winImg" class="winImg" alt="Champion artwork">
-        </div>
-      </div>
-      <div id="winGlitch" class="glitch"
-           data-text="Glory to the machine. Your art devours the bracket">
-        Glory to the machine. Your art devours the bracket
-      </div>
-      <div class="winHint">tap to dismiss</div>
+  <div class="wrap">
+    <div class="clock" id="clock">—</div>
+    <div class="row">
+      <button id="refresh">Sync</button>
+      <button id="force">Force next (test)</button>
+      <span class="muted" id="info"></span>
     </div>
   </div>
 
-  <!-- Close Fullscreen -->
-  <button id="fsClose" class="fsClose" aria-label="Exit fullscreen">×</button>
+  <script>
+    // Your deployed Edge Function endpoint:
+    const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module">
-/* =======================
-   CONFIG
-======================= */
-const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
+    let phaseEnd = null;   // ISO string from the server
+    let periodSec = 10;
+    let rafId = null;
+    let lastSyncAt = 0;
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-  realtime:{ params:{ eventsPerSecond: 5 } }
-});
-
-/* =======================
-   TABLES + CONSTANTS
-======================= */
-const META_TABLE  = 'tournament_meta';
-const MATCHES     = 'matches';
-const WINNERS     = 'winners';
-const roundLabel = ['','R32','R16','QF','SF','FINAL'];
-const VOTE_NS = 'rs_stack_vote_v2_';
-const lockKey = (id)=> `${VOTE_NS}${id}`;
-
-/* =======================
-   STATE / DOM
-======================= */
-let currentRound = 1;
-let rounds = {1:[],2:[],3:[],4:[],5:[]};
-let flat = [];
-let sel=null, chosen=null;
-let LOCAL_PAUSE=false, LOCAL_REMAIN_MS=0, globalTicker=null, showFinished=true;
-
-const listEl=document.getElementById('matchList');
-const detailRound=document.getElementById('detailRound');
-const detailIndex=document.getElementById('detailIndex');
-const detailState=document.getElementById('detailState');
-const leftArt=document.getElementById('leftArt'), rightArt=document.getElementById('rightArt');
-const leftTbd=document.getElementById('leftTbd'), rightTbd=document.getElementById('rightTbd');
-const leftName=document.getElementById('leftName'), rightName=document.getElementById('rightName');
-const leftVotes=document.getElementById('leftVotes'), rightVotes=document.getElementById('rightVotes');
-const btnLeft=document.getElementById('btnLeft'), btnRight=document.getElementById('btnRight');
-const btnSubmit=document.getElementById('btnSubmit');
-const voteLockBadge=document.getElementById('voteLock');
-const roundSummary=document.getElementById('roundSummary');
-const toggleFinished=document.getElementById('toggleFinished');
-const globalClockEl=document.getElementById('globalClock');
-const pauseBadge=document.getElementById('pauseBadge');
-const btnPause=document.getElementById('btnPause');
-const btnKick=document.getElementById('btnKick');
-const winFx=document.getElementById('winFx'); const winImg=document.getElementById('winImg');
-const fsLeftBtn = document.getElementById('fsLeft');
-const fsRightBtn = document.getElementById('fsRight');
-const frameLeft = document.getElementById('frameLeft');
-const frameRight = document.getElementById('frameRight');
-const fsClose = document.getElementById('fsClose');
-
-/* =======================
-   UTILS
-======================= */
-const BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
-const toast = (msg)=>{ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none',1400); };
-const fmt = (ms)=>{ if(ms<=0) return '00:00:00'; const s=Math.floor(ms/1000);
-  return String(Math.floor(s/3600)).padStart(2,'0')+':' + String(Math.floor((s%3600)/60)).padStart(2,'0')+':' + String(s%60).padStart(2,'0'); };
-
-/* =======================
-   FULLSCREEN + WINNER FX
-======================= */
-function reqFS(el){
-  if(el.requestFullscreen) el.requestFullscreen();
-  else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-  setTimeout(()=>{ if (document.fullscreenElement) fsClose.style.display='grid'; }, 50);
-}
-fsLeftBtn.addEventListener('click', ()=>reqFS(frameLeft));
-fsRightBtn.addEventListener('click', ()=>reqFS(frameRight));
-fsClose.addEventListener('click', ()=>{ if (document.fullscreenElement) document.exitFullscreen?.(); fsClose.style.display='none'; });
-document.addEventListener('fullscreenchange', ()=>{ fsClose.style.display = document.fullscreenElement ? 'grid' : 'none'; });
-
-function showWinnerImage(url){
-  winImg.src = url || '';
-  winFx.classList.add('show');
-  setTimeout(()=>winFx.classList.remove('show'), 5200);
-}
-winFx.addEventListener('click', ()=>winFx.classList.remove('show'));
-
-/* =======================
-   DB LOADERS
-======================= */
-async function loadMeta(){
-  const { data } = await supabase.from(META_TABLE).select('*').eq('id',1).maybeSingle();
-  if (data?.current_round) currentRound = data.current_round;
-}
-async function loadMatchesAll(){
-  const { data } = await supabase.from(MATCHES).select('*').order('round', {ascending:true}).order('idx',{ascending:true});
-  rounds = {1:[],2:[],3:[],4:[],5:[]};
-  (data||[]).forEach(row=>{
-    rounds[row.round].push({
-      id: row.id, round: row.round, index: row.idx,
-      A: { name: row.a_name, img: row.a_img },
-      B: { name: row.b_name, img: row.b_img },
-      votesA: row.votes_a||0, votesB: row.votes_b||0, decided: !!row.decided,
-      next_id: row.next_id || null
-    });
-  });
-  flat = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
-}
-
-/* =======================
-   GLOBAL TIMER (READ-ONLY)
-======================= */
-function startTicker(endISO){
-  stopTicker();
-  const endMs = new Date(endISO).getTime();
-  globalClockEl.classList.remove('pending');
-  globalTicker = setInterval(()=>{
-    if (LOCAL_PAUSE) return;
-    const left = Math.max(0, endMs - Date.now());
-    globalClockEl.textContent = fmt(left);
-
-    // mirror ticking time into list rows for CURRENT round
-    document.querySelectorAll(`.matchItem .timer[data-round="${currentRound}"]`)
-      .forEach(el => { el.textContent = '· ' + globalClockEl.textContent; });
-  }, 200);
-}
-function stopTicker(){
-  clearInterval(globalTicker); globalTicker=null;
-  globalClockEl.textContent = '00:00:00';
-  globalClockEl.classList.add('pending');
-}
-
-// Pause only affects local display
-function setPauseUI(paused){
-  pauseBadge.style.display = paused ? 'inline-block' : 'none';
-  btnPause.textContent = paused ? '▶ Resume' : '⏯ Pause';
-  globalClockEl.classList.toggle('pending', paused);
-}
-function pauseLocal(){
-  LOCAL_PAUSE = true;
-  const parts = (globalClockEl.textContent||'00:00:00').split(':').map(x=>parseInt(x||'0',10));
-  LOCAL_REMAIN_MS = ((parts[0]*3600)+(parts[1]*60)+(parts[2]))*1000;
-  setPauseUI(true);
-}
-function resumeLocal(){
-  LOCAL_PAUSE = false; setPauseUI(false);
-  const endAt = new Date(Date.now() + (LOCAL_REMAIN_MS||0)).toISOString();
-  startTicker(endAt);
-}
-btnPause.addEventListener('click', ()=>{ if(!LOCAL_PAUSE) pauseLocal(); else resumeLocal(); });
-
-/* =======================
-   RENDERING
-======================= */
-function visibleMatches(){
-  const cur=currentRound;
-  const all = [...rounds[1],...rounds[2],...rounds[3],...rounds[4],...rounds[5]];
-  return showFinished ? all : all.filter(m => m.round >= cur);
-}
-function updateRoundBreadcrumb(){ roundSummary.textContent = `${roundLabel[currentRound]} → Final`; }
-function updateRowScore(m){
-  const el = listEl.querySelector(`.matchItem[data-id="${m.id}"] .score`);
-  if (el) el.textContent = `${m.votesA||0} - ${m.votesB||0}`;
-}
-function buildList(preserveId){
-  listEl.innerHTML='';
-  const items = visibleMatches();
-  for (const m of items){
-    const item=document.createElement('div'); item.className='matchItem'; item.dataset.id=m.id;
-    const mini=document.createElement('div'); mini.className='thumbMini';
-    const iA=document.createElement('img'); iA.src=m.A?.img||BLANK;
-    const iB=document.createElement('img'); iB.src=m.B?.img||BLANK;
-    mini.append(iA,iB);
-
-    const mid=document.createElement('div');
-    const title=document.createElement('div'); title.className='title';
-    title.textContent=`${m.A?.name||'TBD'} vs ${m.B?.name||'TBD'}`;
-
-    const row=document.createElement('div'); row.className='metaRow';
-    const badge=document.createElement('span'); badge.className='badge'; badge.textContent=roundLabel[m.round];
-    const timer=document.createElement('span'); timer.className='timer';
-    timer.dataset.round = String(m.round);
-    const isTbd = !(m.A?.img && m.B?.img);
-    if (isTbd) { timer.style.display='none'; } else { timer.textContent='· '+(globalClockEl.textContent||'SYNC…'); }
-    row.append(badge,timer); mid.append(title,row);
-
-    const score=document.createElement('div'); score.className='score'; score.textContent=`${m.votesA||0} - ${m.votesB||0}`;
-    item.append(mini,mid,score);
-    item.addEventListener('click',()=>select(m.id));
-    listEl.appendChild(item);
-  }
-  updateRoundBreadcrumb();
-  let targetId = preserveId && items.some(x=>x.id===preserveId) ? preserveId : (items.find(x=>x.A.img&&x.B.img)||items[0])?.id;
-  if(targetId) select(targetId);
-}
-function select(id){
-  sel=id; chosen=null;
-  [...listEl.children].forEach(li=>li.classList.toggle('selected',li.dataset.id===id));
-  const m=flat.find(x=>x.id===id); if(!m) return;
-
-  detailRound.textContent=roundLabel[m.round];
-  detailIndex.textContent=`Match ${m.index}/${rounds[m.round].length}`;
-
-  const canVote=!!(m.A.img&&m.B.img);
-  detailState.textContent=m.decided?'DECIDED':(canVote?'OPEN':'TBD');
-
-  leftArt.src=m.A.img||BLANK; rightArt.src=m.B.img||BLANK;
-  leftTbd.style.display=m.A.img?'none':'flex';
-  rightTbd.style.display=m.B.img?'none':'flex';
-  leftName.textContent=m.A.name||'TBD'; rightName.textContent=m.B.name||'TBD';
-  leftVotes.textContent=m.votesA||0; rightVotes.textContent=m.votesB||0;
-
-  updateRowScore(m);
-
-  const already=!!localStorage.getItem(lockKey(m.id));
-  btnLeft.disabled=btnRight.disabled=already||m.decided||!canVote;
-  btnSubmit.disabled=true;
-  voteLockBadge.style.display=already?'inline-block':'none';
-  btnLeft.classList.remove('active','selected'); btnRight.classList.remove('active','selected');
-}
-
-/* =======================
-   VOTING (DB)
-======================= */
-function choose(side){
-  chosen=side;
-  btnLeft.classList.toggle('active',side==='A'); btnRight.classList.toggle('active',side==='B');
-  btnLeft.classList.toggle('selected',side==='A'); btnRight.classList.toggle('selected',side==='B');
-  btnLeft.setAttribute('aria-pressed', side==='A' ? 'true' : 'false');
-  btnRight.setAttribute('aria-pressed', side==='B' ? 'true' : 'false');
-  btnSubmit.disabled=false;
-}
-btnLeft.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('A'); });
-btnRight.addEventListener('click', ()=>{ const m=flat.find(x=>x.id===sel); if(!m||m.decided||!(m.A.img&&m.B.img)) return; choose('B'); });
-btnSubmit.addEventListener('click', async ()=>{
-  const m=flat.find(x=>x.id===sel); if(!m || !chosen || m.decided) return;
-  const { data: cur } = await supabase.from(MATCHES).select('votes_a, votes_b').eq('id', m.id).single();
-  const newA = (cur?.votes_a||0) + (chosen==='A'?1:0);
-  const newB = (cur?.votes_b||0) + (chosen==='B'?1:0);
-  const { error } = await supabase.from(MATCHES).update({ votes_a:newA, votes_b:newB }).eq('id', m.id);
-  if (error) { toast('Vote failed'); return; }
-  localStorage.setItem(lockKey(m.id),'1'); voteLockBadge.style.display='inline-block';
-  btnLeft.disabled=btnRight.disabled=true; btnSubmit.disabled=true;
-  toast('Vote submitted');
-});
-
-/* =======================
-   MANUAL CONTROLS (DB + HEARTBEAT)
-======================= */
-document.getElementById('btnClearVotes').addEventListener('click', ()=>{
-  const keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.startsWith(VOTE_NS)) keys.push(k); }
-  keys.forEach(k=>localStorage.removeItem(k));
-  const m=flat.find(x=>x.id===sel);
-  if(m && !m.decided && m.A.img && m.B.img){ btnLeft.disabled=btnRight.disabled=false; }
-  toast('Your local votes were cleared');
-});
-
-// Force server heartbeat (with Authorization header)
-btnKick.addEventListener('click', async ()=>{
-  try{
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/dynamic-task`, {
-      method:'POST',
-      headers: { 'Authorization': `Bearer ${SUPABASE_ANON}` }
-    });
-    const body = await res.json().catch(()=> ({}));
-    toast(`Heartbeat: ${res.status} ${body?.state ?? ''}`);
-    console.log('heartbeat', res.status, body);
-  }catch(e){ toast('Heartbeat failed'); console.error(e); }
-});
-
-/* =======================
-   MANUAL TEST: FORCE DECIDE
-======================= */
-document.getElementById('btnForce').addEventListener('click', async ()=>{
-  const m=flat.find(x=>x.id===sel); if(!m) return;
-  if(m.decided){ toast('Match already decided'); return; }
-  if(!(m.A.img && m.B.img)){ toast('TBD pairing'); return; }
-  const a=m.votesA||0, b=m.votesB||0;
-  const winner = (a>b) ? m.A : (b>a) ? m.B : (Math.random()<0.5? m.A : m.B);
-  await supabase.from(MATCHES).update({ decided:true }).eq('id', m.id);
-
-  const nid = m.next_id;
-  if (nid){
-    const { data: next } = await supabase.from(MATCHES).select('*').eq('id', nid).maybeSingle();
-    if (next){
-      if (!next.a_img)
-        await supabase.from(MATCHES).update({ a_name:winner.name, a_img:winner.img }).eq('id', nid);
-      else if (!next.b_img)
-        await supabase.from(MATCHES).update({ b_name:winner.name, b_img:winner.img }).eq('id', nid);
+    async function fetchState(method = 'GET', body = null) {
+      const res = await fetch(EDGE_URL, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : null
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || res.statusText);
+      phaseEnd = json.state.phase_end_at;
+      periodSec = json.state.period_sec;
+      lastSyncAt = Date.now();
+      document.getElementById('info').textContent =
+        `period=${periodSec}s  |  phase_end_at=${phaseEnd}`;
     }
-  } else {
-    // FINAL — show FX (no auto-loop here; server stops the global timer)
-    showWinnerImage(winner.img);
-  }
-  toast('⚡ Decided');
-});
 
-/* =======================
-   REALTIME WIRES
-======================= */
-function subRealtime(){
-  supabase.channel('rt_meta')
-    .on('postgres_changes', { event:'UPDATE', schema:'public', table:META_TABLE, filter:'id=eq.1' }, async (payload)=>{
-      const nxt = payload.new?.current_round;
-      if (typeof nxt==='number' && nxt !== currentRound){
-        currentRound = nxt;
-        await loadMatchesAll();
-        buildList();
-        toast(`➡️ ${roundLabel[currentRound]}`);
+    function draw() {
+      if (!phaseEnd) {
+        document.getElementById('clock').textContent = '…';
+        rafId = requestAnimationFrame(draw);
+        return;
       }
-    }).subscribe();
 
-  supabase.channel('rt_matches_all')
-    .on('postgres_changes', { event:'*', schema:'public', table:MATCHES }, async ()=>{
-      await loadMatchesAll();
-      buildList(sel);
-      // If FINAL row decided, show FX
-      const final = rounds[5][0];
-      if (final && final.decided && final.A.img && final.B.img){
-        const a=final.votesA||0, b=final.votesB||0;
-        const champ = (a>b)?final.A: (b>a)?final.B : final.A;
-        showWinnerImage(champ.img);
+      const endMs = Date.parse(phaseEnd);
+      const remMs = Math.max(0, endMs - Date.now());
+      const secs = Math.ceil(remMs / 1000);
+      document.getElementById('clock').textContent = String(secs);
+
+      // When it hits zero, re-sync the authoritative state (server rolls forward)
+      if (remMs <= 0) {
+        fetchState().catch(err => {
+          console.error(err);
+          document.getElementById('clock').textContent = 'ERR';
+          document.getElementById('info').textContent = err.message;
+          document.getElementById('info').classList.add('error');
+        });
       }
-    }).subscribe();
 
-  // ===== GLOBAL TIMER SUBSCRIPTION =====
-  (async () => {
-    const { data: gt } = await supabase
-      .from('global_timer')
-      .select('end_at, paused')
-      .eq('id','global')
-      .maybeSingle();
-    if (gt?.end_at) startTicker(gt.end_at); else stopTicker();
-  })();
+      // Light background resync every ~5s to handle tab sleep / drift
+      if (Date.now() - lastSyncAt > 5000) {
+        fetchState().catch(console.warn);
+      }
 
-  supabase.channel('global-timer')
-    .on('postgres_changes', { event:'*', schema:'public', table:'global_timer', filter:'id=eq.global' },
-      (payload) => {
-        const endAt = (payload.new ?? payload.old)?.end_at;
-        if (endAt) startTicker(endAt); else stopTicker();
-      })
-    .subscribe();
-}
+      rafId = requestAnimationFrame(draw);
+    }
 
-/* =======================
-   BOOT
-======================= */
-toggleFinished.addEventListener('change', (e)=>{ showFinished=e.target.checked; buildList(sel); });
+    document.getElementById('refresh').addEventListener('click', () =>
+      fetchState().catch(err => alert(err.message))
+    );
 
-(async function init(){
-  await loadMeta();
-  await loadMatchesAll();
-  buildList();
-  subRealtime();
-})();
+    document.getElementById('force').addEventListener('click', () =>
+      fetchState('POST', { force: true }).catch(err => alert(err.message))
+    );
+
+    // boot
+    fetchState().then(draw).catch((e) => {
+      document.getElementById('clock').textContent = 'ERR';
+      document.getElementById('info').textContent = e.message;
+      document.getElementById('info').classList.add('error');
+      console.error(e);
+    });
   </script>
 </body>
 </html>
-```1
