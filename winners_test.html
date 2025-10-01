@@ -1,223 +1,120 @@
 <!doctype html>
-
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Winners Test — Zero Log</title>
+  <title>Rage Space — Winners</title>
   <style>
-    :root { color-scheme: dark; }
-    html,body { height:100%; margin:0; font-family: system-ui, Arial, sans-serif; background:#0b0b0b; color:#fff; }
-    .page { min-height:100%; display:grid; grid-template-rows:auto 1fr; }
-    header { padding:14px 16px; border-bottom:1px solid #222; }
-    h1 { font-size:20px; margin:0; }
-    .muted { opacity:.75; font-size:12px; }
-    main { padding:16px; }
-    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    button { background:#161616; color:#fff; border:1px solid #333; border-radius:10px; padding:8px 12px; cursor:pointer; }
-    button:hover { background:#1f1f1f; }
-    .panel { border:1px solid #222; border-radius:14px; padding:12px; background:#0f0f0f; max-width:900px; margin:0 auto; }
-    .list { margin-top:8px; border-top:1px solid #222; }
-    .item { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; padding:10px 6px; border-bottom:1px solid #1a1a1a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; }
-    .head { font-weight:700; opacity:.9; }
-    .empty { padding:10px 6px; opacity:.7; }
-    a { color:#9ae6b4; text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    :root { --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--green); font-family: ui-sans-serif,system-ui,Arial,Helvetica,sans-serif; }
+    .wrap{ max-width:980px; margin:16px auto 64px; padding:0 16px; }
+    header{ display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid var(--border);
+      padding:10px 12px; border-radius:12px; background:rgba(7,7,7,.6); }
+    .btn{
+      border:1px solid var(--green); color:var(--green); text-decoration:none; padding:8px 12px;
+      border-radius:10px; display:inline-flex; align-items:center; gap:8px; background:transparent; cursor:pointer;
+    }
+    .grid{ margin-top:16px; display:grid; grid-template-columns:1fr; gap:12px; }
+    .card{ border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(7,7,7,.6); }
+    .hero{ aspect-ratio: 16/9; width:100%; display:block; }
+    .hero.red{ background: repeating-linear-gradient(45deg, #3a0000 0, #3a0000 12px, #5a0000 12px, #5a0000 24px), #a60000; }
+    .hero.blue{ background: repeating-linear-gradient(45deg, #001c3a 0, #001c3a 12px, #00325a 12px, #00325a 24px), #0058a6; }
+    .meta{ padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .muted{ color:var(--ink); opacity:.8; font-size:.95rem; }
+    .empty{ opacity:.7; padding:16px; border:1px dashed var(--border); border-radius:12px; text-align:center; }
+    .list{ border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .row{ display:grid; grid-template-columns: 120px 1fr 1fr; gap:10px; padding:10px; border-top:1px solid #0b1c0b; align-items:center; }
+    .row:first-child{ border-top:none; background:rgba(7,7,7,.4); font-weight:700 }
+    .chip{ border:1px solid var(--border); border-radius:999px; padding:4px 10px; }
+    a{ color:#9ae6b4; text-decoration:none; }
+    a:hover{ text-decoration:underline; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <div class="page">
+  <div class="wrap">
     <header>
-      <h1>Winners Test — Zero Log</h1>
-      <div class="muted">Centralized record of each countdown rollover to 0 (from your matchup page).</div>
-      <div class="muted" id="pingStatus">ping: —</div>
-    </header><main>
-  <div class="panel">
-    <div class="row" style="justify-content:space-between;">
-      <div class="row">
-        <button id="btnRefresh">Refresh</button>
-        <button id="btnExport">Export CSV</button>
-        <button id="btnClear">Clear</button>
+      <div>
+        <h1 style="margin:0">🏁 Winners</h1>
+        <div class="muted">Shows the winner decided at each 10s rollover (local demo)</div>
       </div>
-      <div class="row">
-        <a href="matchup.html" target="_blank"><button>Open matchup</button></a>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a class="btn" href="matchup.html">← Back to Matchup</a>
+        <button id="btnClear" class="btn">🧹 Clear</button>
       </div>
-    </div>
+    </header>
 
-    <div class="list" id="list"></div>
+    <div id="content" class="grid"></div>
   </div>
-</main>
 
-  </div>  <script>
-    // Supabase (for reading/clearing the log)
-    const SUPABASE_URL  = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-
-    // Edge Function to ping
-    const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
-
-    const listEl = document.getElementById('list');
-    const pingStatusEl = document.getElementById('pingStatus');
-
-    let pingTimer = null;
-    let lastState = null;
-
-    // ---------- UI ----------
-    function rowEl(idx, r) {
-      const div = document.createElement('div');
-      div.className = 'item';
-      const idCell  = document.createElement('div');
-      const recCell = document.createElement('div');
-      const rollCell= document.createElement('div');
-      idCell.textContent  = `#${idx.toString().padStart(2,'0')} — ${r.source || 'matchup'}`;
-      recCell.textContent = new Date(r.recorded_at).toLocaleString();
-      rollCell.textContent= r.rollover_at ? new Date(r.rollover_at).toLocaleString() : '—';
-      div.append(idCell, recCell, rollCell);
-      return div;
+  <script>
+    const winnersKey = 'rs_winners_v1';
+    function readWinners(){
+      try{ return JSON.parse(localStorage.getItem(winnersKey) || '[]') }catch{ return [] }
+    }
+    function clearWinners(){
+      if (confirm('Clear local winners history?')) {
+        localStorage.removeItem(winnersKey);
+        render();
+      }
     }
 
-    function headerEl() {
-      const div = document.createElement('div');
-      div.className = 'item head';
-      div.innerHTML = `<div>id / source</div><div>recorded_at (local)</div><div>rollover_at (local)</div>`;
-      return div;
+    function winnerCard(w){
+      const card = document.createElement('div');
+      card.className = 'card';
+      const hero = document.createElement('div');
+      hero.className = 'hero ' + (w.color==='red' ? 'red' : 'blue');
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const left = document.createElement('div');
+      const right= document.createElement('div');
+      right.innerHTML = `<span class="chip">#${w.id}</span>`;
+      left.innerHTML = `<div class="muted"><b>${w.name}</b> won</div><div class="muted">${new Date(w.ts).toLocaleString()}</div>`;
+      meta.append(left, right);
+      card.append(hero, meta);
+      return card;
     }
 
-    function renderList(rows) {
-      listEl.innerHTML = '';
-      if (!rows.length) {
-        const d = document.createElement('div');
-        d.className = 'empty';
-        d.textContent = 'No rollovers yet.';
-        listEl.appendChild(d);
+    function listTable(rows){
+      const box = document.createElement('div');
+      box.className = 'list';
+      const head = document.createElement('div');
+      head.className = 'row';
+      head.innerHTML = `<div>When</div><div>Winner</div><div>Color</div>`;
+      box.append(head);
+      rows.forEach(r=>{
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = `
+          <div>${new Date(r.ts).toLocaleTimeString()}</div>
+          <div>${r.name}</div>
+          <div><span class="chip">${r.color.toUpperCase()}</span></div>`;
+        box.append(row);
+      });
+      return box;
+    }
+
+    function render(){
+      const root = document.getElementById('content');
+      root.innerHTML = '';
+
+      const winners = readWinners();
+      if (!winners.length){
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No winners yet. Open matchup and let it run.';
+        root.append(empty);
         return;
       }
-      listEl.appendChild(headerEl());
 
-      // Highest number at the top:
-      const total = rows.length;
-      rows.forEach((r, i) => {
-        const displayNum = total - i; // top row gets highest #
-        listEl.appendChild(rowEl(displayNum, r));
-      });
+      // Big last winner
+      root.append(winnerCard(winners[0]));
+
+      // History table under it
+      root.append(listTable(winners.slice(0, 20)));
     }
 
-    async function fetchRows() {
-      const { data, error } = await supabase
-        .from('zero_rollovers')
-        .select('*')
-        .order('recorded_at', { ascending: false }) // newest first
-        .limit(500);
-      if (error) { console.error(error); return []; }
-      return data || [];
-    }
-
-    function exportCSV(rows){
-      const header = ['id','source','recorded_at_iso','recorded_at_local','rollover_at_iso','rollover_at_local','phase_end_at_iso'];
-      const lines = [header.join(',')];
-      rows.slice().reverse().forEach(r =>{
-        const recLocal = new Date(r.recorded_at).toLocaleString();
-        const rollLocal= r.rollover_at ? new Date(r.rollover_at).toLocaleString() : '';
-        lines.push([
-          r.id, r.source || '', r.recorded_at, recLocal, r.rollover_at || '', rollLocal, r.phase_end_at || ''
-        ].map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(','));
-      });
-      const blob = new Blob([lines.join('\n')], { type:'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = 'zero_rollovers.csv';
-      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-    }
-
-    async function clearAll() {
-      if (!confirm('Clear ALL zero-rollover rows?')) return;
-      const { error } = await supabase
-        .from('zero_rollovers')
-        .delete()
-        .not('id', 'is', null); // safer filter
-      if (error) {
-        alert('Clear failed: ' + error.message);
-      }
-      const rows = await fetchRows(); renderList(rows);
-    }
-
-    // ---------- Edge pinger ----------
-    function updatePingStatus(s, nextDelayMs) {
-      if (!s) { pingStatusEl.textContent = 'ping: —'; return; }
-      if (s.paused) {
-        pingStatusEl.textContent = 'ping: paused (no calls)';
-      } else {
-        const when = new Date(Date.now() + nextDelayMs).toLocaleTimeString();
-        pingStatusEl.textContent = `ping: active (next at ${when})`;
-      }
-    }
-
-    function clearPing() {
-      if (pingTimer) { clearTimeout(pingTimer); pingTimer = null; }
-    }
-
-    async function getState() {
-      try {
-        const res = await fetch(EDGE_URL, { method: 'GET' });
-        const json = await res.json();
-        return json.state;
-      } catch {
-        return lastState;
-      }
-    }
-
-    async function scheduleNextPing(initial=false) {
-      clearPing();
-      const s = await getState();
-      lastState = s;
-
-      // update the list UI after each ping/state-read
-      const rows = await fetchRows(); renderList(rows);
-
-      if (!s || s.paused) {
-        updatePingStatus(s, 0);
-        return; // do not schedule while paused or if state missing
-      }
-
-      // first schedule aligns to next rollover; after that, use period
-      const delayMs = (initial && s.remaining_sec > 0)
-        ? s.remaining_sec * 1000
-        : s.period_sec * 1000;
-
-      updatePingStatus(s, delayMs);
-
-      pingTimer = setTimeout(async () => {
-        try { await fetch(EDGE_URL, { method: 'GET' }); } catch {}
-        scheduleNextPing(false);
-      }, delayMs);
-    }
-
-    // realtime refresh on new inserts
-    function subscribe(){
-      supabase
-        .channel('zero_rollovers_live')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'zero_rollovers' }, async () => {
-          const rows = await fetchRows();
-          renderList(rows);
-          if (!pingTimer) scheduleNextPing(true);
-        })
-        .subscribe();
-    }
-
-    document.getElementById('btnRefresh').addEventListener('click', async ()=>{
-      const rows = await fetchRows(); renderList(rows);
-      scheduleNextPing(true);
-    });
-    document.getElementById('btnExport').addEventListener('click', async ()=>{
-      const rows = await fetchRows(); exportCSV(rows);
-    });
-    document.getElementById('btnClear').addEventListener('click', clearAll);
-
-    (async ()=>{
-      const rows = await fetchRows(); renderList(rows);
-      subscribe();
-      scheduleNextPing(true); // start the cadence
-    })();
-  </script></body>
+    document.getElementById('btnClear').addEventListener('click', clearWinners);
+    render();
+  </script>
+</body>
 </html>
