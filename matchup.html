@@ -29,20 +29,32 @@
   </div>
 
   <script>
+    // Your Edge Function URL (public or include auth headers if Verify JWT is ON)
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
+    // If Verify JWT is ON, uncomment and add headers in fetch calls:
+    // const ANON = "YOUR_SUPABASE_ANON_KEY";
+    // const AUTH = { apikey: ANON, Authorization: `Bearer ${ANON}` };
 
-    let phaseEnd = null;   // ISO string from the server
-    let periodSec = 10;
-    let lastSyncAt = 0;
-    let serverPaused = false;
+    let phaseEndISO = null;     // authoritative end time from server
+    let periodSec   = 10;
+    let serverPaused = false;   // authoritative pause flag from server
+    let lastSyncAt  = 0;
 
+    // UI + freeze buffer
     const clockEl  = document.getElementById('clock');
     const infoEl   = document.getElementById('info');
     const statusEl = document.getElementById('status');
     const pauseBtn = document.getElementById('pause');
+    let frozenSecs = null;      // number to display while paused (frozen)
+
+    function remainingSecsFromNow() {
+      if (!phaseEndISO) return null;
+      const endMs = Date.parse(phaseEndISO);
+      const remMs = Math.max(0, endMs - Date.now());
+      return Math.ceil(remMs / 1000);
+    }
 
     function setPausedUI() {
-      clockEl.textContent = 'PAUSED';
       statusEl.textContent = 'PAUSED';
       pauseBtn.textContent = 'Resume';
     }
@@ -51,24 +63,41 @@
       pauseBtn.textContent = 'Pause';
     }
 
-    function applyState(fromServer) {
-      phaseEnd    = fromServer.state.phase_end_at;
-      periodSec   = fromServer.state.period_sec;
-      serverPaused = Boolean(fromServer.state.paused);
+    function applyState(json) {
+      const s = json.state;
+      phaseEndISO  = s.phase_end_at;
+      periodSec    = s.period_sec;
+      const wasPaused = serverPaused;
+      serverPaused = !!s.paused;
+
+      // if we just transitioned into paused (from server or after POST), capture the current number
+      if (!wasPaused && serverPaused) {
+        frozenSecs = remainingSecsFromNow();
+      }
+      // if we just resumed, clear the freeze
+      if (wasPaused && !serverPaused) {
+        frozenSecs = null;
+      }
 
       if (serverPaused) setPausedUI(); else setLiveUI();
 
-      infoEl.textContent = `period=${periodSec}s | phase_end_at=${phaseEnd} | paused=${serverPaused}`;
+      infoEl.textContent =
+        `period=${periodSec}s | phase_end_at=${phaseEndISO} | paused=${serverPaused}`;
       lastSyncAt = Date.now();
     }
 
     async function callAPI(method = 'GET', body = null) {
       const res = await fetch(EDGE_URL, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // ...AUTH,
+        },
         body: body ? JSON.stringify(body) : null
       });
-      const json = await res.json();
+      const txt = await res.text();
+      let json;
+      try { json = JSON.parse(txt); } catch { throw new Error('Server did not return JSON'); }
       if (!res.ok) throw new Error(json?.error || res.statusText);
       return json;
     }
@@ -80,20 +109,28 @@
 
     function tick() {
       if (serverPaused) {
-        setPausedUI();
-      } else if (phaseEnd) {
-        const endMs = Date.parse(phaseEnd);
-        const remMs = Math.max(0, endMs - Date.now());
-        const secs  = Math.ceil(remMs / 1000);
-        clockEl.textContent = String(secs);
+        // show the exact frozen number captured at pause time
+        if (typeof frozenSecs === 'number' && isFinite(frozenSecs)) {
+          clockEl.textContent = String(frozenSecs);
+        } else {
+          // fallback if we didn't capture yet
+          const nowFreeze = remainingSecsFromNow();
+          frozenSecs = nowFreeze ?? 0;
+          clockEl.textContent = String(frozenSecs);
+        }
+      } else if (phaseEndISO) {
+        const secs = remainingSecsFromNow();
+        clockEl.textContent = String(secs ?? '…');
 
-        if (remMs <= 0) {
+        // re-sync at zero so the server can roll forward
+        if ((secs ?? 0) <= 0) {
           fetchState().catch(console.error);
         }
       } else {
         clockEl.textContent = '…';
       }
 
+      // background re-sync every ~5s to catch external changes
       if (Date.now() - lastSyncAt > 5000) {
         fetchState().catch(console.warn);
       }
@@ -101,6 +138,7 @@
       requestAnimationFrame(tick);
     }
 
+    // Buttons
     document.getElementById('refresh').addEventListener('click', () =>
       fetchState().catch(err => alert(err.message))
     );
@@ -112,27 +150,41 @@
       } catch (e) { alert(e.message); }
     });
 
+    // Toggle GLOBAL pause/resume
     pauseBtn.addEventListener('click', async () => {
       try {
         const desired = !serverPaused;
-        // Flip the UI immediately for instant pause/resume feedback
-        serverPaused = desired;
-        if (serverPaused) setPausedUI(); else setLiveUI();
 
+        // optimistic UI: capture number and flip immediately
+        if (desired) {
+          frozenSecs = remainingSecsFromNow();
+          setPausedUI();
+        } else {
+          frozenSecs = null;
+          setLiveUI();
+        }
+        serverPaused = desired;
+
+        // tell the server
         const json = await callAPI('POST', { pause: desired });
-        applyState(json); // reconcile with server’s truth
+        // reconcile with server truth (in case of race)
+        applyState(json);
       } catch (e) {
         alert(e.message);
+        // recover by pulling the authoritative state
         fetchState().catch(console.error);
       }
     });
 
-    fetchState().then(() => tick()).catch((e) => {
+    // boot
+    fetchState().then(draw).catch((e) => {
       clockEl.textContent = 'ERR';
-      infoEl.textContent  = e.message;
+      infoEl.textContent = e.message;
       infoEl.classList.add('error');
       console.error(e);
     });
+
+    function draw() { tick(); } // alias for readability
   </script>
 </body>
 </html>
