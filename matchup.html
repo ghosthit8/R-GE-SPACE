@@ -11,6 +11,7 @@
     .row { display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap; }
     button { background:#1f1f1f; color:#fff; border:1px solid #333; border-radius:10px; padding:8px 12px; cursor:pointer; }
     button:hover { background:#262626; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
     .muted { opacity:0.7; font-size:14px; }
     .error { color:#ff6b6b; }
     .tag { font-size:12px; padding:2px 6px; border:1px solid #444; border-radius:999px; }
@@ -29,19 +30,21 @@
   </div>
 
   <script>
+    // Your deployed Edge Function URL:
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
 
-    let phaseEnd = null;   // ISO string from the server
+    let phaseEnd = null;      // ISO string from the server
     let periodSec = 10;
-    let rafId = null;
-    let lastSyncAt = 0;
     let paused = false;
-    let lastShown = '—'; // remembers text while paused
+    let lastSyncAt = 0;
+    let lastShown = '—';
 
-    const clockEl = document.getElementById('clock');
-    const infoEl  = document.getElementById('info');
+    const clockEl  = document.getElementById('clock');
+    const infoEl   = document.getElementById('info');
     const statusEl = document.getElementById('status');
-    const pauseBtn = document.getElementById('pause');
+    const refreshBtn = document.getElementById('refresh');
+    const forceBtn   = document.getElementById('force');
+    const pauseBtn   = document.getElementById('pause');
 
     async function fetchState(method = 'GET', body = null) {
       const res = await fetch(EDGE_URL, {
@@ -51,27 +54,31 @@
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || res.statusText);
-      phaseEnd = json.state.phase_end_at;
+
+      phaseEnd  = json.state.phase_end_at;
       periodSec = json.state.period_sec;
+      paused    = !!json.state.paused;
+
+      infoEl.textContent   = `period=${periodSec}s  |  paused=${paused}  |  phase_end_at=${phaseEnd ?? 'null'}`;
+      statusEl.textContent = paused ? 'PAUSED (GLOBAL)' : 'LIVE';
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+      forceBtn.disabled    = paused;         // don’t force-advance while paused
       lastSyncAt = Date.now();
-      infoEl.textContent = `period=${periodSec}s  |  phase_end_at=${phaseEnd}`;
     }
 
     function tick() {
-      if (!phaseEnd) {
-        clockEl.textContent = '…';
-        rafId = requestAnimationFrame(tick);
+      if (paused) {
+        // Keep polling lightly so we notice an unpause made elsewhere
+        clockEl.textContent = 'PAUSED';
+        if (Date.now() - lastSyncAt > 3000) fetchState().catch(console.warn);
+        requestAnimationFrame(tick);
         return;
       }
 
-      if (paused) {
-        // frozen display; no background syncing while paused
-        clockEl.textContent = lastShown;
-        statusEl.textContent = 'PAUSED';
-        rafId = requestAnimationFrame(tick);
+      if (!phaseEnd) {
+        clockEl.textContent = '…';
+        requestAnimationFrame(tick);
         return;
-      } else {
-        statusEl.textContent = 'LIVE';
       }
 
       const endMs = Date.parse(phaseEnd);
@@ -79,8 +86,8 @@
       const secs = Math.ceil(remMs / 1000);
       clockEl.textContent = lastShown = String(secs);
 
-      // When it hits zero, re-sync the authoritative state
       if (remMs <= 0) {
+        // When it hits zero, the edge function will roll forward (if not paused)
         fetchState().catch(err => {
           console.error(err);
           clockEl.textContent = 'ERR';
@@ -89,31 +96,27 @@
         });
       }
 
-      // Background resync every ~5s to handle tab sleep / drift
-      if (Date.now() - lastSyncAt > 5000) {
-        fetchState().catch(console.warn);
-      }
+      // Background re-sync every ~5s in case the tab slept
+      if (Date.now() - lastSyncAt > 5000) fetchState().catch(console.warn);
 
-      rafId = requestAnimationFrame(tick);
+      requestAnimationFrame(tick);
     }
 
-    document.getElementById('refresh').addEventListener('click', () =>
+    refreshBtn.addEventListener('click', () =>
       fetchState().catch(err => alert(err.message))
     );
 
-    document.getElementById('force').addEventListener('click', () =>
+    forceBtn.addEventListener('click', () =>
       fetchState('POST', { force: true }).catch(err => alert(err.message))
     );
 
+    // GLOBAL pause/resume — toggles server state for everyone
     pauseBtn.addEventListener('click', async () => {
-      if (!paused) {
-        paused = true;
-        pauseBtn.textContent = 'Resume';
-      } else {
-        paused = false;
-        pauseBtn.textContent = 'Pause';
-        // make sure we’re back in sync after a pause
-        try { await fetchState(); } catch (e) { console.error(e); }
+      try {
+        await fetchState('POST', { pause: !paused }); // toggle on server
+        await fetchState();                            // read back the result
+      } catch (e) {
+        alert(e.message);
       }
     });
 
