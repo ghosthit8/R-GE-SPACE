@@ -30,6 +30,7 @@
     <header>
       <h1>Winners Test — Zero Log</h1>
       <div class="muted">Centralized record of each countdown rollover to 0 (from your matchup page).</div>
+      <div class="muted" id="pingStatus">ping: —</div>
     </header>
 
     <main>
@@ -50,11 +51,19 @@
   </div>
 
   <script>
+    // Supabase (for reading the log)
     const SUPABASE_URL  = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
+    // Edge Function to ping
+    const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
+
     const listEl = document.getElementById('list');
+    const pingStatusEl = document.getElementById('pingStatus');
+
+    let pingTimer = null;
+    let lastState = null;
 
     function rowEl(idx, r) {
       const div = document.createElement('div');
@@ -115,28 +124,85 @@
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
 
-    // live updates
+    // ---- Edge pinger ----
+    function updatePingStatus(s, nextDelayMs) {
+      if (!s) { pingStatusEl.textContent = 'ping: —'; return; }
+      if (s.paused) {
+        pingStatusEl.textContent = 'ping: paused (no calls)';
+      } else {
+        const when = new Date(Date.now() + nextDelayMs).toLocaleTimeString();
+        pingStatusEl.textContent = `ping: active (next at ${when})`;
+      }
+    }
+
+    function clearPing() {
+      if (pingTimer) { clearTimeout(pingTimer); pingTimer = null; }
+    }
+
+    async function getState() {
+      try {
+        const res = await fetch(EDGE_URL, { method: 'GET' });
+        const json = await res.json();
+        return json.state;
+      } catch {
+        return lastState;
+      }
+    }
+
+    async function scheduleNextPing(initial=false) {
+      clearPing();
+      const s = await getState();
+      lastState = s;
+
+      // update the list UI after each ping/state-read
+      const rows = await fetchRows(); renderList(rows);
+
+      if (!s || s.paused) {
+        updatePingStatus(s, 0);
+        return; // do not schedule while paused or if state missing
+      }
+
+      // first schedule aligns to next rollover; after that, use period
+      const delayMs = (initial && s.remaining_sec > 0)
+        ? s.remaining_sec * 1000
+        : s.period_sec * 1000;
+
+      updatePingStatus(s, delayMs);
+
+      pingTimer = setTimeout(async () => {
+        // Call the function (it will catch-up log if needed)
+        try { await fetch(EDGE_URL, { method: 'GET' }); } catch {}
+        // Recurse to schedule the next one
+        scheduleNextPing(false);
+      }, delayMs);
+    }
+    // ---------------------
+
+    // realtime refresh on new inserts
     function subscribe(){
       supabase
         .channel('zero_rollovers_live')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'zero_rollovers' }, async () => {
           const rows = await fetchRows();
           renderList(rows);
+          // If we were paused before and now have activity, re-check schedule
+          if (!pingTimer) scheduleNextPing(true);
         })
         .subscribe();
     }
 
     document.getElementById('btnRefresh').addEventListener('click', async ()=>{
       const rows = await fetchRows(); renderList(rows);
+      scheduleNextPing(true);
     });
     document.getElementById('btnExport').addEventListener('click', async ()=>{
       const rows = await fetchRows(); exportCSV(rows);
     });
 
     (async ()=>{
-      const rows = await fetchRows();
-      renderList(rows);
+      const rows = await fetchRows(); renderList(rows);
       subscribe();
+      scheduleNextPing(true); // start the cadence
     })();
   </script>
 </body>
