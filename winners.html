@@ -8,8 +8,9 @@
     :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; }
     html,body{ height:100%; margin:0; background:var(--bg); color:var(--green); font-family:system-ui,Arial,sans-serif }
     .wrap{ max-width:900px; margin:16px auto; padding:0 16px }
-    header{ display:flex; justify-content:space-between; align-items:center; gap:8px }
-    .btn{ border:1px solid var(--green); color:var(--green); padding:8px 12px; border-radius:10px; background:transparent; text-decoration:none }
+    header{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap }
+    .btn{ border:1px solid var(--green); color:var(--green); padding:8px 12px; border-radius:10px; background:transparent; text-decoration:none; cursor:pointer }
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
     .grid{ display:grid; gap:12px; margin-top:16px }
     .card{ border:1px solid var(--border); border-radius:12px; background:#111; overflow:hidden }
     .hero{ height:160px } .red{ background:#a60000 } .blue{ background:#0058a6 }
@@ -18,6 +19,7 @@
     .empty{ opacity:.7; padding:16px; border:1px dashed var(--border); border-radius:12px; text-align:center }
     .status{ display:flex; gap:8px; align-items:center }
     .dot{ width:8px; height:8px; border-radius:999px; background:#39ff14; box-shadow:0 0 10px #39ff14 }
+    .err{ color:#ff6b6b; border:1px solid #4a0b0b; background:#1b0909; padding:10px 12px; border-radius:10px; margin-top:12px; white-space:pre-wrap }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -25,9 +27,14 @@
   <div class="wrap">
     <header>
       <div class="status"><span class="dot"></span><span id="live">connecting…</span></div>
-      <a class="btn" href="matchup.html">← Back to Matchup</a>
+      <div class="row">
+        <a class="btn" href="matchup.html">← Back to Matchup</a>
+        <button id="testInsert" class="btn">🧪 Test Insert</button>
+        <button id="refreshBtn" class="btn">↻ Refresh</button>
+      </div>
     </header>
 
+    <div id="errorBox" class="err" style="display:none"></div>
     <div id="content" class="grid"></div>
   </div>
 
@@ -39,6 +46,18 @@
 
     const content = document.getElementById('content');
     const liveEl  = document.getElementById('live');
+    const errBox  = document.getElementById('errorBox');
+    const testBtn = document.getElementById('testInsert');
+    const refreshBtn = document.getElementById('refreshBtn');
+
+    function showError(msg){
+      errBox.style.display='block';
+      errBox.textContent = String(msg);
+    }
+    function clearError(){
+      errBox.style.display='none';
+      errBox.textContent = '';
+    }
 
     function card(row){
       const el = document.createElement('div'); el.className='card';
@@ -50,7 +69,6 @@
       el.append(hero, meta);
       return el;
     }
-
     function render(list){
       content.innerHTML = '';
       if (!list || !list.length){
@@ -61,20 +79,45 @@
     }
 
     async function loadInitial(){
+      clearError();
       const { data, error } = await supabase
         .from('winners')
         .select('*')
         .order('decided_at', { ascending: false })
         .limit(100);
-      if (error){ console.error(error); liveEl.textContent = 'error loading'; return []; }
+
+      if (error){
+        console.error(error);
+        showError("SELECT error:\n" + (error.message || JSON.stringify(error)));
+        return [];
+      }
       return data || [];
     }
 
+    async function doTestInsert(){
+      clearError();
+      const color = Math.random()<0.5 ? 'red' : 'blue';
+      const name  = color === 'red' ? 'RED' : 'BLUE';
+      const { error } = await supabase.from('winners').insert({
+        decided_at: new Date().toISOString(),
+        color, name,
+        phase_key: null,
+        round_num: 1,
+        meta: { source: 'winners-test-button' }
+      });
+      if (error){
+        console.error(error);
+        showError("INSERT error:\n" + (error.message || JSON.stringify(error)));
+      }
+    }
+
     (async ()=>{
+      // initial load
       let rows = await loadInitial();
       render(rows);
       liveEl.textContent = 'live';
 
+      // realtime stream: keep list live
       supabase
         .channel('winners-stream')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'winners' }, (payload) => {
@@ -85,6 +128,9 @@
           if (status === 'SUBSCRIBED') liveEl.textContent = 'live';
           if (status === 'CLOSED' || status === 'CHANNEL_ERROR') liveEl.textContent = 'disconnected';
         });
+
+      testBtn.addEventListener('click', doTestInsert);
+      refreshBtn.addEventListener('click', async ()=>{ rows = await loadInitial(); render(rows); });
     })();
   </script>
 </body>
