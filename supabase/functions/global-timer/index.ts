@@ -9,13 +9,14 @@ const corsHeaders: Record<string, string> = {
 };
 
 const nowIso = () => new Date().toISOString();
+const canonicalISO = (iso: string) => new Date(iso).toISOString(); // normalize -> avoids string drift
 function secondsUntil(iso: string | null): number {
   if (!iso) return 0;
   const ms = new Date(iso).getTime() - Date.now();
   return Math.max(0, Math.ceil(ms / 1000));
 }
 
-// deterministic fallback if there’s a tie
+// deterministic fallback if there's a tie
 function pickBlueByHash(phaseKey: string) {
   let h = 5381;
   for (let i = 0; i < phaseKey.length; i++) h = ((h << 5) + h) + phaseKey.charCodeAt(i);
@@ -44,99 +45,84 @@ Deno.serve(async (req) => {
   const url = Deno.env.get("SUPABASE_URL")!;
   const serviceRole = Deno.env.get("SERVICE_ROLE_KEY")!;
   const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const client = createClient(url, serviceRole);
+  const admin = createClient(url, serviceRole);
 
   async function countVotes(phaseKey: string) {
-    // Count from phase_votes (one per device per phase)
-    const redQ = await client
-      .from("phase_votes")
-      .select("*", { count: "exact", head: true })
-      .eq("phase_key", phaseKey)
-      .eq("choice", "red");
-
-    const blueQ = await client
-      .from("phase_votes")
-      .select("*", { count: "exact", head: true })
-      .eq("phase_key", phaseKey)
-      .eq("choice", "blue");
-
+    const redQ = await admin.from("phase_votes").select("*", { count: "exact", head: true })
+      .eq("phase_key", phaseKey).eq("choice", "red");
+    const blueQ = await admin.from("phase_votes").select("*", { count: "exact", head: true })
+      .eq("phase_key", phaseKey).eq("choice", "blue");
     return { red: redQ.count ?? 0, blue: blueQ.count ?? 0 };
   }
 
-  async function decideWinnerForPhase(phaseKey: string) {
-    // 1) votes first
-    const { red, blue } = await countVotes(phaseKey);
+  async function winnerExists(phaseKey: string) {
+    const { data, error } = await admin.from("winners").select("id").eq("phase_key", phaseKey).limit(1);
+    if (error) return false;
+    return (data?.length ?? 0) > 0;
+  }
 
-    // 2) choose winner (majority wins, tie → hash)
+  async function decideWinnerForPhase(phaseKeyRaw: string) {
+    // 0) canonicalize the key to avoid dup rows due to string variance
+    const phaseKey = canonicalISO(phaseKeyRaw);
+
+    // 1) if someone already decided this phase, bail (idempotency)
+    if (await winnerExists(phaseKey)) return;
+
+    // 2) majority vote wins; tie -> deterministic hash
+    const { red, blue } = await countVotes(phaseKey);
     let color: "red" | "blue";
     if (red > blue) color = "red";
     else if (blue > red) color = "blue";
     else color = pickBlueByHash(phaseKey) ? "blue" : "red";
 
-    const payload = [
-      {
-        decided_at: new Date().toISOString(),
-        phase_key: phaseKey,
-        round_num: 1,
-        name: color === "blue" ? "BLUE" : "RED",
-        color,
-        image_url:
-          color === "blue"
-            ? "https://dummyimage.com/800x600/0060ff/ffffff&text=BLUE"
-            : "https://dummyimage.com/800x600/ff0000/ffffff&text=RED",
-        meta: { source: "edge-global-timer", votes: { red, blue } },
-      },
-    ];
+    const payload = [{
+      decided_at: new Date().toISOString(),
+      phase_key: phaseKey,
+      round_num: 1,
+      name: color === "blue" ? "BLUE" : "RED",
+      color,
+      image_url: color === "blue"
+        ? "https://dummyimage.com/800x600/0060ff/ffffff&text=BLUE"
+        : "https://dummyimage.com/800x600/ff0000/ffffff&text=RED",
+      meta: { source: "edge-global-timer", votes: { red, blue } }
+    }];
 
-    // 3) idempotent upsert by phase_key
+    // 3) single-row upsert; unique index on winners(phase_key) must exist
     const res = await fetch(`${url}/rest/v1/winners?on_conflict=phase_key`, {
       method: "POST",
       headers: {
         apikey: anon,
         Authorization: `Bearer ${anon}`,
         "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=minimal",
+        Prefer: "resolution=ignore-duplicates,return=minimal"
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     });
+
+    // ignore 409s (another request beat us to it)
     if (!res.ok && res.status !== 409) {
       const t = await res.text().catch(() => "");
       console.error("winner upsert failed", res.status, t);
     }
   }
 
-  // fetch or bootstrap singleton tournament_state (row id = 1)
-  const { data: s0, error: e0 } = await client
+  // ── load or bootstrap singleton state (id = 1)
+  const { data: s0, error: e0 } = await admin
     .from("tournament_state")
-    .select(
-      "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
-    )
+    .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
     .eq("id", 1)
     .single();
 
   let s = s0 as Row | null;
   if (!s || e0) {
-    const period = 10; // change to 60/86400 for prod
+    const period = 10; // change for prod (e.g., 60, 86400)
     const end = new Date(Date.now() + period * 1000).toISOString();
-    const { data: upserted, error: ue } = await client
+    const { data: upserted, error: ue } = await admin
       .from("tournament_state")
-      .upsert({
-        id: 1,
-        phase_end_at: end,
-        period_sec: period,
-        paused: false,
-        paused_remaining_sec: null,
-        updated_at: nowIso(),
-      })
-      .select(
-        "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
-      )
+      .upsert({ id: 1, phase_end_at: end, period_sec: period, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
+      .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
       .single();
-    if (ue)
-      return new Response(JSON.stringify({ error: ue.message }), {
-        status: 500,
-        headers: corsHeaders,
-      });
+    if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
     s = upserted as Row;
   }
 
@@ -147,102 +133,61 @@ Deno.serve(async (req) => {
       const finishedPhase = s!.phase_end_at ?? nowIso();
       await decideWinnerForPhase(finishedPhase);
       const newEnd = new Date(Date.now() + s!.period_sec * 1000).toISOString();
-      const { data: upd, error: ue } = await client
+      const { data: upd, error: ue } = await admin
         .from("tournament_state")
-        .update({
-          phase_end_at: newEnd,
-          paused: false,
-          paused_remaining_sec: null,
-          updated_at: nowIso(),
-        })
+        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
         .eq("id", 1)
-        .select(
-          "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
-        )
+        .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
         .single();
-      if (ue)
-        return new Response(JSON.stringify({ error: ue.message }), {
-          status: 500,
-          headers: corsHeaders,
-        });
+      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
       s = upd as Row;
     }
 
     if (body?.action === "pause" && !s!.paused) {
       const remainingNow = secondsUntil(s!.phase_end_at);
-      const { data: upd, error: ue } = await client
+      const { data: upd, error: ue } = await admin
         .from("tournament_state")
-        .update({
-          paused: true,
-          paused_remaining_sec: remainingNow,
-          updated_at: nowIso(),
-        })
+        .update({ paused: true, paused_remaining_sec: remainingNow, updated_at: nowIso() })
         .eq("id", 1)
-        .select(
-          "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
-        )
+        .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
         .single();
-      if (ue)
-        return new Response(JSON.stringify({ error: ue.message }), {
-          status: 500,
-          headers: corsHeaders,
-        });
+      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
       s = upd as Row;
     }
 
     if (body?.action === "resume" && s!.paused) {
-      const remaining =
-        s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at);
+      const remaining = (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at));
       const newEnd = new Date(Date.now() + remaining * 1000).toISOString();
-      const { data: upd, error: ue } = await client
+      const { data: upd, error: ue } = await admin
         .from("tournament_state")
-        .update({
-          phase_end_at: newEnd,
-          paused: false,
-          paused_remaining_sec: null,
-          updated_at: nowIso(),
-        })
+        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
         .eq("id", 1)
-        .select(
-          "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
-        )
+        .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
         .single();
-      if (ue)
-        return new Response(JSON.stringify({ error: ue.message }), {
-          status: 500,
-          headers: corsHeaders,
-        });
+      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
       s = upd as Row;
     }
   }
 
-  // Catch-up loop: decide winner for each elapsed phase, then roll forward
+  // ── Decide strictly at 0s, then roll forward exactly one period each time.
   if (!s!.paused) {
     while (secondsUntil(s!.phase_end_at) <= 0) {
-      const finishedPhase = s!.phase_end_at ?? nowIso();
-      await decideWinnerForPhase(finishedPhase);
-      const nextEnd = new Date(
-        new Date(finishedPhase).getTime() + s!.period_sec * 1000
-      ).toISOString();
-      const { data: upd, error: ue } = await client
+      const finishedPhase = canonicalISO(s!.phase_end_at ?? nowIso()); // canonical key
+      await decideWinnerForPhase(finishedPhase);                       // 0s: majority wins
+      const nextEnd = new Date(new Date(finishedPhase).getTime() + s!.period_sec * 1000).toISOString();
+      const { data: upd, error: ue } = await admin
         .from("tournament_state")
         .update({ phase_end_at: nextEnd, updated_at: nowIso() })
         .eq("id", 1)
-        .select(
-          "id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at"
-        )
+        .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
         .single();
-      if (ue)
-        return new Response(JSON.stringify({ error: ue.message }), {
-          status: 500,
-          headers: corsHeaders,
-        });
+      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
       s = upd as Row;
     }
   }
 
   const remaining = s!.paused
-    ? s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at)
+    ? (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at))
     : secondsUntil(s!.phase_end_at);
 
   const state: State = {
