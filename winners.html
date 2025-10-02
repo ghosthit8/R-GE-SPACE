@@ -3,142 +3,121 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>🏁 Winners — Live (Supabase)</title>
+  <title>Winners</title>
   <style>
-    :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; }
-    html,body{ height:100%; margin:0; background:var(--bg); color:var(--green); font-family:system-ui,Arial,sans-serif }
-    .wrap{ max-width:900px; margin:16px auto; padding:0 16px }
-    header{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap }
-    .btn{ border:1px solid var(--green); color:var(--green); padding:8px 12px; border-radius:10px; background:transparent; text-decoration:none; cursor:pointer }
-    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
-    .grid{ display:grid; gap:12px; margin-top:16px }
-    .card{ border:1px solid var(--border); border-radius:12px; background:#111; overflow:hidden }
-    .hero{ height:180px; background-size:cover; background-position:center; }
-    .red{ background:#a60000 } .blue{ background:#0058a6 }
-    .meta{ padding:10px 12px; display:flex; justify-content:space-between; align-items:center }
-    .badge{ border:1px solid var(--border); border-radius:999px; padding:4px 10px }
-    .empty{ opacity:.7; padding:16px; border:1px dashed var(--border); border-radius:12px; text-align:center }
-    .status{ display:flex; gap:8px; align-items:center }
-    .dot{ width:8px; height:8px; border-radius:999px; background:#39ff14; box-shadow:0 0 10px #39ff14 }
-    .err{ color:#ff6b6b; border:1px solid #4a0b0b; background:#1b0909; padding:10px 12px; border-radius:10px; margin-top:12px; white-space:pre-wrap }
+    body{background:#000;color:#39ff14;font-family:system-ui,Arial,sans-serif;margin:0;padding:20px}
+    .bar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .btn{border:1px solid #39ff14;color:#39ff14;background:transparent;padding:6px 10px;border-radius:8px;text-decoration:none;cursor:pointer}
+    .btn:hover{background:rgba(57,255,20,.1)}
+    .winner-card{border:1px solid #153b16;border-radius:12px;background:#0b0b0b;margin-bottom:14px;overflow:hidden}
+    .winner-card img{width:100%;display:block}
+    .meta{padding:8px 12px;display:flex;justify-content:space-between}
+    .live{color:#39ff14;font-weight:bold}
+    .error{background:#400;color:#f88;padding:6px;border-radius:8px;margin:8px 0}
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div class="status"><span class="dot"></span><span id="live">connecting…</span></div>
-      <div class="row">
-        <a class="btn" href="matchup.html">← Back to Matchup</a>
-        <button id="testInsert" class="btn">🧪 Test Insert</button>
-        <button id="refreshBtn" class="btn">↻ Refresh</button>
-      </div>
-    </header>
-
-    <div id="errorBox" class="err" style="display:none"></div>
-    <div id="content" class="grid"></div>
+  <div class="bar">
+    <span>🟢 <span class="live">live</span></span>
+    <div>
+      <a href="matchup.html" class="btn">← Back to Matchup</a>
+      <button id="btnInsert" class="btn">✏️ Test Insert</button>
+      <button id="btnRefresh" class="btn">⟳ Refresh</button>
+    </div>
   </div>
 
-  <script>
-    // Supabase config
-    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  <div id="errorBox" class="error" style="display:none"></div>
+  <div id="winnersList">No winners yet.</div>
 
-    // Placeholders used by Test Insert (match matchup.html defaults)
-    const RED_IMAGE_URL  = 'https://dummyimage.com/800x600/ff0000/ffffff&text=RED';
-    const BLUE_IMAGE_URL = 'https://dummyimage.com/800x600/0060ff/ffffff&text=BLUE';
+<script>
+const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const content = document.getElementById('content');
-    const liveEl  = document.getElementById('live');
-    const errBox  = document.getElementById('errorBox');
-    const testBtn = document.getElementById('testInsert');
-    const refreshBtn = document.getElementById('refreshBtn');
+const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
+const RED_IMAGE_URL  = 'https://dummyimage.com/800x600/ff0000/ffffff&text=RED';
+const BLUE_IMAGE_URL = 'https://dummyimage.com/800x600/0060ff/ffffff&text=BLUE';
 
-    function showError(msg){ errBox.style.display='block'; errBox.textContent = String(msg); }
-    function clearError(){ errBox.style.display='none'; errBox.textContent = ''; }
+const listEl = document.getElementById('winnersList');
+const errBox = document.getElementById('errorBox');
 
-    function card(row){
-      const el = document.createElement('div'); el.className='card';
-      const hero = document.createElement('div'); hero.className='hero';
-      // Prefer the stored image; fallback to color block
-      if (row.image_url) {
-        hero.style.backgroundImage = `url("${row.image_url}")`;
-      } else {
-        hero.classList.add((row.color||'red')); // solid color fallback
-      }
-      const meta = document.createElement('div'); meta.className='meta';
-      const when = row.decided_at ? new Date(row.decided_at).toLocaleString() : '';
-      meta.innerHTML = `<div><b>${row.name || ''}</b> — ${(row.color || '').toUpperCase()}</div>
-                        <div class="badge">${when}</div>`;
-      el.append(hero, meta);
-      return el;
+function showError(msg){ errBox.style.display='block'; errBox.textContent=msg; }
+function clearError(){ errBox.style.display='none'; }
+
+function renderWinners(rows){
+  if(!rows || !rows.length){ listEl.textContent="No winners yet."; return; }
+  listEl.innerHTML = rows.map(r=>`
+    <div class="winner-card">
+      <img src="${r.image_url}" alt="${r.color}">
+      <div class="meta">
+        <span><b>${r.name}</b> — ${r.color.toUpperCase()}</span>
+        <span>${new Date(r.decided_at).toLocaleString()}</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function loadWinners(){
+  const { data, error } = await supabase.from('winners').select('*').order('decided_at',{ascending:false}).limit(20);
+  if(error){ showError("SELECT error: "+error.message); return; }
+  clearError();
+  renderWinners(data);
+}
+
+document.getElementById('btnRefresh').onclick = loadWinners;
+
+document.getElementById('btnInsert').onclick = async()=>{
+  const picked = Math.random()<0.5
+    ? { color:'red',  name:'Test Winner', image_url: RED_IMAGE_URL }
+    : { color:'blue', name:'Test Winner', image_url: BLUE_IMAGE_URL };
+  const { error } = await supabase.from('winners').upsert(
+    { decided_at:new Date().toISOString(), color:picked.color, name:picked.name,
+      image_url:picked.image_url, phase_key: new Date().toISOString(), round_num:1, meta:{source:'manual'} },
+    { onConflict:'phase_key' }
+  );
+  if(error) showError("INSERT error: "+error.message); else clearError();
+};
+
+supabase.channel('winners-feed')
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'},payload=>{
+    loadWinners();
+  })
+  .subscribe();
+
+loadWinners();
+
+/* === Headless decider so winners keep rolling even if matchup is closed === */
+let lastPhaseKey = null;
+async function edgeState(){
+  const res = await fetch(EDGE_URL,{
+    headers:{ 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`,'apikey':SUPABASE_ANON_KEY }
+  });
+  const j = await res.json().catch(()=> ({}));
+  return j.state||j;
+}
+async function ensureWinner(phaseKey){
+  const { data:existing } = await supabase.from('winners').select('id').eq('phase_key',phaseKey).maybeSingle();
+  if(existing) return;
+  const picked = Math.random()<0.5
+    ? { color:'red', name:'RED', image_url:RED_IMAGE_URL }
+    : { color:'blue',name:'BLUE',image_url:BLUE_IMAGE_URL };
+  await supabase.from('winners').upsert(
+    { decided_at:new Date().toISOString(), color:picked.color, name:picked.name,
+      image_url:picked.image_url, phase_key:phaseKey, round_num:1, meta:{source:'winners-headless'} },
+    { onConflict:'phase_key' }
+  );
+}
+setInterval(async()=>{
+  try{
+    const st = await edgeState();
+    const phaseKey = st.phase_end_at||null;
+    if(phaseKey && phaseKey!==lastPhaseKey){
+      lastPhaseKey=phaseKey;
+      await ensureWinner(phaseKey);
     }
-
-    function render(list){
-      content.innerHTML = '';
-      if (!list || !list.length){
-        content.innerHTML = `<div class="empty">No winners yet.</div>`;
-        return;
-      }
-      list.forEach(r => content.append(card(r)));
-    }
-
-    async function loadInitial(){
-      clearError();
-      const { data, error } = await supabase
-        .from('winners')
-        .select('*')
-        .order('decided_at', { ascending: false })
-        .limit(100);
-
-      if (error){
-        console.error(error);
-        showError("SELECT error:\n" + (error.message || JSON.stringify(error)));
-        return [];
-      }
-      return data || [];
-    }
-
-    async function doTestInsert(){
-      clearError();
-      const color = Math.random()<0.5 ? 'red' : 'blue';
-      const name  = color === 'red' ? 'RED' : 'BLUE';
-      const image_url = color === 'red' ? RED_IMAGE_URL : BLUE_IMAGE_URL;
-
-      const { error } = await supabase.from('winners').insert({
-        decided_at: new Date().toISOString(),
-        color, name, image_url,
-        phase_key: null,
-        round_num: 1,
-        meta: { source: 'winners-test-button' }
-      });
-
-      if (error){
-        console.error(error);
-        showError("INSERT error:\n" + (error.message || JSON.stringify(error)));
-      }
-    }
-
-    (async ()=>{
-      let rows = await loadInitial();
-      render(rows);
-      liveEl.textContent = 'live';
-
-      supabase
-        .channel('winners-stream')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'winners' }, (payload) => {
-          rows.unshift(payload.new);
-          render(rows);
-        })
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') liveEl.textContent = 'live';
-          if (status === 'CLOSED' || status === 'CHANNEL_ERROR') liveEl.textContent = 'disconnected';
-        });
-
-      testBtn.addEventListener('click', doTestInsert);
-      refreshBtn.addEventListener('click', async ()=>{ rows = await loadInitial(); render(rows); });
-    })();
-  </script>
+  }catch(e){/* ignore */}
+},2000);
+</script>
 </body>
 </html>
