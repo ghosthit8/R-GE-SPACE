@@ -55,6 +55,7 @@
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 
 const clockEl = document.getElementById('clock');
@@ -72,12 +73,12 @@ function toast(msg){ toastEl.textContent=msg; toastEl.style.display='block'; cle
 // Stable anonymous voter key per device
 function getVoterKey(){
   let k = localStorage.getItem('rs_voter_key');
-  if(!k){ k = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now(); localStorage.setItem('rs_voter_key', k); }
+  if(!k){ k = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)) + '-' + Date.now(); localStorage.setItem('rs_voter_key', k); }
   return k;
 }
 const VOTER_KEY = getVoterKey();
 
-let chosen = null;                // 'red' | 'blue'
+let chosen = null; // 'red' | 'blue'
 let serverPhaseEndISO = null;
 let paused = false;
 let remainingSec = null;
@@ -90,7 +91,7 @@ voteBlueBtn.onclick = ()=>{ chosen='blue'; submitBtn.disabled=false; voteBlueBtn
 submitBtn.onclick = async ()=>{
   if(!chosen || !serverPhaseEndISO) return;
   try{
-    const { error } = await supabase.from('votes').upsert(
+    const { error } = await supabase.from('phase_votes').upsert(
       { phase_key: serverPhaseEndISO, voter_key: VOTER_KEY, choice: chosen },
       { onConflict: 'phase_key,voter_key' }
     );
@@ -100,7 +101,7 @@ submitBtn.onclick = async ()=>{
     toast('Vote saved');
   }catch(e){
     console.error(e);
-    toast('Vote failed');
+    toast('Vote failed: ' + (e?.message || 'unknown error'));
   }
 };
 
@@ -135,13 +136,23 @@ function normalize(s){ return {
 
 async function fetchState(){
   const s = normalize(await callEdge('GET'));
+  const prevPhase = serverPhaseEndISO;
   serverPhaseEndISO = s.phase_end_at;
   paused = s.paused;
   remainingSec = s.remaining_sec;
   lastSyncAt = Date.now();
   setStateUI();
-  // If the user already picked, keep submit enabled (so they can cast before end)
-  submitBtn.disabled = !chosen;
+
+  // If we rolled to a new phase, reset selection
+  if(prevPhase && serverPhaseEndISO && prevPhase !== serverPhaseEndISO){
+    chosen = null;
+    voteRedBtn.classList.remove('selected');
+    voteBlueBtn.classList.remove('selected');
+    submitBtn.textContent = '✅ Submit Vote';
+    submitBtn.disabled = true;
+  } else {
+    submitBtn.disabled = !chosen;
+  }
 }
 
 function stop(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
@@ -154,16 +165,7 @@ async function start(){
       const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
       clockEl.textContent = String(Math.ceil(rem/1000));
       if (rem <= 0 || Date.now()-lastSyncAt > 5000) {
-        // new phase → clear button state so user can vote again
-        const prevPhase = serverPhaseEndISO;
-        await fetchState();
-        if(prevPhase && serverPhaseEndISO && prevPhase !== serverPhaseEndISO){
-          chosen = null;
-          voteRedBtn.classList.remove('selected');
-          voteBlueBtn.classList.remove('selected');
-          submitBtn.textContent = '✅ Submit Vote';
-          submitBtn.disabled = true;
-        }
+        try{ await fetchState(); }catch(e){ clockEl.textContent='ERR'; stateEl.textContent='ERR'; }
       }
     }
     rafId = requestAnimationFrame(tick);
