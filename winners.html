@@ -1,53 +1,90 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <title>🏁 Winners — Live</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>🏁 Winners — Live (Supabase)</title>
   <style>
-    body{background:#000;color:#39ff14;font-family:system-ui,Arial,sans-serif;margin:0;padding:16px}
-    .card{border:1px solid #0f2510;border-radius:12px;background:#111;margin:8px 0;overflow:hidden}
-    .hero{height:160px}
-    .red{background:#a60000}.blue{background:#0058a6}
-    .meta{padding:10px 12px;display:flex;justify-content:space-between}
-    .empty{opacity:.6;padding:20px;text-align:center;border:1px dashed #0f2510;border-radius:12px}
+    :root{ --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--green); font-family:system-ui,Arial,sans-serif }
+    .wrap{ max-width:900px; margin:16px auto; padding:0 16px }
+    header{ display:flex; justify-content:space-between; align-items:center; gap:8px }
+    .btn{ border:1px solid var(--green); color:var(--green); padding:8px 12px; border-radius:10px; background:transparent; text-decoration:none }
+    .grid{ display:grid; gap:12px; margin-top:16px }
+    .card{ border:1px solid var(--border); border-radius:12px; background:#111; overflow:hidden }
+    .hero{ height:160px } .red{ background:#a60000 } .blue{ background:#0058a6 }
+    .meta{ padding:10px 12px; display:flex; justify-content:space-between; align-items:center }
+    .badge{ border:1px solid var(--border); border-radius:999px; padding:4px 10px }
+    .empty{ opacity:.7; padding:16px; border:1px dashed var(--border); border-radius:12px; text-align:center }
+    .status{ display:flex; gap:8px; align-items:center }
+    .dot{ width:8px; height:8px; border-radius:999px; background:#39ff14; box-shadow:0 0 10px #39ff14 }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <h1>🏁 Winners</h1>
-  <div id="content"></div>
+  <div class="wrap">
+    <header>
+      <div class="status"><span class="dot"></span><span id="live">connecting…</span></div>
+      <a class="btn" href="matchup.html">← Back to Matchup</a>
+    </header>
+
+    <div id="content" class="grid"></div>
+  </div>
 
   <script>
+    // --- Supabase config (your real project) ---
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const content = document.getElementById("content");
+    const content = document.getElementById('content');
+    const liveEl  = document.getElementById('live');
+
+    function card(row){
+      const el = document.createElement('div'); el.className='card';
+      const hero = document.createElement('div'); hero.className='hero ' + (row.color || 'red');
+      const meta = document.createElement('div'); meta.className='meta';
+      const when = row.decided_at ? new Date(row.decided_at).toLocaleString() : '';
+      meta.innerHTML = `<div><b>${row.name || ''}</b> — ${(row.color || '').toUpperCase()}</div>
+                        <div class="badge">${when}</div>`;
+      el.append(hero, meta);
+      return el;
+    }
+
     function render(list){
-      content.innerHTML="";
-      if(!list.length){ content.innerHTML='<div class="empty">No winners yet.</div>'; return; }
-      list.forEach(r=>{
-        const el=document.createElement("div"); el.className="card";
-        const hero=document.createElement("div"); hero.className="hero "+r.color;
-        const meta=document.createElement("div"); meta.className="meta";
-        meta.innerHTML=`<b>${r.name}</b> — ${r.color.toUpperCase()} <span>${new Date(r.decided_at).toLocaleTimeString()}</span>`;
-        el.append(hero,meta); content.append(el);
-      });
+      content.innerHTML = '';
+      if (!list || !list.length){
+        content.innerHTML = `<div class="empty">No winners yet.</div>`;
+        return;
+      }
+      list.forEach(r => content.append(card(r)));
     }
 
     async function loadInitial(){
-      let {data,error} = await supabase.from("winners").select("*").order("decided_at",{ascending:false}).limit(50);
-      if(error){ console.error(error); return []; }
-      return data;
+      const { data, error } = await supabase
+        .from('winners')
+        .select('*')
+        .order('decided_at', { ascending: false })
+        .limit(100);
+      if (error){ console.error(error); liveEl.textContent = 'error loading'; return []; }
+      return data || [];
     }
 
     (async ()=>{
-      let rows=await loadInitial(); render(rows);
-      supabase.channel("winners-stream")
-        .on("postgres_changes",{event:"INSERT",schema:"public",table:"winners"},payload=>{
-          rows.unshift(payload.new); render(rows);
+      let rows = await loadInitial();
+      render(rows);
+      liveEl.textContent = 'live';
+
+      supabase
+        .channel('winners-stream')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'winners' }, (payload) => {
+          rows.unshift(payload.new);
+          render(rows);
         })
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') liveEl.textContent = 'live';
+          if (status === 'CLOSED' || status === 'CHANNEL_ERROR') liveEl.textContent = 'disconnected';
+        });
     })();
   </script>
 </body>
