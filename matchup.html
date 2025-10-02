@@ -55,7 +55,6 @@
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 
 const clockEl = document.getElementById('clock');
@@ -69,6 +68,8 @@ const submitBtn = document.getElementById('submitBtn');
 const toastEl = document.getElementById('toast');
 
 function toast(msg){ toastEl.textContent=msg; toastEl.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>toastEl.style.display='none',1200); }
+
+function canonicalISO(iso){ return new Date(iso).toISOString(); }
 
 // Stable anonymous voter key per device
 function getVoterKey(){
@@ -91,8 +92,9 @@ voteBlueBtn.onclick = ()=>{ chosen='blue'; submitBtn.disabled=false; voteBlueBtn
 submitBtn.onclick = async ()=>{
   if(!chosen || !serverPhaseEndISO) return;
   try{
+    const phaseKey = canonicalISO(serverPhaseEndISO);
     const { error } = await supabase.from('phase_votes').upsert(
-      { phase_key: serverPhaseEndISO, voter_key: VOTER_KEY, choice: chosen },
+      { phase_key: phaseKey, voter_key: VOTER_KEY, choice: chosen },
       { onConflict: 'phase_key,voter_key' }
     );
     if (error) throw error;
@@ -143,7 +145,6 @@ async function fetchState(){
   lastSyncAt = Date.now();
   setStateUI();
 
-  // If we rolled to a new phase, reset selection
   if(prevPhase && serverPhaseEndISO && prevPhase !== serverPhaseEndISO){
     chosen = null;
     voteRedBtn.classList.remove('selected');
