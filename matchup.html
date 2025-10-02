@@ -135,9 +135,8 @@
 
     <div class="vote-row">
       <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
-      <!-- now both point to winners.html -->
       <a class="btn" href="winners.html" target="_blank" rel="noopener">🏁 Winners</a>
-      <a class="btn" href="winners.html" target="_blank" rel="noopener">📝 Test Log</a>
+      <a class="btn" href="winners.html" target="_blank" rel="noopener">📝 Log</a>
     </div>
   </div>
 
@@ -161,6 +160,10 @@
     let rafId = null;
     let decidedForPhaseKey = null;
 
+    // fallback clock if Edge can’t be reached
+    let fallbackActive = false;
+    let fallbackEndAt = null;
+
     const tinyClock = document.getElementById('tinyClock');
     const tinyState = document.getElementById('tinyState');
     const pauseBtn  = document.getElementById('pauseBtn');
@@ -170,13 +173,21 @@
       pauseBtn.textContent  = paused ? "▶️ Resume" : "⏸️ Pause";
       tinyClock.classList.toggle('paused', paused);
     }
-    function showTinyError(msg){ tinyClock.textContent='ERR'; console.error(msg); }
+    function showTinyError(msg){ console.error(msg); }
+
+    // Avoid sending Content-Type on GET -> no preflight
     async function callEdge(method='GET', body=null){
-      const res = await fetch(EDGE_URL,{ method, headers:{'Content-Type':'application/json'}, body: body?JSON.stringify(body):null });
+      const init = { method };
+      if (method !== 'GET') {
+        init.headers = { 'Content-Type': 'application/json' };
+        if (body) init.body = JSON.stringify(body);
+      }
+      const res = await fetch(EDGE_URL, init);
       const json = await res.json().catch(()=> ({}));
       if(!res.ok) throw new Error(json?.error||res.statusText);
       return json;
     }
+
     async function fetchState(){
       const json = await callEdge('GET');
       const s = json.state;
@@ -193,11 +204,34 @@
       if (phaseChanged) beginNewRound();
       return s;
     }
+
     function stopTiny(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
+
+    // local fallback loop (used only if Edge is unreachable at boot)
+    function startFallback(){
+      fallbackActive = true;
+      const step = ()=>{
+        if (paused){ tinyClock.textContent = String(Math.max(0, Math.ceil(((fallbackEndAt||0)-Date.now())/1000))); requestAnimationFrame(step); return; }
+        if (!fallbackEndAt) fallbackEndAt = Date.now() + periodSec*1000;
+        const rem = Math.max(0, fallbackEndAt - Date.now());
+        tinyClock.textContent = String(Math.ceil(rem/1000));
+        if (rem <= 0){
+          fallbackEndAt = Date.now() + periodSec*1000;
+          decideWinnerNow();
+        }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+
     async function startTiny(){
       stopTiny();
       const draw = async () => {
         try{
+          if (fallbackActive){
+            // handled by fallback loop
+            return;
+          }
           if (paused){
             const n = Math.max(0, Math.ceil(Number(remainingSec ?? 0)));
             tinyClock.textContent = String(n);
@@ -219,13 +253,28 @@
               if (s.paused) tinyClock.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
             }
           }
-        }catch(e){ showTinyError(e.message); return; }
+        }catch(e){
+          showTinyError(e.message);
+          // If we fail here (likely CORS or network), fall back to local clock once.
+          if (!fallbackActive){
+            console.warn('Edge unreachable, switching to local 10s clock.');
+            startFallback();
+          }
+          return;
+        }
         rafId = requestAnimationFrame(draw);
       };
       rafId = requestAnimationFrame(draw);
     }
+
     pauseBtn.addEventListener('click', async ()=>{
       try{
+        if (fallbackActive){
+          // Just toggle paused flag locally in fallback mode
+          paused = !paused;
+          setTinyState();
+          return;
+        }
         if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'});
         await fetchState();
       }catch(e){ showTinyError(e.message); }
@@ -322,15 +371,15 @@
       // 1) Keep local for backward-compat
       pushWinner({ ts:Date.now(), id:picked.id, name:picked.name, color:picked.color });
 
-      // 2) Insert into Supabase (dedupe by phase_key if your SQL has a UNIQUE constraint)
+      // 2) Insert into Supabase
       try{
         await supabase.from('winners').insert({
           decided_at: new Date().toISOString(),
           color: picked.color,
           name: picked.name,
-          phase_key: serverPhaseEndISO || null,     // 10s phase identifier
+          phase_key: serverPhaseEndISO || (fallbackActive ? String(fallbackEndAt) : null),
           round_num: b.round,
-          meta: { battle_id: b.id }
+          meta: { battle_id: b.id, source: fallbackActive ? 'client-fallback' : 'edge' }
         });
       }catch(e){
         console.error('Supabase insert error:', e);
@@ -338,7 +387,7 @@
 
       confettiBurst();
 
-      // Optional: ping other tabs that still rely on localStorage listeners
+      // Optional: ping legacy listeners
       localStorage.setItem('rs_winners_ping_v1', String(Date.now()));
     }
 
@@ -372,10 +421,17 @@
 
     (async ()=>{ 
       try{ 
+        // Try Edge first
         await fetchState();
         beginNewRound();
         await startTiny();
-      } catch(e){ showTinyError(e.message); } 
+      } catch(e){
+        // If Edge fails at boot, show fallback clock immediately
+        console.warn('Boot fetchState failed; enabling local fallback countdown.', e);
+        beginNewRound();
+        setTinyState();
+        startFallback();
+      } 
     })();
   </script>
 </body>
