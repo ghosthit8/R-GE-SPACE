@@ -3,55 +3,75 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Winners → winners_test</title>
-
-  <!-- Hard fallback redirect (no-JS) -->
-  <meta http-equiv="refresh" content="0; url=winners_test.html" />
-
-  <!-- Optional: don’t index this helper page -->
-  <meta name="robots" content="noindex, nofollow" />
-  <link rel="canonical" href="winners_test.html" />
-
+  <title>🏁 Winners — Live View</title>
   <style>
-    :root { color-scheme: dark; }
-    html,body{
-      height:100%; margin:0; background:#000; color:#39ff14;
-      font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, Helvetica, sans-serif;
-    }
-    main{ display:grid; place-items:center; min-height:100%; padding:24px }
-    .box{ text-align:center; border:1px solid #0f2510; border-radius:12px; padding:16px 20px; background:#070707; }
-    .hint{ color:#e5ffe5; opacity:.8; margin-top:6px; font-size:14px }
-    a{ color:#9ae6b4; text-decoration:none } a:hover{ text-decoration:underline }
+    :root { --green:#39ff14; --border:#0f2510; --ink:#e5ffe5; --bg:#000; }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--green); font-family: system-ui, Arial, sans-serif; }
+    .wrap{ max-width:900px; margin:16px auto; padding:0 16px; }
+    header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
+    h1{ margin:0 }
+    .btn{ border:1px solid var(--green); color:var(--green); padding:6px 12px; border-radius:8px; background:transparent; text-decoration:none; }
+    .grid{ display:grid; gap:12px; }
+    .card{ border:1px solid var(--border); border-radius:12px; background:#111; overflow:hidden; }
+    .hero{ height:160px; }
+    .hero.red{ background:#a00; }
+    .hero.blue{ background:#00a; }
+    .meta{ padding:8px 12px; display:flex; justify-content:space-between; align-items:center; }
+    .empty{ opacity:.7; padding:20px; text-align:center; border:1px dashed var(--border); border-radius:12px; }
   </style>
-
-  <script>
-    // JS redirect (fast path) with query + hash passthrough
-    (function () {
-      var target = 'winners_test.html';
-      var qs = window.location.search || '';
-      var hash = window.location.hash || '';
-      var href = target + qs + hash;
-
-      // If prerendered, wait until visible to avoid browser quirks
-      if (document.visibilityState === 'prerender') {
-        document.addEventListener('visibilitychange', function onVis() {
-          if (!document.hidden) { document.removeEventListener('visibilitychange', onVis); location.replace(href); }
-        });
-      } else {
-        location.replace(href);
-      }
-    })();
-  </script>
 </head>
 <body>
-  <main>
-    <div class="box">
-      <div style="font-size:20px;margin-bottom:8px">
-        Redirecting to <b>winners_test.html</b>…
-      </div>
-      <a href="winners_test.html">Click here if you’re not redirected</a>
-      <div class="hint">Keeps any ?query and #hash intact.</div>
-    </div>
-  </main>
+  <div class="wrap">
+    <header>
+      <h1>🏁 Winners</h1>
+      <a class="btn" href="matchup.html">← Back</a>
+    </header>
+    <div id="content" class="grid"></div>
+  </div>
+
+  <script>
+    const winnersKey = 'rs_winners_v1';
+    const content = document.getElementById('content');
+    let lastJSON = null;
+
+    function readWinners(){
+      try { return JSON.parse(localStorage.getItem(winnersKey) || '[]') }
+      catch { return [] }
+    }
+
+    function render(){
+      const winners = readWinners();
+      const json = JSON.stringify(winners);
+      if (json === lastJSON) return; // no change
+      lastJSON = json;
+
+      content.innerHTML = '';
+      if (!winners.length){
+        content.innerHTML = '<div class="empty">No winners yet — keep Matchup running.</div>';
+        return;
+      }
+      winners.forEach(w=>{
+        const card = document.createElement('div');
+        card.className='card';
+        const hero = document.createElement('div');
+        hero.className='hero ' + w.color;
+        const meta = document.createElement('div');
+        meta.className='meta';
+        meta.innerHTML = `<b>${w.name}</b> — ${w.color.toUpperCase()} <span>${new Date(w.ts).toLocaleTimeString()}</span>`;
+        card.append(hero, meta);
+        content.append(card);
+      });
+    }
+
+    // refresh on storage events (from matchup tab)
+    window.addEventListener('storage', e=>{
+      if (e.key === winnersKey) render();
+    });
+
+    // also poll every 2s (fallback if matchup tab throttled)
+    setInterval(render, 2000);
+
+    render();
+  </script>
 </body>
 </html>
