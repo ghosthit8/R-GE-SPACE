@@ -18,7 +18,7 @@ function secondsUntil(iso: string | null): number {
 // deterministic pick off an ISO string
 function pickBlue(phaseKey: string) {
   let h = 5381;
-  for (let i = 0; i < phaseKey.length; i++) h = ((h << 5) + h) + phaseKey.charCodeAt(i); // djb2
+  for (let i = 0; i < phaseKey.length; i++) h = ((h << 5) + h) + phaseKey.charCodeAt(i);
   return (h & 1) === 1;
 }
 
@@ -43,11 +43,10 @@ Deno.serve(async (req) => {
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const serviceRole = Deno.env.get("SERVICE_ROLE_KEY")!;
-  const anon = Deno.env.get("SUPABASE_ANON_KEY")!; // for REST headers on upsert
+  const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
   const client = createClient(url, serviceRole);
 
   async function decideWinnerForPhase(phaseKey: string) {
-    // idempotent: on_conflict=phase_key (create a unique index on winners.phase_key once)
     const blue = pickBlue(phaseKey);
     const payload = [{
       decided_at: new Date().toISOString(),
@@ -71,7 +70,6 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify(payload)
     });
-    // ok if 201/204; if 409 it means already inserted by another call — that's fine
     if (!res.ok && res.status !== 409) {
       const t = await res.text().catch(()=>"");
       console.error("winner upsert failed", res.status, t);
@@ -102,7 +100,6 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({} as any));
 
     if (body?.force === true) {
-      // force: immediately close current phase, decide, roll to next
       const finishedPhase = s!.phase_end_at ?? nowIso();
       await decideWinnerForPhase(finishedPhase);
       const newEnd = new Date(Date.now() + s!.period_sec * 1000).toISOString();
@@ -146,9 +143,7 @@ Deno.serve(async (req) => {
   if (!s!.paused) {
     while (secondsUntil(s!.phase_end_at) <= 0) {
       const finishedPhase = s!.phase_end_at ?? nowIso();
-      // 1) decide winner for that finished phase (idempotent)
       await decideWinnerForPhase(finishedPhase);
-      // 2) roll to next phase
       const nextEnd = new Date(new Date(finishedPhase).getTime() + s!.period_sec * 1000).toISOString();
       const { data: upd, error: ue } = await client
         .from("tournament_state")
@@ -160,7 +155,6 @@ Deno.serve(async (req) => {
       s = upd as Row;
     }
   }
-  // =======================================================
 
   const remaining = s!.paused
     ? (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at))
