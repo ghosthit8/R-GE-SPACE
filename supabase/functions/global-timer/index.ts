@@ -15,8 +15,8 @@ function secondsUntil(iso: string | null): number {
   return Math.max(0, Math.ceil(ms / 1000));
 }
 
-// deterministic pick off an ISO string
-function pickBlue(phaseKey: string) {
+// deterministic fallback on ties
+function pickBlueByHash(phaseKey: string) {
   let h = 5381;
   for (let i = 0; i < phaseKey.length; i++) h = ((h << 5) + h) + phaseKey.charCodeAt(i);
   return (h & 1) === 1;
@@ -46,20 +46,41 @@ Deno.serve(async (req) => {
   const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
   const client = createClient(url, serviceRole);
 
+  async function countVotes(phaseKey: string) {
+    const redQ  = await client.from("votes").select("*", { count: "exact", head: true })
+      .eq("phase_key", phaseKey).eq("choice", "red");
+    const blueQ = await client.from("votes").select("*", { count: "exact", head: true })
+      .eq("phase_key", phaseKey).eq("choice", "blue");
+
+    return {
+      red:  redQ.count  ?? 0,
+      blue: blueQ.count ?? 0,
+    };
+  }
+
   async function decideWinnerForPhase(phaseKey: string) {
-    const blue = pickBlue(phaseKey);
+    // 1) read votes for this phase
+    const { red, blue } = await countVotes(phaseKey);
+
+    // 2) choose winner: vote-majority first, tie → deterministic fallback
+    let color: "red" | "blue";
+    if (red > blue) color = "red";
+    else if (blue > red) color = "blue";
+    else color = pickBlueByHash(phaseKey) ? "blue" : "red";
+
     const payload = [{
       decided_at: new Date().toISOString(),
       phase_key: phaseKey,
       round_num: 1,
-      name: blue ? "BLUE" : "RED",
-      color: blue ? "blue" : "red",
-      image_url: blue
+      name: color === "blue" ? "BLUE" : "RED",
+      color,
+      image_url: color === "blue"
         ? "https://dummyimage.com/800x600/0060ff/ffffff&text=BLUE"
         : "https://dummyimage.com/800x600/ff0000/ffffff&text=RED",
-      meta: { source: "edge-global-timer" }
+      meta: { source: "edge-global-timer", votes: { red, blue } }
     }];
 
+    // 3) idempotent upsert by phase_key
     const res = await fetch(`${url}/rest/v1/winners?on_conflict=phase_key`, {
       method: "POST",
       headers: {
@@ -85,7 +106,7 @@ Deno.serve(async (req) => {
 
   let s = s0 as Row | null;
   if (!s || e0) {
-    const period = 10;
+    const period = 10; // <-- change for prod (e.g., 60 or 86400)
     const end = new Date(Date.now() + period * 1000).toISOString();
     const { data: upserted, error: ue } = await client
       .from("tournament_state")
@@ -139,7 +160,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ===== Catch-up loop: for every elapsed phase, DECIDE & roll forward =====
+  // Catch-up loop: decide winner for each elapsed phase, then roll forward
   if (!s!.paused) {
     while (secondsUntil(s!.phase_end_at) <= 0) {
       const finishedPhase = s!.phase_end_at ?? nowIso();
