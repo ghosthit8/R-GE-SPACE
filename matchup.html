@@ -1,192 +1,189 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rage Space — Matchup</title>
+  <style>
+    :root{ --green:#39ff14; --green-bright:#7dff62; --bg:#000; --ink:#e5ffe5; --card:#0b0b0b; --border:#153b16; --muted:#8aff8a; --maxw:980px; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
+    .wrap{max-width:var(--maxw);margin:16px auto 64px;padding:0 16px}
+    .scorebar{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:8px 12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
+    .btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer}
+    .btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
+    .tiny{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
+    .clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
+    .tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px}
+    .art{aspect-ratio:4/3;width:100%}.art.red{background:#a60000}.art.blue{background:#0058a6}
+    .meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
+    .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--green-bright);box-shadow:0 0 18px rgba(125,255,98,.35),inset 0 0 12px rgba(57,255,20,.15)}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#0a0a0a;color:#e5ffe5;border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.2);z-index:9999}
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="scorebar">
+      <div class="tiny"><span>Decision in</span> <span id="clock" class="clock">—</span> <span id="state">LIVE</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="phaseKey" style="font-size:12px;opacity:.8;border:1px solid var(--border);border-radius:999px;padding:2px 8px">phase: —</span>
+        <button id="pauseBtn" class="btn">⏸️ Pause</button>
+        <button id="forceBtn" class="btn">🏁 Force Decide</button>
+        <a class="btn" href="winners.html" target="_blank" rel="noopener">🏁 Winners</a>
+      </div>
+    </div>
 
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Content-Type": "application/json",
+    <div class="tile">
+      <div class="art red"></div>
+      <div class="meta"><span>Entry — RED</span><button class="btn primary" id="voteRed">Vote Red</button></div>
+    </div>
+
+    <div class="tile">
+      <div class="art blue"></div>
+      <div class="meta"><span>Entry — BLUE</span><button class="btn primary" id="voteBlue">Vote Blue</button></div>
+    </div>
+
+    <div class="row">
+      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
+
+const clockEl = document.getElementById('clock');
+const stateEl = document.getElementById('state');
+const phaseBadge = document.getElementById('phaseKey');
+const pauseBtn = document.getElementById('pauseBtn');
+const forceBtn = document.getElementById('forceBtn');
+const voteRedBtn = document.getElementById('voteRed');
+const voteBlueBtn = document.getElementById('voteBlue');
+const submitBtn = document.getElementById('submitBtn');
+const toastEl = document.getElementById('toast');
+
+function toast(msg){ toastEl.textContent=msg; toastEl.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>toastEl.style.display='none',1200); }
+
+// Stable anonymous voter key per device
+function getVoterKey(){
+  let k = localStorage.getItem('rs_voter_key');
+  if(!k){ k = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now(); localStorage.setItem('rs_voter_key', k); }
+  return k;
+}
+const VOTER_KEY = getVoterKey();
+
+let chosen = null;                // 'red' | 'blue'
+let serverPhaseEndISO = null;
+let paused = false;
+let remainingSec = null;
+let lastSyncAt = 0;
+let rafId = null;
+
+voteRedBtn.onclick  = ()=>{ chosen='red';  submitBtn.disabled=false; voteRedBtn.classList.add('selected');  voteBlueBtn.classList.remove('selected');  toast('Selected RED'); };
+voteBlueBtn.onclick = ()=>{ chosen='blue'; submitBtn.disabled=false; voteBlueBtn.classList.add('selected'); voteRedBtn.classList.remove('selected');  toast('Selected BLUE'); };
+
+submitBtn.onclick = async ()=>{
+  if(!chosen || !serverPhaseEndISO) return;
+  try{
+    const { error } = await supabase.from('votes').upsert(
+      { phase_key: serverPhaseEndISO, voter_key: VOTER_KEY, choice: chosen },
+      { onConflict: 'phase_key,voter_key' }
+    );
+    if (error) throw error;
+    submitBtn.disabled = true;
+    submitBtn.textContent = '🎉 Vote submitted!';
+    toast('Vote saved');
+  }catch(e){
+    console.error(e);
+    toast('Vote failed');
+  }
 };
 
-const nowIso = () => new Date().toISOString();
-function secondsUntil(iso: string | null): number {
-  if (!iso) return 0;
-  const ms = new Date(iso).getTime() - Date.now();
-  return Math.max(0, Math.ceil(ms / 1000));
+function setStateUI(){
+  stateEl.textContent = paused ? 'PAUSED' : 'LIVE';
+  pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause';
+  phaseBadge.textContent = 'phase: ' + (serverPhaseEndISO || '—');
 }
 
-// deterministic fallback on ties
-function pickBlueByHash(phaseKey: string) {
-  let h = 5381;
-  for (let i = 0; i < phaseKey.length; i++) h = ((h << 5) + h) + phaseKey.charCodeAt(i);
-  return (h & 1) === 1;
+async function callEdge(method='GET', body=null){
+  const res = await fetch(EDGE_URL,{
+    method,
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':`Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey': SUPABASE_ANON_KEY
+    },
+    body: body ? JSON.stringify(body) : null
+  });
+  const raw = await res.text();
+  let j=null; try{ j=JSON.parse(raw); }catch{}
+  if(!res.ok) throw new Error((j && j.error) || raw || 'edge error');
+  return j?.state || j || {};
 }
 
-type Row = {
-  id: number;
-  phase_end_at: string | null;
-  period_sec: number;
-  paused: boolean;
-  paused_remaining_sec: number | null;
-  updated_at: string | null;
-};
+function normalize(s){ return {
+  phase_end_at: s.phase_end_at ?? null,
+  period_sec: s.period_sec ?? 10,
+  paused: !!s.paused,
+  remaining_sec: s.remaining_sec ?? null
+};}
 
-type State = {
-  phase_end_at: string;
-  period_sec: number;
-  paused: boolean;
-  remaining_sec: number;
-};
+async function fetchState(){
+  const s = normalize(await callEdge('GET'));
+  serverPhaseEndISO = s.phase_end_at;
+  paused = s.paused;
+  remainingSec = s.remaining_sec;
+  lastSyncAt = Date.now();
+  setStateUI();
+  // If the user already picked, keep submit enabled (so they can cast before end)
+  submitBtn.disabled = !chosen;
+}
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const serviceRole = Deno.env.get("SERVICE_ROLE_KEY")!;
-  const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const client = createClient(url, serviceRole);
-
-  async function countVotes(phaseKey: string) {
-    const redQ  = await client.from("votes").select("*", { count: "exact", head: true })
-      .eq("phase_key", phaseKey).eq("choice", "red");
-    const blueQ = await client.from("votes").select("*", { count: "exact", head: true })
-      .eq("phase_key", phaseKey).eq("choice", "blue");
-
-    return {
-      red:  redQ.count  ?? 0,
-      blue: blueQ.count ?? 0,
-    };
-  }
-
-  async function decideWinnerForPhase(phaseKey: string) {
-    // 1) read votes for this phase
-    const { red, blue } = await countVotes(phaseKey);
-
-    // 2) choose winner: vote-majority first, tie → deterministic fallback
-    let color: "red" | "blue";
-    if (red > blue) color = "red";
-    else if (blue > red) color = "blue";
-    else color = pickBlueByHash(phaseKey) ? "blue" : "red";
-
-    const payload = [{
-      decided_at: new Date().toISOString(),
-      phase_key: phaseKey,
-      round_num: 1,
-      name: color === "blue" ? "BLUE" : "RED",
-      color,
-      image_url: color === "blue"
-        ? "https://dummyimage.com/800x600/0060ff/ffffff&text=BLUE"
-        : "https://dummyimage.com/800x600/ff0000/ffffff&text=RED",
-      meta: { source: "edge-global-timer", votes: { red, blue } }
-    }];
-
-    // 3) idempotent upsert by phase_key
-    const res = await fetch(`${url}/rest/v1/winners?on_conflict=phase_key`, {
-      method: "POST",
-      headers: {
-        apikey: anon,
-        Authorization: `Bearer ${anon}`,
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=minimal"
-      },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok && res.status !== 409) {
-      const t = await res.text().catch(()=>"");
-      console.error("winner upsert failed", res.status, t);
+function stop(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
+async function start(){
+  stop();
+  const tick = async ()=>{
+    if (paused){
+      clockEl.textContent = String(Math.max(0, Math.ceil(Number(remainingSec ?? 0))));
+    } else {
+      const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
+      clockEl.textContent = String(Math.ceil(rem/1000));
+      if (rem <= 0 || Date.now()-lastSyncAt > 5000) {
+        // new phase → clear button state so user can vote again
+        const prevPhase = serverPhaseEndISO;
+        await fetchState();
+        if(prevPhase && serverPhaseEndISO && prevPhase !== serverPhaseEndISO){
+          chosen = null;
+          voteRedBtn.classList.remove('selected');
+          voteBlueBtn.classList.remove('selected');
+          submitBtn.textContent = '✅ Submit Vote';
+          submitBtn.disabled = true;
+        }
+      }
     }
-  }
-
-  // fetch or bootstrap singleton
-  const { data: s0, error: e0 } = await client
-    .from("tournament_state")
-    .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
-    .eq("id", 1)
-    .single();
-
-  let s = s0 as Row | null;
-  if (!s || e0) {
-    const period = 10; // <-- change for prod (e.g., 60 or 86400)
-    const end = new Date(Date.now() + period * 1000).toISOString();
-    const { data: upserted, error: ue } = await client
-      .from("tournament_state")
-      .upsert({ id: 1, phase_end_at: end, period_sec: period, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
-      .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
-      .single();
-    if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
-    s = upserted as Row;
-  }
-
-  if (req.method === "POST") {
-    const body = await req.json().catch(() => ({} as any));
-
-    if (body?.force === true) {
-      const finishedPhase = s!.phase_end_at ?? nowIso();
-      await decideWinnerForPhase(finishedPhase);
-      const newEnd = new Date(Date.now() + s!.period_sec * 1000).toISOString();
-      const { data: upd, error: ue } = await client
-        .from("tournament_state")
-        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
-        .eq("id", 1)
-        .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
-        .single();
-      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
-      s = upd as Row;
-    }
-
-    if (body?.action === "pause" && !s!.paused) {
-      const remainingNow = secondsUntil(s!.phase_end_at);
-      const { data: upd, error: ue } = await client
-        .from("tournament_state")
-        .update({ paused: true, paused_remaining_sec: remainingNow, updated_at: nowIso() })
-        .eq("id", 1)
-        .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
-        .single();
-      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
-      s = upd as Row;
-    }
-
-    if (body?.action === "resume" && s!.paused) {
-      const remaining = (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at));
-      const newEnd = new Date(Date.now() + remaining * 1000).toISOString();
-      const { data: upd, error: ue } = await client
-        .from("tournament_state")
-        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
-        .eq("id", 1)
-        .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
-        .single();
-      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
-      s = upd as Row;
-    }
-  }
-
-  // Catch-up loop: decide winner for each elapsed phase, then roll forward
-  if (!s!.paused) {
-    while (secondsUntil(s!.phase_end_at) <= 0) {
-      const finishedPhase = s!.phase_end_at ?? nowIso();
-      await decideWinnerForPhase(finishedPhase);
-      const nextEnd = new Date(new Date(finishedPhase).getTime() + s!.period_sec * 1000).toISOString();
-      const { data: upd, error: ue } = await client
-        .from("tournament_state")
-        .update({ phase_end_at: nextEnd, updated_at: nowIso() })
-        .eq("id", 1)
-        .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
-        .single();
-      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
-      s = upd as Row;
-    }
-  }
-
-  const remaining = s!.paused
-    ? (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at))
-    : secondsUntil(s!.phase_end_at);
-
-  const state: State = {
-    phase_end_at: s!.phase_end_at ?? nowIso(),
-    period_sec: s!.period_sec,
-    paused: s!.paused,
-    remaining_sec: Math.max(0, Math.ceil(Number(remaining ?? 0))),
+    rafId = requestAnimationFrame(tick);
   };
+  rafId = requestAnimationFrame(tick);
+}
 
-  return new Response(JSON.stringify({ state }), { headers: corsHeaders });
-});
+pauseBtn.onclick = async ()=>{ try{
+  if (paused) await callEdge('POST',{action:'resume'});
+  else        await callEdge('POST',{action:'pause'});
+  await fetchState();
+}catch(e){ toast('Pause/resume failed'); }};
+
+forceBtn.onclick = async ()=>{ try{
+  await callEdge('POST',{force:true});
+  await fetchState();
+  toast('Forced decision & rolled phase');
+}catch(e){ toast('Force failed'); }};
+
+(async()=>{ try{ await fetchState(); await start(); }catch(e){ clockEl.textContent='ERR'; stateEl.textContent='ERR'; }})();
+</script>
+</body>
+</html>
