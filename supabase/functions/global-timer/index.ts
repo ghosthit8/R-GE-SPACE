@@ -15,6 +15,13 @@ function secondsUntil(iso: string | null): number {
   return Math.max(0, Math.ceil(ms / 1000));
 }
 
+// deterministic pick off an ISO string
+function pickBlue(phaseKey: string) {
+  let h = 5381;
+  for (let i = 0; i < phaseKey.length; i++) h = ((h << 5) + h) + phaseKey.charCodeAt(i); // djb2
+  return (h & 1) === 1;
+}
+
 type Row = {
   id: number;
   phase_end_at: string | null;
@@ -23,28 +30,55 @@ type Row = {
   paused_remaining_sec: number | null;
   updated_at: string | null;
 };
-type State = { phase_end_at: string; period_sec: number; paused: boolean; remaining_sec: number; };
+
+type State = {
+  phase_end_at: string;
+  period_sec: number;
+  paused: boolean;
+  remaining_sec: number;
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const serviceRole = Deno.env.get("SERVICE_ROLE_KEY")!;
+  const anon = Deno.env.get("SUPABASE_ANON_KEY")!; // for REST headers on upsert
   const client = createClient(url, serviceRole);
 
-  async function logZero(rolledFromISO: string | null) {
-    try {
-      const rollover_at = rolledFromISO ?? nowIso();
-      const { error } = await client
-        .from("zero_rollovers")
-        .insert({ rollover_at, phase_end_at: rolledFromISO, source: "edge-fn" });
-      if (error) console.error("zero_rollovers insert failed:", error.message);
-    } catch (e) {
-      console.error("zero_rollovers insert exception:", (e as Error).message);
+  async function decideWinnerForPhase(phaseKey: string) {
+    // idempotent: on_conflict=phase_key (create a unique index on winners.phase_key once)
+    const blue = pickBlue(phaseKey);
+    const payload = [{
+      decided_at: new Date().toISOString(),
+      phase_key: phaseKey,
+      round_num: 1,
+      name: blue ? "BLUE" : "RED",
+      color: blue ? "blue" : "red",
+      image_url: blue
+        ? "https://dummyimage.com/800x600/0060ff/ffffff&text=BLUE"
+        : "https://dummyimage.com/800x600/ff0000/ffffff&text=RED",
+      meta: { source: "edge-global-timer" }
+    }];
+
+    const res = await fetch(`${url}/rest/v1/winners?on_conflict=phase_key`, {
+      method: "POST",
+      headers: {
+        apikey: anon,
+        Authorization: `Bearer ${anon}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal"
+      },
+      body: JSON.stringify(payload)
+    });
+    // ok if 201/204; if 409 it means already inserted by another call — that's fine
+    if (!res.ok && res.status !== 409) {
+      const t = await res.text().catch(()=>"");
+      console.error("winner upsert failed", res.status, t);
     }
   }
 
-  // singleton row
+  // fetch or bootstrap singleton
   const { data: s0, error: e0 } = await client
     .from("tournament_state")
     .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
@@ -68,7 +102,9 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({} as any));
 
     if (body?.force === true) {
-      await logZero(s!.phase_end_at);
+      // force: immediately close current phase, decide, roll to next
+      const finishedPhase = s!.phase_end_at ?? nowIso();
+      await decideWinnerForPhase(finishedPhase);
       const newEnd = new Date(Date.now() + s!.period_sec * 1000).toISOString();
       const { data: upd, error: ue } = await client
         .from("tournament_state")
@@ -106,12 +142,14 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ===== Catch-up loop: backfill all missed rollovers =====
+  // ===== Catch-up loop: for every elapsed phase, DECIDE & roll forward =====
   if (!s!.paused) {
-    // While now >= phase_end_at, log the ending phase and push to the next
     while (secondsUntil(s!.phase_end_at) <= 0) {
-      await logZero(s!.phase_end_at);
-      const nextEnd = new Date(new Date(s!.phase_end_at ?? nowIso()).getTime() + s!.period_sec * 1000).toISOString();
+      const finishedPhase = s!.phase_end_at ?? nowIso();
+      // 1) decide winner for that finished phase (idempotent)
+      await decideWinnerForPhase(finishedPhase);
+      // 2) roll to next phase
+      const nextEnd = new Date(new Date(finishedPhase).getTime() + s!.period_sec * 1000).toISOString();
       const { data: upd, error: ue } = await client
         .from("tournament_state")
         .update({ phase_end_at: nextEnd, updated_at: nowIso() })
@@ -124,12 +162,15 @@ Deno.serve(async (req) => {
   }
   // =======================================================
 
+  const remaining = s!.paused
+    ? (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at))
+    : secondsUntil(s!.phase_end_at);
+
   const state: State = {
     phase_end_at: s!.phase_end_at ?? nowIso(),
     period_sec: s!.period_sec,
     paused: s!.paused,
-    remaining_sec: (s!.paused ? (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at))
-                              : secondsUntil(s!.phase_end_at)),
+    remaining_sec: Math.max(0, Math.ceil(Number(remaining ?? 0))),
   };
 
   return new Response(JSON.stringify({ state }), { headers: corsHeaders });
