@@ -19,6 +19,7 @@
     header.wrap{ padding-top:0 }
     h1{ letter-spacing:.06em; margin:0 0 8px }
 
+    /* scorebar + small timer */
     .scorebar{
       display:flex; gap:12px; align-items:center; justify-content:space-between;
       border:1px solid var(--border); padding:8px 12px; border-radius:10px;
@@ -37,6 +38,7 @@
     .btn:active:not(:disabled){ transform: translateY(0) scale(.99) }
     .btn:disabled{ opacity:.45; cursor:not-allowed }
 
+    /* Selected state — brighter green + soft pulse */
     .btn.primary.selected{
       background:rgba(57,255,20,.22);
       color:var(--green-bright);
@@ -46,44 +48,67 @@
       animation: pulse-green .9s ease-out 1;
     }
     @keyframes pulse-green{
-      0%{ box-shadow: 0 0 0 rgba(125,255,98,0) }
-      40%{ box-shadow: 0 0 26px rgba(125,255,98,.45), inset 0 0 22px rgba(57,255,20,.25) }
-      100%{ box-shadow: 0 0 22px rgba(125,255,98,.35), inset 0 0 18px rgba(57,255,20,.15) }
+      0%   { box-shadow: 0 0 0 rgba(125,255,98,.0) }
+      40%  { box-shadow: 0 0 26px rgba(125,255,98,.45), inset 0 0 22px rgba(57,255,20,.25) }
+      100% { box-shadow: 0 0 22px rgba(125,255,98,.35), inset 0 0 18px rgba(57,255,20,.15) }
     }
 
-    .tiny-timer{ display:inline-flex; align-items:center; gap:8px; font-variant-numeric:tabular-nums;
-      font-size:12px; color:var(--muted); opacity:.95 }
-    .tiny-clock{ font-size:13px; font-weight:700; padding:2px 8px; border:1px solid var(--border); border-radius:8px;
-      text-shadow:0 0 6px rgba(57,255,20,.35) }
+    /* Small green timer (old-matchup vibe) */
+    .tiny-timer{
+      display:inline-flex; align-items:center; gap:8px; font-variant-numeric:tabular-nums;
+      font-size:12px; color:var(--muted); opacity:.95;
+    }
+    .tiny-clock{
+      font-size:13px; font-weight:700; padding:2px 8px; border:1px solid var(--border); border-radius:8px;
+      text-shadow:0 0 6px rgba(57,255,20,.35);
+    }
     .paused{ opacity:.65 }
 
-    .stack{ margin-top:16px; display:grid; grid-template-columns:1fr; gap:16px }
+    /* Stacked two-tile layout */
+    .stack{ margin-top:16px; display:grid; grid-template-columns:1fr; gap:16px; }
     .tile{
       border:1px solid var(--border); border-radius:14px; overflow:hidden; background:rgba(7,7,7,.6); position:relative;
       transition: box-shadow .2s ease, transform .18s ease;
     }
-    .tile.chosen{ outline:2px solid var(--green);
-      box-shadow:0 0 18px rgba(57,255,20,.35) inset, 0 0 14px rgba(57,255,20,.25); animation: throb 1.2s ease-in-out infinite }
-    @keyframes throb{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.01)} }
-    .art{ aspect-ratio:4/3; width:100%; display:block }
-    .art.red{ background:repeating-linear-gradient(45deg,#3a0000 0,#3a0000 12px,#5a0000 12px,#5a0000 24px),#a60000 }
-    .art.blue{ background:repeating-linear-gradient(45deg,#001c3a 0,#001c3a 12px,#00325a 12px,#00325a 24px),#0058a6 }
+    .tile.chosen{
+      outline:2px solid var(--green);
+      box-shadow:0 0 18px rgba(57,255,20,.35) inset, 0 0 14px rgba(57,255,20,.25);
+      animation: throb 1.2s ease-in-out infinite;
+    }
+    @keyframes throb{
+      0%,100% { transform: scale(1) }
+      50%     { transform: scale(1.01) }
+    }
+    .art{ aspect-ratio: 4/3; width:100%; display:block; }
+    .art.red{ background: repeating-linear-gradient(45deg, #3a0000 0, #3a0000 12px, #5a0000 12px, #5a0000 24px), #a60000; }
+    .art.blue{ background: repeating-linear-gradient(45deg, #001c3a 0, #001c3a 12px, #00325a 12px, #00325a 24px), #0058a6; }
 
-    .meta{ display:flex; gap:12px; align-items:center; justify-content:space-between; padding:10px 12px; border-top:1px solid var(--border) }
+    .meta{
+      display:flex; gap:12px; align-items:center; justify-content:space-between;
+      padding:10px 12px; border-top:1px solid var(--border);
+    }
     .label{ color:var(--ink); opacity:.8 }
-    .vote-row{ margin-top:16px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap }
+    .vote-row{ margin-top:16px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
 
-    .counts{ display:flex; gap:12px; align-items:center; justify-content:space-between; margin-top:10px; font-variant-numeric:tabular-nums }
+    .counts{ display:flex; gap:12px; align-items:center; justify-content:center; margin-top:10px; font-variant-numeric:tabular-nums; }
     .count-chip{ border:1px solid var(--border); border-radius:999px; padding:4px 10px; color:var(--ink); opacity:.9 }
 
-    .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#0a0a0a; color:#e5ffe5;
-      border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:none; box-shadow:0 0 18px rgba(57,255,20,.2); z-index:9999 }
+    .toast{
+      position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#0a0a0a; color:#e5ffe5;
+      border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:none;
+      box-shadow:0 0 18px rgba(57,255,20,.2); z-index:9999;
+    }
 
-    .winner-ribbon{ position:absolute; top:10px; left:10px; background:#0a0a0a; border:1px solid var(--border);
-      border-radius:10px; padding:6px 10px; color:var(--ink); font-weight:700; display:none; box-shadow:0 0 18px rgba(57,255,20,.25) }
+    /* Winner ribbon */
+    .winner-ribbon{
+      position:absolute; top:10px; left:10px; background:#0a0a0a; border:1px solid var(--border);
+      border-radius:10px; padding:6px 10px; color:var(--ink); font-weight:700; display:none;
+      box-shadow:0 0 18px rgba(57,255,20,.25);
+    }
     .tile.win .winner-ribbon{ display:block }
 
-    #confetti{ position:fixed; inset:0; pointer-events:none; z-index:9998 }
+    /* confetti canvas sits on top */
+    #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 9998; }
   </style>
 
   <!-- Supabase client -->
@@ -110,9 +135,11 @@
         <span class="count-chip">Blue votes: <b id="countBlue">0</b></span>
       </div>
 
+      <!-- Global Pause/Resume -->
       <button class="btn" id="pauseBtn" title="Pause or resume global timer">⏯️ Pause</button>
     </div>
 
+    <!-- Stacked entries -->
     <div class="stack" id="stack">
       <div class="tile" id="topTile">
         <div class="winner-ribbon">🏆 Winner</div>
@@ -135,6 +162,7 @@
 
     <div class="vote-row">
       <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
+      <!-- FIXED: link to winners.html -->
       <a class="btn" href="winners.html" target="_blank" rel="noopener">🏁 Winners</a>
       <a class="btn" href="winners.html" target="_blank" rel="noopener">📝 Log</a>
     </div>
@@ -144,25 +172,25 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    /* ========= Supabase ========= */
+    // ===== Supabase =====
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    /* ========= Edge timer ========= */
+    // ===== Small global timer + Pause/Resume (uses your edge function) =====
+    // This expects your edge function "global-timer" that returns:
+    // { state: { phase_end_at, period_sec, paused, remaining_sec } }
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
 
-    let serverPhaseEndISO = null;
-    let periodSec = 10;
+    let serverPhaseEndISO = null;  // changes every 10s phase; used to detect rollover
+    let periodSec = 10;            // server-provided; default 10s for tests
     let paused = false;
     let remainingSec = null;
     let lastSyncAt = 0;
     let rafId = null;
-    let decidedForPhaseKey = null;
 
-    // fallback clock if Edge can’t be reached
-    let fallbackActive = false;
-    let fallbackEndAt = null;
+    // Winner handling uses this to avoid double-deciding within the same phase:
+    let decidedForPhaseKey = null; // equals serverPhaseEndISO when we've decided
 
     const tinyClock = document.getElementById('tinyClock');
     const tinyState = document.getElementById('tinyState');
@@ -173,113 +201,82 @@
       pauseBtn.textContent  = paused ? "▶️ Resume" : "⏸️ Pause";
       tinyClock.classList.toggle('paused', paused);
     }
-    function showTinyError(msg){ console.error(msg); }
-
-    // Avoid sending Content-Type on GET -> no preflight
-    async function callEdge(method='GET', body=null){
-      const init = { method };
-      if (method !== 'GET') {
-        init.headers = { 'Content-Type': 'application/json' };
-        if (body) init.body = JSON.stringify(body);
-      }
-      const res = await fetch(EDGE_URL, init);
+    function showTinyError(msg){
+      tinyClock.textContent = 'ERR'; console.error(msg);
+    }
+    async function callEdge(method='GET', body=null) {
+      const res = await fetch(EDGE_URL, {
+        method, headers:{ 'Content-Type':'application/json' },
+        body: body ? JSON.stringify(body) : null
+      });
       const json = await res.json().catch(()=> ({}));
-      if(!res.ok) throw new Error(json?.error||res.statusText);
+      if (!res.ok) throw new Error(json?.error || res.statusText);
       return json;
     }
-
     async function fetchState(){
-      const json = await callEdge('GET');
+      const json = await callEdge('GET'); // {state:{phase_end_at,period_sec,paused,remaining_sec}}
       const s = json.state;
+      // Detect NEW phase → reset per-round stuff
       const newPhaseISO = s.phase_end_at ?? null;
       const phaseChanged = !!serverPhaseEndISO && newPhaseISO && newPhaseISO !== serverPhaseEndISO;
 
       serverPhaseEndISO = newPhaseISO;
-      periodSec   = s.period_sec ?? 10;
-      paused      = !!s.paused;
-      remainingSec= s.remaining_sec ?? null;
-      lastSyncAt  = Date.now();
+      periodSec = s.period_sec ?? 10;
+      paused = !!s.paused;
+      remainingSec = s.remaining_sec ?? null;
+      lastSyncAt = Date.now();
       setTinyState();
 
-      if (phaseChanged) beginNewRound();
+      if (phaseChanged){
+        // Reset per-round
+        beginNewRound();
+      }
       return s;
     }
-
-    function stopTiny(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
-
-    // local fallback loop (used only if Edge is unreachable at boot)
-    function startFallback(){
-      fallbackActive = true;
-      const step = ()=>{
-        if (paused){ tinyClock.textContent = String(Math.max(0, Math.ceil(((fallbackEndAt||0)-Date.now())/1000))); requestAnimationFrame(step); return; }
-        if (!fallbackEndAt) fallbackEndAt = Date.now() + periodSec*1000;
-        const rem = Math.max(0, fallbackEndAt - Date.now());
-        tinyClock.textContent = String(Math.ceil(rem/1000));
-        if (rem <= 0){
-          fallbackEndAt = Date.now() + periodSec*1000;
-          decideWinnerNow();
-        }
-        requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-    }
-
+    function stopTiny(){ if (rafId) cancelAnimationFrame(rafId); rafId = null; }
     async function startTiny(){
       stopTiny();
       const draw = async () => {
         try{
-          if (fallbackActive){
-            // handled by fallback loop
-            return;
-          }
           if (paused){
             const n = Math.max(0, Math.ceil(Number(remainingSec ?? 0)));
             tinyClock.textContent = String(n);
-          } else {
+          }else{
             const endMs = Date.parse(serverPhaseEndISO);
             const remMs = Math.max(0, endMs - Date.now());
-            const secs  = Math.ceil(remMs/1000);
+            const secs  = Math.ceil(remMs / 1000);
             tinyClock.textContent = String(secs);
 
-            if (remMs <= 0){
-              if (serverPhaseEndISO && decidedForPhaseKey !== serverPhaseEndISO){
+            // === Phase rollover handling ===
+            if (remMs <= 0) {
+              // Make a winner decision exactly once for this phase key
+              if (serverPhaseEndISO && decidedForPhaseKey !== serverPhaseEndISO) {
                 decidedForPhaseKey = serverPhaseEndISO;
-                decideWinnerNow();
+                decideWinnerNow(); // will also save to LocalStorage for winners page
               }
+              // Resync right after rollover so a new phase begins
               const s = await fetchState();
               if (s.paused) tinyClock.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
-            } else if (Date.now() - lastSyncAt > 5000){
+            } else if (Date.now() - lastSyncAt > 5000) {
+              // mid-phase light resync
               const s = await fetchState();
               if (s.paused) tinyClock.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
             }
           }
-        }catch(e){
-          showTinyError(e.message);
-          // If we fail here (likely CORS or network), fall back to local clock once.
-          if (!fallbackActive){
-            console.warn('Edge unreachable, switching to local 10s clock.');
-            startFallback();
-          }
-          return;
-        }
+        }catch(e){ showTinyError(e.message); return; }
         rafId = requestAnimationFrame(draw);
       };
       rafId = requestAnimationFrame(draw);
     }
-
     pauseBtn.addEventListener('click', async ()=>{
       try{
-        if (fallbackActive){
-          // Just toggle paused flag locally in fallback mode
-          paused = !paused;
-          setTinyState();
-          return;
-        }
-        if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'});
-        await fetchState();
+        if (paused) { await callEdge('POST', { action: 'resume' }); }
+        else        { await callEdge('POST', { action: 'pause'  }); }
+        await fetchState(); // reflect latest
       }catch(e){ showTinyError(e.message); }
     });
 
+    // ===== Simulated single battle + voting =====
     const roundNumEl = document.getElementById('roundNum');
     const battleIndexEl = document.getElementById('battleIndex');
     const battleTotalEl = document.getElementById('battleTotal');
@@ -295,143 +292,222 @@
     const BATTLES = [{
       id:'SIM_1',
       round:1, indexInRound:1, total:1,
-      A:{ id:'RED',  name:'RED',  color:'red' },
-      B:{ id:'BLUE', name:'BLUE', color:'blue' }
+      A:{ id:'RED',   name:'RED',  color:'red'  },
+      B:{ id:'BLUE',  name:'BLUE', color:'blue' }
     }];
 
     let idx = 0;
-    let chosen = null;
-    let submitted = false;
-    let votesA = 0;
+    let chosen = null;      // 'A' or 'B' before submit
+    let submitted = false;  // lock for this client
+    let votesA = 0;         // local demo counters
     let votesB = 0;
 
     const lockKey = (id)=> `rs_vote_${id}`;
-    const winnersKey = 'rs_winners_v1';
+    const Key = 'rs__v1'; // local winners history (unchanged)
 
     function showToast(msg){
-      toastEl.textContent = msg; toastEl.style.display='block';
-      clearTimeout(showToast._t); showToast._t=setTimeout(()=> toastEl.style.display='none',1400);
+      toastEl.textContent = msg;
+      toastEl.style.display = 'block';
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(()=> toastEl.style.display='none', 1400);
     }
+
     function setButtonHighlight(){
       voteTopBtn.classList.toggle('selected', chosen==='A');
       voteBottomBtn.classList.toggle('selected', chosen==='B');
       topTile.classList.toggle('chosen', chosen==='A');
       bottomTile.classList.toggle('chosen', chosen==='B');
     }
+
     function updateCountsUI(){
-      countRedEl.textContent = String(votesA);
-      countBlueEl.textContent= String(votesB);
+      countRedEl.textContent  = String(votesA);
+      countBlueEl.textContent = String(votesB);
     }
-    function clearWinnerUI(){ topTile.classList.remove('win'); bottomTile.classList.remove('win'); }
-    function markWinnerUI(who){ if(who==='A') topTile.classList.add('win'); if(who==='B') bottomTile.classList.add('win'); }
-    function readWinners(){ try{ return JSON.parse(localStorage.getItem(winnersKey)||'[]') }catch{ return [] } }
-    function pushWinner(w){ const arr=readWinners(); arr.unshift(w); localStorage.setItem(winnersKey, JSON.stringify(arr.slice(0,500))); }
+
+    function clearWinnerUI(){
+      topTile.classList.remove('win');
+      bottomTile.classList.remove('win');
+    }
+
+    function markWinnerUI(who){ // 'A' or 'B'
+      clearWinnerUI();
+      if (who === 'A') topTile.classList.add('win');
+      if (who === 'B') bottomTile.classList.add('win');
+    }
+
+    function read(){
+      try{ return JSON.parse(localStorage.getItem(Key) || '[]') }catch{ return [] }
+    }
+    function pushWinner(w){
+      const arr = read();
+      arr.unshift(w);
+      localStorage.setItem(Key, JSON.stringify(arr.slice(0, 500))); // keep last 500
+    }
 
     function render(){
       const b = BATTLES[idx];
-      roundNumEl.textContent = b.round;
-      battleIndexEl.textContent = b.indexInRound;
-      battleTotalEl.textContent = b.total;
+      roundNumEl.textContent   = b.round;
+      battleIndexEl.textContent= b.indexInRound;
+      battleTotalEl.textContent= b.total;
 
-      chosen=null; submitted=false;
-      submitBtn.disabled=true; submitBtn.textContent='✅ Submit Vote';
-      setButtonHighlight(); clearWinnerUI();
+      chosen = null;
+      submitted = false;
+      submitBtn.disabled = true;
+      submitBtn.textContent = '✅ Submit Vote';
+      setButtonHighlight();
+      clearWinnerUI();
 
-      votesA=0; votesB=0; updateCountsUI();
+      // counters reset per round
+      votesA = 0;
+      votesB = 0;
+      updateCountsUI();
+
+      // unlock client vote for this new round
       localStorage.removeItem(lockKey(b.id));
-      voteTopBtn.disabled=false; voteBottomBtn.disabled=false;
+      voteTopBtn.disabled = false; 
+      voteBottomBtn.disabled = false;
     }
 
     voteTopBtn.addEventListener('click', ()=>{
       if (voteTopBtn.disabled) return;
-      chosen='A'; submitBtn.disabled=false; setButtonHighlight(); showToast('Selected: RED');
+      chosen = 'A';
+      submitBtn.disabled = false;
+      setButtonHighlight();
+      showToast('Selected: RED');
     });
     voteBottomBtn.addEventListener('click', ()=>{
       if (voteBottomBtn.disabled) return;
-      chosen='B'; submitBtn.disabled=false; setButtonHighlight(); showToast('Selected: BLUE');
+      chosen = 'B';
+      submitBtn.disabled = false;
+      setButtonHighlight();
+      showToast('Selected: BLUE');
     });
 
     submitBtn.addEventListener('click', ()=>{
       const b = BATTLES[idx];
-      if(!chosen || submitted) return;
-      if (chosen==='A') votesA+=1; else votesB+=1;
+      if (!chosen || submitted) return;
+
+      // In this demo, "submit" applies exactly one local vote
+      if (chosen === 'A') votesA += 1; else votesB += 1;
       updateCountsUI();
-      submitted=true; localStorage.setItem(lockKey(b.id), chosen);
-      submitBtn.textContent='🎉 Vote submitted!'; submitBtn.disabled=true;
-      voteTopBtn.disabled=true; voteBottomBtn.disabled=true;
-      confettiBurst(); showToast(`Vote submitted: ${chosen==='A'?'RED':'BLUE'}`);
+
+      submitted = true;
+      localStorage.setItem(lockKey(b.id), chosen);
+      submitBtn.textContent = '🎉 Vote submitted!';
+      submitBtn.disabled = true;
+
+      // Disable further changes after submit
+      voteTopBtn.disabled = true;
+      voteBottomBtn.disabled = true;
+
+      // Confetti for submitting
+      confettiBurst();
+      showToast(`Vote submitted: ${chosen==='A'?'RED':'BLUE'}`);
     });
 
+    // Called when the phase hits 0s (detected in the tiny timer loop)
     async function decideWinnerNow(){
-      let who=null;
-      if (votesA>votesB) who='A'; else if (votesB>votesA) who='B'; else who=Math.random()<0.5?'A':'B';
+      // Decide based on vote counts; tie → random
+      let who = null; // 'A' or 'B'
+      if (votesA > votesB) who = 'A';
+      else if (votesB > votesA) who = 'B';
+      else who = Math.random() < 0.5 ? 'A' : 'B';
+
       markWinnerUI(who);
-      const b=BATTLES[idx]; const picked=(who==='A')?b.A:b.B;
 
-      // 1) Keep local for backward-compat
-      pushWinner({ ts:Date.now(), id:picked.id, name:picked.name, color:picked.color });
+      // Persist locally (unchanged)
+      const b = BATTLES[idx];
+      const picked = (who==='A') ? b.A : b.B;
+      pushWinner({
+        ts: Date.now(),
+        id: picked.id,
+        name: picked.name,
+        color: picked.color // 'red' | 'blue'
+      });
 
-      // 2) Insert into Supabase
+      // NEW: Insert into Supabase (one row per 10s phase)
       try{
         await supabase.from('winners').insert({
           decided_at: new Date().toISOString(),
           color: picked.color,
           name: picked.name,
-          phase_key: serverPhaseEndISO || (fallbackActive ? String(fallbackEndAt) : null),
+          phase_key: serverPhaseEndISO || null,  // helps dedupe per phase if you add a UNIQUE(phase_key)
           round_num: b.round,
-          meta: { battle_id: b.id, source: fallbackActive ? 'client-fallback' : 'edge' }
+          meta: { battle_id: b.id }
         });
       }catch(e){
         console.error('Supabase insert error:', e);
       }
 
+      // Tiny celebratory pop
       confettiBurst();
-
-      // Optional: ping legacy listeners
-      localStorage.setItem('rs_winners_ping_v1', String(Date.now()));
     }
 
-    function beginNewRound(){ render(); }
+    function beginNewRound(){
+      // Reset the local voting round & UI
+      render();
+    }
 
+    // ===== Minimal confetti (no libs) =====
     function confettiBurst(){
-      const canvas=document.getElementById('confetti');
-      const ctx=canvas.getContext('2d');
-      const DPR=Math.max(1,window.devicePixelRatio||1);
-      function resize(){ canvas.width=Math.floor(window.innerWidth*DPR); canvas.height=Math.floor(window.innerHeight*DPR); }
-      resize();
-      let particles=[]; const N=120;
-      for(let i=0;i<N;i++){
-        particles.push({ x:canvas.width/2+(Math.random()-0.5)*canvas.width*0.2, y:canvas.height*0.3+(Math.random()-0.5)*canvas.height*0.1,
-          vx:(Math.random()-0.5)*6*DPR, vy:(Math.random()*-4-2)*DPR, g:0.25*DPR, a:1, r:Math.random()*3*DPR+2*DPR, life:900+Math.random()*400 });
+      const canvas = document.getElementById('confetti');
+      const ctx = canvas.getContext('2d');
+      const DPR = Math.max(1, window.devicePixelRatio || 1);
+      function resize(){
+        canvas.width = Math.floor(window.innerWidth * DPR);
+        canvas.height = Math.floor(window.innerHeight * DPR);
       }
-      const start=performance.now();
-      (function tick(){
-        const t=performance.now(); const dt=(t-(tick._last||t))/16.67; tick._last=t;
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        particles.forEach(p=>{ p.vx*=0.99; p.vy+=p.g; p.x+=p.vx*dt; p.y+=p.vy*dt; p.a*=0.986;
-          ctx.globalAlpha=Math.max(0,p.a); ctx.fillStyle=(Math.random()<0.5)?'#39ff14':'#7dff62';
-          ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      resize();
+      let particles = [];
+      const N = 120;
+      for (let i=0;i<N;i++){
+        particles.push({
+          x: canvas.width/2 + (Math.random()-0.5)*canvas.width*0.2,
+          y: canvas.height*0.3 + (Math.random()-0.5)*canvas.height*0.1,
+          vx: (Math.random()-0.5)*6*DPR,
+          vy: (Math.random()*-4 -2)*DPR,
+          g: 0.25*DPR,
+          a: 1,
+          r: Math.random()*3*DPR + 2*DPR,
+          life: 900 + Math.random()*400
         });
-        ctx.globalAlpha=1;
-        particles=particles.filter(p=>p.a>0.04 && p.y<canvas.height+40*DPR);
-        if (t-start<1200 && particles.length) requestAnimationFrame(tick); else ctx.clearRect(0,0,canvas.width,canvas.height);
+      }
+      const start = performance.now();
+      (function tick(t0){
+        const t = performance.now();
+        const dt = (t - (tick._last||t))/16.67; tick._last = t;
+
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        particles.forEach(p=>{
+          p.vx *= 0.99;
+          p.vy += p.g;
+          p.x += p.vx*dt;
+          p.y += p.vy*dt;
+          p.a *= 0.986;
+          ctx.globalAlpha = Math.max(0, p.a);
+          ctx.fillStyle = (Math.random()<0.5) ? '#39ff14' : '#7dff62';
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+
+        // trim and continue
+        particles = particles.filter(p=> p.a>0.04 && p.y<canvas.height+40*DPR);
+        if (t - start < 1200 && particles.length){
+          requestAnimationFrame(tick);
+        } else {
+          ctx.clearRect(0,0,canvas.width,canvas.height);
+        }
       })();
       window.addEventListener('resize', resize, { once:true });
     }
 
+    // Boot
     (async ()=>{ 
       try{ 
-        // Try Edge first
-        await fetchState();
-        beginNewRound();
-        await startTiny();
-      } catch(e){
-        // If Edge fails at boot, show fallback clock immediately
-        console.warn('Boot fetchState failed; enabling local fallback countdown.', e);
-        beginNewRound();
-        setTinyState();
-        startFallback();
-      } 
+        await fetchState();     // seed state (and trigger beginNewRound on first change)
+        beginNewRound();        // initial render
+        await startTiny();      // start the live countdown
+      } catch(e){ showTinyError(e.message); } 
     })();
   </script>
 </body>
