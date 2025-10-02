@@ -13,7 +13,8 @@
     .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
     .grid{ display:grid; gap:12px; margin-top:16px }
     .card{ border:1px solid var(--border); border-radius:12px; background:#111; overflow:hidden }
-    .hero{ height:160px } .red{ background:#a60000 } .blue{ background:#0058a6 }
+    .hero{ height:180px; background-size:cover; background-position:center; }
+    .red{ background:#a60000 } .blue{ background:#0058a6 }
     .meta{ padding:10px 12px; display:flex; justify-content:space-between; align-items:center }
     .badge{ border:1px solid var(--border); border-radius:999px; padding:4px 10px }
     .empty{ opacity:.7; padding:16px; border:1px dashed var(--border); border-radius:12px; text-align:center }
@@ -39,10 +40,14 @@
   </div>
 
   <script>
-    // --- Supabase config (your real project) ---
+    // Supabase config
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Placeholders used by Test Insert (match matchup.html defaults)
+    const RED_IMAGE_URL  = 'https://dummyimage.com/800x600/ff0000/ffffff&text=RED';
+    const BLUE_IMAGE_URL = 'https://dummyimage.com/800x600/0060ff/ffffff&text=BLUE';
 
     const content = document.getElementById('content');
     const liveEl  = document.getElementById('live');
@@ -50,18 +55,18 @@
     const testBtn = document.getElementById('testInsert');
     const refreshBtn = document.getElementById('refreshBtn');
 
-    function showError(msg){
-      errBox.style.display='block';
-      errBox.textContent = String(msg);
-    }
-    function clearError(){
-      errBox.style.display='none';
-      errBox.textContent = '';
-    }
+    function showError(msg){ errBox.style.display='block'; errBox.textContent = String(msg); }
+    function clearError(){ errBox.style.display='none'; errBox.textContent = ''; }
 
     function card(row){
       const el = document.createElement('div'); el.className='card';
-      const hero = document.createElement('div'); hero.className='hero ' + (row.color || 'red');
+      const hero = document.createElement('div'); hero.className='hero';
+      // Prefer the stored image; fallback to color block
+      if (row.image_url) {
+        hero.style.backgroundImage = `url("${row.image_url}")`;
+      } else {
+        hero.classList.add((row.color||'red')); // solid color fallback
+      }
       const meta = document.createElement('div'); meta.className='meta';
       const when = row.decided_at ? new Date(row.decided_at).toLocaleString() : '';
       meta.innerHTML = `<div><b>${row.name || ''}</b> — ${(row.color || '').toUpperCase()}</div>
@@ -69,6 +74,7 @@
       el.append(hero, meta);
       return el;
     }
+
     function render(list){
       content.innerHTML = '';
       if (!list || !list.length){
@@ -98,13 +104,16 @@
       clearError();
       const color = Math.random()<0.5 ? 'red' : 'blue';
       const name  = color === 'red' ? 'RED' : 'BLUE';
+      const image_url = color === 'red' ? RED_IMAGE_URL : BLUE_IMAGE_URL;
+
       const { error } = await supabase.from('winners').insert({
         decided_at: new Date().toISOString(),
-        color, name,
+        color, name, image_url,
         phase_key: null,
         round_num: 1,
         meta: { source: 'winners-test-button' }
       });
+
       if (error){
         console.error(error);
         showError("INSERT error:\n" + (error.message || JSON.stringify(error)));
@@ -112,12 +121,10 @@
     }
 
     (async ()=>{
-      // initial load
       let rows = await loadInitial();
       render(rows);
       liveEl.textContent = 'live';
 
-      // realtime stream: keep list live
       supabase
         .channel('winners-stream')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'winners' }, (payload) => {
