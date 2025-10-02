@@ -7,7 +7,7 @@
   <style>
     :root{
       --green:#39ff14; --green-bright:#7dff62; --bg:#000; --ink:#e5ffe5; --card:#0b0b0b; --border:#153b16;
-      --muted:#8aff8a; --maxw:980px; --err:#ff6b6b;
+      --muted:#8aff8a; --maxw:980px;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -15,427 +15,187 @@
     .wrap{max-width:var(--maxw);margin:16px auto 64px;padding:0 16px}
     header.wrap{padding-top:0}
     h1{margin:0 0 8px;letter-spacing:.06em}
-    .badge{font-size:.9rem;color:var(--ink);opacity:.8}
-    .scorebar{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:8px 12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap;box-shadow:inset 0 0 14px rgba(57,255,20,.09)}
-    .tag{font-size:.8rem;padding:3px 10px;border:1px solid var(--border);border-radius:999px}
-    .btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
-    .btn.primary{background:rgba(57,255,20,.08)}
+    .scorebar{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:8px 12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
+    .btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer}
     .btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
     .tiny-timer{display:inline-flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
     .tiny-clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
-    .paused{opacity:.6}
-    .stack{margin-top:16px;display:grid;gap:16px}
-    .tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);position:relative}
-    .winner-ribbon{position:absolute;top:10px;left:10px;background:#0a0a0a;border:1px solid var(--border);border-radius:10px;padding:6px 10px;color:var(--ink);font-weight:700;display:none}
-    .tile.win .winner-ribbon{display:block}
+    .tiny-state{border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:12px}
+    .tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px}
     .art{aspect-ratio:4/3;width:100%}
     .art.red{background:repeating-linear-gradient(45deg,#3a0000 0,#3a0000 12px,#5a0000 12px,#5a0000 24px),#a60000}
     .art.blue{background:repeating-linear-gradient(45deg,#001c3a 0,#001c3a 12px,#00325a 12px,#00325a 24px),#0058a6}
     .meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
-    .label{color:var(--ink);opacity:.85}
-    .vote-row{margin-top:16px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
-    .counts{display:flex;gap:12px;align-items:center}
-    .count-chip{border:1px solid var(--border);border-radius:999px;padding:4px 10px;color:var(--ink);opacity:.9}
-    .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--green-bright);box-shadow:0 0 22px rgba(125,255,98,.35),inset 0 0 18px rgba(57,255,20,.15)}
-    #confetti{position:fixed;inset:0;pointer-events:none;z-index:9998}
-    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#0a0a0a;color:#e5ffe5;border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.2)}
-    /* Debug panel */
-    .debug-toggle{position:fixed;top:14px;right:16px;z-index:9999}
-    .debug-panel{position:fixed;right:16px;top:58px;width:min(92vw,520px);max-height:60vh;overflow:auto;background:#0b0b0b;border:1px solid var(--border);border-radius:12px;padding:10px 12px;color:#d2ffd2;display:none;z-index:9999}
-    .debug-panel.open{display:block}
-    .log-item{border-top:1px dashed #214221;padding:8px 2px}
-    .log-item:first-child{border-top:0}
-    .log-title{display:flex;justify-content:space-between;gap:8px}
-    .log-title b{color:#fff}
-    .status-bad{color:var(--err)}
-    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; white-space:pre-wrap; word-break:break-word}
+    .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--green-bright);box-shadow:0 0 18px rgba(125,255,98,.35),inset 0 0 12px rgba(57,255,20,.15)}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#0a0a0a;color:#e5ffe5;border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.2);z-index:9999}
+    /* Debug */
+    .debug{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .chip{border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:12px}
+    .err{color:#ff6b6b}
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <button class="btn debug-toggle" id="btnDebug">🐛 Debug</button>
-  <div class="debug-panel" id="debugPanel">
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-      <span class="chip">Timer Debug Console</span>
-      <button class="btn" id="btnResync">↻ Resync</button>
-      <button class="btn" id="btnForceDecide">🏁 Force Decide</button>
-      <span class="chip" id="chipMode">MODE: —</span>
-    </div>
-    <div id="logList"></div>
-  </div>
-
   <header class="wrap">
     <h1>R<span style="font-variant:all-small-caps">Ⓐ</span>GE SPACE — MATCHUP</h1>
-    <div class="badge">Stacked demo · Red vs Blue · winner decided every 10s</div>
-  </header>
-
-  <div class="wrap">
     <div class="scorebar">
       <div class="tiny-timer">
         <span>Decision in</span>
         <span id="tinyClock" class="tiny-clock">—</span>
-        <span id="tinyState" class="tag">LIVE</span>
+        <span id="tinyState" class="tiny-state">LIVE</span>
       </div>
-      <div class="badge">Round <span id="roundNum">1</span>, Match <span id="battleIndex">1</span>/<span id="battleTotal">1</span></div>
-      <div class="counts">
-        <span class="count-chip">Red votes: <b id="countRed">0</b></span>
-        <span class="count-chip">Blue votes: <b id="countBlue">0</b></span>
+      <div class="debug">
+        <span class="chip" id="phaseKey">phase: —</span>
+        <button id="btnPause" class="btn">⏸️ Pause</button>
+        <button id="btnForce" class="btn">🏁 Force Decide</button>
+        <a class="btn" href="winners.html" target="_blank" rel="noopener">🏁 Winners</a>
       </div>
-      <button id="pauseBtn" class="btn">⏯️ Pause</button>
     </div>
+  </header>
 
-    <div class="stack">
-      <div class="tile" id="topTile">
-        <div class="winner-ribbon">🏆 Winner</div>
-        <div class="art red" id="topArt"></div>
-        <div class="meta">
-          <span class="label" id="topLabel">Entry — RED</span>
-          <button class="btn primary" id="voteTop">Vote Red (Top)</button>
-        </div>
-      </div>
-
-      <div class="tile" id="bottomTile">
-        <div class="winner-ribbon">🏆 Winner</div>
-        <div class="art blue" id="bottomArt"></div>
-        <div class="meta">
-          <span class="label" id="bottomLabel">Entry — BLUE</span>
-          <button class="btn primary" id="voteBottom">Vote Blue (Bottom)</button>
-        </div>
+  <main class="wrap">
+    <div class="tile">
+      <div class="art red"></div>
+      <div class="meta">
+        <span>Entry — RED</span>
+        <button class="btn primary" id="voteTop">Vote Red (Top)</button>
       </div>
     </div>
 
-    <div class="vote-row">
-      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
-      <a class="btn" href="winners.html" target="_blank" rel="noopener">🏁 Winners</a>
-      <a class="btn" href="winners.html" target="_blank" rel="noopener">📝 Log</a>
+    <div class="tile">
+      <div class="art blue"></div>
+      <div class="meta">
+        <span>Entry — BLUE</span>
+        <button class="btn primary" id="voteBottom">Vote Blue (Bottom)</button>
+      </div>
     </div>
-  </div>
 
-  <canvas id="confetti"></canvas>
+    <div class="row">
+      <button class="btn" id="btnSubmit" disabled>✅ Submit Vote</button>
+    </div>
+  </main>
+
   <div id="toast" class="toast"></div>
 
-  <script>
-    /* ========= Supabase config ========= */
-    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<script>
+/* ===== Supabase / Edge config ===== */
+const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 
-    /* ========= Image URLs for winners (required by NOT NULL) ========= */
-    const RED_IMAGE_URL  = 'https://dummyimage.com/800x600/ff0000/ffffff&text=RED';
-    const BLUE_IMAGE_URL = 'https://dummyimage.com/800x600/0060ff/ffffff&text=BLUE';
+/* ===== UI refs ===== */
+const tinyClock = document.getElementById('tinyClock');
+const tinyState = document.getElementById('tinyState');
+const chipPhase = document.getElementById('phaseKey');
+const btnPause  = document.getElementById('btnPause');
+const btnForce  = document.getElementById('btnForce');
+const voteTop   = document.getElementById('voteTop');
+const voteBottom= document.getElementById('voteBottom');
+const btnSubmit = document.getElementById('btnSubmit');
+const toastEl   = document.getElementById('toast');
 
-    /* ========= Edge function endpoint ========= */
-    const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
+/* ===== Local voting (UI only; server decides winners) ===== */
+let chosen = null;
+voteTop.onclick = ()=>{ chosen='A'; btnSubmit.disabled=false; voteTop.classList.add('selected'); voteBottom.classList.remove('selected'); showToast('Selected RED'); };
+voteBottom.onclick = ()=>{ chosen='B'; btnSubmit.disabled=false; voteBottom.classList.add('selected'); voteTop.classList.remove('selected'); showToast('Selected BLUE'); };
+btnSubmit.onclick = ()=>{ if(!chosen) return; btnSubmit.disabled=true; btnSubmit.textContent='🎉 Vote submitted!'; };
 
-    /* ========= Debug helpers ========= */
-    const logList = document.getElementById('logList');
-    function now() { return new Date().toLocaleTimeString(); }
-    function logError(title, obj) {
-      console.error('[TIMER]', title, obj);
-      const item = document.createElement('div');
-      item.className = 'log-item';
-      const pre = document.createElement('div');
-      pre.className = 'mono';
-      pre.textContent = JSON.stringify(obj, null, 2);
-      item.innerHTML = `<div class="log-title"><b>${now()} • ${title}</b></div>`;
-      item.append(pre);
-      logList.prepend(item);
-      // trim
-      while (logList.children.length > 40) logList.removeChild(logList.lastChild);
-    }
+/* ===== Timer sync with Edge ===== */
+let paused=false;
+let serverPhaseEndISO=null;
+let remainingSec=null;
+let lastSyncAt=0;
+let rafId=null;
 
-    /* ========= Timer state ========= */
-    let serverPhaseEndISO = null;   // end of current 10s phase (ISO string)
-    let periodSec = 10;
-    let paused = false;
-    let remainingSec = null;
-    let lastSyncAt = 0;
-    let rafId = null;
-    let decidedForPhaseKey = null;
-    let localFallback = false;
+function showToast(msg){
+  toastEl.textContent = msg; toastEl.style.display='block';
+  clearTimeout(showToast._t); toastEl._t=setTimeout(()=> toastEl.style.display='none', 1200);
+}
+function setTinyState(){
+  tinyState.textContent = paused ? 'PAUSED' : 'LIVE';
+  btnPause.textContent  = paused ? '▶️ Resume' : '⏸️ Pause';
+}
+function setPhaseKeyLabel(){
+  chipPhase.textContent = 'phase: ' + (serverPhaseEndISO || '—');
+}
 
-    const tinyClock = document.getElementById('tinyClock');
-    const tinyState = document.getElementById('tinyState');
-    const pauseBtn  = document.getElementById('pauseBtn');
-    const chipMode  = document.getElementById('chipMode');
+async function callEdge(method='GET', body=null){
+  const res = await fetch(EDGE_URL,{
+    method,
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':`Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey': SUPABASE_ANON_KEY
+    },
+    body: body ? JSON.stringify(body) : null
+  });
+  const raw = await res.text();
+  let j=null; try{ j = JSON.parse(raw); }catch{}
+  if(!res.ok) throw new Error((j && j.error) || raw || 'edge error');
+  return j?.state || j || {};
+}
+function normalize(st){ return {
+  phase_end_at: st.phase_end_at ?? null,
+  period_sec:   st.period_sec ?? 10,
+  paused:       !!st.paused,
+  remaining_sec: st.remaining_sec ?? null
+};}
 
-    function setTinyState(){
-      const mode = localFallback ? 'LOCAL' : (paused ? 'PAUSED' : 'LIVE');
-      tinyState.textContent = mode;
-      chipMode.textContent = 'MODE: ' + mode;
-      pauseBtn.textContent  = paused ? '▶️ Resume' : '⏸️ Pause';
-      tinyClock.classList.toggle('paused', paused || localFallback);
-    }
-    function showTinyError(msg){
-      tinyClock.textContent='ERR';
-      logError('Clock error', { message: msg });
-    }
+async function fetchState(){
+  const s = normalize(await callEdge('GET'));
+  serverPhaseEndISO = s.phase_end_at;
+  paused = s.paused;
+  remainingSec = s.remaining_sec;
+  lastSyncAt = Date.now();
+  setTinyState(); setPhaseKeyLabel();
+}
 
-    // Include Authorization & apikey; capture detailed failures
-    async function callEdge(method='GET', body=null){
-      let res;
-      try {
-        res = await fetch(EDGE_URL, {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'apikey': SUPABASE_ANON_KEY
-          },
-          body: body ? JSON.stringify(body) : null
-        });
-      } catch (e) {
-        const err = { type:'NetworkError', message:e.message };
-        logError('Edge fetch failed (network)', err);
-        throw err;
-      }
-
-      let raw = '';
-      try { raw = await res.text(); } catch(e) {}
-
-      let parsed = null;
-      try { parsed = raw ? JSON.parse(raw) : null; } catch(e) {}
-
-      if (!res.ok) {
-        const err = {
-          type:'HTTPError',
-          status: res.status,
-          statusText: res.statusText,
-          body: parsed || raw || null
-        };
-        logError('Edge responded not-ok', err);
-        throw err;
-      }
-
-      return parsed || {};
-    }
-
-    // Normalize {state:{...}} or {...}
-    function normalizeState(json){
-      const s = json && typeof json === 'object' ? (json.state || json) : {};
-      return {
-        phase_end_at: s.phase_end_at ?? null,
-        period_sec:   s.period_sec ?? 10,
-        paused:       !!s.paused,
-        remaining_sec: (s.remaining_sec ?? null)
-      };
-    }
-
-    async function fetchState(){
-      try {
-        const raw = await callEdge('GET');
-        const s = normalizeState(raw);
-
-        const newISO = s.phase_end_at || null;
-        const changed = !!serverPhaseEndISO && newISO && newISO !== serverPhaseEndISO;
-
-        serverPhaseEndISO = newISO;
-        periodSec = s.period_sec || 10;
-        paused = !!s.paused;
-        remainingSec = s.remaining_sec ?? null;
-        lastSyncAt = Date.now();
-        localFallback = false;
-        setTinyState();
-
-        if (changed) beginNewRound();
-        return s;
-
-      } catch (e) {
-        // Fallback: start a local 10s phase so the page keeps working
-        localFallback = true;
-        const end = new Date(Date.now() + 10_000);
-        serverPhaseEndISO = end.toISOString();
-        periodSec = 10; paused = false; remainingSec = null; lastSyncAt = Date.now();
-        setTinyState();
-        logError('Using LOCAL fallback timer', { reason: e });
-        return { phase_end_at: serverPhaseEndISO, period_sec: 10, paused: false, remaining_sec: 10 };
+function stop(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
+async function start(){
+  stop();
+  const tick = async ()=>{
+    if (paused){
+      const n = Math.max(0, Math.ceil(Number(remainingSec ?? 0)));
+      tinyClock.textContent = String(n);
+    } else {
+      const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
+      tinyClock.textContent = String(Math.ceil(rem/1000));
+      if (rem <= 0 || Date.now()-lastSyncAt > 5000) {
+        try{ await fetchState(); } catch(e){ tinyClock.textContent='ERR'; tinyState.textContent='ERR'; }
       }
     }
+    rafId = requestAnimationFrame(tick);
+  };
+  rafId = requestAnimationFrame(tick);
+}
 
-    function stopTiny(){ if(rafId) cancelAnimationFrame(rafId); rafId = null; }
-    async function startTiny(){
-      stopTiny();
-      const draw = async () =>{
-        try{
-          if(paused){
-            const n = Math.max(0, Math.ceil(Number(remainingSec ?? 0)));
-            tinyClock.textContent = String(n);
-          }else{
-            const endMs = Date.parse(serverPhaseEndISO);
-            const remMs = Math.max(0, endMs - Date.now());
-            const secs  = Math.ceil(remMs/1000);
-            tinyClock.textContent = String(secs);
+/* ===== Controls ===== */
+btnPause.onclick = async ()=>{
+  try{
+    if (paused) await callEdge('POST',{action:'resume'});
+    else        await callEdge('POST',{action:'pause'});
+    await fetchState();
+  }catch(e){ tinyState.textContent='ERR'; showToast('Pause/resume failed'); }
+};
+btnForce.onclick = async ()=>{
+  try{
+    await callEdge('POST',{force:true});
+    await fetchState();
+    showToast('Forced decision & rolled phase');
+  }catch(e){ showToast('Force failed'); }
+};
 
-            if(remMs <= 0){
-              if(serverPhaseEndISO && decidedForPhaseKey !== serverPhaseEndISO){
-                decidedForPhaseKey = serverPhaseEndISO;
-                decideWinnerNow();
-              }
-              const s = await fetchState();
-              if(s.paused) tinyClock.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
-            }else if(Date.now() - lastSyncAt > 5000 && !localFallback){
-              const s = await fetchState();
-              if(s.paused) tinyClock.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
-            }
-          }
-        }catch(e){ showTinyError(e.message); return; }
-        rafId = requestAnimationFrame(draw);
-      };
-      rafId = requestAnimationFrame(draw);
-    }
-
-    pauseBtn.addEventListener('click', async ()=>{
-      try{
-        if (paused) await callEdge('POST',{action:'resume'});
-        else        await callEdge('POST',{action:'pause'});
-        await fetchState();
-      }catch(e){
-        logError('Pause/Resume failed', e);
-        showTinyError('pause/resume');
-      }
-    });
-
-    /* ========= Minimal demo voting ========= */
-    const roundNumEl = document.getElementById('roundNum');
-    const battleIndexEl = document.getElementById('battleIndex');
-    const battleTotalEl = document.getElementById('battleTotal');
-    const voteTopBtn = document.getElementById('voteTop');
-    const voteBottomBtn = document.getElementById('voteBottom');
-    const submitBtn = document.getElementById('submitBtn');
-    const topTile = document.getElementById('topTile');
-    const bottomTile = document.getElementById('bottomTile');
-    const toastEl = document.getElementById('toast');
-    const countRedEl = document.getElementById('countRed');
-    const countBlueEl= document.getElementById('countBlue');
-
-    const BATTLES = [{
-      id:'SIM_1',
-      round:1, indexInRound:1, total:1,
-      A:{ id:'RED',  name:'RED',  color:'red',  image_url: RED_IMAGE_URL  },
-      B:{ id:'BLUE', name:'BLUE', color:'blue', image_url: BLUE_IMAGE_URL }
-    }];
-
-    let idx=0, chosen=null, submitted=false, votesA=0, votesB=0;
-
-    function showToast(msg){
-      toastEl.textContent = msg; toastEl.style.display='block';
-      clearTimeout(showToast._t); showToast._t=setTimeout(()=> toastEl.style.display='none', 1300);
-    }
-    function setButtonHighlight(){
-      voteTopBtn.classList.toggle('selected', chosen==='A');
-      voteBottomBtn.classList.toggle('selected', chosen==='B');
-      topTile.classList.toggle('win', false);
-      bottomTile.classList.toggle('win', false);
-    }
-    function updateCountsUI(){ countRedEl.textContent=String(votesA); countBlueEl.textContent=String(votesB); }
-    function markWinnerUI(who){ if(who==='A') topTile.classList.add('win'); if(who==='B') bottomTile.classList.add('win'); }
-
-    function render(){
-      const b = BATTLES[idx];
-      (roundNumEl||{}).textContent=b.round;
-      (battleIndexEl||{}).textContent=b.indexInRound;
-      (battleTotalEl||{}).textContent=b.total;
-
-      chosen=null; submitted=false;
-      submitBtn.disabled=true; submitBtn.textContent='✅ Submit Vote';
-      voteTopBtn.disabled=false; voteBottomBtn.disabled=false;
-      votesA=0; votesB=0; updateCountsUI(); setButtonHighlight();
-    }
-
-    voteTopBtn.addEventListener('click', ()=>{ if(voteTopBtn.disabled) return; chosen='A'; submitBtn.disabled=false; setButtonHighlight(); showToast('Selected: RED'); });
-    voteBottomBtn.addEventListener('click', ()=>{ if(voteBottomBtn.disabled) return; chosen='B'; submitBtn.disabled=false; setButtonHighlight(); showToast('Selected: BLUE'); });
-
-    submitBtn.addEventListener('click', ()=>{
-      if(!chosen || submitted) return;
-      if(chosen==='A') votesA++; else votesB++;
-      updateCountsUI();
-      submitted=true; submitBtn.disabled=true; submitBtn.textContent='🎉 Vote submitted!';
-      voteTopBtn.disabled=true; voteBottomBtn.disabled=true;
-      confettiBurst();
-    });
-
-    /* ========= Decide winner + insert into Supabase (with image_url) ========= */
-    async function decideWinnerNow(){
-      let who=null;
-      if(votesA>votesB) who='A'; else if(votesB>votesA) who='B'; else who=Math.random()<0.5?'A':'B';
-      markWinnerUI(who);
-
-      const b=BATTLES[idx];
-      const picked=(who==='A')?b.A:b.B;
-      const image_url = picked.image_url || (picked.color==='red'?RED_IMAGE_URL:BLUE_IMAGE_URL);
-
-      try{
-        const { error } = await supabase.from('winners').insert({
-          decided_at: new Date().toISOString(),
-          color: picked.color,
-          name: picked.name,
-          image_url,                         // REQUIRED by your schema
-          phase_key: serverPhaseEndISO || null,
-          round_num: b.round,
-          meta: { battle_id: b.id, source: localFallback ? 'local' : 'edge' }
-        });
-        if (error) {
-          logError('Supabase insert error', error);
-        }
-      }catch(e){
-        logError('Supabase insert threw', e);
-      }
-
-      confettiBurst();
-    }
-
-    function beginNewRound(){ render(); }
-
-    /* ========= Lightweight confetti ========= */
-    function confettiBurst(){
-      const canvas=document.getElementById('confetti');
-      const ctx=canvas.getContext('2d');
-      const DPR=Math.max(1,window.devicePixelRatio||1);
-      function resize(){ canvas.width=Math.floor(window.innerWidth*DPR); canvas.height=Math.floor(window.innerHeight*DPR); }
-      resize();
-      let parts=[]; const N=120;
-      for(let i=0;i<N;i++){
-        parts.push({x:canvas.width/2+(Math.random()-0.5)*canvas.width*0.2,y:canvas.height*0.3+(Math.random()-0.5)*canvas.height*0.1,vx:(Math.random()-0.5)*6*DPR,vy:(Math.random()*-4-2)*DPR,g:0.25*DPR,a:1,r:Math.random()*3*DPR+2*DPR});
-      }
-      const start=performance.now();
-      (function tick(){
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        parts.forEach(p=>{p.vx*=0.99;p.vy+=p.g;p.x+=p.vx;p.y+=p.vy;p.a*=0.986;ctx.globalAlpha=Math.max(0,p.a);ctx.fillStyle=(Math.random()<0.5)?'#39ff14':'#7dff62';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();});
-        ctx.globalAlpha=1; parts=parts.filter(p=>p.a>0.04 && p.y<canvas.height+40*DPR);
-        if(performance.now()-start<1200 && parts.length) requestAnimationFrame(tick); else ctx.clearRect(0,0,canvas.width,canvas.height);
-      })();
-      window.addEventListener('resize', resize, { once:true });
-    }
-
-    // Debug UI controls
-    const btnDebug = document.getElementById('btnDebug');
-    const debugPanel = document.getElementById('debugPanel');
-    document.getElementById('btnResync').addEventListener('click', async ()=>{
-      try { await fetchState(); } catch(e) { /* logged already */ }
-    });
-    document.getElementById('btnForceDecide').addEventListener('click', ()=>{
-      decidedForPhaseKey = 'manual-' + Date.now();
-      decideWinnerNow();
-    });
-    btnDebug.addEventListener('click', ()=>{
-      const open = debugPanel.classList.toggle('open');
-      localStorage.setItem('rs_debug_open', open ? '1' : '0');
-    });
-    if (localStorage.getItem('rs_debug_open') === '1') debugPanel.classList.add('open');
-
-    // Global error hooks → panel
-    window.addEventListener('error', (e)=> logError('window.onerror', { message: e.message, filename:e.filename, lineno:e.lineno, colno:e.colno }));
-    window.addEventListener('unhandledrejection', (e)=> logError('unhandledrejection', { reason: (e.reason && e.reason.message) ? e.reason.message : String(e.reason) }));
-
-    // boot
-    (async ()=>{
-      try{
-        await fetchState();        // seed from Edge or fallback
-        beginNewRound();           // render UI
-        await startTiny();         // start countdown
-      }catch(e){ showTinyError(e.message); }
-    })();
-  </script>
+/* ===== Boot ===== */
+(async ()=>{
+  try{
+    await fetchState();
+    await start();
+  }catch(e){
+    tinyClock.textContent='ERR';
+    tinyState.textContent='ERR';
+  }
+})();
+</script>
 </body>
 </html>
