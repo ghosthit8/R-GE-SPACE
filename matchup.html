@@ -85,6 +85,9 @@
 
     #confetti{ position:fixed; inset:0; pointer-events:none; z-index:9998 }
   </style>
+
+  <!-- Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <header class="wrap">
@@ -142,6 +145,12 @@
   <div id="toast" class="toast"></div>
 
   <script>
+    /* ========= Supabase ========= */
+    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    /* ========= Edge timer ========= */
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
 
     let serverPhaseEndISO = null;
@@ -304,13 +313,33 @@
       confettiBurst(); showToast(`Vote submitted: ${chosen==='A'?'RED':'BLUE'}`);
     });
 
-    function decideWinnerNow(){
+    async function decideWinnerNow(){
       let who=null;
       if (votesA>votesB) who='A'; else if (votesB>votesA) who='B'; else who=Math.random()<0.5?'A':'B';
       markWinnerUI(who);
       const b=BATTLES[idx]; const picked=(who==='A')?b.A:b.B;
+
+      // 1) Keep local for backward-compat
       pushWinner({ ts:Date.now(), id:picked.id, name:picked.name, color:picked.color });
+
+      // 2) Insert into Supabase (dedupe by phase_key if your SQL has a UNIQUE constraint)
+      try{
+        await supabase.from('winners').insert({
+          decided_at: new Date().toISOString(),
+          color: picked.color,
+          name: picked.name,
+          phase_key: serverPhaseEndISO || null,     // 10s phase identifier
+          round_num: b.round,
+          meta: { battle_id: b.id }
+        });
+      }catch(e){
+        console.error('Supabase insert error:', e);
+      }
+
       confettiBurst();
+
+      // Optional: ping other tabs that still rely on localStorage listeners
+      localStorage.setItem('rs_winners_ping_v1', String(Date.now()));
     }
 
     function beginNewRound(){ render(); }
