@@ -7,7 +7,7 @@
   <style>
     :root{
       --green:#39ff14; --green-bright:#7dff62; --bg:#000; --ink:#e5ffe5; --card:#0b0b0b; --border:#153b16;
-      --muted:#8aff8a; --maxw:980px;
+      --muted:#8aff8a; --maxw:980px; --err:#ff6b6b;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -39,10 +39,32 @@
     .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--green-bright);box-shadow:0 0 22px rgba(125,255,98,.35),inset 0 0 18px rgba(57,255,20,.15)}
     #confetti{position:fixed;inset:0;pointer-events:none;z-index:9998}
     .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#0a0a0a;color:#e5ffe5;border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.2)}
+    /* Debug panel */
+    .debug-toggle{position:fixed;top:14px;right:16px;z-index:9999}
+    .debug-panel{position:fixed;right:16px;top:58px;width:min(92vw,520px);max-height:60vh;overflow:auto;background:#0b0b0b;border:1px solid var(--border);border-radius:12px;padding:10px 12px;color:#d2ffd2;display:none;z-index:9999}
+    .debug-panel.open{display:block}
+    .log-item{border-top:1px dashed #214221;padding:8px 2px}
+    .log-item:first-child{border-top:0}
+    .log-title{display:flex;justify-content:space-between;gap:8px}
+    .log-title b{color:#fff}
+    .status-bad{color:var(--err)}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; white-space:pre-wrap; word-break:break-word}
+    .chip{border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:12px}
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+  <button class="btn debug-toggle" id="btnDebug">🐛 Debug</button>
+  <div class="debug-panel" id="debugPanel">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <span class="chip">Timer Debug Console</span>
+      <button class="btn" id="btnResync">↻ Resync</button>
+      <button class="btn" id="btnForceDecide">🏁 Force Decide</button>
+      <span class="chip" id="chipMode">MODE: —</span>
+    </div>
+    <div id="logList"></div>
+  </div>
+
   <header class="wrap">
     <h1>R<span style="font-variant:all-small-caps">Ⓐ</span>GE SPACE — MATCHUP</h1>
     <div class="badge">Stacked demo · Red vs Blue · winner decided every 10s</div>
@@ -99,12 +121,29 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    /* ========= Image URLs for winners (required by your NOT NULL column) ========= */
+    /* ========= Image URLs for winners (required by NOT NULL) ========= */
     const RED_IMAGE_URL  = 'https://dummyimage.com/800x600/ff0000/ffffff&text=RED';
     const BLUE_IMAGE_URL = 'https://dummyimage.com/800x600/0060ff/ffffff&text=BLUE';
 
     /* ========= Edge function endpoint ========= */
     const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer";
+
+    /* ========= Debug helpers ========= */
+    const logList = document.getElementById('logList');
+    function now() { return new Date().toLocaleTimeString(); }
+    function logError(title, obj) {
+      console.error('[TIMER]', title, obj);
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      const pre = document.createElement('div');
+      pre.className = 'mono';
+      pre.textContent = JSON.stringify(obj, null, 2);
+      item.innerHTML = `<div class="log-title"><b>${now()} • ${title}</b></div>`;
+      item.append(pre);
+      logList.prepend(item);
+      // trim
+      while (logList.children.length > 40) logList.removeChild(logList.lastChild);
+    }
 
     /* ========= Timer state ========= */
     let serverPhaseEndISO = null;   // end of current 10s phase (ISO string)
@@ -114,49 +153,104 @@
     let lastSyncAt = 0;
     let rafId = null;
     let decidedForPhaseKey = null;
+    let localFallback = false;
 
     const tinyClock = document.getElementById('tinyClock');
     const tinyState = document.getElementById('tinyState');
     const pauseBtn  = document.getElementById('pauseBtn');
+    const chipMode  = document.getElementById('chipMode');
 
     function setTinyState(){
-      tinyState.textContent = paused ? 'PAUSED' : 'LIVE';
+      const mode = localFallback ? 'LOCAL' : (paused ? 'PAUSED' : 'LIVE');
+      tinyState.textContent = mode;
+      chipMode.textContent = 'MODE: ' + mode;
       pauseBtn.textContent  = paused ? '▶️ Resume' : '⏸️ Pause';
-      tinyClock.classList.toggle('paused', paused);
+      tinyClock.classList.toggle('paused', paused || localFallback);
     }
-    function showTinyError(msg){ tinyClock.textContent='ERR'; console.error(msg); }
+    function showTinyError(msg){
+      tinyClock.textContent='ERR';
+      logError('Clock error', { message: msg });
+    }
 
-    // === IMPORTANT: include Authorization & apikey headers ===
+    // Include Authorization & apikey; capture detailed failures
     async function callEdge(method='GET', body=null){
-      const res = await fetch(EDGE_URL, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'apikey': SUPABASE_ANON_KEY
-        },
-        body: body ? JSON.stringify(body) : null
-      });
-      const json = await res.json().catch(()=> ({}));
-      if(!res.ok) throw new Error(json?.error || res.statusText);
-      return json;
+      let res;
+      try {
+        res = await fetch(EDGE_URL, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'apikey': SUPABASE_ANON_KEY
+          },
+          body: body ? JSON.stringify(body) : null
+        });
+      } catch (e) {
+        const err = { type:'NetworkError', message:e.message };
+        logError('Edge fetch failed (network)', err);
+        throw err;
+      }
+
+      let raw = '';
+      try { raw = await res.text(); } catch(e) {}
+
+      let parsed = null;
+      try { parsed = raw ? JSON.parse(raw) : null; } catch(e) {}
+
+      if (!res.ok) {
+        const err = {
+          type:'HTTPError',
+          status: res.status,
+          statusText: res.statusText,
+          body: parsed || raw || null
+        };
+        logError('Edge responded not-ok', err);
+        throw err;
+      }
+
+      return parsed || {};
+    }
+
+    // Normalize {state:{...}} or {...}
+    function normalizeState(json){
+      const s = json && typeof json === 'object' ? (json.state || json) : {};
+      return {
+        phase_end_at: s.phase_end_at ?? null,
+        period_sec:   s.period_sec ?? 10,
+        paused:       !!s.paused,
+        remaining_sec: (s.remaining_sec ?? null)
+      };
     }
 
     async function fetchState(){
-      const json = await callEdge('GET'); // expects { state:{ phase_end_at, period_sec, paused, remaining_sec } }
-      const s = json.state || {};
-      const newISO = s.phase_end_at ?? null;
-      const changed = !!serverPhaseEndISO && newISO && newISO !== serverPhaseEndISO;
+      try {
+        const raw = await callEdge('GET');
+        const s = normalizeState(raw);
 
-      serverPhaseEndISO = newISO;
-      periodSec = s.period_sec ?? 10;
-      paused = !!s.paused;
-      remainingSec = s.remaining_sec ?? null;
-      lastSyncAt = Date.now();
-      setTinyState();
+        const newISO = s.phase_end_at || null;
+        const changed = !!serverPhaseEndISO && newISO && newISO !== serverPhaseEndISO;
 
-      if(changed) beginNewRound();
-      return s;
+        serverPhaseEndISO = newISO;
+        periodSec = s.period_sec || 10;
+        paused = !!s.paused;
+        remainingSec = s.remaining_sec ?? null;
+        lastSyncAt = Date.now();
+        localFallback = false;
+        setTinyState();
+
+        if (changed) beginNewRound();
+        return s;
+
+      } catch (e) {
+        // Fallback: start a local 10s phase so the page keeps working
+        localFallback = true;
+        const end = new Date(Date.now() + 10_000);
+        serverPhaseEndISO = end.toISOString();
+        periodSec = 10; paused = false; remainingSec = null; lastSyncAt = Date.now();
+        setTinyState();
+        logError('Using LOCAL fallback timer', { reason: e });
+        return { phase_end_at: serverPhaseEndISO, period_sec: 10, paused: false, remaining_sec: 10 };
+      }
     }
 
     function stopTiny(){ if(rafId) cancelAnimationFrame(rafId); rafId = null; }
@@ -180,7 +274,7 @@
               }
               const s = await fetchState();
               if(s.paused) tinyClock.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
-            }else if(Date.now() - lastSyncAt > 5000){
+            }else if(Date.now() - lastSyncAt > 5000 && !localFallback){
               const s = await fetchState();
               if(s.paused) tinyClock.textContent = String(Math.max(0, Math.ceil(Number(s.remaining_sec ?? 0))));
             }
@@ -196,7 +290,10 @@
         if (paused) await callEdge('POST',{action:'resume'});
         else        await callEdge('POST',{action:'pause'});
         await fetchState();
-      }catch(e){ showTinyError(e.message); }
+      }catch(e){
+        logError('Pause/Resume failed', e);
+        showTinyError('pause/resume');
+      }
     });
 
     /* ========= Minimal demo voting ========= */
@@ -269,17 +366,20 @@
       const image_url = picked.image_url || (picked.color==='red'?RED_IMAGE_URL:BLUE_IMAGE_URL);
 
       try{
-        await supabase.from('winners').insert({
+        const { error } = await supabase.from('winners').insert({
           decided_at: new Date().toISOString(),
           color: picked.color,
           name: picked.name,
           image_url,                         // REQUIRED by your schema
           phase_key: serverPhaseEndISO || null,
           round_num: b.round,
-          meta: { battle_id: b.id, source:'matchup' }
+          meta: { battle_id: b.id, source: localFallback ? 'local' : 'edge' }
         });
+        if (error) {
+          logError('Supabase insert error', error);
+        }
       }catch(e){
-        console.error('Supabase insert error:', e);
+        logError('Supabase insert threw', e);
       }
 
       confettiBurst();
@@ -308,10 +408,30 @@
       window.addEventListener('resize', resize, { once:true });
     }
 
+    // Debug UI controls
+    const btnDebug = document.getElementById('btnDebug');
+    const debugPanel = document.getElementById('debugPanel');
+    document.getElementById('btnResync').addEventListener('click', async ()=>{
+      try { await fetchState(); } catch(e) { /* logged already */ }
+    });
+    document.getElementById('btnForceDecide').addEventListener('click', ()=>{
+      decidedForPhaseKey = 'manual-' + Date.now();
+      decideWinnerNow();
+    });
+    btnDebug.addEventListener('click', ()=>{
+      const open = debugPanel.classList.toggle('open');
+      localStorage.setItem('rs_debug_open', open ? '1' : '0');
+    });
+    if (localStorage.getItem('rs_debug_open') === '1') debugPanel.classList.add('open');
+
+    // Global error hooks → panel
+    window.addEventListener('error', (e)=> logError('window.onerror', { message: e.message, filename:e.filename, lineno:e.lineno, colno:e.colno }));
+    window.addEventListener('unhandledrejection', (e)=> logError('unhandledrejection', { reason: (e.reason && e.reason.message) ? e.reason.message : String(e.reason) }));
+
     // boot
     (async ()=>{
       try{
-        await fetchState();        // seed from Edge
+        await fetchState();        // seed from Edge or fallback
         beginNewRound();           // render UI
         await startTiny();         // start countdown
       }catch(e){ showTinyError(e.message); }
