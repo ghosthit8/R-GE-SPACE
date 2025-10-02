@@ -1,169 +1,57 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Rage Space — Winners</title>
-<style>
-  :root{ --green:#39ff14; --ink:#e5ffe5; --bg:#000; --card:#0a0a0a; }
-  *{ box-sizing:border-box }
-  body{ margin:0; background:#000; color:var(--ink); font-family:ui-sans-serif,system-ui,Arial }
-  header{ padding:14px 16px; position:sticky; top:0; background:linear-gradient(#000, rgba(0,0,0,.75)); border-bottom:1px solid rgba(57,255,20,.25) }
-  .btn{ display:inline-block; padding:8px 12px; border:1px solid var(--green); color:var(--green); text-decoration:none; border-radius:10px; margin-right:8px }
-  h1{ margin:0; color:var(--green); text-shadow:0 0 10px rgba(57,255,20,.6) }
-  .wrap{ padding:14px 14px 48px; max-width:1100px; margin:0 auto }
-  table{ width:100%; border-collapse:collapse; background:var(--card); border:1px solid rgba(57,255,20,.25); box-shadow:0 0 24px rgba(57,255,20,.08); }
-  th,td{ padding:10px 8px; border-bottom:1px solid rgba(57,255,20,.18); vertical-align:middle; }
-  th{ text-align:left; color:var(--green); font-weight:700; letter-spacing:.04em; text-transform:uppercase; font-size:12px }
-  tbody tr:hover{ background:#0d0d0d }
-  .thumbWrap{ position:relative; width:70px; height:70px; }
-  .thumb{ width:100%; height:100%; object-fit:cover; border:1px solid rgba(57,255,20,.35); border-radius:10px }
-  .fsThumbBtn{
-    position:absolute; right:4px; bottom:4px; width:22px; height:22px;
-    display:grid; place-items:center; font-size:12px; line-height:1;
-    border:1px solid rgba(57,255,20,.8); color:var(--green); background:rgba(0,0,0,.55);
-    border-radius:6px; cursor:pointer; backdrop-filter: blur(2px);
-  }
-  .fsThumbBtn:active{ transform:scale(.98) }
-  .pill{ display:inline-block; padding:3px 8px; border:1px solid rgba(57,255,20,.35); border-radius:999px; color:var(--green); font-size:12px }
-  .muted{ opacity:.8 }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Winners → winners_test</title>
 
-  /* Lightbox */
-  #lightbox{
-    position:fixed; inset:0; display:none; place-items:center; z-index:99999;
-    background: radial-gradient(ellipse at center, rgba(0,0,0,.25), rgba(0,0,0,.9) 70%);
-    cursor:zoom-out;
-  }
-  #lightbox.show{ display:grid; animation: lbIn .18s ease-out }
-  @keyframes lbIn{ from{ opacity:0 } to{ opacity:1 } }
-  .lbFrame{
-    position:relative; padding:12px; border-radius:20px;
-    background:linear-gradient(135deg, rgba(0,229,255,.18), rgba(255,31,143,.18));
-    border:1px solid rgba(57,255,20,.35); box-shadow:0 0 40px rgba(57,255,20,.2);
-  }
-  .lbImg{
-    display:block; max-width:min(94vw,1200px); max-height:min(84vh,1200px);
-    object-fit:contain; background:#000; border-radius:12px;
-    filter:saturate(1.1) contrast(1.05) brightness(1.03);
-  }
-  .lbBadge{
-    position:absolute; top:10px; left:10px;
-    background:linear-gradient(90deg,#39ff14,#9bffa6); color:#001a00;
-    font-weight:900; letter-spacing:.12em; text-transform:uppercase;
-    padding:6px 12px; border-radius:999px; box-shadow:0 0 18px rgba(57,255,20,.55);
-  }
-  .lbHint{ margin-top:8px; text-align:center; color:#b9ffbf; }
-</style>
+  <!-- Hard fallback redirect (no-JS) -->
+  <meta http-equiv="refresh" content="0; url=winners_test.html" />
+
+  <!-- Optional: don’t index this helper page -->
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="canonical" href="winners_test.html" />
+
+  <style>
+    :root { color-scheme: dark; }
+    html,body{
+      height:100%; margin:0; background:#000; color:#39ff14;
+      font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, Helvetica, sans-serif;
+    }
+    main{ display:grid; place-items:center; min-height:100%; padding:24px }
+    .box{ text-align:center; border:1px solid #0f2510; border-radius:12px; padding:16px 20px; background:#070707; }
+    .hint{ color:#e5ffe5; opacity:.8; margin-top:6px; font-size:14px }
+    a{ color:#9ae6b4; text-decoration:none } a:hover{ text-decoration:underline }
+  </style>
+
+  <script>
+    // JS redirect (fast path) with query + hash passthrough
+    (function () {
+      var target = 'winners_test.html';
+      var qs = window.location.search || '';
+      var hash = window.location.hash || '';
+      var href = target + qs + hash;
+
+      // If prerendered, wait until visible to avoid browser quirks
+      if (document.visibilityState === 'prerender') {
+        document.addEventListener('visibilitychange', function onVis() {
+          if (!document.hidden) { document.removeEventListener('visibilitychange', onVis); location.replace(href); }
+        });
+      } else {
+        location.replace(href);
+      }
+    })();
+  </script>
 </head>
 <body>
-  <header>
-    <a class="btn" href="matchup.html">← Back</a>
-    <h1>🏆 Champions</h1>
-  </header>
-
-  <div class="wrap">
-    <p class="muted">Soft launch: pulling winner rows as they’re recorded. Artist names + submission flow coming next.</p>
-
-    <table id="winnersTable">
-      <thead>
-        <tr>
-          <th>Won</th>
-          <th>Preview</th>
-          <th>Match</th>
-          <th>Submitted By</th>
-        </tr>
-      </thead>
-      <tbody id="winnersBody"></tbody>
-    </table>
-  </div>
-
-  <!-- Lightbox -->
-  <div id="lightbox" aria-modal="true" role="dialog" title="Tap to close">
-    <div class="lbFrame" id="lbFrame">
-      <div class="lbBadge">Champion</div>
-      <img id="lbImg" class="lbImg" alt="Winner full view">
-      <div class="lbHint">tap or press Esc to close</div>
+  <main>
+    <div class="box">
+      <div style="font-size:20px;margin-bottom:8px">
+        Redirecting to <b>winners_test.html</b>…
+      </div>
+      <a href="winners_test.html">Click here if you’re not redirected</a>
+      <div class="hint">Keeps any ?query and #hash intact.</div>
     </div>
-  </div>
-
-  <script type="module">
-    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-    const SUPABASE_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
-    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
-
-    const lightbox = document.getElementById('lightbox');
-    const lbImg = document.getElementById('lbImg');
-    const lbFrame = document.getElementById('lbFrame');
-
-    function openLightbox(url){
-      lbImg.src = url;
-      lightbox.classList.add('show');
-
-      // Try native fullscreen for extra immersion (best-effort)
-      try {
-        if (lbFrame.requestFullscreen) lbFrame.requestFullscreen();
-        else if (lbFrame.webkitRequestFullscreen) lbFrame.webkitRequestFullscreen();
-      } catch {}
-    }
-    function closeLightbox(){
-      lightbox.classList.remove('show');
-      lbImg.src = '';
-      try {
-        if (document.fullscreenElement) document.exitFullscreen();
-        else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
-      } catch {}
-    }
-    lightbox.addEventListener('click', closeLightbox);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
-
-    async function loadWinners(){
-      const { data, error } = await supabase
-        .from('winners')
-        .select('id, match_id, image_url, submitted_by, won_at')
-        .order('won_at', { ascending:false })
-        .limit(200);
-      if(error){ console.error(error); return; }
-
-      const body = document.getElementById('winnersBody');
-      body.innerHTML = '';
-
-      data.forEach(row=>{
-        const tr = document.createElement('tr');
-
-        const dateTd = document.createElement('td');
-        dateTd.textContent = new Date(row.won_at).toLocaleString();
-        tr.appendChild(dateTd);
-
-        const imgTd = document.createElement('td');
-        const wrap = document.createElement('div'); wrap.className = 'thumbWrap';
-        const img = document.createElement('img'); img.src = row.image_url; img.alt = 'Winning piece'; img.className = 'thumb';
-        const fs = document.createElement('button'); fs.className = 'fsThumbBtn'; fs.title = 'Fullscreen'; fs.textContent = '⤢';
-        fs.addEventListener('click', (e)=>{ e.stopPropagation(); openLightbox(row.image_url); });
-        img.addEventListener('click', ()=> openLightbox(row.image_url));
-        wrap.append(img, fs); imgTd.appendChild(wrap);
-        tr.appendChild(imgTd);
-
-        const matchTd = document.createElement('td');
-        matchTd.innerHTML = `<span class="pill">${row.match_id ?? '—'}</span>`;
-        tr.appendChild(matchTd);
-
-        const subTd = document.createElement('td');
-        subTd.textContent = row.submitted_by || '—';
-        tr.appendChild(subTd);
-
-        body.appendChild(tr);
-      });
-    }
-
-    loadWinners();
-    // live updates (optional)
-    try {
-      supabase.channel('winners-stream')
-        .on('postgres_changes', { event:'INSERT', schema:'public', table:'winners' },
-          () => loadWinners())
-        .subscribe();
-    } catch(e) {}
-  </script>
+  </main>
 </body>
 </html>
