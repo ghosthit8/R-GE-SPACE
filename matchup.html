@@ -73,7 +73,7 @@
     .label{ color:var(--ink); opacity:.8 }
     .vote-row{ margin-top:16px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap }
 
-    .counts{ display:flex; gap:12px; align-items:center; justify-content:center; margin-top:10px; font-variant-numeric:tabular-nums }
+    .counts{ display:flex; gap:12px; align-items:center; justify-content:space-between; margin-top:10px; font-variant-numeric:tabular-nums }
     .count-chip{ border:1px solid var(--border); border-radius:999px; padding:4px 10px; color:var(--ink); opacity:.9 }
 
     .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#0a0a0a; color:#e5ffe5;
@@ -132,9 +132,9 @@
 
     <div class="vote-row">
       <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
-      <!-- both link to winners_test.html per your setup -->
-      <a class="btn" href="winners_test.html" target="_blank" rel="noopener">🏁 Winners</a>
-      <a class="btn" href="winners_test.html" target="_blank" rel="noopener">📝 Test Log</a>
+      <!-- both now link to winners.html -->
+      <a class="btn" href="winners.html" target="_blank" rel="noopener">🏁 Winners</a>
+      <a class="btn" href="winners.html" target="_blank" rel="noopener">📝 Log</a>
     </div>
   </div>
 
@@ -313,47 +313,10 @@
       // Save winner
       pushWinner({ ts:Date.now(), id:picked.id, name:picked.name, color:picked.color });
 
-      // 🔔 NEW: ping other tabs (Winners page) so they update instantly
+      // notify other tabs
       localStorage.setItem('rs_winners_ping_v1', String(Date.now()));
 
       confettiBurst();
     }
 
-    function beginNewRound(){ render(); }
-
-    function confettiBurst(){
-      const canvas=document.getElementById('confetti');
-      const ctx=canvas.getContext('2d');
-      const DPR=Math.max(1,window.devicePixelRatio||1);
-      function resize(){ canvas.width=Math.floor(window.innerWidth*DPR); canvas.height=Math.floor(window.innerHeight*DPR); }
-      resize();
-      let particles=[]; const N=120;
-      for(let i=0;i<N;i++){
-        particles.push({ x:canvas.width/2+(Math.random()-0.5)*canvas.width*0.2, y:canvas.height*0.3+(Math.random()-0.5)*canvas.height*0.1,
-          vx:(Math.random()-0.5)*6*DPR, vy:(Math.random()*-4-2)*DPR, g:0.25*DPR, a:1, r:Math.random()*3*DPR+2*DPR, life:900+Math.random()*400 });
-      }
-      const start=performance.now();
-      (function tick(){
-        const t=performance.now(); const dt=(t-(tick._last||t))/16.67; tick._last=t;
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        particles.forEach(p=>{ p.vx*=0.99; p.vy+=p.g; p.x+=p.vx*dt; p.y+=p.vy*dt; p.a*=0.986;
-          ctx.globalAlpha=Math.max(0,p.a); ctx.fillStyle=(Math.random()<0.5)?'#39ff14':'#7dff62';
-          ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
-        });
-        ctx.globalAlpha=1;
-        particles=particles.filter(p=>p.a>0.04 && p.y<canvas.height+40*DPR);
-        if (t-start<1200 && particles.length) requestAnimationFrame(tick); else ctx.clearRect(0,0,canvas.width,canvas.height);
-      })();
-      window.addEventListener('resize', resize, { once:true });
-    }
-
-    (async ()=>{ 
-      try{ 
-        await fetchState();
-        beginNewRound();
-        await startTiny();
-      } catch(e){ showTinyError(e.message); } 
-    })();
-  </script>
-</body>
-</html>
+    function beginNewRound
