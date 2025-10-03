@@ -73,7 +73,9 @@ const toastEl = document.getElementById('toast');
 const winBanner = document.getElementById('winBanner');
 
 function toast(msg){ toastEl.textContent=msg; toastEl.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>toastEl.style.display='none',1200); }
-function canonicalISO(iso){ return new Date(iso).toISOString(); }
+const canonicalISO = (iso) => new Date(iso).toISOString();   // force Z format
+const normalizeKey = (k) => new Date(k).toISOString();       // tolerant compare
+
 function showWinnerBanner(color){
   winBanner.innerHTML = color === 'blue' ? '<span class="winner-blue">BLUE WON</span>' : '<span class="winner-red">RED WON</span>';
   winBanner.style.display = 'block';
@@ -199,11 +201,17 @@ forceBtn.onclick = async ()=>{ try{
   toast('Forced decision & rolled phase');
 }catch(e){ toast('Force failed'); }};
 
-// 🔔 WINNER BANNER: fire on ANY new winner insert (no key matching)
-supabase.channel('winners-any')
+// 🔔 WINNER BANNER: only for THIS phase (format-tolerant)
+supabase.channel('winners-current')
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, (payload)=>{
+    const insertedKey = payload?.new?.phase_key;
     const color = (payload?.new?.color || '').toLowerCase();
-    if (color === 'red' || color === 'blue') showWinnerBanner(color);
+    if (!insertedKey || !serverPhaseEndISO) return;
+    // compare in canonical ISO to avoid Z vs +00:00 issues
+    if (normalizeKey(insertedKey) === normalizeKey(serverPhaseEndISO) &&
+        (color === 'red' || color === 'blue')) {
+      showWinnerBanner(color);
+    }
   })
   .subscribe();
 
