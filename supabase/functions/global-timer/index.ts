@@ -44,7 +44,8 @@ Deno.serve(async (req) => {
     const { data } = await admin.from("winners").select("id").eq("phase_key", phaseKey).limit(1);
     return (data?.length ?? 0) > 0;
   }
-  // helper: atomic decision inside the DB
+
+  // helper: atomic decision inside the DB (always using canonical ISO)
   async function decideInDB(phaseKeyRaw: string) {
     const phaseKey = canonicalISO(phaseKeyRaw);
     if (await winnerExists(phaseKey)) return; // fast-path
@@ -57,7 +58,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({ phase_key: phaseKey }),
     });
-    // 204/200 is fine; 409 should not happen (handled in SQL); log other errors
+    // 204/200 OK; 409 is fine (conflict handled by SQL). Log other errors.
     if (!res.ok && res.status !== 409) {
       const t = await res.text().catch(() => "");
       console.error("decide_winner RPC failed", res.status, t);
@@ -71,7 +72,7 @@ Deno.serve(async (req) => {
     .eq("id", 1).single();
   let s = s0 as Row | null;
   if (!s || e0) {
-    const period = 10; // change for prod
+    const period = 10; // adjust for prod if needed
     const end = new Date(Date.now() + period * 1000).toISOString();
     const { data: upserted, error: ue } = await admin
       .from("tournament_state")
@@ -85,10 +86,11 @@ Deno.serve(async (req) => {
   if (req.method === "POST") {
     const body = await req.json().catch(() => ({} as any));
 
+    // Force: decide immediately, then roll
     if (body?.force === true) {
-      const finishedPhase = s!.phase_end_at ?? nowIso();
+      const finishedPhase = canonicalISO(s!.phase_end_at ?? nowIso());
       await decideInDB(finishedPhase);
-      const newEnd = new Date(Date.now() + s!.period_sec * 1000).toISOString();
+      const newEnd = new Date(Date.parse(finishedPhase) + s!.period_sec * 1000).toISOString();
       const { data: upd, error: ue } = await admin
         .from("tournament_state")
         .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
@@ -97,6 +99,7 @@ Deno.serve(async (req) => {
       s = upd as Row;
     }
 
+    // Pause captures remaining and freezes
     if (body?.action === "pause" && !s!.paused) {
       const remainingNow = secondsUntil(s!.phase_end_at);
       const { data: upd, error: ue } = await admin
@@ -107,6 +110,7 @@ Deno.serve(async (req) => {
       s = upd as Row;
     }
 
+    // Resume re-computes a new canonical end
     if (body?.action === "resume" && s!.paused) {
       const remaining = s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at);
       const newEnd = new Date(Date.now() + remaining * 1000).toISOString();
@@ -124,7 +128,7 @@ Deno.serve(async (req) => {
     while (secondsUntil(s!.phase_end_at) <= 0) {
       const finishedPhase = canonicalISO(s!.phase_end_at ?? nowIso());
       await decideInDB(finishedPhase);
-      const nextEnd = new Date(new Date(finishedPhase).getTime() + s!.period_sec * 1000).toISOString();
+      const nextEnd = new Date(Date.parse(finishedPhase) + s!.period_sec * 1000).toISOString();
       const { data: upd, error: ue } = await admin
         .from("tournament_state")
         .update({ phase_end_at: nextEnd, updated_at: nowIso() })
