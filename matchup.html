@@ -19,6 +19,10 @@
     .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--green-bright);box-shadow:0 0 18px rgba(125,255,98,.35),inset 0 0 12px rgba(57,255,20,.15)}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
     .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#0a0a0a;color:#e5ffe5;border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.2);z-index:9999}
+    /* winner banner */
+    .winner-banner{position:fixed;top:10px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:12px;border:1px solid var(--border);background:#0b0b0b;color:var(--ink);box-shadow:0 0 18px rgba(57,255,20,.25);display:none;z-index:9999;font-weight:700}
+    .winner-red{color:#ff8b8b}
+    .winner-blue{color:#8bb6ff}
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -50,6 +54,7 @@
   </div>
 
   <div id="toast" class="toast"></div>
+  <div id="winBanner" class="winner-banner"></div>
 
 <script>
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
@@ -66,10 +71,17 @@ const voteRedBtn = document.getElementById('voteRed');
 const voteBlueBtn = document.getElementById('voteBlue');
 const submitBtn = document.getElementById('submitBtn');
 const toastEl = document.getElementById('toast');
+const winBanner = document.getElementById('winBanner');
 
 function toast(msg){ toastEl.textContent=msg; toastEl.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>toastEl.style.display='none',1200); }
-
 function canonicalISO(iso){ return new Date(iso).toISOString(); }
+
+function showWinnerBanner(color){
+  winBanner.innerHTML = color === 'blue' ? '<span class="winner-blue">BLUE WON</span>' : '<span class="winner-red">RED WON</span>';
+  winBanner.style.display = 'block';
+  clearTimeout(showWinnerBanner._t);
+  showWinnerBanner._t = setTimeout(()=> winBanner.style.display = 'none', 3000);
+}
 
 // Stable anonymous voter key per device
 function getVoterKey(){
@@ -85,6 +97,7 @@ let paused = false;
 let remainingSec = null;
 let lastSyncAt = 0;
 let rafId = null;
+let winnersSub = null; // realtime subscription for current phase
 
 voteRedBtn.onclick  = ()=>{ chosen='red';  submitBtn.disabled=false; voteRedBtn.classList.add('selected');  voteBlueBtn.classList.remove('selected');  toast('Selected RED'); };
 voteBlueBtn.onclick = ()=>{ chosen='blue'; submitBtn.disabled=false; voteBlueBtn.classList.add('selected'); voteRedBtn.classList.remove('selected');  toast('Selected BLUE'); };
@@ -136,6 +149,22 @@ function normalize(s){ return {
   remaining_sec: s.remaining_sec ?? null
 };}
 
+function resubscribeWinners(){
+  // kill old sub
+  if (winnersSub) { supabase.removeChannel(winnersSub); winnersSub = null; }
+
+  const key = canonicalISO(serverPhaseEndISO);
+  winnersSub = supabase.channel('winner-'+key)
+    .on('postgres_changes',{
+      event:'INSERT', schema:'public', table:'winners',
+      filter: `phase_key=eq.${key}`
+    }, (payload)=>{
+      const color = (payload?.new?.color || '').toLowerCase();
+      if (color === 'red' || color === 'blue') showWinnerBanner(color);
+    })
+    .subscribe();
+}
+
 async function fetchState(){
   const s = normalize(await callEdge('GET'));
   const prevPhase = serverPhaseEndISO;
@@ -145,14 +174,17 @@ async function fetchState(){
   lastSyncAt = Date.now();
   setStateUI();
 
+  // New phase → reset and resubscribe for winner
   if(prevPhase && serverPhaseEndISO && prevPhase !== serverPhaseEndISO){
     chosen = null;
     voteRedBtn.classList.remove('selected');
     voteBlueBtn.classList.remove('selected');
     submitBtn.textContent = '✅ Submit Vote';
     submitBtn.disabled = true;
+    resubscribeWinners();
   } else {
     submitBtn.disabled = !chosen;
+    if (!winnersSub) resubscribeWinners();
   }
 }
 
