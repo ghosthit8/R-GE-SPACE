@@ -1,43 +1,47 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Winners</title>
-  <style>
-    body{background:#000;color:#39ff14;font-family:system-ui,Arial,sans-serif;margin:0;padding:20px}
-    .bar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
-    .btn{border:1px solid #39ff14;color:#39ff14;background:transparent;padding:6px 10px;border-radius:8px;text-decoration:none;cursor:pointer}
-    .btn:hover{background:rgba(57,255,20,.1)}
-    .winner-card{border:1px solid #153b16;border-radius:12px;background:#0b0b0b;margin-bottom:14px;overflow:hidden}
-    .winner-card img{width:100%;display:block}
-    .meta{padding:8px 12px;display:flex;justify-content:space-between}
-    .live{color:#39ff14;font-weight:bold}
-    .error{background:#400;color:#f88;padding:6px;border-radius:8px;margin:8px 0}
-  </style>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Winners</title>
+<style>
+  :root{ --green:#39ff14; --border:#153b16; --ink:#e5ffe5; }
+  html,body{background:#000;color:var(--green);font-family:system-ui,Arial,sans-serif;margin:0}
+  .bar{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);position:sticky;top:0;background:#000;z-index:2}
+  .btn{border:1px solid var(--green);color:var(--green);background:transparent;padding:6px 10px;border-radius:8px;cursor:pointer}
+  .btn:hover{background:rgba(57,255,20,.08)}
+  .btn.danger{border-color:#ff6b6b;color:#ff6b6b}
+  .btn.danger:hover{background:rgba(255,107,107,.12)}
+  .list{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  /* compact row card */
+  .row{display:grid;grid-template-columns:auto 110px 1fr auto;align-items:center;gap:10px;
+       border:1px solid var(--border);border-radius:10px;background:#0b0b0b;padding:6px 8px}
+  .num{font-weight:700;min-width:2.5ch;text-align:right;opacity:.9}
+  .thumb{width:110px;height:70px;border-radius:6px;object-fit:cover;border:1px solid var(--border)}
+  .meta{display:flex;flex-direction:column;line-height:1.2}
+  .name{font-weight:700}
+  .color{opacity:.85}
+  .ts{font-variant-numeric:tabular-nums;opacity:.8;white-space:nowrap;margin-left:8px}
+  .empty{opacity:.7;padding:24px 12px;text-align:center}
+  .error{background:#400;color:#f88;padding:6px;border-radius:8px;margin:8px 12px;display:none}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="bar">
-    <span>🟢 <span class="live">live</span></span>
-    <div>
-      <a href="matchup.html" class="btn">← Back to Matchup</a>
-      <button id="btnInsert" class="btn">✏️ Test Insert</button>
+    <strong>🏁 Winners</strong>
+    <div style="display:flex;gap:8px">
+      <a href="matchup.html" class="btn">← Matchup</a>
       <button id="btnRefresh" class="btn">⟳ Refresh</button>
+      <button id="btnClear" class="btn danger">🧹 Clear Winners</button>
     </div>
   </div>
 
-  <div id="errorBox" class="error" style="display:none"></div>
-  <div id="winnersList">No winners yet.</div>
+  <div id="errorBox" class="error"></div>
+  <div id="winnersList" class="list"><div class="empty">No winners yet.</div></div>
 
 <script>
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
-const RED_IMAGE_URL  = 'https://dummyimage.com/800x600/ff0000/ffffff&text=RED';
-const BLUE_IMAGE_URL = 'https://dummyimage.com/800x600/0060ff/ffffff&text=BLUE';
 
 const listEl = document.getElementById('winnersList');
 const errBox = document.getElementById('errorBox');
@@ -45,79 +49,61 @@ const errBox = document.getElementById('errorBox');
 function showError(msg){ errBox.style.display='block'; errBox.textContent=msg; }
 function clearError(){ errBox.style.display='none'; }
 
-function renderWinners(rows){
-  if(!rows || !rows.length){ listEl.textContent="No winners yet."; return; }
-  listEl.innerHTML = rows.map(r=>`
-    <div class="winner-card">
-      <img src="${r.image_url}" alt="${r.color}">
-      <div class="meta">
-        <span><b>${r.name}</b> — ${r.color.toUpperCase()}</span>
-        <span>${new Date(r.decided_at).toLocaleString()}</span>
+function render(rows){
+  if(!rows || rows.length === 0){
+    listEl.innerHTML = `<div class="empty">No winners yet.</div>`;
+    return;
+  }
+  // Highest number = most recent
+  const total = rows.length;
+  listEl.innerHTML = rows.map((r, i) => {
+    const n = total - i; // e.g., if 50 rows, newest is #50
+    const ts = new Date(r.decided_at).toLocaleString();
+    return `
+      <div class="row">
+        <div class="num">#${n}</div>
+        <img class="thumb" src="${r.image_url}" alt="${r.color}">
+        <div class="meta">
+          <div class="name">${(r.name || '').toUpperCase()}</div>
+          <div class="color">${(r.color || '').toUpperCase()}</div>
+        </div>
+        <div class="ts">${ts}</div>
       </div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 }
 
 async function loadWinners(){
-  const { data, error } = await supabase.from('winners').select('*').order('decided_at',{ascending:false}).limit(20);
-  if(error){ showError("SELECT error: "+error.message); return; }
-  clearError();
-  renderWinners(data);
+  const { data, error } = await supabase
+    .from('winners')
+    .select('*')
+    .order('decided_at',{ ascending:false })
+    .limit(200);
+  if(error){ showError("SELECT error: " + error.message); return; }
+  clearError(); render(data);
 }
 
 document.getElementById('btnRefresh').onclick = loadWinners;
 
-document.getElementById('btnInsert').onclick = async()=>{
-  const picked = Math.random()<0.5
-    ? { color:'red',  name:'Test Winner', image_url: RED_IMAGE_URL }
-    : { color:'blue', name:'Test Winner', image_url: BLUE_IMAGE_URL };
-  const { error } = await supabase.from('winners').upsert(
-    { decided_at:new Date().toISOString(), color:picked.color, name:picked.name,
-      image_url:picked.image_url, phase_key: new Date().toISOString(), round_num:1, meta:{source:'manual'} },
-    { onConflict:'phase_key' }
-  );
-  if(error) showError("INSERT error: "+error.message); else clearError();
+document.getElementById('btnClear').onclick = async () => {
+  if (!confirm("Delete ALL winners? This cannot be undone.")) return;
+  clearError();
+  try{
+    const { error } = await supabase.from('winners').delete().neq('id', 0);
+    if (error) throw error;
+    await loadWinners();
+  }catch(e){
+    showError("DELETE error: " + (e?.message || e));
+  }
 };
 
+// Live updates
 supabase.channel('winners-feed')
-  .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'},payload=>{
-    loadWinners();
-  })
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'},()=> loadWinners())
   .subscribe();
 
+// initial load
 loadWinners();
-
-/* === Headless decider so winners keep rolling even if matchup is closed === */
-let lastPhaseKey = null;
-async function edgeState(){
-  const res = await fetch(EDGE_URL,{
-    headers:{ 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`,'apikey':SUPABASE_ANON_KEY }
-  });
-  const j = await res.json().catch(()=> ({}));
-  return j.state||j;
-}
-async function ensureWinner(phaseKey){
-  const { data:existing } = await supabase.from('winners').select('id').eq('phase_key',phaseKey).maybeSingle();
-  if(existing) return;
-  const picked = Math.random()<0.5
-    ? { color:'red', name:'RED', image_url:RED_IMAGE_URL }
-    : { color:'blue',name:'BLUE',image_url:BLUE_IMAGE_URL };
-  await supabase.from('winners').upsert(
-    { decided_at:new Date().toISOString(), color:picked.color, name:picked.name,
-      image_url:picked.image_url, phase_key:phaseKey, round_num:1, meta:{source:'winners-headless'} },
-    { onConflict:'phase_key' }
-  );
-}
-setInterval(async()=>{
-  try{
-    const st = await edgeState();
-    const phaseKey = st.phase_end_at||null;
-    if(phaseKey && phaseKey!==lastPhaseKey){
-      lastPhaseKey=phaseKey;
-      await ensureWinner(phaseKey);
-    }
-  }catch(e){/* ignore */}
-},2000);
 </script>
 </body>
 </html>
