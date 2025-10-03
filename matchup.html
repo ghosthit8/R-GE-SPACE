@@ -74,7 +74,6 @@ const winBanner = document.getElementById('winBanner');
 
 function toast(msg){ toastEl.textContent=msg; toastEl.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>toastEl.style.display='none',1200); }
 function canonicalISO(iso){ return new Date(iso).toISOString(); }
-
 function showWinnerBanner(color){
   winBanner.innerHTML = color === 'blue' ? '<span class="winner-blue">BLUE WON</span>' : '<span class="winner-red">RED WON</span>';
   winBanner.style.display = 'block';
@@ -82,6 +81,7 @@ function showWinnerBanner(color){
   showWinnerBanner._t = setTimeout(()=> winBanner.style.display = 'none', 3000);
 }
 
+// Stable anonymous voter key per device
 function getVoterKey(){
   let k = localStorage.getItem('rs_voter_key');
   if(!k){ k = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)) + '-' + Date.now(); localStorage.setItem('rs_voter_key', k); }
@@ -95,10 +95,8 @@ let paused = false;
 let remainingSec = null;
 let lastSyncAt = 0;
 let rafId = null;
-let winnersSub = null; // realtime channel (all winners)
-let lastFinishedKey = null; // phase_key that just ended (watch for its insert)
 
-// --- voting
+// voting ui
 voteRedBtn.onclick  = ()=>{ chosen='red';  submitBtn.disabled=false; voteRedBtn.classList.add('selected');  voteBlueBtn.classList.remove('selected');  toast('Selected RED'); };
 voteBlueBtn.onclick = ()=>{ chosen='blue'; submitBtn.disabled=false; voteBlueBtn.classList.add('selected'); voteRedBtn.classList.remove('selected');  toast('Selected BLUE'); };
 
@@ -120,7 +118,6 @@ submitBtn.onclick = async ()=>{
   }
 };
 
-// --- ui + state fetch
 function setStateUI(){
   stateEl.textContent = paused ? 'PAUSED' : 'LIVE';
   pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause';
@@ -150,49 +147,17 @@ function normalize(s){ return {
   remaining_sec: s.remaining_sec ?? null
 };}
 
-// --- realtime winners subscription (listen to all inserts and filter locally)
-function ensureWinnersSub(){
-  if (winnersSub) return;
-  winnersSub = supabase.channel('winners-all')
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, (payload)=>{
-      const pk = payload?.new?.phase_key;
-      const color = (payload?.new?.color || '').toLowerCase();
-      if (lastFinishedKey && pk === lastFinishedKey && (color === 'red' || color === 'blue')) {
-        showWinnerBanner(color);
-      }
-    })
-    .subscribe();
-}
-
-async function checkImmediateWinner(prevPhaseISO){
-  // if we missed the realtime (because we re-synced after roll), show the banner anyway
-  const key = canonicalISO(prevPhaseISO);
-  const { data, error } = await supabase.from('winners').select('color').eq('phase_key', key).limit(1);
-  if (!error && data && data.length) {
-    const color = (data[0].color || '').toLowerCase();
-    if (color === 'red' || color === 'blue') showWinnerBanner(color);
-  }
-}
-
 async function fetchState(){
   const s = normalize(await callEdge('GET'));
-  const prevPhase = serverPhaseEndISO;        // keep old phase (just finished, if rolled)
-  const prevChanged = !!(prevPhase && s.phase_end_at && prevPhase !== s.phase_end_at);
-
+  const prevPhase = serverPhaseEndISO;
   serverPhaseEndISO = s.phase_end_at;
   paused = s.paused;
   remainingSec = s.remaining_sec;
   lastSyncAt = Date.now();
   setStateUI();
 
-  // New phase rolled: remember the just-finished key, check winner immediately,
-  // then keep listening for the next decision.
-  if (prevChanged) {
-    lastFinishedKey = canonicalISO(prevPhase);   // winner row will have this key
-    ensureWinnersSub();                          // make sure realtime is on
-    await checkImmediateWinner(prevPhase);       // show banner if insert already happened
-
-    // reset UI for new phase voting
+  // new phase → reset vote UI
+  if(prevPhase && serverPhaseEndISO && prevPhase !== serverPhaseEndISO){
     chosen = null;
     voteRedBtn.classList.remove('selected');
     voteBlueBtn.classList.remove('selected');
@@ -200,7 +165,6 @@ async function fetchState(){
     submitBtn.disabled = true;
   } else {
     submitBtn.disabled = !chosen;
-    ensureWinnersSub();
   }
 }
 
@@ -234,6 +198,14 @@ forceBtn.onclick = async ()=>{ try{
   await fetchState();
   toast('Forced decision & rolled phase');
 }catch(e){ toast('Force failed'); }};
+
+// 🔔 WINNER BANNER: fire on ANY new winner insert (no key matching)
+supabase.channel('winners-any')
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, (payload)=>{
+    const color = (payload?.new?.color || '').toLowerCase();
+    if (color === 'red' || color === 'blue') showWinnerBanner(color);
+  })
+  .subscribe();
 
 // boot
 (async()=>{ try{ await fetchState(); await start(); }catch(e){ clockEl.textContent='ERR'; stateEl.textContent='ERR'; }})();
