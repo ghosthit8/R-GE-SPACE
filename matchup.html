@@ -19,7 +19,6 @@
     .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--green-bright);box-shadow:0 0 18px rgba(125,255,98,.35),inset 0 0 12px rgba(57,255,20,.15)}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
     .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#0a0a0a;color:#e5ffe5;border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.2);z-index:9999}
-    /* winner banner */
     .winner-banner{position:fixed;top:10px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:12px;border:1px solid var(--border);background:#0b0b0b;color:var(--ink);box-shadow:0 0 18px rgba(57,255,20,.25);display:none;z-index:9999;font-weight:700}
     .winner-red{color:#ff8b8b}
     .winner-blue{color:#8bb6ff}
@@ -83,7 +82,6 @@ function showWinnerBanner(color){
   showWinnerBanner._t = setTimeout(()=> winBanner.style.display = 'none', 3000);
 }
 
-// Stable anonymous voter key per device
 function getVoterKey(){
   let k = localStorage.getItem('rs_voter_key');
   if(!k){ k = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)) + '-' + Date.now(); localStorage.setItem('rs_voter_key', k); }
@@ -91,14 +89,16 @@ function getVoterKey(){
 }
 const VOTER_KEY = getVoterKey();
 
-let chosen = null; // 'red' | 'blue'
+let chosen = null;
 let serverPhaseEndISO = null;
 let paused = false;
 let remainingSec = null;
 let lastSyncAt = 0;
 let rafId = null;
-let winnersSub = null; // realtime subscription for current phase
+let winnersSub = null; // realtime channel (all winners)
+let lastFinishedKey = null; // phase_key that just ended (watch for its insert)
 
+// --- voting
 voteRedBtn.onclick  = ()=>{ chosen='red';  submitBtn.disabled=false; voteRedBtn.classList.add('selected');  voteBlueBtn.classList.remove('selected');  toast('Selected RED'); };
 voteBlueBtn.onclick = ()=>{ chosen='blue'; submitBtn.disabled=false; voteBlueBtn.classList.add('selected'); voteRedBtn.classList.remove('selected');  toast('Selected BLUE'); };
 
@@ -120,6 +120,7 @@ submitBtn.onclick = async ()=>{
   }
 };
 
+// --- ui + state fetch
 function setStateUI(){
   stateEl.textContent = paused ? 'PAUSED' : 'LIVE';
   pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause';
@@ -149,42 +150,57 @@ function normalize(s){ return {
   remaining_sec: s.remaining_sec ?? null
 };}
 
-function resubscribeWinners(){
-  // kill old sub
-  if (winnersSub) { supabase.removeChannel(winnersSub); winnersSub = null; }
-
-  const key = canonicalISO(serverPhaseEndISO);
-  winnersSub = supabase.channel('winner-'+key)
-    .on('postgres_changes',{
-      event:'INSERT', schema:'public', table:'winners',
-      filter: `phase_key=eq.${key}`
-    }, (payload)=>{
+// --- realtime winners subscription (listen to all inserts and filter locally)
+function ensureWinnersSub(){
+  if (winnersSub) return;
+  winnersSub = supabase.channel('winners-all')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, (payload)=>{
+      const pk = payload?.new?.phase_key;
       const color = (payload?.new?.color || '').toLowerCase();
-      if (color === 'red' || color === 'blue') showWinnerBanner(color);
+      if (lastFinishedKey && pk === lastFinishedKey && (color === 'red' || color === 'blue')) {
+        showWinnerBanner(color);
+      }
     })
     .subscribe();
 }
 
+async function checkImmediateWinner(prevPhaseISO){
+  // if we missed the realtime (because we re-synced after roll), show the banner anyway
+  const key = canonicalISO(prevPhaseISO);
+  const { data, error } = await supabase.from('winners').select('color').eq('phase_key', key).limit(1);
+  if (!error && data && data.length) {
+    const color = (data[0].color || '').toLowerCase();
+    if (color === 'red' || color === 'blue') showWinnerBanner(color);
+  }
+}
+
 async function fetchState(){
   const s = normalize(await callEdge('GET'));
-  const prevPhase = serverPhaseEndISO;
+  const prevPhase = serverPhaseEndISO;        // keep old phase (just finished, if rolled)
+  const prevChanged = !!(prevPhase && s.phase_end_at && prevPhase !== s.phase_end_at);
+
   serverPhaseEndISO = s.phase_end_at;
   paused = s.paused;
   remainingSec = s.remaining_sec;
   lastSyncAt = Date.now();
   setStateUI();
 
-  // New phase → reset and resubscribe for winner
-  if(prevPhase && serverPhaseEndISO && prevPhase !== serverPhaseEndISO){
+  // New phase rolled: remember the just-finished key, check winner immediately,
+  // then keep listening for the next decision.
+  if (prevChanged) {
+    lastFinishedKey = canonicalISO(prevPhase);   // winner row will have this key
+    ensureWinnersSub();                          // make sure realtime is on
+    await checkImmediateWinner(prevPhase);       // show banner if insert already happened
+
+    // reset UI for new phase voting
     chosen = null;
     voteRedBtn.classList.remove('selected');
     voteBlueBtn.classList.remove('selected');
     submitBtn.textContent = '✅ Submit Vote';
     submitBtn.disabled = true;
-    resubscribeWinners();
   } else {
     submitBtn.disabled = !chosen;
-    if (!winnersSub) resubscribeWinners();
+    ensureWinnersSub();
   }
 }
 
@@ -206,6 +222,7 @@ async function start(){
   rafId = requestAnimationFrame(tick);
 }
 
+// controls
 pauseBtn.onclick = async ()=>{ try{
   if (paused) await callEdge('POST',{action:'resume'});
   else        await callEdge('POST',{action:'pause'});
@@ -218,6 +235,7 @@ forceBtn.onclick = async ()=>{ try{
   toast('Forced decision & rolled phase');
 }catch(e){ toast('Force failed'); }};
 
+// boot
 (async()=>{ try{ await fetchState(); await start(); }catch(e){ clockEl.textContent='ERR'; stateEl.textContent='ERR'; }})();
 </script>
 </body>
