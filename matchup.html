@@ -1,59 +1,58 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup</title>
-  <style>
-    :root{ --green:#39ff14; --green-bright:#7dff62; --bg:#000; --ink:#e5ffe5; --card:#0b0b0b; --border:#153b16; --muted:#8aff8a; --maxw:980px; }
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
-    .wrap{max-width:var(--maxw);margin:16px auto 64px;padding:0 16px}
-    .scorebar{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:8px 12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
-    .btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer}
-    .btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
-    .tiny{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
-    .clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
-    .tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px}
-    .art{aspect-ratio:4/3;width:100%}.art.red{background:#a60000}.art.blue{background:#0058a6}
-    .meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
-    .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--green-bright);box-shadow:0 0 18px rgba(125,255,98,.35),inset 0 0 12px rgba(57,255,20,.15)}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
-    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#0a0a0a;color:#e5ffe5;border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.2);z-index:9999}
-    .winner-banner{position:fixed;top:10px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:12px;border:1px solid var(--border);background:#0b0b0b;color:var(--ink);box-shadow:0 0 18px rgba(57,255,20,.25);display:none;z-index:9999;font-weight:700}
-    .winner-red{color:#ff8b8b}
-    .winner-blue{color:#8bb6ff}
-  </style>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Rage Space — Matchup</title>
+<style>
+:root{--green:#39ff14;--green-bright:#7dff62;--bg:#000;--ink:#e5ffe5;--card:#0b0b0b;--border:#153b16;--muted:#8aff8a;--maxw:980px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
+.wrap{max-width:var(--maxw);margin:16px auto 64px;padding:0 16px}
+.scorebar{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:8px 12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
+.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer}
+.btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
+.tiny{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
+.clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
+.tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px}
+.art{aspect-ratio:4/3;width:100%}.art.red{background:#a60000}.art.blue{background:#0058a6}
+.meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
+.btn.primary.selected{background:rgba(57,255,20,.22);color:var(--green-bright);box-shadow:0 0 18px rgba(125,255,98,.35),inset 0 0 12px rgba(57,255,20,.15)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#0a0a0a;color:#e5ffe5;border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.2);z-index:9999}
+.winner-banner{position:fixed;top:10px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:12px;border:1px solid var(--border);background:#0b0b0b;color:var(--ink);box-shadow:0 0 18px rgba(57,255,20,.25);display:none;z-index:9999;font-weight:700}
+.winner-red{color:#ff8b8b}.winner-blue{color:#8bb6ff}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <div class="wrap">
-    <div class="scorebar">
-      <div class="tiny"><span>Decision in</span> <span id="clock" class="clock">—</span> <span id="state">LIVE</span></div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span id="phaseKey" style="font-size:12px;opacity:.8;border:1px solid var(--border);border-radius:999px;padding:2px 8px">phase: —</span>
-        <button id="pauseBtn" class="btn">⏸️ Pause</button>
-        <button id="forceBtn" class="btn">🏁 Force Decide</button>
-        <a class="btn" href="winners.html" target="_blank" rel="noopener">🏁 Winners</a>
-      </div>
-    </div>
-
-    <div class="tile">
-      <div class="art red"></div>
-      <div class="meta"><span>Entry — RED</span><button class="btn primary" id="voteRed">Vote Red</button></div>
-    </div>
-
-    <div class="tile">
-      <div class="art blue"></div>
-      <div class="meta"><span>Entry — BLUE</span><button class="btn primary" id="voteBlue">Vote Blue</button></div>
-    </div>
-
-    <div class="row">
-      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
+<div class="wrap">
+  <div class="scorebar">
+    <div class="tiny"><span>Decision in</span> <span id="clock" class="clock">—</span> <span id="state">LIVE</span></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span id="phaseKey" style="font-size:12px;opacity:.8;border:1px solid var(--border);border-radius:999px;padding:2px 8px">phase: —</span>
+      <button id="pauseBtn" class="btn">⏸️ Pause</button>
+      <button id="forceBtn" class="btn">🏁 Force Decide</button>
+      <a class="btn" href="winners.html" target="_blank" rel="noopener">🏁 Winners</a>
     </div>
   </div>
 
-  <div id="toast" class="toast"></div>
-  <div id="winBanner" class="winner-banner"></div>
+  <div class="tile">
+    <div class="art red"></div>
+    <div class="meta"><span>Entry — RED</span><button class="btn primary" id="voteRed">Vote Red</button></div>
+  </div>
+
+  <div class="tile">
+    <div class="art blue"></div>
+    <div class="meta"><span>Entry — BLUE</span><button class="btn primary" id="voteBlue">Vote Blue</button></div>
+  </div>
+
+  <div class="row">
+    <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="winBanner" class="winner-banner"></div>
 
 <script>
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
@@ -72,17 +71,15 @@ const submitBtn = document.getElementById('submitBtn');
 const toastEl = document.getElementById('toast');
 const winBanner = document.getElementById('winBanner');
 
+const toIso = (x) => new Date(x).toISOString();
 function toast(msg){ toastEl.textContent=msg; toastEl.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>toastEl.style.display='none',1200); }
-const toIso = (x)=> new Date(x).toISOString();
-
 function showWinnerBanner(color){
   winBanner.innerHTML = color === 'blue' ? '<span class="winner-blue">BLUE WON</span>' : '<span class="winner-red">RED WON</span>';
-  winBanner.style.display = 'block';
-  clearTimeout(showWinnerBanner._t);
+  winBanner.style.display = 'block'; clearTimeout(showWinnerBanner._t);
   showWinnerBanner._t = setTimeout(()=> winBanner.style.display = 'none', 3000);
 }
 
-// stable anonymous voter key per device
+// stable anonymous voter key
 function getVoterKey(){
   let k = localStorage.getItem('rs_voter_key');
   if(!k){ k = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)) + '-' + Date.now(); localStorage.setItem('rs_voter_key', k); }
@@ -97,10 +94,10 @@ let remainingSec = null;
 let lastSyncAt = 0;
 let rafId = null;
 
-// we’ll track the phase that JUST ended
+// track the phase that JUST finished
 let lastFinishedKey = null;
 
-// voting ui
+// submit vote
 voteRedBtn.onclick  = ()=>{ chosen='red';  submitBtn.disabled=false; voteRedBtn.classList.add('selected');  voteBlueBtn.classList.remove('selected');  toast('Selected RED'); };
 voteBlueBtn.onclick = ()=>{ chosen='blue'; submitBtn.disabled=false; voteBlueBtn.classList.add('selected'); voteRedBtn.classList.remove('selected');  toast('Selected BLUE'); };
 
@@ -113,74 +110,57 @@ submitBtn.onclick = async ()=>{
       { onConflict: 'phase_key,voter_key' }
     );
     if (error) throw error;
-    submitBtn.disabled = true;
-    submitBtn.textContent = '🎉 Vote submitted!';
-    toast('Vote saved');
-  }catch(e){
-    console.error(e);
-    toast('Vote failed: ' + (e?.message || 'unknown error'));
-  }
+    submitBtn.disabled = true; submitBtn.textContent = '🎉 Vote submitted!'; toast('Vote saved');
+  }catch(e){ console.error(e); toast('Vote failed: ' + (e?.message || 'unknown error')); }
 };
 
-function setStateUI(){
-  stateEl.textContent = paused ? 'PAUSED' : 'LIVE';
+function setStateUI(){ stateEl.textContent = paused ? 'PAUSED' : 'LIVE';
   pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause';
   phaseBadge.textContent = 'phase: ' + (serverPhaseEndISO || '—');
 }
 
 async function callEdge(method='GET', body=null){
-  const res = await fetch(EDGE_URL,{
-    method,
-    headers:{
-      'Content-Type':'application/json',
-      'Authorization':`Bearer ${SUPABASE_ANON_KEY}`,
-      'apikey': SUPABASE_ANON_KEY
-    },
-    body: body ? JSON.stringify(body) : null
-  });
-  const raw = await res.text();
-  let j=null; try{ j=JSON.parse(raw); }catch{}
+  const res = await fetch(EDGE_URL,{ method, headers:{
+      'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_ANON_KEY}`,'apikey': SUPABASE_ANON_KEY
+    }, body: body ? JSON.stringify(body) : null });
+  const raw = await res.text(); let j=null; try{ j=JSON.parse(raw); }catch{}
   if(!res.ok) throw new Error((j && j.error) || raw || 'edge error');
   return j?.state || j || {};
 }
 
 function normalize(s){ return {
-  phase_end_at: s.phase_end_at ?? null,
-  period_sec: s.period_sec ?? 10,
-  paused: !!s.paused,
-  remaining_sec: s.remaining_sec ?? null
+  phase_end_at: s.phase_end_at ?? null, period_sec: s.period_sec ?? 10,
+  paused: !!s.paused, remaining_sec: s.remaining_sec ?? null
 };}
 
-// one-shot check for a winner (in case we missed the realtime)
-async function checkImmediateWinner(pkIso){
-  const { data, error } = await supabase.from('winners').select('color').eq('phase_key', toIso(pkIso)).limit(1);
-  if (!error && data && data.length) {
-    const color = (data[0].color || '').toLowerCase();
-    if (color === 'red' || color === 'blue') showWinnerBanner(color);
+// poll helper: look for winner of a specific key for a short window
+async function pollWinnerForKey(pkIso, totalMs = 3600, stepMs = 300){
+  const deadline = Date.now() + totalMs;
+  while (Date.now() < deadline) {
+    const { data, error } = await supabase.from('winners').select('color').eq('phase_key', toIso(pkIso)).limit(1);
+    if (!error && data && data.length) {
+      const c = (data[0].color || '').toLowerCase();
+      if (c === 'red' || c === 'blue') { showWinnerBanner(c); return true; }
+    }
+    await new Promise(r=> setTimeout(r, stepMs));
   }
+  return false;
 }
 
 async function fetchState(){
   const s = normalize(await callEdge('GET'));
   const prevPhase = serverPhaseEndISO;
-  serverPhaseEndISO = s.phase_end_at;
-  paused = s.paused;
-  remainingSec = s.remaining_sec;
-  lastSyncAt = Date.now();
+  serverPhaseEndISO = s.phase_end_at; paused = s.paused; remainingSec = s.remaining_sec; lastSyncAt = Date.now();
   setStateUI();
 
-  // if the phase rolled, remember the just-finished key and check winner NOW
+  // phase rolled: remember finished key and poll briefly in case realtime is missed
   if (prevPhase && serverPhaseEndISO && prevPhase !== serverPhaseEndISO) {
     lastFinishedKey = toIso(prevPhase);
-    // check immediately (covers cases where insert happened a moment ago)
-    await checkImmediateWinner(lastFinishedKey);
+    chosen = null; voteRedBtn.classList.remove('selected'); voteBlueBtn.classList.remove('selected');
+    submitBtn.textContent = '✅ Submit Vote'; submitBtn.disabled = true;
 
-    // reset vote UI
-    chosen = null;
-    voteRedBtn.classList.remove('selected');
-    voteBlueBtn.classList.remove('selected');
-    submitBtn.textContent = '✅ Submit Vote';
-    submitBtn.disabled = true;
+    // immediate check + short polling window
+    pollWinnerForKey(lastFinishedKey);
   } else {
     submitBtn.disabled = !chosen;
   }
@@ -206,30 +186,24 @@ async function start(){
 
 // controls
 pauseBtn.onclick = async ()=>{ try{
-  if (paused) await callEdge('POST',{action:'resume'});
-  else        await callEdge('POST',{action:'pause'});
+  if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'});
   await fetchState();
 }catch(e){ toast('Pause/resume failed'); }};
 
 forceBtn.onclick = async ()=>{ try{
-  await callEdge('POST',{force:true});
-  await fetchState();
-  toast('Forced decision & rolled phase');
+  await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision & rolled phase');
 }catch(e){ toast('Force failed'); }};
 
-// subscribe ONCE: fire only when the inserted winner matches the just-finished key
-const winnersChannel = supabase.channel('winners-phase')
+// realtime: once; only react when the row matches the JUST-finished key
+supabase.channel('winners-phase')
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, (payload)=>{
     const rowKey = payload?.new?.phase_key;
-    const color = (payload?.new?.color || '').toLowerCase();
+    const color  = (payload?.new?.color || '').toLowerCase();
     if (!rowKey || !lastFinishedKey) return;
-    if (toIso(rowKey) === toIso(lastFinishedKey) && (color === 'red' || color === 'blue')) {
-      showWinnerBanner(color);
-    }
+    if (toIso(rowKey) === toIso(lastFinishedKey) && (color === 'red' || color === 'blue')) showWinnerBanner(color);
   })
   .subscribe();
 
-// boot
 (async()=>{ try{ await fetchState(); await start(); }catch(e){ clockEl.textContent='ERR'; stateEl.textContent='ERR'; }})();
 </script>
 </body>
