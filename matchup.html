@@ -1,4 +1,5 @@
 <!doctype html>
+
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
@@ -15,6 +16,7 @@
 .clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
 .tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px}
 .art{aspect-ratio:4/3;width:100%}.art.red{background:#a60000}.art.blue{background:#0058a6}
+.caption{display:block;text-align:center;font-size:12px;color:var(--muted);padding:6px 8px;border-top:1px dashed var(--border)}
 .meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
 .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--green-bright);box-shadow:0 0 18px rgba(125,255,98,.35),inset 0 0 12px rgba(57,255,20,.15)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
@@ -34,27 +36,19 @@
       <button id="forceBtn" class="btn">🏁 Force Decide</button>
       <a class="btn" href="winners.html" target="_blank" rel="noopener">🏁 Winners</a>
     </div>
-  </div>
-
-  <div class="tile">
+  </div>  <div class="tile">
     <div class="art red"></div>
+    <small class="caption" id="redCount">0 votes</small>
     <div class="meta"><span>Entry — RED</span><button class="btn primary" id="voteRed">Vote Red</button></div>
-  </div>
-
-  <div class="tile">
+  </div>  <div class="tile">
     <div class="art blue"></div>
+    <small class="caption" id="blueCount">0 votes</small>
     <div class="meta"><span>Entry — BLUE</span><button class="btn primary" id="voteBlue">Vote Blue</button></div>
-  </div>
-
-  <div class="row">
+  </div>  <div class="row">
     <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
   </div>
-</div>
-
-<div id="toast" class="toast"></div>
-<div id="winBanner" class="winner-banner"></div>
-
-<script>
+</div><div id="toast" class="toast"></div>
+<div id="winBanner" class="winner-banner"></div><script>
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -70,6 +64,8 @@ const voteBlueBtn = document.getElementById('voteBlue');
 const submitBtn = document.getElementById('submitBtn');
 const toastEl = document.getElementById('toast');
 const winBanner = document.getElementById('winBanner');
+const redCountEl = document.getElementById('redCount');
+const blueCountEl = document.getElementById('blueCount');
 
 const toIso = (x) => new Date(x).toISOString();
 function toast(msg){ toastEl.textContent=msg; toastEl.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>toastEl.style.display='none',1200); }
@@ -93,6 +89,7 @@ let paused = false;
 let remainingSec = null;
 let lastSyncAt = 0;
 let rafId = null;
+let lastCountsAt = 0;
 
 // track the phase that JUST finished
 let lastFinishedKey = null;
@@ -111,6 +108,7 @@ submitBtn.onclick = async ()=>{
     );
     if (error) throw error;
     submitBtn.disabled = true; submitBtn.textContent = '🎉 Vote submitted!'; toast('Vote saved');
+    await refreshVoteCounts();
   }catch(e){ console.error(e); toast('Vote failed: ' + (e?.message || 'unknown error')); }
 };
 
@@ -132,6 +130,20 @@ function normalize(s){ return {
   phase_end_at: s.phase_end_at ?? null, period_sec: s.period_sec ?? 10,
   paused: !!s.paused, remaining_sec: s.remaining_sec ?? null
 };}
+
+// vote counts helper
+function fmtVotes(n){ return `${n} ${n===1?'vote':'votes'}`; }
+async function refreshVoteCounts(){
+  try{
+    if(!serverPhaseEndISO) { redCountEl.textContent = '0 votes'; blueCountEl.textContent = '0 votes'; return; }
+    const phaseKey = toIso(serverPhaseEndISO);
+    const redQ = await supabase.from('phase_votes').select('*', { count:'exact', head:true }).eq('phase_key', phaseKey).eq('choice','red');
+    const blueQ = await supabase.from('phase_votes').select('*', { count:'exact', head:true }).eq('phase_key', phaseKey).eq('choice','blue');
+    const r = redQ?.count ?? 0; const b = blueQ?.count ?? 0;
+    redCountEl.textContent = fmtVotes(r); blueCountEl.textContent = fmtVotes(b);
+    lastCountsAt = Date.now();
+  }catch(e){ /* silent */ }
+}
 
 // poll helper: look for winner of a specific key for a short window
 async function pollWinnerForKey(pkIso, totalMs = 3600, stepMs = 300){
@@ -158,12 +170,15 @@ async function fetchState(){
     lastFinishedKey = toIso(prevPhase);
     chosen = null; voteRedBtn.classList.remove('selected'); voteBlueBtn.classList.remove('selected');
     submitBtn.textContent = '✅ Submit Vote'; submitBtn.disabled = true;
-
+    redCountEl.textContent = '0 votes'; blueCountEl.textContent = '0 votes';
     // immediate check + short polling window
     pollWinnerForKey(lastFinishedKey);
   } else {
     submitBtn.disabled = !chosen;
   }
+
+  // refresh counts on every state pull
+  refreshVoteCounts();
 }
 
 function stop(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
@@ -178,6 +193,8 @@ async function start(){
       if (rem <= 0 || Date.now()-lastSyncAt > 5000) {
         try{ await fetchState(); }catch(e){ clockEl.textContent='ERR'; stateEl.textContent='ERR'; }
       }
+      // gently poll vote counts at most every 2s
+      if (Date.now() - lastCountsAt > 2000) refreshVoteCounts();
     }
     rafId = requestAnimationFrame(tick);
   };
@@ -194,7 +211,7 @@ forceBtn.onclick = async ()=>{ try{
   await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision & rolled phase');
 }catch(e){ toast('Force failed'); }};
 
-// realtime: once; only react when the row matches the JUST-finished key
+// realtime: winners (end-of-phase)
 supabase.channel('winners-phase')
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, (payload)=>{
     const rowKey = payload?.new?.phase_key;
@@ -204,7 +221,17 @@ supabase.channel('winners-phase')
   })
   .subscribe();
 
+// realtime: live vote counts for current phase (optional if RLS allows)
+const votesChannel = supabase.channel('phase-votes-live')
+  .on('postgres_changes', { event:'*', schema:'public', table:'phase_votes' }, async (payload)=>{
+    try{
+      const pk = payload?.new?.phase_key || payload?.old?.phase_key;
+      if (!pk || !serverPhaseEndISO) return;
+      if (toIso(pk) === toIso(serverPhaseEndISO)) await refreshVoteCounts();
+    }catch(e){}
+  })
+  .subscribe();
+
 (async()=>{ try{ await fetchState(); await start(); }catch(e){ clockEl.textContent='ERR'; stateEl.textContent='ERR'; }})();
-</script>
-</body>
+</script></body>
 </html>
