@@ -202,7 +202,14 @@ async function start(){
   stop();
   const tick = async ()=>{
     if (paused){
-      clockEl.textContent = String(Math.max(0, Math.ceil(Number(remainingSec ?? 0))));
+      // When paused, fall back to phase_end_at-derived seconds if remainingSec is null
+      const remCalc = serverPhaseEndISO ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
+      const sec = (typeof remainingSec === 'number' && !Number.isNaN(remainingSec)) ? Number(remainingSec) : Math.ceil(remCalc/1000);
+      clockEl.textContent = String(Math.max(0, Math.ceil(sec)));
+      // Keep syncing state while paused so UI doesn't freeze
+      if (Date.now() - lastSyncAt > 5000) {
+        try{ await fetchState(); }catch(e){ clockEl.textContent='ERR'; stateEl.textContent='ERR'; }
+      }
     } else {
       const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
       clockEl.textContent = String(Math.ceil(rem/1000));
