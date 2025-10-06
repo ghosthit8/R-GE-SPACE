@@ -1,114 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Rage Space — Matchup</title>
+
+<!-- Supabase -->
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+<style>
+:root{
+  --green:#39ff14; --green-bright:#7dff62;
+  --bg:#000; --ink:#e5e5e5;
+  --card:#0b0b0b; --border:#153b16; --muted:#8aff8a; --maxw:980px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
+.wrap{max-width:var(--maxw);margin:16px auto 64px;padding:0 16px}
+
+/* top controls */
+.scorebar{
+  display:flex; gap:12px; align-items:center; justify-content:space-between;
+  border:1px solid var(--border); padding:12px; border-radius:12px; background:rgba(7,7,7,.6); flex-wrap:wrap
+}
+.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer}
+.btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
+.tiny{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
+.clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
+
+/* tiles */
+.tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px}
+.art{aspect-ratio:4/3;width:100%}
+.art.red{background:#a60000}
+.art.blue{background:#0058a6}
+.caption{display:block;text-align:center;font-size:12px;color:var(--muted);padding:6px 8px;border-top:1px dashed var(--border)}
+.meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
+.btn.primary.selected{background:rgba(57,255,20,.22);color:var(--ink);box-shadow:0 0 18px rgba(125,255,98,.35), inset 0 0 12px rgba(57,255,20,.15)}
+
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18)}
+.toast.show{display:block}
+</style>
+</head>
+
+<body>
+  <div class="wrap">
+    <!-- top controls bar -->
+    <div class="scorebar">
+      <div class="tiny">
+        <strong>Decision in</strong>
+        <span id="clock" class="clock">Sync…</span>
+        <span id="state" class="clock">—</span>
+        <span id="phaseKey" class="clock">phase: —</span>
+      </div>
+      <div class="row">
+        <button id="btnPause" class="btn">⏸️ Pause</button>
+        <button id="btnForce" class="btn">🏁 Force Decide</button>
+        <a class="btn" href="./winners.html">🏁 Winners</a>
+      </div>
+    </div>
+
+    <!-- RED -->
+    <div class="tile">
+      <div class="art red"></div>
+      <div class="caption" id="redCount">0 votes</div>
+      <div class="meta">
+        <span>Entry — RED</span>
+        <button class="btn primary" id="voteRed">Vote Red</button>
+      </div>
+    </div>
+
+    <!-- BLUE -->
+    <div class="tile">
+      <div class="art blue"></div>
+      <div class="caption" id="blueCount">0 votes</div>
+      <div class="meta">
+        <span>Entry — BLUE</span>
+        <button class="btn primary" id="voteBlue">Vote Blue</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
 <script>
-(() => {
-  // === CONFIG: update only if your values are different ===
-  const SUPABASE_URL  = "https://tuqvpcevrhciursxrgav.supabase.co";
-  const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-  const EDGE_PATH     = "/functions/v1/global-timer";
+/* =========================
+   CONFIG
+========================= */
+const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 
-  // === SELECTORS: point these at your existing elements ===
-  const CLOCK_SEL = "#countdown, #decisionClock, #countdownMain";  // first match wins
-  const PHASE_SEL = "#phaseKey, [data-phase-badge]";               // optional
-  const BTN_PAUSE_SEL = "#btnPause, button#pause, .btn-pause";     // optional
-  const BTN_FORCE_SEL = "#btnForceDecide, #forceDecide, .btn-force-decide"; // optional
-  const STATUS_SEL = "#status, .status";                           // optional
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // === internal state ===
-  let ticker = null;
-  let phaseEndsAt = null;     // Date
-  let phaseKey = null;        // string
-  let paused = false;
+/* =========================
+   DOM
+========================= */
+const clockEl = document.getElementById('clock');
+const stateEl = document.getElementById('state');
+const phaseBadge = document.getElementById('phaseKey');
 
-  const $ = (sel) => document.querySelector(sel);
-  const pick = (...sels) => {
-    for (const s of sels) {
-      const n = $(s);
-      if (n) return n;
+const pauseBtn = document.getElementById('btnPause');
+const forceBtn = document.getElementById('btnForce');
+
+const voteRedBtn  = document.getElementById('voteRed');
+const voteBlueBtn = document.getElementById('voteBlue');
+const submitBtn   = document.getElementById('submitBtn');
+
+const redCountEl  = document.getElementById('redCount');
+const blueCountEl = document.getElementById('blueCount');
+const toastEl     = document.getElementById('toast');
+
+function toast(msg, ms=1600){ toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'), ms); }
+const toIso = (d)=> new Date(d).toISOString();
+
+/* =========================
+   STATE
+========================= */
+let rafId = null;
+let paused = false;
+let remainingSec = null;
+let serverPhaseEndISO = null;
+let lastSyncAt = 0;
+let lastCountsAt = 0;
+let chosen = null; // 'red'|'blue'|null
+let lastFinishedKey = null;
+
+/* =========================
+   HELPERS
+========================= */
+async function callEdge(method='GET', body=null){
+  const res = await fetch(EDGE_URL, {
+    method,
+    headers: {
+      'Content-Type':'application/json',
+      'Authorization':`Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey': SUPABASE_ANON_KEY
+    },
+    body: body ? JSON.stringify(body) : null
+  });
+  const raw = await res.text();
+  let j=null; try{ j=JSON.parse(raw); }catch{}
+  if(!res.ok) throw new Error((j && j.error) || raw || 'edge error');
+  // Edge returns { state: { phase_end_at, remaining_sec, paused, period_sec } }
+  return j?.state || j || {};
+}
+
+function normalize(s){ return {
+  phase_end_at: s.phase_end_at ?? null,
+  period_sec: s.period_sec ?? 10,
+  paused: !!s.paused,
+  remaining_sec: (typeof s.remaining_sec === 'number') ? s.remaining_sec : null
+};}
+
+function fmtVotes(n){ return `${n} ${n===1?'vote':'votes'}`; }
+
+/* =========================
+   COUNTS + WINNER BANNER
+========================= */
+async function refreshVoteCounts(){
+  try{
+    if(!serverPhaseEndISO) { redCountEl.textContent = '0 votes'; blueCountEl.textContent = '0 votes'; return; }
+    const phaseKey = toIso(serverPhaseEndISO);
+    const { data, error } = await supabase
+      .from('phase_votes')
+      .select('vote')
+      .eq('phase_key', phaseKey);
+    if (error) throw error;
+    let r=0, b=0;
+    (data||[]).forEach(row => { if(row.vote==='red') r++; else if(row.vote==='blue') b++; });
+    redCountEl.textContent  = fmtVotes(r);
+    blueCountEl.textContent = fmtVotes(b);
+    lastCountsAt = Date.now();
+  }catch(e){}
+}
+
+function showWinnerBanner(color){
+  toast(`🏁 ${color.toUpperCase()} won!`);
+}
+
+async function pollWinnerForKey(key){
+  try{
+    const { data } = await supabase.from('winners').select('color').eq('phase_key', toIso(key)).limit(1);
+    if ((data?.[0]?.color||'').toLowerCase() === 'red')  showWinnerBanner('red');
+    if ((data?.[0]?.color||'').toLowerCase() === 'blue') showWinnerBanner('blue');
+  }catch(e){}
+}
+
+/* =========================
+   PHASE & CLOCK
+========================= */
+function setStateUI(){
+  stateEl.textContent = paused ? 'PAUSED' : 'LIVE';
+  pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause';
+  phaseBadge.textContent = 'phase: ' + (serverPhaseEndISO || '—');
+}
+
+async function fetchState(){
+  const s = normalize(await callEdge('GET'));
+  const prev = serverPhaseEndISO;
+
+  serverPhaseEndISO = s.phase_end_at;
+  paused = s.paused;
+  remainingSec = s.remaining_sec;
+  lastSyncAt = Date.now();
+
+  setStateUI();
+
+  // phase rolled → remember finished key, clear counts, and try winner banner
+  if (prev && serverPhaseEndISO && prev !== serverPhaseEndISO) {
+    lastFinishedKey = toIso(prev);
+    chosen = null;
+    voteRedBtn.classList.remove('selected');
+    voteBlueBtn.classList.remove('selected');
+    submitBtn.textContent = '✅ Submit Vote';
+    submitBtn.disabled = true;
+    redCountEl.textContent = '0 votes';
+    blueCountEl.textContent = '0 votes';
+    pollWinnerForKey(lastFinishedKey);
+  } else {
+    submitBtn.disabled = !chosen;
+  }
+
+  refreshVoteCounts();
+}
+
+function stop(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
+
+async function start(){
+  stop();
+  const tick = async ()=>{
+    if (paused){
+      const remCalc = serverPhaseEndISO ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
+      const sec = (typeof remainingSec === 'number' && !Number.isNaN(remainingSec))
+        ? Number(remainingSec)
+        : Math.ceil(remCalc/1000);
+      clockEl.textContent = String(Math.max(0, Math.ceil(sec)));
+      if (Date.now() - lastSyncAt > 5000) { try{ await fetchState(); }catch{} }
+    } else {
+      const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
+      clockEl.textContent = String(Math.ceil(rem/1000));
+      if (rem <= 0 || Date.now()-lastSyncAt > 5000) { try{ await fetchState(); }catch{} }
+      if (Date.now() - lastCountsAt > 2000) refreshVoteCounts();
     }
-    return null;
+    rafId = requestAnimationFrame(tick);
   };
+  rafId = requestAnimationFrame(tick);
+}
 
-  const clockEl = pick(CLOCK_SEL);
-  const phaseEl = pick(PHASE_SEL);
-  const statusEl = pick(STATUS_SEL);
-  const btnPause = pick(BTN_PAUSE_SEL);
-  const btnForce = pick(BTN_FORCE_SEL);
+/* =========================
+   CONTROLS & VOTING
+========================= */
+pauseBtn.onclick = async ()=>{ try{
+  if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'});
+  await fetchState();
+}catch(e){ toast('Pause/resume failed'); }};
 
-  function setText(el, txt) { if (el) el.textContent = txt; }
+forceBtn.onclick = async ()=>{ try{
+  await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision');
+}catch(e){ toast('Force failed'); }};
 
-  async function fetchPhase() {
-    try {
-      setText(statusEl, "syncing…");
-      const res = await fetch(SUPABASE_URL + EDGE_PATH, {
-        headers: { Authorization: `Bearer ${SUPABASE_ANON}` }
-      });
-      const body = await res.json().catch(()=> ({}));
+voteRedBtn.onclick  = ()=>{ chosen='red';  voteRedBtn.classList.add('selected');  voteBlueBtn.classList.remove('selected'); submitBtn.disabled=false; };
+voteBlueBtn.onclick = ()=>{ chosen='blue'; voteBlueBtn.classList.add('selected'); voteRedBtn.classList.remove('selected');  submitBtn.disabled=false; };
 
-      const p = body?.phase;
-      if (!p?.phase_key || !p?.ends_at) {
-        setText(clockEl, "Sync…");
-        setText(statusEl, "waiting for phase");
-        return;
-      }
+submitBtn.onclick = async ()=>{
+  if (!chosen || !serverPhaseEndISO) return;
+  try{
+    const phaseKey = toIso(serverPhaseEndISO);
+    // one vote per user per phase with upsert (requires unique index on (phase_key, user_id))
+    const { error } = await supabase
+      .from('phase_votes')
+      .upsert({ phase_key: phaseKey, vote: chosen }, { onConflict:'phase_key,user_id' });
+    if (error) throw error;
+    toast(`Voted ${chosen.toUpperCase()}`);
+    submitBtn.textContent = '✔ Voted';
+    submitBtn.disabled = true;
+    refreshVoteCounts();
+  }catch(e){ toast('Vote failed'); }
+};
 
-      // When server switches phase, reset local state
-      if (phaseKey !== p.phase_key) {
-        phaseKey = p.phase_key;
-        setText(phaseEl, phaseKey);
-      }
-      phaseEndsAt = new Date(p.ends_at);
-      bootTicker();
-      setText(statusEl, "LIVE");
-    } catch (e) {
-      setText(statusEl, "sync error");
-      console.error("fetchPhase error", e);
-    }
-  }
+/* =========================
+   REALTIME (optional)
+========================= */
+supabase.channel('winners-phase')
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, (payload)=>{
+    const rowKey = payload?.new?.phase_key;
+    const color  = (payload?.new?.color || '').toLowerCase();
+    if (!rowKey || !lastFinishedKey) return;
+    if (toIso(rowKey) === toIso(lastFinishedKey) && (color === 'red' || color === 'blue')) showWinnerBanner(color);
+  })
+  .subscribe();
 
-  function bootTicker() {
-    if (ticker) clearInterval(ticker);
-    const tick = () => {
-      if (!phaseEndsAt) { setText(clockEl, "Sync…"); return; }
-      if (paused) { return; }
+supabase.channel('phase-votes-live')
+  .on('postgres_changes',{event:'*',schema:'public',table:'phase_votes'}, async (payload)=>{
+    try{
+      const pk = payload?.new?.phase_key || payload?.old?.phase_key;
+      if (!pk || !serverPhaseEndISO) return;
+      if (toIso(pk) === toIso(serverPhaseEndISO)) await refreshVoteCounts();
+    }catch(e){}
+  })
+  .subscribe();
 
-      const diff = phaseEndsAt.getTime() - Date.now();
-      if (diff <= 0) {
-        setText(clockEl, "0");
-        // Ask server for the next phase and restart
-        fetchPhase();
-      } else {
-        setText(clockEl, String(Math.floor(diff / 1000)));
-      }
-    };
-    tick();
-    ticker = setInterval(tick, 1000);
-  }
-
-  // Optional: wire your existing Pause button
-  if (btnPause) {
-    btnPause.addEventListener("click", () => {
-      paused = !paused;
-      // If unpausing, immediately tick to catch up
-      if (!paused) bootTicker();
-      // If you also pause the server in your code, keep that call where it is.
-    });
-  }
-
-  // Optional: wire your existing Force Decide button
-  if (btnForce) {
-    btnForce.addEventListener("click", async () => {
-      try {
-        await fetch(SUPABASE_URL + EDGE_PATH, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${SUPABASE_ANON}` }
-        });
-      } finally {
-        fetchPhase(); // pull freshly-advanced phase
-      }
-    });
-  }
-
-  // Kick things off and keep it fresh
-  fetchPhase();
-  setInterval(fetchPhase, 10000);
-})();
+/* =========================
+   BOOT
+========================= */
+(async()=>{ try{
+  await fetchState();
+  await start();
+}catch(e){
+  clockEl.textContent='ERR'; stateEl.textContent='ERR';
+}})();
 </script>
+</body>
+</html>
