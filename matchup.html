@@ -40,6 +40,9 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18)}
 .toast.show{display:block}
+.badge{border:1px solid var(--border);border-radius:8px;padding:2px 8px}
+.badge.warn{border-color:#3b1616;color:#ff6b6b}
+.badge.ok{border-color:#153b16;color:#8aff8a}
 </style>
 </head>
 
@@ -52,6 +55,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
         <span id="clock" class="clock">Sync…</span>
         <span id="state" class="clock">—</span>
         <span id="phaseKey" class="clock">phase: —</span>
+        <span id="loginBadge" class="badge">checking auth…</span>
       </div>
       <div class="row">
         <button id="btnPause" class="btn">⏸️ Pause</button>
@@ -103,6 +107,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const clockEl = document.getElementById('clock');
 const stateEl = document.getElementById('state');
 const phaseBadge = document.getElementById('phaseKey');
+const loginBadge = document.getElementById('loginBadge');
 
 const pauseBtn = document.getElementById('btnPause');
 const forceBtn = document.getElementById('btnForce');
@@ -129,16 +134,23 @@ let lastSyncAt = 0;
 let lastCountsAt = 0;
 let chosen = null; // 'red'|'blue'|null
 let lastFinishedKey = null;
+let currentUid = null; // logged-in user id or null
 
 /* =========================
-   AUTH (anonymous ok)
+   AUTH (no anonymous)
 ========================= */
-async function ensureAuth() {
+async function getUidOrNull() {
   const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user) return session.user.id;
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error) throw error;
-  return data.user.id;
+  return session?.user?.id ?? null;
+}
+function paintLoginBadge() {
+  if (currentUid) {
+    loginBadge.textContent = "logged in";
+    loginBadge.classList.remove('warn'); loginBadge.classList.add('ok');
+  } else {
+    loginBadge.textContent = "not logged in";
+    loginBadge.classList.remove('ok'); loginBadge.classList.add('warn');
+  }
 }
 
 /* =========================
@@ -157,7 +169,6 @@ async function callEdge(method='GET', body=null){
   const raw = await res.text();
   let j=null; try{ j=JSON.parse(raw); }catch{}
   if(!res.ok) throw new Error((j && j.error) || raw || 'edge error');
-  // Edge returns { state: { phase_end_at, remaining_sec, paused, period_sec } }
   return j?.state || j || {};
 }
 const normalize = (s)=>({
@@ -230,7 +241,7 @@ async function fetchState(){
     blueCountEl.textContent = '0 votes';
     pollWinnerForKey(lastFinishedKey);
   } else {
-    submitBtn.disabled = !chosen;
+    submitBtn.disabled = !chosen || !currentUid;
   }
 
   refreshVoteCounts();
@@ -271,19 +282,19 @@ forceBtn.onclick = async ()=>{ try{
   await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision');
 }catch(e){ toast('Force failed'); }};
 
-voteRedBtn.onclick  = ()=>{ chosen='red';  voteRedBtn.classList.add('selected');  voteBlueBtn.classList.remove('selected'); submitBtn.disabled=false; };
-voteBlueBtn.onclick = ()=>{ chosen='blue'; voteBlueBtn.classList.add('selected'); voteRedBtn.classList.remove('selected');  submitBtn.disabled=false; };
+voteRedBtn.onclick  = ()=>{ chosen='red';  voteRedBtn.classList.add('selected');  voteBlueBtn.classList.remove('selected'); submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
+voteBlueBtn.onclick = ()=>{ chosen='blue'; voteBlueBtn.classList.add('selected'); voteRedBtn.classList.remove('selected');  submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
 
 submitBtn.onclick = async ()=>{
   if (!chosen || !serverPhaseEndISO) return;
+  if (!currentUid) { toast('Log in to vote'); return; }
   try{
-    const uid = await ensureAuth();                  // ensure session
     const phaseKey = toIso(serverPhaseEndISO);
 
     // one vote per user per phase with upsert (requires unique index on (phase_key, user_id))
     const { error } = await supabase
       .from('phase_votes')
-      .upsert({ phase_key: phaseKey, vote: chosen, user_id: uid }, { onConflict:'phase_key,user_id' });
+      .upsert({ phase_key: phaseKey, vote: chosen, user_id: currentUid }, { onConflict:'phase_key,user_id' });
 
     if (error) throw error;
     toast(`Voted ${chosen.toUpperCase()}`);
@@ -291,7 +302,7 @@ submitBtn.onclick = async ()=>{
     submitBtn.disabled = true;
     refreshVoteCounts();
   }catch(e){
-    console.error('vote error', e);
+    console.error('VOTE ERROR:', e);
     toast('Vote failed');
   }
 };
@@ -322,7 +333,17 @@ supabase.channel('phase-votes-live')
    BOOT
 ========================= */
 (async()=>{ try{
-  await ensureAuth();          // <-- important for RLS
+  // Get current login status (no anonymous sign-in)
+  currentUid = await getUidOrNull();
+  paintLoginBadge();
+
+  // React to auth state changes (e.g., user logs in/out elsewhere)
+  supabase.auth.onAuthStateChange(async (_evt, session) => {
+    currentUid = session?.user?.id ?? null;
+    paintLoginBadge();
+    submitBtn.disabled = !chosen || !currentUid;
+  });
+
   await fetchState();
   await start();
 }catch(e){
