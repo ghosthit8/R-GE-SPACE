@@ -43,6 +43,15 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .badge{border:1px solid var(--border);border-radius:8px;padding:2px 8px}
 .badge.warn{border-color:#3b1616;color:#ff6b6b}
 .badge.ok{border-color:#153b16;color:#8aff8a}
+
+/* === DEBUG overlay styles === */
+#dbgBtn{position:fixed;right:14px;bottom:18px;z-index:9999;border:1px solid #39ff14;background:#071c07;color:#39ff14;border-radius:10px;padding:10px 12px}
+#dbg{display:none;position:fixed;inset:auto 8px 68px 8px;z-index:9998;background:#000;border:1px solid #153b16;border-radius:12px;box-shadow:0 0 18px rgba(57,255,20,.18)}
+#dbg[data-open="1"]{display:block}
+#dbg h3{margin:8px 10px;font:700 14px/1.2 system-ui;color:#7dff62}
+#dbg pre{margin:6px 10px 12px;padding:8px;border:1px dashed #153b16;border-radius:8px;max-height:38vh;overflow:auto;color:#8aff8a;background:#060}
+#dbg .row{display:flex;gap:8px;flex-wrap:wrap;margin:0 10px 10px}
+#dbg .pill{border:1px solid #39ff14;color:#39ff14;background:transparent;border-radius:999px;padding:8px 12px}
 </style>
 </head>
 
@@ -91,6 +100,18 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 
   <div id="toast" class="toast"></div>
 
+  <!-- Debug overlay (shows when URL has ?debug=1) -->
+  <button id="dbgBtn" style="display:none">🔎 Debug</button>
+  <div id="dbg" aria-live="polite">
+    <h3>RageSpace — Debug</h3>
+    <div class="row">
+      <button class="pill" id="dbgRefresh">Refresh Stats</button>
+      <button class="pill" id="dbgTestInsert">Test Insert</button>
+      <button class="pill" id="dbgClear">Clear</button>
+    </div>
+    <pre id="dbgOut"></pre>
+  </div>
+
 <script>
 /* =========================
    CONFIG
@@ -135,6 +156,11 @@ let lastCountsAt = 0;
 let chosen = null; // 'red'|'blue'|null
 let lastFinishedKey = null;
 let currentUid = null; // logged-in user id or null
+
+// Expose for debug overlay
+window.paused = paused;
+window.remainingSec = remainingSec;
+window.serverPhaseEndISO = serverPhaseEndISO;
 
 /* =========================
    AUTH (no anonymous)
@@ -227,6 +253,11 @@ async function fetchState(){
   remainingSec = s.remaining_sec;
   lastSyncAt = Date.now();
 
+  // update globals for debug overlay
+  window.paused = paused;
+  window.remainingSec = remainingSec;
+  window.serverPhaseEndISO = serverPhaseEndISO;
+
   setStateUI();
 
   // phase rolled
@@ -291,7 +322,6 @@ submitBtn.onclick = async ()=>{
   try{
     const phaseKey = toIso(serverPhaseEndISO);
 
-    // one vote per user per phase with upsert (requires unique index on (phase_key, user_id))
     const { error } = await supabase
       .from('phase_votes')
       .upsert({ phase_key: phaseKey, vote: chosen, user_id: currentUid }, { onConflict:'phase_key,user_id' });
@@ -303,6 +333,7 @@ submitBtn.onclick = async ()=>{
     refreshVoteCounts();
   }catch(e){
     console.error('VOTE ERROR:', e);
+    if (window.RSDBG) RSDBG.out('VOTE ERROR', e?.message || e);
     toast('Vote failed');
   }
 };
@@ -349,6 +380,102 @@ supabase.channel('phase-votes-live')
 }catch(e){
   clockEl.textContent='ERR'; stateEl.textContent='ERR';
 }})();
+
+/* =========================
+   MOBILE DEBUG OVERLAY
+   Enable with ?debug=1 in the URL
+========================= */
+(function mobileDebug(){
+  const params = new URLSearchParams(location.search);
+  if (!params.has('debug')) return;
+
+  const logEl = document.getElementById('dbgOut');
+  const btn = document.getElementById('dbgBtn');
+  const panel = document.getElementById('dbg');
+  const btnRefresh = document.getElementById('dbgRefresh');
+  const btnInsert = document.getElementById('dbgTestInsert');
+  const btnClear = document.getElementById('dbgClear');
+
+  const showBtn = ()=> btn.style.display = 'block';
+  const toggle = ()=> panel.dataset.open = panel.dataset.open === '1' ? '0' : '1';
+  const out = (label, obj) => {
+    const time = new Date().toLocaleTimeString();
+    const body = (typeof obj === 'string') ? obj : JSON.stringify(obj, null, 2);
+    logEl.textContent = `[${time}] ${label}\n${body}\n\n` + logEl.textContent;
+  };
+
+  // global hook
+  window.RSDBG = { out };
+
+  // wrap existing functions to log
+  if (typeof fetchState === 'function') {
+    const orig = fetchState;
+    window.fetchState = async function(){
+      try {
+        const r = await orig();
+        RSDBG.out('fetchState ok', { phase_end_at: window.serverPhaseEndISO, paused: window.paused, remainingSec: window.remainingSec });
+        return r;
+      } catch(e) {
+        RSDBG.out('fetchState error', e?.message || e);
+        throw e;
+      }
+    }
+  }
+  if (typeof refreshVoteCounts === 'function') {
+    const origC = refreshVoteCounts;
+    window.refreshVoteCounts = async function(){
+      try { await origC(); RSDBG.out('counts ok', {}); }
+      catch(e){ RSDBG.out('counts error', e?.message || e); }
+    }
+  }
+
+  btn.onclick = toggle;
+
+  btnRefresh.onclick = async () => {
+    try {
+      const { data:{ session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id || null;
+      RSDBG.out('auth session', session ? { uid, email: session.user.email || null } : 'NO SESSION');
+
+      const sel = await supabase.from('phase_votes').select('vote', { count: 'exact', head: false }).limit(1);
+      RSDBG.out('select phase_votes', sel.error ? sel.error : { rows: (sel.data||[]).length });
+
+      RSDBG.out('phase+clock', {
+        phase_end_at: window.serverPhaseEndISO || null,
+        paused: window.paused || false,
+        remainingSec: window.remainingSec ?? null
+      });
+    } catch(e) {
+      RSDBG.out('dbgRefresh error', e?.message || e);
+    }
+  };
+
+  btnInsert.onclick = async () => {
+    try {
+      const { data:{ session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) {
+        RSDBG.out('Test Insert', 'NO SESSION — login required');
+        return;
+      }
+      const uid = session.user.id;
+      const pk = (window.serverPhaseEndISO ? new Date(window.serverPhaseEndISO).toISOString() : new Date().toISOString());
+      const { error } = await supabase
+        .from('phase_votes')
+        .upsert({ phase_key: pk, vote: 'red', user_id: uid }, { onConflict: 'phase_key,user_id' });
+
+      if (error) RSDBG.out('Test Insert ERROR', { message: error.message, details: error.details, hint: error.hint, code: error.code });
+      else RSDBG.out('Test Insert OK', { phase_key: pk, user_id: uid });
+    } catch(e) {
+      RSDBG.out('Test Insert EXCEPTION', e?.message || e);
+    }
+  };
+
+  btnClear.onclick = () => logEl.textContent = '';
+
+  // show & open panel
+  showBtn();
+  setTimeout(() => { panel.dataset.open = '1'; }, 250);
+})();
 </script>
 </body>
 </html>
