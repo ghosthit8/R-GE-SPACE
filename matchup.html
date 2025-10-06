@@ -1,303 +1,114 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Rage Space — Matchup</title>
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <style>
-    :root { --green:#39ff14; --bg:#000; }
-    * { box-sizing: border-box; }
-    body {
-      background: var(--bg);
-      color: var(--green);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      margin: 0; padding: 24px 14px; text-align: center;
+<script>
+(() => {
+  // === CONFIG: update only if your values are different ===
+  const SUPABASE_URL  = "https://tuqvpcevrhciursxrgav.supabase.co";
+  const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+  const EDGE_PATH     = "/functions/v1/global-timer";
+
+  // === SELECTORS: point these at your existing elements ===
+  const CLOCK_SEL = "#countdown, #decisionClock, #countdownMain";  // first match wins
+  const PHASE_SEL = "#phaseKey, [data-phase-badge]";               // optional
+  const BTN_PAUSE_SEL = "#btnPause, button#pause, .btn-pause";     // optional
+  const BTN_FORCE_SEL = "#btnForceDecide, #forceDecide, .btn-force-decide"; // optional
+  const STATUS_SEL = "#status, .status";                           // optional
+
+  // === internal state ===
+  let ticker = null;
+  let phaseEndsAt = null;     // Date
+  let phaseKey = null;        // string
+  let paused = false;
+
+  const $ = (sel) => document.querySelector(sel);
+  const pick = (...sels) => {
+    for (const s of sels) {
+      const n = $(s);
+      if (n) return n;
     }
-    h1 { margin: 10px 0 6px; letter-spacing: .5px; }
-    .sub { opacity:.8; font-size:.95rem; margin-bottom: 16px; }
+    return null;
+  };
 
-    .grid {
-      display: grid; gap: 14px; max-width: 720px; margin: 0 auto;
-      grid-template-columns: 1fr; 
-    }
-    @media (min-width:720px){ .grid { grid-template-columns: 1fr 1fr; } }
+  const clockEl = pick(CLOCK_SEL);
+  const phaseEl = pick(PHASE_SEL);
+  const statusEl = pick(STATUS_SEL);
+  const btnPause = pick(BTN_PAUSE_SEL);
+  const btnForce = pick(BTN_FORCE_SEL);
 
-    .card {
-      border: 2px solid var(--green); border-radius: 18px; padding: 14px;
-      position: relative; background: transparent; min-height: 220px;
-    }
-    .thumb {
-      width: 100%; height: 180px; background: linear-gradient(45deg,#1a1a1a,#0a0a0a);
-      display:flex; align-items:center; justify-content:center; font-size:28px;
-      user-select: none;
-    }
-    .vote-btn {
-      margin-top: 10px; width: 100%; padding: 14px 16px;
-      border: 2px solid var(--green); background: transparent; color: var(--green);
-      cursor: pointer; font-weight: 700; font-size: 18px; border-radius: 12px;
-      transition: transform .08s ease;
-    }
-    .vote-btn:active { transform: scale(.99); }
-    .vote-btn.selected { background: var(--green); color: #000; }
+  function setText(el, txt) { if (el) el.textContent = txt; }
 
-    .capt { margin-top: 8px; font-size: 14px; opacity:.9; }
-    .row { max-width: 720px; margin: 16px auto; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
-    .pill {
-      border:2px solid var(--green); border-radius:999px; padding:8px 14px; font-weight:700;
-      background: transparent; color: var(--green); cursor:pointer;
-    }
-    .pill.primary { background: var(--green); color:#000; }
-    #countdown { font-size: 40px; font-weight: 900; letter-spacing: 1px; }
-    #status { margin-top:6px; font-size:12px; opacity:.8 }
-    .log { max-width: 820px; margin: 16px auto 0; text-align:left; white-space:pre-wrap; font-size:12px; opacity:.85 }
-  </style>
-</head>
-<body>
-  <h1>Red vs Blue</h1>
-  <div class="sub">Live test round · global timer driven by Edge Function</div>
+  async function fetchPhase() {
+    try {
+      setText(statusEl, "syncing…");
+      const res = await fetch(SUPABASE_URL + EDGE_PATH, {
+        headers: { Authorization: `Bearer ${SUPABASE_ANON}` }
+      });
+      const body = await res.json().catch(()=> ({}));
 
-  <div id="countdown">Sync…</div>
-  <div id="status">waiting for phase</div>
-
-  <div class="grid" id="cards">
-    <div class="card" id="card-red">
-      <div class="thumb">RED</div>
-      <button id="btn-red" class="vote-btn">Vote Red</button>
-      <div id="cap-red" class="capt">Votes: 0</div>
-    </div>
-    <div class="card" id="card-blue">
-      <div class="thumb">BLUE</div>
-      <button id="btn-blue" class="vote-btn">Vote Blue</button>
-      <div id="cap-blue" class="capt">Votes: 0</div>
-    </div>
-  </div>
-
-  <div class="row">
-    <button id="submit" class="pill primary">Submit</button>
-    <button id="clearSel" class="pill">Clear</button>
-    <button id="forceRefresh" class="pill">Force Sync</button>
-  </div>
-
-  <pre id="log" class="log"></pre>
-
-  <script>
-    /********* CONFIG (from your project) *********/
-    const SUPABASE_URL  = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-    const EDGE_PATH     = "/functions/v1/global-timer"; // your edge timer endpoint
-
-    /********* BOOT *********/
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-    const el = (id)=> document.getElementById(id);
-    const log = (...args)=> { 
-      const line = args.map(a => (typeof a === 'object' ? JSON.stringify(a,null,2) : String(a))).join(' ');
-      el('log').textContent = (line + "\n" + el('log').textContent).slice(0, 12000);
-      console.debug(...args);
-    };
-
-    // UI elements
-    const btnRed   = el('btn-red');
-    const btnBlue  = el('btn-blue');
-    const capRed   = el('cap-red');
-    const capBlue  = el('cap-blue');
-    const submit   = el('submit');
-    const clearSel = el('clearSel');
-    const forceRefresh = el('forceRefresh');
-    const countdown = el('countdown');
-    const statusEl  = el('status');
-
-    let selected = null;               // 'red' | 'blue' | null
-    let phaseKey = null;               // server-authoritative phase_key (string)
-    let phaseEndsAt = null;            // Date
-    let ticker = null;                 // setInterval handle
-    let voteSub = null;                // realtime subscription handle
-    let userId = null;                 // auth uid (anonymous ok)
-
-    // Ensure we have an authenticated user (anonymous if needed)
-    async function ensureAuth() {
-      const { data: sess } = await sb.auth.getSession();
-      if (sess?.session?.user) {
-        userId = sess.session.user.id;
-        return userId;
+      const p = body?.phase;
+      if (!p?.phase_key || !p?.ends_at) {
+        setText(clockEl, "Sync…");
+        setText(statusEl, "waiting for phase");
+        return;
       }
-      const { data, error } = await sb.auth.signInAnonymously();
-      if (error) { log('anon auth error', error); throw error; }
-      userId = data.user.id;
-      log('anon auth ok', userId);
-      return userId;
-    }
 
-    // Fetch current phase from Edge Function (authoritative)
-    async function fetchPhase() {
+      // When server switches phase, reset local state
+      if (phaseKey !== p.phase_key) {
+        phaseKey = p.phase_key;
+        setText(phaseEl, phaseKey);
+      }
+      phaseEndsAt = new Date(p.ends_at);
+      bootTicker();
+      setText(statusEl, "LIVE");
+    } catch (e) {
+      setText(statusEl, "sync error");
+      console.error("fetchPhase error", e);
+    }
+  }
+
+  function bootTicker() {
+    if (ticker) clearInterval(ticker);
+    const tick = () => {
+      if (!phaseEndsAt) { setText(clockEl, "Sync…"); return; }
+      if (paused) { return; }
+
+      const diff = phaseEndsAt.getTime() - Date.now();
+      if (diff <= 0) {
+        setText(clockEl, "0");
+        // Ask server for the next phase and restart
+        fetchPhase();
+      } else {
+        setText(clockEl, String(Math.floor(diff / 1000)));
+      }
+    };
+    tick();
+    ticker = setInterval(tick, 1000);
+  }
+
+  // Optional: wire your existing Pause button
+  if (btnPause) {
+    btnPause.addEventListener("click", () => {
+      paused = !paused;
+      // If unpausing, immediately tick to catch up
+      if (!paused) bootTicker();
+      // If you also pause the server in your code, keep that call where it is.
+    });
+  }
+
+  // Optional: wire your existing Force Decide button
+  if (btnForce) {
+    btnForce.addEventListener("click", async () => {
       try {
-        statusEl.textContent = 'syncing…';
-        const res = await fetch(SUPABASE_URL + EDGE_PATH, {
+        await fetch(SUPABASE_URL + EDGE_PATH, {
+          method: "POST",
           headers: { Authorization: `Bearer ${SUPABASE_ANON}` }
         });
-        const body = await res.json().catch(() => ({}));
-        log('phase fetch', body);
-
-        const p = body?.phase;
-        if (!p?.phase_key || !p?.ends_at) {
-          statusEl.textContent = 'waiting for phase…';
-          return;
-        }
-
-        // If phase changed, reset listeners and UI for new round
-        if (phaseKey !== p.phase_key) {
-          phaseKey = p.phase_key;
-          log('phase switched ->', phaseKey);
-          teardownRealtime();
-          await primeRealtime();
-          selected = null; paintSelection();
-        }
-
-        phaseEndsAt = new Date(p.ends_at);
-        bootTicker();
-        statusEl.textContent = `phase: ${phaseKey}`;
-      } catch (e) {
-        log('fetchPhase error', e);
-        statusEl.textContent = 'sync error';
+      } finally {
+        fetchPhase(); // pull freshly-advanced phase
       }
-    }
+    });
+  }
 
-    // Start/refresh countdown
-    function bootTicker() {
-      if (ticker) clearInterval(ticker);
-      const tick = () => {
-        if (!phaseEndsAt) { countdown.textContent = 'Sync…'; return; }
-        const now = Date.now();
-        const diffMs = phaseEndsAt.getTime() - now;
-        if (diffMs <= 0) {
-          countdown.textContent = '0';
-          // Phase is over; ask server to roll/decide and then resync
-          fetchPhase(); // pull next phase as soon as server advances
-        } else {
-          countdown.textContent = Math.floor(diffMs / 1000);
-        }
-      };
-      tick();
-      ticker = setInterval(tick, 1000);
-    }
-
-    // Load current counts for captions
-    async function refreshCounts() {
-      if (!phaseKey) return;
-      // group by vote
-      const { data, error } = await sb
-        .from('phase_votes')
-        .select('vote, count:vote', { count: 'exact', head: false })
-        .eq('phase_key', phaseKey);
-      if (error) { log('count error', error); return; }
-
-      // Compute counts reliably
-      let red = 0, blue = 0;
-      for (const row of data || []) {
-        if (row.vote === 'red')  red  += 1;
-        if (row.vote === 'blue') blue += 1;
-      }
-      capRed.textContent  = `Votes: ${red}`;
-      capBlue.textContent = `Votes: ${blue}`;
-    }
-
-    // Subscribe to realtime changes for this phase
-    async function primeRealtime() {
-      await refreshCounts();
-      voteSub = sb
-        .channel('realtime:phase_votes:' + phaseKey)
-        .on('postgres_changes', {
-          event: '*', schema: 'public', table: 'phase_votes',
-          filter: `phase_key=eq.${phaseKey}`
-        }, async (payload) => {
-          log('rt', payload.eventType, payload.new || payload.old);
-          await refreshCounts();
-        })
-        .subscribe((status) => log('rt status', status));
-    }
-
-    function teardownRealtime() {
-      if (voteSub) { sb.removeChannel(voteSub); voteSub = null; }
-    }
-
-    // UI helpers
-    function paintSelection() {
-      btnRed.classList.toggle('selected',  selected === 'red');
-      btnBlue.classList.toggle('selected', selected === 'blue');
-    }
-
-    // Voting (single vote per user per phase via unique index and upsert)
-    async function submitVote() {
-      if (!selected) { log('no selection'); return; }
-      if (!phaseKey) { log('no phase yet'); return; }
-      await ensureAuth();
-
-      // We assume a UNIQUE INDEX exists on (phase_key, user_id)
-      // and user_id defaults to auth.uid() in RLS / trigger.
-      // Upsert allows changing your mind before time expires,
-      // but still keeps ONE row per user.
-      const { data, error } = await sb
-        .from('phase_votes')
-        .upsert(
-          { phase_key: phaseKey, vote: selected },
-          { onConflict: 'phase_key,user_id' }
-        )
-        .select();
-
-      if (error) {
-        log('vote error', error);
-      } else {
-        log('vote ok', data);
-        await refreshCounts();
-        // Remember local choice for UX
-        localStorage.setItem('lastVote:' + phaseKey, selected);
-      }
-    }
-
-    // Maintain local UX state across refresh within same phase
-    function restoreLocalChoice() {
-      if (!phaseKey) return;
-      const v = localStorage.getItem('lastVote:' + phaseKey);
-      if (v === 'red' || v === 'blue') { selected = v; paintSelection(); }
-    }
-
-    /********* EVENT WIRING *********/
-    btnRed.addEventListener('click', () => { selected = 'red'; paintSelection(); });
-    btnBlue.addEventListener('click', () => { selected = 'blue'; paintSelection(); });
-    submit.addEventListener('click', submitVote);
-    clearSel.addEventListener('click', () => { selected = null; paintSelection(); });
-    forceRefresh.addEventListener('click', () => fetchPhase());
-
-    /********* LIFECYCLE *********/
-    (async function main(){
-      try {
-        await ensureAuth();
-        await fetchPhase();
-        // Keep syncing even if no one is on page; your GitHub Action also pings server
-        setInterval(fetchPhase, 10000);
-        // Try to restore UX choice for current phase
-        setInterval(restoreLocalChoice, 1500);
-      } catch (e) {
-        log('boot error', e);
-      }
-    })();
-
-    /********* NOTES *********
-     * Tables assumed:
-     *   phase_votes( id, phase_key text, user_id uuid default auth.uid(), vote text check in ('red','blue'), created_at )
-     * Index:
-     *   create unique index if not exists ux_phase_votes_phase_user on phase_votes(phase_key, user_id);
-     * RLS (example idea):
-     *   enable rls on phase_votes;
-     *   create policy "insert-own" on phase_votes for insert with check (auth.uid() = user_id);
-     *   create policy "select-phase" on phase_votes for select using (true);
-     *   create policy "update-own" on phase_votes for update using (auth.uid() = user_id);
-     *
-     * Why “wrong winner” won’t happen here:
-     * - We *always* use server-provided `phase_key` from Edge for counting & voting.
-     * - Counts are filtered by that exact key; ties/winners are decided server-side.
-     * - Client never compares different phases or local clocks.
-     **************************/
-  </script>
-</body>
-</html>
+  // Kick things off and keep it fresh
+  fetchPhase();
+  setInterval(fetchPhase, 10000);
+})();
+</script>
