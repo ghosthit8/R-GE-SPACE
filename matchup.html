@@ -131,7 +131,18 @@ let chosen = null; // 'red'|'blue'|null
 let lastFinishedKey = null;
 
 /* =========================
-   HELPERS
+   AUTH (anonymous ok)
+========================= */
+async function ensureAuth() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user) return session.user.id;
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if (error) throw error;
+  return data.user.id;
+}
+
+/* =========================
+   EDGE CALLS
 ========================= */
 async function callEdge(method='GET', body=null){
   const res = await fetch(EDGE_URL, {
@@ -149,19 +160,18 @@ async function callEdge(method='GET', body=null){
   // Edge returns { state: { phase_end_at, remaining_sec, paused, period_sec } }
   return j?.state || j || {};
 }
-
-function normalize(s){ return {
+const normalize = (s)=>({
   phase_end_at: s.phase_end_at ?? null,
   period_sec: s.period_sec ?? 10,
   paused: !!s.paused,
   remaining_sec: (typeof s.remaining_sec === 'number') ? s.remaining_sec : null
-};}
-
-function fmtVotes(n){ return `${n} ${n===1?'vote':'votes'}`; }
+});
 
 /* =========================
-   COUNTS + WINNER BANNER
+   VOTE COUNTS
 ========================= */
+const fmtVotes = (n)=> `${n} ${n===1?'vote':'votes'}`;
+
 async function refreshVoteCounts(){
   try{
     if(!serverPhaseEndISO) { redCountEl.textContent = '0 votes'; blueCountEl.textContent = '0 votes'; return; }
@@ -179,15 +189,12 @@ async function refreshVoteCounts(){
   }catch(e){}
 }
 
-function showWinnerBanner(color){
-  toast(`🏁 ${color.toUpperCase()} won!`);
-}
-
+function showWinnerBanner(color){ toast(`🏁 ${color.toUpperCase()} won!`); }
 async function pollWinnerForKey(key){
   try{
     const { data } = await supabase.from('winners').select('color').eq('phase_key', toIso(key)).limit(1);
-    if ((data?.[0]?.color||'').toLowerCase() === 'red')  showWinnerBanner('red');
-    if ((data?.[0]?.color||'').toLowerCase() === 'blue') showWinnerBanner('blue');
+    const c = (data?.[0]?.color||'').toLowerCase();
+    if (c==='red' || c==='blue') showWinnerBanner(c);
   }catch(e){}
 }
 
@@ -211,7 +218,7 @@ async function fetchState(){
 
   setStateUI();
 
-  // phase rolled → remember finished key, clear counts, and try winner banner
+  // phase rolled
   if (prev && serverPhaseEndISO && prev !== serverPhaseEndISO) {
     lastFinishedKey = toIso(prev);
     chosen = null;
@@ -270,17 +277,23 @@ voteBlueBtn.onclick = ()=>{ chosen='blue'; voteBlueBtn.classList.add('selected')
 submitBtn.onclick = async ()=>{
   if (!chosen || !serverPhaseEndISO) return;
   try{
+    const uid = await ensureAuth();                  // ensure session
     const phaseKey = toIso(serverPhaseEndISO);
+
     // one vote per user per phase with upsert (requires unique index on (phase_key, user_id))
     const { error } = await supabase
       .from('phase_votes')
-      .upsert({ phase_key: phaseKey, vote: chosen }, { onConflict:'phase_key,user_id' });
+      .upsert({ phase_key: phaseKey, vote: chosen, user_id: uid }, { onConflict:'phase_key,user_id' });
+
     if (error) throw error;
     toast(`Voted ${chosen.toUpperCase()}`);
     submitBtn.textContent = '✔ Voted';
     submitBtn.disabled = true;
     refreshVoteCounts();
-  }catch(e){ toast('Vote failed'); }
+  }catch(e){
+    console.error('vote error', e);
+    toast('Vote failed');
+  }
 };
 
 /* =========================
@@ -309,6 +322,7 @@ supabase.channel('phase-votes-live')
    BOOT
 ========================= */
 (async()=>{ try{
+  await ensureAuth();          // <-- important for RLS
   await fetchState();
   await start();
 }catch(e){
