@@ -15,7 +15,7 @@
 body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
 .wrap{max-width:var(--maxw);margin:16px auto 64px;padding:0 16px}
 .scorebar{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
-.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer}
+.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
 .btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
 .tiny{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
 .clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
@@ -47,11 +47,12 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       <div class="row">
         <button id="btnPause" class="btn">⏸️ Pause</button>
         <button id="btnForce" class="btn">🏁 Force Decide</button>
-        <!-- CHANGED: anchor -> button so navigation is reliable in subfolders -->
-        <button id="openWinners" class="btn">🏁 Winners</button>
+        <!-- ✅ Fixed: plain anchor for reliable navigation -->
+        <a id="openWinners" class="btn" href="winners.html">🏁 Winners</a>
       </div>
     </div>
 
+    <!-- RED -->
     <div class="tile">
       <div class="art red"></div>
       <div class="caption" id="redCount">0 votes</div>
@@ -61,6 +62,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       </div>
     </div>
 
+    <!-- BLUE -->
     <div class="tile">
       <div class="art blue"></div>
       <div class="caption" id="blueCount">0 votes</div>
@@ -74,6 +76,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
     </div>
   </div>
+
   <div id="toast" class="toast"></div>
 
 <script>
@@ -97,12 +100,6 @@ const toastEl     = document.getElementById('toast');
 
 function toast(msg, ms=1600){ toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'), ms); }
 const toIso = (d)=> new Date(d).toISOString();
-
-// NEW: winners navigation that works under GitHub Pages subpaths
-document.getElementById('openWinners')?.addEventListener('click', () => {
-  const url = new URL('winners.html', window.location.href);
-  window.location.href = url.href;
-});
 
 let rafId = null;
 let paused = false;
