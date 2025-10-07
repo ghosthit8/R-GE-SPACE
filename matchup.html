@@ -47,7 +47,8 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       <div class="row">
         <button id="btnPause" class="btn">⏸️ Pause</button>
         <button id="btnForce" class="btn">🏁 Force Decide</button>
-        <a class="btn" href="./winners.html">🏁 Winners</a>
+        <!-- CHANGED: anchor -> button so navigation is reliable in subfolders -->
+        <button id="openWinners" class="btn">🏁 Winners</button>
       </div>
     </div>
 
@@ -93,8 +94,15 @@ const submitBtn   = document.getElementById('submitBtn');
 const redCountEl  = document.getElementById('redCount');
 const blueCountEl = document.getElementById('blueCount');
 const toastEl     = document.getElementById('toast');
+
 function toast(msg, ms=1600){ toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'), ms); }
 const toIso = (d)=> new Date(d).toISOString();
+
+// NEW: winners navigation that works under GitHub Pages subpaths
+document.getElementById('openWinners')?.addEventListener('click', () => {
+  const url = new URL('winners.html', window.location.href);
+  window.location.href = url.href;
+});
 
 let rafId = null;
 let paused = false;
