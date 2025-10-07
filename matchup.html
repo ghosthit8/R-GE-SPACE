@@ -47,10 +47,12 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       <div class="row">
         <button id="btnPause" class="btn">⏸️ Pause</button>
         <button id="btnForce" class="btn">🏁 Force Decide</button>
-        <!-- Primary simple link -->
-        <a id="openWinners" class="btn" href="./winners.html" target="_self" rel="noopener">🏁 Winners</a>
-        <!-- Visible fallback (kept for testing) -->
-        <a id="openWinnersForce" class="btn" href="./winners.html" target="_self" rel="noopener">🧰 Open Winners (force)</a>
+
+        <!-- Normal anchor (works in standard browsers/GitHub Pages when paths are correct) -->
+        <a class="btn" id="openWinnersLink" href="./winners.html" target="_self" rel="noopener">🏁 Winners</a>
+
+        <!-- JS button (forces navigation; helps in stubborn webviews) -->
+        <button class="btn" id="goWinners" type="button">🧰 Open Winners</button>
       </div>
     </div>
 
@@ -82,30 +84,34 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   <div id="toast" class="toast"></div>
 
 <script>
-// --- Tiny, safe fallback for environments that block normal anchor nav (file:// / mobile previews)
+/* ---------- Winners navigation (no HEAD checks, no href rewriting) ---------- */
 (function(){
-  function toFolderPath(){ return location.pathname.replace(/[^/]*$/, ''); }
-  const primary = document.getElementById('openWinners');
-  const force   = document.getElementById('openWinnersForce');
-  if (!primary || !force) return;
+  const btn = document.getElementById('goWinners');
+  if (!btn) return;
 
-  function go(url){ try { window.location.assign(url); } catch { window.location.href = url; } }
-
-  function computedFolderHref(){ return toFolderPath() + 'winners.html'; }
-  function computedRelativeHref(){ return new URL('winners.html', window.location.href).href; }
-
-  // Force link tries the safest thing for the current environment
-  force.addEventListener('click', function(ev){
+  btn.addEventListener('click', function(ev){
     ev.preventDefault();
-    // If running from file://, prefer folder path resolution
-    if (location.protocol === 'file:') { go(computedFolderHref()); return; }
-    // On web: use URL() relative resolution
-    go(computedRelativeHref());
+
+    // Try the sibling file first (same folder as matchup.html)
+    const folderHref = location.pathname.replace(/[^/]*$/, '') + 'winners.html';
+
+    // Also compute repo-root fallback for GitHub Pages project sites: /<repo>/winners.html
+    const parts = location.pathname.split('/').filter(Boolean);
+    const repoRoot = parts.length ? `/${parts[0]}/` : '/';
+    const rootHref = `${repoRoot}winners.html`;
+
+    // Prefer folder path; if you're accidentally at a different subpath on GH Pages,
+    // the rootHref still lands at /<repo>/winners.html which is correct for your repo.
+    try { window.location.assign(folderHref); }
+    catch { window.location.href = folderHref; }
+
+    // As a last resort (some webviews), queue a quick fallback push to repo root.
+    setTimeout(()=>{ try{ window.location.replace(rootHref); } catch{ window.location.href = rootHref; } }, 150);
   }, {passive:false});
 })();
 
 /* =========================
-   Your existing app logic
+   App logic (unchanged)
 ========================= */
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
@@ -249,21 +255,30 @@ supabase.channel('winners-phase')
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, (payload)=>{
     const rowKey = payload?.new?.phase_key; const color  = (payload?.new?.color || '').toLowerCase();
     if (!rowKey || !lastFinishedKey) return;
-    if (toIso(rowKey) === toIso(lastFinishedKey) && (color === 'red' || color === 'blue')) showWinnerBanner(color);
+    if (toIso(rowKey) === toIso(lastFinishedKey) && (color === 'red' || 'blue')) showWinnerBanner(color);
   }).subscribe();
 
 supabase.channel('phase-votes-live')
   .on('postgres_changes',{event:'*',schema:'public',table:'phase_votes'}, async (payload)=>{
-    try{ const pk = payload?.new?.phase_key || payload?.old?.phase_key; if (!pk || !serverPhaseEndISO) return;
+    try{
+      const pk = payload?.new?.phase_key || payload?.old?.phase_key;
+      if (!pk || !serverPhaseEndISO) return;
       if (toIso(pk) === toIso(serverPhaseEndISO)) await refreshVoteCounts();
-    }catch(e){} }).subscribe();
+    }catch(e){}
+  }).subscribe();
 
 (async()=>{
   try{
     currentUid = await getUidOrNull(); paintLoginBadge();
-    supabase.auth.onAuthStateChange(async (_evt, session) => { currentUid = session?.user?.id ?? null; paintLoginBadge(); submitBtn.disabled = !chosen || !currentUid; });
+    supabase.auth.onAuthStateChange(async (_evt, session) => {
+      currentUid = session?.user?.id ?? null;
+      paintLoginBadge();
+      submitBtn.disabled = !chosen || !currentUid;
+    });
     await fetchState(); await start();
-  }catch(e){ clockEl.textContent='ERR'; stateEl.textContent='ERR'; }
+  }catch(e){
+    clockEl.textContent='ERR'; stateEl.textContent='ERR';
+  }
 })();
 </script>
 </body>
