@@ -47,8 +47,10 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       <div class="row">
         <button id="btnPause" class="btn">⏸️ Pause</button>
         <button id="btnForce" class="btn">🏁 Force Decide</button>
-        <!-- ✅ Simple relative link -->
-        <a class="btn" href="./winners.html">🏁 Winners</a>
+        <!-- Primary simple link -->
+        <a id="openWinners" class="btn" href="./winners.html" target="_self" rel="noopener">🏁 Winners</a>
+        <!-- Visible fallback (kept for testing) -->
+        <a id="openWinnersForce" class="btn" href="./winners.html" target="_self" rel="noopener">🧰 Open Winners (force)</a>
       </div>
     </div>
 
@@ -80,6 +82,31 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   <div id="toast" class="toast"></div>
 
 <script>
+// --- Tiny, safe fallback for environments that block normal anchor nav (file:// / mobile previews)
+(function(){
+  function toFolderPath(){ return location.pathname.replace(/[^/]*$/, ''); }
+  const primary = document.getElementById('openWinners');
+  const force   = document.getElementById('openWinnersForce');
+  if (!primary || !force) return;
+
+  function go(url){ try { window.location.assign(url); } catch { window.location.href = url; } }
+
+  function computedFolderHref(){ return toFolderPath() + 'winners.html'; }
+  function computedRelativeHref(){ return new URL('winners.html', window.location.href).href; }
+
+  // Force link tries the safest thing for the current environment
+  force.addEventListener('click', function(ev){
+    ev.preventDefault();
+    // If running from file://, prefer folder path resolution
+    if (location.protocol === 'file:') { go(computedFolderHref()); return; }
+    // On web: use URL() relative resolution
+    go(computedRelativeHref());
+  }, {passive:false});
+})();
+
+/* =========================
+   Your existing app logic
+========================= */
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
