@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Rage Space — Matchup</title>
+<title>Rage Space — Winners</title>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
 :root{
@@ -14,225 +14,95 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
 .wrap{max-width:var(--maxw);margin:16px auto 64px;padding:0 16px}
-.scorebar{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
-.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer}
+.header{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
+.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
 .btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
-.tiny{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
-.clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
-.tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px}
-.art{aspect-ratio:4/3;width:100%}
-.art.red{background:#a60000}
-.art.blue{background:#0058a6}
-.caption{display:block;text-align:center;font-size:12px;color:var(--muted);padding:6px 8px;border-top:1px dashed var(--border)}
-.meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
-.btn.primary.selected{background:rgba(57,255,20,.22);color:var(--ink);box-shadow:0 0 18px rgba(125,255,98,.35), inset 0 0 12px rgba(57,255,20,.15)}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18)}
-.toast.show{display:block}
+.h1{font-weight:700;font-size:18px}
+.list{margin-top:16px;display:grid;gap:12px}
+.card{border:1px solid var(--border);background:rgba(7,7,7,.6);border-radius:14px;padding:12px;display:flex;justify-content:space-between;align-items:center}
 .badge{border:1px solid var(--border);border-radius:8px;padding:2px 8px}
-.badge.warn{border-color:#3b1616;color:#ff6b6b}
-.badge.ok{border-color:#153b16;color:#8aff8a}
+.kv{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.time{color:var(--muted);font-size:12px}
+.color-dot{width:14px;height:14px;border-radius:50%;border:1px solid var(--border)}
+.color-red{background:#a60000}
+.color-blue{background:#0058a6}
+.empty{color:var(--muted);text-align:center;margin-top:24px}
 </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="scorebar">
-      <div class="tiny">
-        <strong>Decision in</strong>
-        <span id="clock" class="clock">Sync…</span>
-        <span id="state" class="clock">—</span>
-        <span id="phaseKey" class="clock">phase: —</span>
-        <span id="loginBadge" class="badge">checking auth…</span>
-      </div>
-      <div class="row">
-        <button id="btnPause" class="btn">⏸️ Pause</button>
-        <button id="btnForce" class="btn">🏁 Force Decide</button>
-        <a class="btn" href="./winners.html">🏁 Winners</a>
-      </div>
+    <div class="header">
+      <div class="h1">🏁 Winners</div>
+      <a class="btn" href="/R-GE-SPACE/matchup.html">⬅ Back to Matchup</a>
     </div>
 
-    <div class="tile">
-      <div class="art red"></div>
-      <div class="caption" id="redCount">0 votes</div>
-      <div class="meta">
-        <span>Entry — RED</span>
-        <button class="btn primary" id="voteRed">Vote Red</button>
-      </div>
-    </div>
-
-    <div class="tile">
-      <div class="art blue"></div>
-      <div class="caption" id="blueCount">0 votes</div>
-      <div class="meta">
-        <span>Entry — BLUE</span>
-        <button class="btn primary" id="voteBlue">Vote Blue</button>
-      </div>
-    </div>
-
-    <div class="row">
-      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
-    </div>
+    <div id="winnersList" class="list" aria-live="polite"></div>
+    <div id="emptyState" class="empty" style="display:none;">No winners recorded yet.</div>
   </div>
-  <div id="toast" class="toast"></div>
 
 <script>
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const clockEl = document.getElementById('clock');
-const stateEl = document.getElementById('state');
-const phaseBadge = document.getElementById('phaseKey');
-const loginBadge = document.getElementById('loginBadge');
-const pauseBtn = document.getElementById('btnPause');
-const forceBtn = document.getElementById('btnForce');
-const voteRedBtn  = document.getElementById('voteRed');
-const voteBlueBtn = document.getElementById('voteBlue');
-const submitBtn   = document.getElementById('submitBtn');
-const redCountEl  = document.getElementById('redCount');
-const blueCountEl = document.getElementById('blueCount');
-const toastEl     = document.getElementById('toast');
-function toast(msg, ms=1600){ toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'), ms); }
-const toIso = (d)=> new Date(d).toISOString();
+const listEl = document.getElementById('winnersList');
+const emptyEl = document.getElementById('emptyState');
 
-let rafId = null;
-let paused = false;
-let remainingSec = null;
-let serverPhaseEndISO = null;
-let lastSyncAt = 0;
-let lastCountsAt = 0;
-let chosen = null;
-let lastFinishedKey = null;
-let currentUid = null;
-
-async function getUidOrNull() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user?.id ?? null;
-}
-function paintLoginBadge() {
-  if (currentUid) { loginBadge.textContent = "logged in"; loginBadge.classList.remove('warn'); loginBadge.classList.add('ok'); }
-  else { loginBadge.textContent = "not logged in"; loginBadge.classList.remove('ok'); loginBadge.classList.add('warn'); }
+function rowHTML({ color, phase_key, created_at }) {
+  const c = (color || '').toLowerCase();
+  const dotClass = c === 'red' ? 'color-red' : c === 'blue' ? 'color-blue' : '';
+  const time = created_at ? new Date(created_at).toLocaleString() : '—';
+  const key = phase_key || '—';
+  return `
+    <div class="card">
+      <div class="kv">
+        <span class="color-dot ${dotClass}" title="${c}"></span>
+        <strong>${c ? c.toUpperCase() : '—'}</strong>
+      </div>
+      <div class="kv">
+        <span class="badge">phase: ${key}</span>
+        <span class="time">${time}</span>
+      </div>
+    </div>`;
 }
 
-async function callEdge(method='GET', body=null){
-  const res = await fetch(EDGE_URL, {
-    method,
-    headers: {'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_ANON_KEY}`,'apikey': SUPABASE_ANON_KEY},
-    body: body ? JSON.stringify(body) : null
-  });
-  const raw = await res.text(); let j=null; try{ j=JSON.parse(raw); }catch{}
-  if(!res.ok) throw new Error((j && j.error) || raw || 'edge error');
-  return j?.state || j || {};
-}
-const normalize = (s)=>({
-  phase_end_at: s.phase_end_at ?? null,
-  period_sec: s.period_sec ?? 10,
-  paused: !!s.paused,
-  remaining_sec: (typeof s.remaining_sec === 'number') ? s.remaining_sec : null
-});
-
-const fmtVotes = (n)=> `${n} ${n===1?'vote':'votes'}`;
-async function refreshVoteCounts(){
+async function loadWinners(){
   try{
-    if(!serverPhaseEndISO) { redCountEl.textContent = '0 votes'; blueCountEl.textContent = '0 votes'; return; }
-    const phaseKey = toIso(serverPhaseEndISO);
-    const { data, error } = await supabase.from('phase_votes').select('vote').eq('phase_key', phaseKey);
+    // Adjust the select fields to match your table schema exactly
+    const { data, error } = await supabase
+      .from('winners')
+      .select('color, phase_key, created_at')
+      .order('created_at', { ascending: false })
+      .limit(50);
     if (error) throw error;
-    let r=0, b=0; (data||[]).forEach(row => { if(row.vote==='red') r++; else if(row.vote==='blue') b++; });
-    redCountEl.textContent  = fmtVotes(r);
-    blueCountEl.textContent = fmtVotes(b);
-    lastCountsAt = Date.now();
-  }catch(e){}
-}
-function showWinnerBanner(color){ toast(`🏁 ${color.toUpperCase()} won!`); }
-async function pollWinnerForKey(key){
-  try{
-    const { data } = await supabase.from('winners').select('color').eq('phase_key', toIso(key)).limit(1);
-    const c = (data?.[0]?.color||'').toLowerCase();
-    if (c==='red' || c==='blue') showWinnerBanner(c);
-  }catch(e){}
-}
 
-function setStateUI(){
-  stateEl.textContent = paused ? 'PAUSED' : 'LIVE';
-  pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause';
-  phaseBadge.textContent = 'phase: ' + (serverPhaseEndISO || '—');
-}
-async function fetchState(){
-  const s = normalize(await callEdge('GET'));
-  const prev = serverPhaseEndISO;
-  serverPhaseEndISO = s.phase_end_at; paused = s.paused; remainingSec = s.remaining_sec; lastSyncAt = Date.now();
-  setStateUI();
-  if (prev && serverPhaseEndISO && prev !== serverPhaseEndISO) {
-    lastFinishedKey = toIso(prev); chosen = null;
-    voteRedBtn.classList.remove('selected'); voteBlueBtn.classList.remove('selected');
-    submitBtn.textContent = '✅ Submit Vote'; submitBtn.disabled = true;
-    redCountEl.textContent = '0 votes'; blueCountEl.textContent = '0 votes';
-    pollWinnerForKey(lastFinishedKey);
-  } else {
-    submitBtn.disabled = !chosen || !currentUid;
-  }
-  refreshVoteCounts();
-}
-function stop(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
-async function start(){
-  stop();
-  const tick = async ()=>{
-    if (paused){
-      const remCalc = serverPhaseEndISO ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
-      const sec = (typeof remainingSec === 'number' && !Number.isNaN(remainingSec)) ? Number(remainingSec) : Math.ceil(remCalc/1000);
-      clockEl.textContent = String(Math.max(0, Math.ceil(sec)));
-      if (Date.now() - lastSyncAt > 5000) { try{ await fetchState(); }catch{} }
-    } else {
-      const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
-      clockEl.textContent = String(Math.ceil(rem/1000));
-      if (rem <= 0 || Date.now()-lastSyncAt > 5000) { try{ await fetchState(); }catch{} }
-      if (Date.now() - lastCountsAt > 2000) refreshVoteCounts();
+    if (!data || data.length === 0) {
+      emptyEl.style.display = 'block';
+      listEl.innerHTML = '';
+      return;
     }
-    rafId = requestAnimationFrame(tick);
-  };
-  rafId = requestAnimationFrame(tick);
+
+    emptyEl.style.display = 'none';
+    listEl.innerHTML = data.map(rowHTML).join('');
+  } catch (e) {
+    emptyEl.style.display = 'block';
+    emptyEl.textContent = 'Failed to load winners.';
+  }
 }
 
-pauseBtn.onclick = async ()=>{ try{ if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'}); await fetchState(); toast('OK'); }catch(e){ toast('Pause/resume failed'); }};
-forceBtn.onclick = async ()=>{ try{ await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision'); }catch(e){ toast('Force failed'); }};
-voteRedBtn.onclick  = ()=>{ chosen='red';  voteRedBtn.classList.add('selected');  voteBlueBtn.classList.remove('selected'); submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
-voteBlueBtn.onclick = ()=>{ chosen='blue'; voteBlueBtn.classList.add('selected'); voteRedBtn.classList.remove('selected');  submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
-submitBtn.onclick = async ()=>{
-  if (!chosen || !serverPhaseEndISO) return;
-  if (!currentUid) { toast('Log in to vote'); return; }
-  try{
-    const phaseKey = toIso(serverPhaseEndISO);
-    const { error } = await supabase.from('phase_votes').upsert({ phase_key: phaseKey, vote: chosen, user_id: currentUid }, { onConflict:'phase_key,user_id' });
-    if (error) throw error;
-    toast(`Voted ${chosen.toUpperCase()}`);
-    submitBtn.textContent = '✔ Voted';
-    submitBtn.disabled = true;
-    refreshVoteCounts();
-  }catch(e){ toast('Vote failed'); }
-};
+loadWinners();
 
-supabase.channel('winners-phase')
-  .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, (payload)=>{
-    const rowKey = payload?.new?.phase_key; const color  = (payload?.new?.color || '').toLowerCase();
-    if (!rowKey || !lastFinishedKey) return;
-    if (toIso(rowKey) === toIso(lastFinishedKey) && (color === 'red' || color === 'blue')) showWinnerBanner(color);
-  }).subscribe();
-
-supabase.channel('phase-votes-live')
-  .on('postgres_changes',{event:'*',schema:'public',table:'phase_votes'}, async (payload)=>{
-    try{ const pk = payload?.new?.phase_key || payload?.old?.phase_key; if (!pk || !serverPhaseEndISO) return;
-      if (toIso(pk) === toIso(serverPhaseEndISO)) await refreshVoteCounts();
-    }catch(e){} }).subscribe();
-
-(async()=>{
-  try{
-    currentUid = await getUidOrNull(); paintLoginBadge();
-    supabase.auth.onAuthStateChange(async (_evt, session) => { currentUid = session?.user?.id ?? null; paintLoginBadge(); submitBtn.disabled = !chosen || !currentUid; });
-    await fetchState(); await start();
-  }catch(e){ clockEl.textContent='ERR'; stateEl.textContent='ERR'; }
-})();
+// Live updates (optional): listen for new winners inserts
+supabase.channel('winners-feed')
+  .on('postgres_changes', { event:'INSERT', schema:'public', table:'winners' }, (payload)=>{
+    const r = payload?.new;
+    if (!r) return;
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = rowHTML(r);
+    listEl.prepend(wrapper.firstElementChild);
+    emptyEl.style.display = 'none';
+  })
+  .subscribe();
 </script>
 </body>
 </html>
