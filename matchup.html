@@ -19,7 +19,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
 .tiny{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
 .clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
-.tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px}
+.tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px;position:relative}
 .art{aspect-ratio:4/3;width:100%}
 .art.red{background:#a60000}
 .art.blue{background:#0058a6}
@@ -27,11 +27,25 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
 .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--ink);box-shadow:0 0 18px rgba(125,255,98,.35), inset 0 0 12px rgba(57,255,20,.15)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18);z-index:9999}
 .toast.show{display:block}
 .badge{border:1px solid var(--border);border-radius:8px;padding:2px 8px}
 .badge.warn{border-color:#3b1616;color:#ff6b6b}
 .badge.ok{border-color:#153b16;color:#8aff8a}
+
+/* Winner FX */
+@keyframes winPulse {
+  0% { box-shadow: 0 0 0px rgba(125,255,98,.0); transform: scale(1);}
+  50% { box-shadow: 0 0 36px rgba(125,255,98,.45); transform: scale(1.01);}
+  100% { box-shadow: 0 0 0px rgba(125,255,98,.0); transform: scale(1);}
+}
+.tile.win .art { animation: winPulse 1200ms ease-in-out 2; }
+.tile.win::after{
+  content:"🏁 WINNER";
+  position:absolute; right:10px; top:10px;
+  background:rgba(7,28,7,.9); border:1px solid var(--border);
+  padding:6px 10px; border-radius:10px; font-weight:700;
+}
 </style>
 </head>
 <body>
@@ -47,17 +61,13 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       <div class="row">
         <button id="btnPause" class="btn">⏸️ Pause</button>
         <button id="btnForce" class="btn">🏁 Force Decide</button>
-
-        <!-- Normal anchor (works in standard browsers/GitHub Pages when paths are correct) -->
         <a class="btn" id="openWinnersLink" href="./winners.html" target="_self" rel="noopener">🏁 Winners</a>
-
-        <!-- JS button (forces navigation; helps in stubborn webviews) -->
         <button class="btn" id="goWinners" type="button">🧰 Open Winners</button>
       </div>
     </div>
 
     <!-- RED -->
-    <div class="tile">
+    <div class="tile" id="tileRed">
       <div class="art red"></div>
       <div class="caption" id="redCount">0 votes</div>
       <div class="meta">
@@ -67,7 +77,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
     </div>
 
     <!-- BLUE -->
-    <div class="tile">
+    <div class="tile" id="tileBlue">
       <div class="art blue"></div>
       <div class="caption" id="blueCount">0 votes</div>
       <div class="meta">
@@ -84,34 +94,23 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   <div id="toast" class="toast"></div>
 
 <script>
-/* ---------- Winners navigation (no HEAD checks, no href rewriting) ---------- */
+/* ---------- Winners navigation ---------- */
 (function(){
   const btn = document.getElementById('goWinners');
   if (!btn) return;
-
   btn.addEventListener('click', function(ev){
     ev.preventDefault();
-
-    // Try the sibling file first (same folder as matchup.html)
     const folderHref = location.pathname.replace(/[^/]*$/, '') + 'winners.html';
-
-    // Also compute repo-root fallback for GitHub Pages project sites: /<repo>/winners.html
     const parts = location.pathname.split('/').filter(Boolean);
     const repoRoot = parts.length ? `/${parts[0]}/` : '/';
     const rootHref = `${repoRoot}winners.html`;
-
-    // Prefer folder path; if you're accidentally at a different subpath on GH Pages,
-    // the rootHref still lands at /<repo>/winners.html which is correct for your repo.
-    try { window.location.assign(folderHref); }
-    catch { window.location.href = folderHref; }
-
-    // As a last resort (some webviews), queue a quick fallback push to repo root.
+    try { window.location.assign(folderHref); } catch { window.location.href = folderHref; }
     setTimeout(()=>{ try{ window.location.replace(rootHref); } catch{ window.location.href = rootHref; } }, 150);
   }, {passive:false});
 })();
 
 /* =========================
-   App logic (unchanged)
+   App logic
 ========================= */
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
@@ -130,6 +129,8 @@ const submitBtn   = document.getElementById('submitBtn');
 const redCountEl  = document.getElementById('redCount');
 const blueCountEl = document.getElementById('blueCount');
 const toastEl     = document.getElementById('toast');
+const tileRed     = document.getElementById('tileRed');
+const tileBlue    = document.getElementById('tileBlue');
 
 function toast(msg, ms=1600){ toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'), ms); }
 const toIso = (d)=> new Date(d).toISOString();
@@ -171,25 +172,83 @@ const normalize = (s)=>({
 });
 
 const fmtVotes = (n)=> `${n} ${n===1?'vote':'votes'}`;
+async function countVotesForPhase(phaseKeyISO){
+  const { data, error } = await supabase.from('phase_votes').select('vote').eq('phase_key', phaseKeyISO);
+  if (error) throw error;
+  let r=0, b=0; (data||[]).forEach(row => { if(row.vote==='red') r++; else if(row.vote==='blue') b++; });
+  return {r,b};
+}
 async function refreshVoteCounts(){
   try{
     if(!serverPhaseEndISO) { redCountEl.textContent = '0 votes'; blueCountEl.textContent = '0 votes'; return; }
     const phaseKey = toIso(serverPhaseEndISO);
-    const { data, error } = await supabase.from('phase_votes').select('vote').eq('phase_key', phaseKey);
-    if (error) throw error;
-    let r=0, b=0; (data||[]).forEach(row => { if(row.vote==='red') r++; else if(row.vote==='blue') b++; });
+    const { r, b } = await countVotesForPhase(phaseKey);
     redCountEl.textContent  = fmtVotes(r);
     blueCountEl.textContent = fmtVotes(b);
     lastCountsAt = Date.now();
   }catch(e){}
 }
-function showWinnerBanner(color){ toast(`🏁 ${color.toUpperCase()} won!`); }
-async function pollWinnerForKey(key){
+
+function clearWinFX(){ tileRed.classList.remove('win'); tileBlue.classList.remove('win'); }
+function playWinnerFX(color){
+  clearWinFX();
+  if(color==='red') tileRed.classList.add('win');
+  if(color==='blue') tileBlue.classList.add('win');
+  toast(`🏁 ${color.toUpperCase()} won!`, 2000);
+}
+function showTieBanner(){
+  clearWinFX();
+  toast('⛔ Tie — no winner', 2000);
+}
+
+/**
+ * Finalize a winner for a finished phase key.
+ * - If a row already exists in winners, show it.
+ * - Otherwise, strictly compare counts and INSERT (no randomness).
+ * - On tie, DO NOT insert (just show tie banner).
+ */
+async function finalizeWinnerForKey(phaseKeyISO){
   try{
-    const { data } = await supabase.from('winners').select('color').eq('phase_key', toIso(key)).limit(1);
-    const c = (data?.[0]?.color||'').toLowerCase();
-    if (c==='red' || c==='blue') showWinnerBanner(c);
-  }catch(e){}
+    // 1) Did someone already write the winner?
+    {
+      const { data, error } = await supabase.from('winners').select('color').eq('phase_key', phaseKeyISO).limit(1);
+      if (error) throw error;
+      const existing = (data?.[0]?.color || '').toLowerCase();
+      if (existing==='red' || existing==='blue'){ playWinnerFX(existing); return; }
+      if (existing==='tie'){ showTieBanner(); return; }
+    }
+
+    // 2) Compute strict majority
+    const { r, b } = await countVotesForPhase(phaseKeyISO);
+    if (r===b){ showTieBanner(); return; }
+    const color = (r>b) ? 'red' : 'blue';
+
+    // 3) Try to write winner (insert-or-ignore via unique phase_key)
+    const { error: insErr } = await supabase
+      .from('winners')
+      .insert({ phase_key: phaseKeyISO, color })
+      .select()
+      .single();
+
+    if (insErr){
+      // Someone else likely wrote it; read back and display.
+      const { data } = await supabase.from('winners').select('color').eq('phase_key', phaseKeyISO).limit(1);
+      const c = (data?.[0]?.color||'').toLowerCase();
+      if (c==='red' || c==='blue'){ playWinnerFX(c); return; }
+      showTieBanner();
+      return;
+    }
+
+    playWinnerFX(color);
+  }catch(e){
+    // If anything fails, fall back to read-only poll
+    try{
+      const { data } = await supabase.from('winners').select('color').eq('phase_key', phaseKeyISO).limit(1);
+      const c = (data?.[0]?.color||'').toLowerCase();
+      if (c==='red' || c==='blue') playWinnerFX(c);
+      else showTieBanner();
+    }catch(_){}
+  }
 }
 
 function setStateUI(){
@@ -197,17 +256,22 @@ function setStateUI(){
   pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause';
   phaseBadge.textContent = 'phase: ' + (serverPhaseEndISO || '—');
 }
+
 async function fetchState(){
   const s = normalize(await callEdge('GET'));
   const prev = serverPhaseEndISO;
   serverPhaseEndISO = s.phase_end_at; paused = s.paused; remainingSec = s.remaining_sec; lastSyncAt = Date.now();
   setStateUI();
+
   if (prev && serverPhaseEndISO && prev !== serverPhaseEndISO) {
-    lastFinishedKey = toIso(prev); chosen = null;
+    // The previous phase just ended at 0 — finalize winner with strict majority (no random).
+    lastFinishedKey = toIso(prev);
+    chosen = null;
     voteRedBtn.classList.remove('selected'); voteBlueBtn.classList.remove('selected');
     submitBtn.textContent = '✅ Submit Vote'; submitBtn.disabled = true;
     redCountEl.textContent = '0 votes'; blueCountEl.textContent = '0 votes';
-    pollWinnerForKey(lastFinishedKey);
+    clearWinFX();
+    await finalizeWinnerForKey(lastFinishedKey);
   } else {
     submitBtn.disabled = !chosen || !currentUid;
   }
@@ -233,8 +297,11 @@ async function start(){
   rafId = requestAnimationFrame(tick);
 }
 
+/* --- Controls --- */
 pauseBtn.onclick = async ()=>{ try{ if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'}); await fetchState(); toast('OK'); }catch(e){ toast('Pause/resume failed'); }};
 forceBtn.onclick = async ()=>{ try{ await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision'); }catch(e){ toast('Force failed'); }};
+
+/* --- Voting UX --- */
 voteRedBtn.onclick  = ()=>{ chosen='red';  voteRedBtn.classList.add('selected');  voteBlueBtn.classList.remove('selected'); submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
 voteBlueBtn.onclick = ()=>{ chosen='blue'; voteBlueBtn.classList.add('selected'); voteRedBtn.classList.remove('selected');  submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
 submitBtn.onclick = async ()=>{
@@ -242,7 +309,10 @@ submitBtn.onclick = async ()=>{
   if (!currentUid) { toast('Log in to vote'); return; }
   try{
     const phaseKey = toIso(serverPhaseEndISO);
-    const { error } = await supabase.from('phase_votes').upsert({ phase_key: phaseKey, vote: chosen, user_id: currentUid }, { onConflict:'phase_key,user_id' });
+    const { error } = await supabase.from('phase_votes').upsert(
+      { phase_key: phaseKey, vote: chosen, user_id: currentUid },
+      { onConflict:'phase_key,user_id' }
+    );
     if (error) throw error;
     toast(`Voted ${chosen.toUpperCase()}`);
     submitBtn.textContent = '✔ Voted';
@@ -251,11 +321,17 @@ submitBtn.onclick = async ()=>{
   }catch(e){ toast('Vote failed'); }
 };
 
+/* --- Realtime fixes --- */
 supabase.channel('winners-phase')
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, (payload)=>{
-    const rowKey = payload?.new?.phase_key; const color  = (payload?.new?.color || '').toLowerCase();
+    const rowKey = payload?.new?.phase_key;
+    const color  = (payload?.new?.color || '').toLowerCase();
     if (!rowKey || !lastFinishedKey) return;
-    if (toIso(rowKey) === toIso(lastFinishedKey) && (color === 'red' || 'blue')) showWinnerBanner(color);
+    if (toIso(rowKey) === toIso(lastFinishedKey) && (color==='red' || color==='blue')) {
+      playWinnerFX(color);
+    } else if (toIso(rowKey) === toIso(lastFinishedKey) && color==='tie') {
+      showTieBanner();
+    }
   }).subscribe();
 
 supabase.channel('phase-votes-live')
@@ -267,6 +343,7 @@ supabase.channel('phase-votes-live')
     }catch(e){}
   }).subscribe();
 
+/* --- Auth + boot --- */
 (async()=>{
   try{
     currentUid = await getUidOrNull(); paintLoginBadge();
