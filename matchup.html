@@ -20,9 +20,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .tiny{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
 .clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
 .tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px;position:relative}
-.art{aspect-ratio:4/3;width:100%}
-.art.red{background:#a60000}
-.art.blue{background:#0058a6}
+.art{aspect-ratio:4/3;width:100%;height:auto;display:block;object-fit:cover}
 .caption{display:block;text-align:center;font-size:12px;color:var(--muted);padding:6px 8px;border-top:1px dashed var(--border)}
 .meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
 .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--ink);box-shadow:0 0 18px rgba(125,255,98,.35), inset 0 0 12px rgba(57,255,20,.15)}
@@ -58,12 +56,11 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   position:absolute; inset:0; overflow:hidden;
   filter: contrast(1.05) saturate(1.1);
 }
-/* Winner art backdrop (fills screen) */
+/* Winner art backdrop (image fills screen) */
 .overlay-art{
   position:absolute; inset:0;
+  background-size:cover; background-position:center; background-repeat:no-repeat;
 }
-.overlay-art.red{ background:#a60000; }
-.overlay-art.blue{ background:#0058a6; }
 .overlay-art.split{
   background: linear-gradient(90deg,#a60000 50%, #0058a6 50%);
 }
@@ -157,23 +154,23 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       </div>
     </div>
 
-    <!-- RED -->
-    <div class="tile" id="tileRed">
-      <div class="art red"></div>
-      <div class="caption" id="redCount">0 votes</div>
+    <!-- ENTRY A -->
+    <div class="tile" id="tileA" data-color="red">
+      <img id="imgA" class="art" alt="Entry A"/>
+      <div class="caption" id="countA">0 votes</div>
       <div class="meta">
-        <span>Entry — RED</span>
-        <button class="btn primary" id="voteRed">Vote Red</button>
+        <span>Entry A</span>
+        <button class="btn primary" id="voteA">Vote This</button>
       </div>
     </div>
 
-    <!-- BLUE -->
-    <div class="tile" id="tileBlue">
-      <div class="art blue"></div>
-      <div class="caption" id="blueCount">0 votes</div>
+    <!-- ENTRY B -->
+    <div class="tile" id="tileB" data-color="blue">
+      <img id="imgB" class="art" alt="Entry B"/>
+      <div class="caption" id="countB">0 votes</div>
       <div class="meta">
-        <span>Entry — BLUE</span>
-        <button class="btn primary" id="voteBlue">Vote Blue</button>
+        <span>Entry B</span>
+        <button class="btn primary" id="voteB">Vote This</button>
       </div>
     </div>
 
@@ -201,7 +198,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   </div>
 
 <script>
-/* ---------- Winners navigation ---------- */
+/* ---------- Winners navigation (unchanged helper) ---------- */
 (function(){
   const btn = document.getElementById('goWinners');
   if (!btn) return;
@@ -230,14 +227,18 @@ const phaseBadge = document.getElementById('phaseKey');
 const loginBadge = document.getElementById('loginBadge');
 const pauseBtn = document.getElementById('btnPause');
 const forceBtn = document.getElementById('btnForce');
-const voteRedBtn  = document.getElementById('voteRed');
-const voteBlueBtn = document.getElementById('voteBlue');
 const submitBtn   = document.getElementById('submitBtn');
-const redCountEl  = document.getElementById('redCount');
-const blueCountEl = document.getElementById('blueCount');
+
+const tileA = document.getElementById('tileA');
+const tileB = document.getElementById('tileB');
+const imgA  = document.getElementById('imgA');
+const imgB  = document.getElementById('imgB');
+const voteA = document.getElementById('voteA');
+const voteB = document.getElementById('voteB');
+const countA = document.getElementById('countA');
+const countB = document.getElementById('countB');
+
 const toastEl     = document.getElementById('toast');
-const tileRed     = document.getElementById('tileRed');
-const tileBlue    = document.getElementById('tileBlue');
 
 /* ======= BIG OVERLAY HOOKS ======= */
 const overlay = document.getElementById('overlay');
@@ -258,7 +259,7 @@ let remainingSec = null;
 let serverPhaseEndISO = null;
 let lastSyncAt = 0;
 let lastCountsAt = 0;
-let chosen = null;
+let chosen = null; // 'red' or 'blue' (A=red, B=blue)
 let lastFinishedKey = null;
 let currentUid = null;
 
@@ -297,20 +298,36 @@ async function countVotesForPhase(phaseKeyISO){
 }
 async function refreshVoteCounts(){
   try{
-    if(!serverPhaseEndISO) { redCountEl.textContent = '0 votes'; blueCountEl.textContent = '0 votes'; return; }
+    if(!serverPhaseEndISO) { countA.textContent = '0 votes'; countB.textContent = '0 votes'; return; }
     const phaseKey = toIso(serverPhaseEndISO);
     const { r, b } = await countVotesForPhase(phaseKey);
-    redCountEl.textContent  = fmtVotes(r);
-    blueCountEl.textContent = fmtVotes(b);
+    countA.textContent  = fmtVotes(r);
+    countB.textContent  = fmtVotes(b);
     lastCountsAt = Date.now();
   }catch(e){}
 }
 
-function clearWinFX(){ tileRed.classList.remove('win'); tileBlue.classList.remove('win'); }
+/* ======= IMAGE SEEDING ======= */
+function seedUrl(phaseKeyISO, suffix){
+  // Deterministic "random" artsy photos per phase
+  const s = encodeURIComponent(`${phaseKeyISO}-${suffix}`);
+  // Bigger than tile to look crisp in overlay too
+  return `https://picsum.photos/seed/${s}/1600/1200`;
+}
+function setImagesForPhase(phaseKeyISO){
+  const srcA = seedUrl(phaseKeyISO, 'A');
+  const srcB = seedUrl(phaseKeyISO, 'B');
+  imgA.src = srcA; imgB.src = srcB;
+  imgA.loading = 'eager'; imgB.loading = 'eager';
+  imgA.decoding = 'async'; imgB.decoding = 'async';
+}
+
+/* ======= WINNER / TIE VISUALS ======= */
+function clearWinFX(){ tileA.classList.remove('win'); tileB.classList.remove('win'); }
 function playWinnerFX(color){
   clearWinFX();
-  if(color==='red') tileRed.classList.add('win');
-  if(color==='blue') tileBlue.classList.add('win');
+  if(color==='red') tileA.classList.add('win');
+  if(color==='blue') tileB.classList.add('win');
   openWinnerOverlay(color);
 }
 function showTieBanner(){
@@ -318,18 +335,20 @@ function showTieBanner(){
   openTieOverlay();
 }
 
-/* ======= BIG OVERLAY FUNCTIONS ======= */
+/* Overlay open/close */
 function openWinnerOverlay(color){
-  // backdrop shows full "image" of the winner
-  overlayArt.className = 'overlay-art ' + (color==='red' ? 'red' : 'blue');
+  const src = (color==='red') ? imgA.src : imgB.src;
+  overlayArt.className = 'overlay-art';
+  overlayArt.style.backgroundImage = `url("${src}")`;
   overlayCard.className = 'overlay-card';
   overlayTitle.textContent = 'CHAMPION';
-  overlaySubtitle.textContent = (color==='red' ? 'RED prevails' : 'BLUE prevails');
+  overlaySubtitle.textContent = (color==='red' ? 'Entry A prevails' : 'Entry B prevails');
   overlay.classList.add('show');
   startConfetti({mode:'win'});
 }
 function openTieOverlay(){
   overlayArt.className = 'overlay-art split';
+  overlayArt.style.backgroundImage = '';
   overlayCard.className = 'overlay-card tie';
   overlayTitle.textContent = 'TIE';
   overlaySubtitle.textContent = 'No winner for this round';
@@ -340,7 +359,7 @@ function closeOverlay(){
   overlay.classList.remove('show');
   stopConfetti();
 }
-overlayClose.addEventListener('click', closeOverlay);
+document.getElementById('overlayClose').addEventListener('click', closeOverlay);
 
 /* Cyberpunk/analog confetti (pixel shards + flicker) */
 function startConfetti({mode='win'}={}){
@@ -429,17 +448,21 @@ async function fetchState(){
   setStateUI();
 
   if (prev && serverPhaseEndISO && prev !== serverPhaseEndISO) {
-    // Phase just flipped → finalize previous phase
+    // Phase just flipped → finalize previous phase + load new images for the new phase
     lastFinishedKey = toIso(prev);
     chosen = null;
-    voteRedBtn.classList.remove('selected'); voteBlueBtn.classList.remove('selected');
+    voteA.classList.remove('selected'); voteB.classList.remove('selected');
     submitBtn.textContent = '✅ Submit Vote'; submitBtn.disabled = true;
-    redCountEl.textContent = '0 votes'; blueCountEl.textContent = '0 votes';
+    countA.textContent = '0 votes'; countB.textContent = '0 votes';
     clearWinFX();
     await finalizeWinnerForKey(lastFinishedKey);
   } else {
     submitBtn.disabled = !chosen || !currentUid;
   }
+
+  // Ensure current phase images are set
+  if (serverPhaseEndISO) setImagesForPhase(toIso(serverPhaseEndISO));
+
   refreshVoteCounts();
 }
 function stop(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
@@ -523,9 +546,9 @@ async function finalizeWinnerForKey(phaseKeyISO){
 pauseBtn.onclick = async ()=>{ try{ if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'}); await fetchState(); toast('OK'); }catch(e){ toast('Pause/resume failed'); }};
 forceBtn.onclick = async ()=>{ try{ await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision'); }catch(e){ toast('Force failed'); }};
 
-/* --- Voting UX --- */
-voteRedBtn.onclick  = ()=>{ chosen='red';  voteRedBtn.classList.add('selected');  voteBlueBtn.classList.remove('selected'); submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
-voteBlueBtn.onclick = ()=>{ chosen='blue'; voteBlueBtn.classList.add('selected'); voteRedBtn.classList.remove('selected');  submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
+/* --- Voting UX (A maps to 'red', B maps to 'blue') --- */
+voteA.onclick  = ()=>{ chosen='red';  voteA.classList.add('selected');  voteB.classList.remove('selected'); submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
+voteB.onclick  = ()=>{ chosen='blue'; voteB.classList.add('selected'); voteA.classList.remove('selected');  submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
 submitBtn.onclick = async ()=>{
   if (!chosen || !serverPhaseEndISO) return;
   if (!currentUid) { toast('Log in to vote'); return; }
@@ -536,7 +559,7 @@ submitBtn.onclick = async ()=>{
       { onConflict:'phase_key,user_id' }
     );
     if (error) throw error;
-    toast(`Voted ${chosen.toUpperCase()}`);
+    toast('✔ Vote submitted');
     submitBtn.textContent = '✔ Voted';
     submitBtn.disabled = true;
     refreshVoteCounts();
@@ -580,7 +603,10 @@ supabase.channel('phase-votes-live')
       paintLoginBadge();
       submitBtn.disabled = !chosen || !currentUid;
     });
-    await fetchState(); await start();
+    await fetchState(); 
+    // Ensure images set immediately on first load if state present
+    if (serverPhaseEndISO) setImagesForPhase(toIso(serverPhaseEndISO));
+    await start();
   }catch(e){
     clockEl.textContent='ERR'; stateEl.textContent='ERR';
   }
