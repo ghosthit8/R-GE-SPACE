@@ -47,8 +47,8 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       <div class="row">
         <button id="btnPause" class="btn">⏸️ Pause</button>
         <button id="btnForce" class="btn">🏁 Force Decide</button>
-        <!-- ✅ Plain anchor (native navigation) -->
-        <a id="openWinners" class="btn" href="winners.html">🏁 Winners</a>
+        <!-- ✅ Simple relative link -->
+        <a class="btn" href="./winners.html">🏁 Winners</a>
       </div>
     </div>
 
@@ -80,46 +80,6 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   <div id="toast" class="toast"></div>
 
 <script>
-/* ---------- Winners link: make it bulletproof for GitHub Pages subfolders ---------- */
-(function(){
-  const a = document.getElementById('openWinners');
-  if(!a) return;
-
-  // 1) On load, rewrite href to the *current folder* (e.g. /repo/subdir/winners.html)
-  const folder = window.location.pathname.replace(/[^/]*$/, ''); // keep trailing slash
-  a.href = folder + 'winners.html';
-
-  // 2) On click, if that 404s on some setups, fall back to the repo root (/repo/winners.html)
-  a.addEventListener('click', function(ev){
-    // Try to be nice: do a quick HEAD to the folder path; if it fails, jump to repo root
-    const folderHref = a.href;
-    const parts = window.location.pathname.split('/').filter(Boolean);
-    // repo root is "/<repo>/" for project pages, or "/" for user pages
-    const repoRoot = parts.length ? `/${parts[0]}/` : '/';
-    const rootHref = `${repoRoot}winners.html`;
-
-    // If folderHref already equals rootHref, just let browser proceed
-    if (folderHref === rootHref) return;
-
-    // Attempt a quick check; if it fails, redirect to rootHref
-    // (same-origin, so CORS is fine)
-    try {
-      ev.preventDefault();
-      fetch(folderHref, { method:'HEAD', cache:'no-store' })
-        .then(r => {
-          if (r.ok) window.location.href = folderHref;
-          else window.location.href = rootHref;
-        })
-        .catch(() => { window.location.href = rootHref; });
-    } catch {
-      // As a last resort, let the browser follow the anchor normally
-    }
-  }, { passive:false });
-})();
-
-/* =========================
-   Your existing app logic
-========================= */
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
