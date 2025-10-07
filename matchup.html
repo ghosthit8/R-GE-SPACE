@@ -27,13 +27,13 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
 .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--ink);box-shadow:0 0 18px rgba(125,255,98,.35), inset 0 0 12px rgba(57,255,20,.15)}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18);z-index:9999}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18);z-index:50}
 .toast.show{display:block}
 .badge{border:1px solid var(--border);border-radius:8px;padding:2px 8px}
 .badge.warn{border-color:#3b1616;color:#ff6b6b}
 .badge.ok{border-color:#153b16;color:#8aff8a}
 
-/* Winner FX */
+/* Small Winner FX (tile pulse) */
 @keyframes winPulse {
   0% { box-shadow: 0 0 0px rgba(125,255,98,.0); transform: scale(1);}
   50% { box-shadow: 0 0 36px rgba(125,255,98,.45); transform: scale(1.01);}
@@ -46,6 +46,97 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   background:rgba(7,28,7,.9); border:1px solid var(--border);
   padding:6px 10px; border-radius:10px; font-weight:700;
 }
+
+/* ====== BIG OVERLAY BANNER ====== */
+#overlay{
+  position:fixed; inset:0; display:none; z-index:9999;
+  background:rgba(0,0,0,0.92);
+}
+#overlay.show{ display:block; }
+
+.overlay-bg{
+  position:absolute; inset:0; overflow:hidden;
+  filter: contrast(1.05) saturate(1.1);
+}
+/* Winner art backdrop (fills screen) */
+.overlay-art{
+  position:absolute; inset:0;
+}
+.overlay-art.red{ background:#a60000; }
+.overlay-art.blue{ background:#0058a6; }
+.overlay-art.split{
+  background: linear-gradient(90deg,#a60000 50%, #0058a6 50%);
+}
+
+/* Subtle scanlines + vignette for analog vibe */
+.scanlines{
+  position:absolute; inset:0;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0.25) 0px,
+      rgba(0,0,0,0.25) 2px,
+      rgba(0,0,0,0.0) 3px,
+      rgba(0,0,0,0.0) 4px
+    );
+  mix-blend-mode:multiply;
+  pointer-events:none;
+}
+.vignette{
+  position:absolute; inset:-10%;
+  background:radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 100%);
+  pointer-events:none;
+}
+
+/* Glitchy title card */
+@keyframes titleJitter {
+  0%,100% { transform: translate(0,0); }
+  20% { transform: translate(1px,-1px); }
+  40% { transform: translate(-1px,1px); }
+  60% { transform: translate(1px,1px); }
+  80% { transform: translate(-1px,-1px); }
+}
+.overlay-card{
+  position:relative;
+  max-width:min(820px, 92vw);
+  margin: 8vh auto 4vh auto;
+  border:1px solid var(--green);
+  background:rgba(7,7,7,.72);
+  border-radius:18px;
+  padding:22px 18px;
+  box-shadow:0 0 40px rgba(57,255,20,.25);
+  animation:titleJitter 2200ms steps(2,end) infinite;
+}
+.overlay-card h1{
+  margin:0 0 6px 0; text-align:center; letter-spacing:2px;
+  font-size: clamp(28px, 6vw, 54px);
+  text-transform:uppercase;
+}
+.overlay-card .sub{
+  text-align:center; color:var(--muted); margin-bottom:12px;
+  font-size: clamp(12px, 2.4vw, 14px);
+}
+.overlay-card .motto{
+  text-align:center; margin-top:8px; color:var(--green-bright);
+  font-weight:700; letter-spacing:.5px;
+}
+
+/* Close button */
+#overlayClose{
+  position:absolute; right:14px; top:12px; z-index:2;
+  border:1px solid var(--green); background:rgba(0,0,0,.6);
+  color:var(--green); border-radius:10px; padding:6px 10px; cursor:pointer;
+}
+
+/* Confetti canvas fills screen */
+#confetti { position:absolute; inset:0; pointer-events:none; }
+
+/* Tie styling tweak */
+.overlay-card.tie{
+  border-color:#4e4e4e; box-shadow:0 0 40px rgba(130,130,130,.25);
+}
+.overlay-card.tie h1{ color:#d4d4d4; }
+.overlay-card.tie .motto{ color:#cfcfcf; }
 </style>
 </head>
 <body>
@@ -93,8 +184,24 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 
   <div id="toast" class="toast"></div>
 
+  <!-- ===== BIG OVERLAY ===== -->
+  <div id="overlay">
+    <canvas id="confetti"></canvas>
+    <div class="overlay-bg">
+      <div id="overlayArt" class="overlay-art"></div>
+      <div class="scanlines"></div>
+      <div class="vignette"></div>
+    </div>
+    <button id="overlayClose" class="btn">✕</button>
+    <div id="overlayCard" class="overlay-card">
+      <h1 id="overlayTitle">CHAMPION</h1>
+      <div class="sub" id="overlaySubtitle">Rage Space</div>
+      <div class="motto">Glory to the machine. Your art devours the bracket</div>
+    </div>
+  </div>
+
 <script>
-/* ---------- Winners navigation (kept, but you can ignore) ---------- */
+/* ---------- Winners navigation ---------- */
 (function(){
   const btn = document.getElementById('goWinners');
   if (!btn) return;
@@ -131,6 +238,16 @@ const blueCountEl = document.getElementById('blueCount');
 const toastEl     = document.getElementById('toast');
 const tileRed     = document.getElementById('tileRed');
 const tileBlue    = document.getElementById('tileBlue');
+
+/* ======= BIG OVERLAY HOOKS ======= */
+const overlay = document.getElementById('overlay');
+const overlayClose = document.getElementById('overlayClose');
+const overlayArt = document.getElementById('overlayArt');
+const overlayCard = document.getElementById('overlayCard');
+const overlayTitle = document.getElementById('overlayTitle');
+const overlaySubtitle = document.getElementById('overlaySubtitle');
+const confetti = document.getElementById('confetti');
+let confettiRAF = null;
 
 function toast(msg, ms=1600){ toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'), ms); }
 const toIso = (d)=> new Date(d).toISOString();
@@ -194,90 +311,111 @@ function playWinnerFX(color){
   clearWinFX();
   if(color==='red') tileRed.classList.add('win');
   if(color==='blue') tileBlue.classList.add('win');
-  toast(`🏁 ${color.toUpperCase()} won!`, 2000);
+  openWinnerOverlay(color);
 }
 function showTieBanner(){
-  // IMPORTANT: if tie, ensure NO winner visuals remain visible
   clearWinFX();
-  toast('⛔ Tie — no winner', 2000);
+  openTieOverlay();
 }
 
-/**
- * Finalize a winner for a finished phase key.
- * - Strict majority only (no randomness).
- * - On tie, DO NOT write to DB; clear any winner UI.
- * - If a winner row already exists, display it UNLESS local counts are tied (then show tie).
- */
-async function finalizeWinnerForKey(phaseKeyISO){
-  try{
-    // Always recompute counts first
-    const { r, b } = await countVotesForPhase(phaseKeyISO);
-    if (r === b) {
-      showTieBanner();
-      return;
-    }
+/* ======= BIG OVERLAY FUNCTIONS ======= */
+function openWinnerOverlay(color){
+  // backdrop shows full "image" of the winner
+  overlayArt.className = 'overlay-art ' + (color==='red' ? 'red' : 'blue');
+  overlayCard.className = 'overlay-card';
+  overlayTitle.textContent = 'CHAMPION';
+  overlaySubtitle.textContent = (color==='red' ? 'RED prevails' : 'BLUE prevails');
+  overlay.classList.add('show');
+  startConfetti({mode:'win'});
+}
+function openTieOverlay(){
+  overlayArt.className = 'overlay-art split';
+  overlayCard.className = 'overlay-card tie';
+  overlayTitle.textContent = 'TIE';
+  overlaySubtitle.textContent = 'No winner for this round';
+  overlay.classList.add('show');
+  startConfetti({mode:'tie'});
+}
+function closeOverlay(){
+  overlay.classList.remove('show');
+  stopConfetti();
+}
+overlayClose.addEventListener('click', closeOverlay);
 
-    // If someone already wrote a winner, respect it (not tied)
-    {
-      const { data, error } = await supabase
-        .from('winners')
-        .select('color')
-        .eq('phase_key', phaseKeyISO)
-        .limit(1);
-      if (error) throw error;
+/* Cyberpunk/analog confetti (pixel shards + flicker) */
+function startConfetti({mode='win'}={}){
+  const ctx = confetti.getContext('2d');
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const resize = ()=>{
+    confetti.width = Math.floor(innerWidth * dpr);
+    confetti.height = Math.floor(innerHeight * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  };
+  resize(); window.addEventListener('resize', resize, { once:true });
 
-      const existing = (data?.[0]?.color || '').toLowerCase();
-      if (existing === 'red' || existing === 'blue'){
-        playWinnerFX(existing);
-        return;
-      }
-      if (existing === 'tie'){
-        showTieBanner();
-        return;
-      }
-    }
+  const particles = [];
+  const count = mode==='win' ? 220 : 120;
+  const palette = mode==='win'
+    ? ['#39ff14','#7dff62','#00ffd5','#baffc9','#eaff00']
+    : ['#cfcfcf','#a0a0a0','#6ad1ff','#39ff14'];
 
-    // Not a tie, and no stored winner → compute strict majority and insert-or-ignore
-    const color = (r > b) ? 'red' : 'blue';
-    const { error: insErr } = await supabase
-      .from('winners')
-      .insert({ phase_key: phaseKeyISO, color })
-      .select()
-      .single();
-
-    if (insErr){
-      // Another client wrote something; read back and display,
-      // but still suppress if it somehow shows as tie locally
-      const { data } = await supabase
-        .from('winners')
-        .select('color')
-        .eq('phase_key', phaseKeyISO)
-        .limit(1);
-      const c = (data?.[0]?.color || '').toLowerCase();
-      if (r === b || c === 'tie'){ showTieBanner(); return; }
-      if (c === 'red' || c === 'blue'){ playWinnerFX(c); return; }
-      showTieBanner();
-      return;
-    }
-
-    playWinnerFX(color);
-  }catch(e){
-    // Conservative fallback: if uncertain, prefer "no winner" over showing a wrong winner
-    try{
-      const { r, b } = await countVotesForPhase(phaseKeyISO);
-      if (r === b) { showTieBanner(); return; }
-      const { data } = await supabase
-        .from('winners')
-        .select('color')
-        .eq('phase_key', phaseKeyISO)
-        .limit(1);
-      const c = (data?.[0]?.color || '').toLowerCase();
-      if (c === 'red' || c === 'blue') playWinnerFX(c);
-      else showTieBanner();
-    }catch(_){}
+  for (let i=0;i<count;i++){
+    particles.push({
+      x: Math.random()*innerWidth,
+      y: -10 - Math.random()*innerHeight*0.4,
+      vx: (Math.random()-0.5)*2.0,
+      vy: 1.2 + Math.random()*2.6,
+      w: 3 + Math.floor(Math.random()*7),
+      h: 3 + Math.floor(Math.random()*7),
+      rot: Math.random()*Math.PI,
+      vr: (Math.random()-0.5)*0.2,
+      color: palette[Math.floor(Math.random()*palette.length)],
+      life: 120 + Math.random()*140
+    });
   }
+
+  let t=0, flicker=0;
+  function step(){
+    ctx.clearRect(0,0,innerWidth,innerHeight);
+
+    // slight screen flicker bar
+    if ((t%30)===0) flicker = Math.random()*0.15;
+    ctx.globalAlpha = 1.0;
+
+    // draw particles
+    particles.forEach(p=>{
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.life -= 1;
+      if (p.y > innerHeight+20) { p.y = -10; p.x = Math.random()*innerWidth; }
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+    });
+
+    // scanline overlay in canvas (extra to CSS)
+    ctx.globalAlpha = 0.08 + flicker;
+    ctx.fillStyle = '#000';
+    const stripe = 4;
+    for (let y=0;y<innerHeight;y+=stripe){
+      ctx.fillRect(0,y,innerWidth,2);
+    }
+    ctx.globalAlpha = 1;
+
+    t++;
+    confettiRAF = requestAnimationFrame(step);
+  }
+  step();
+}
+function stopConfetti(){
+  if (confettiRAF) cancelAnimationFrame(confettiRAF);
+  confettiRAF = null;
+  const ctx = confetti.getContext('2d');
+  ctx.clearRect(0,0,confetti.width,confetti.height);
 }
 
+/* ======= TIMER + STATE ======= */
 function setStateUI(){
   stateEl.textContent = paused ? 'PAUSED' : 'LIVE';
   pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause';
@@ -324,6 +462,63 @@ async function start(){
   rafId = requestAnimationFrame(tick);
 }
 
+/* ======= STRICT WINNER LOGIC ======= */
+async function finalizeWinnerForKey(phaseKeyISO){
+  try{
+    const { r, b } = await countVotesForPhase(phaseKeyISO);
+    if (r === b) { showTieBanner(); return; }
+
+    // Check if written already
+    {
+      const { data, error } = await supabase
+        .from('winners')
+        .select('color')
+        .eq('phase_key', phaseKeyISO)
+        .limit(1);
+      if (error) throw error;
+
+      const existing = (data?.[0]?.color || '').toLowerCase();
+      if (existing === 'red' || existing === 'blue'){ playWinnerFX(existing); return; }
+      if (existing === 'tie'){ showTieBanner(); return; }
+    }
+
+    const color = (r > b) ? 'red' : 'blue';
+    const { error: insErr } = await supabase
+      .from('winners')
+      .insert({ phase_key: phaseKeyISO, color })
+      .select()
+      .single();
+
+    if (insErr){
+      const { data } = await supabase
+        .from('winners')
+        .select('color')
+        .eq('phase_key', phaseKeyISO)
+        .limit(1);
+      const c = (data?.[0]?.color || '').toLowerCase();
+      if (r === b || c === 'tie'){ showTieBanner(); return; }
+      if (c === 'red' || c === 'blue'){ playWinnerFX(c); return; }
+      showTieBanner();
+      return;
+    }
+
+    playWinnerFX(color);
+  }catch(e){
+    try{
+      const { r, b } = await countVotesForPhase(phaseKeyISO);
+      if (r === b) { showTieBanner(); return; }
+      const { data } = await supabase
+        .from('winners')
+        .select('color')
+        .eq('phase_key', phaseKeyISO)
+        .limit(1);
+      const c = (data?.[0]?.color || '').toLowerCase();
+      if (c === 'red' || c === 'blue') playWinnerFX(c);
+      else showTieBanner();
+    }catch(_){}
+  }
+}
+
 /* --- Controls --- */
 pauseBtn.onclick = async ()=>{ try{ if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'}); await fetchState(); toast('OK'); }catch(e){ toast('Pause/resume failed'); }};
 forceBtn.onclick = async ()=>{ try{ await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision'); }catch(e){ toast('Force failed'); }};
@@ -356,18 +551,11 @@ supabase.channel('winners-phase')
     if (!rowKey || !lastFinishedKey) return;
     if (toIso(rowKey) !== toIso(lastFinishedKey)) return;
 
-    // Double-check counts for this finished key
     try{
       const { r, b } = await countVotesForPhase(lastFinishedKey);
-      if (r === b || color === 'tie'){
-        showTieBanner();       // clears any prior winner visuals
-        return;
-      }
-      if (color === 'red' || color === 'blue'){
-        playWinnerFX(color);
-      }
+      if (r === b || color === 'tie'){ showTieBanner(); return; }
+      if (color === 'red' || color === 'blue'){ playWinnerFX(color); }
     }catch(_){
-      // If we can't verify counts, fall back to showing what DB says unless 'tie'
       if (color === 'tie') showTieBanner();
       else if (color === 'red' || color === 'blue') playWinnerFX(color);
     }
