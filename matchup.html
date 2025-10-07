@@ -94,7 +94,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   <div id="toast" class="toast"></div>
 
 <script>
-/* ---------- Winners navigation ---------- */
+/* ---------- Winners navigation (kept, but you can ignore) ---------- */
 (function(){
   const btn = document.getElementById('goWinners');
   if (!btn) return;
@@ -197,33 +197,48 @@ function playWinnerFX(color){
   toast(`🏁 ${color.toUpperCase()} won!`, 2000);
 }
 function showTieBanner(){
+  // IMPORTANT: if tie, ensure NO winner visuals remain visible
   clearWinFX();
   toast('⛔ Tie — no winner', 2000);
 }
 
 /**
  * Finalize a winner for a finished phase key.
- * - If a row already exists in winners, show it.
- * - Otherwise, strictly compare counts and INSERT (no randomness).
- * - On tie, DO NOT insert (just show tie banner).
+ * - Strict majority only (no randomness).
+ * - On tie, DO NOT write to DB; clear any winner UI.
+ * - If a winner row already exists, display it UNLESS local counts are tied (then show tie).
  */
 async function finalizeWinnerForKey(phaseKeyISO){
   try{
-    // 1) Did someone already write the winner?
-    {
-      const { data, error } = await supabase.from('winners').select('color').eq('phase_key', phaseKeyISO).limit(1);
-      if (error) throw error;
-      const existing = (data?.[0]?.color || '').toLowerCase();
-      if (existing==='red' || existing==='blue'){ playWinnerFX(existing); return; }
-      if (existing==='tie'){ showTieBanner(); return; }
+    // Always recompute counts first
+    const { r, b } = await countVotesForPhase(phaseKeyISO);
+    if (r === b) {
+      showTieBanner();
+      return;
     }
 
-    // 2) Compute strict majority
-    const { r, b } = await countVotesForPhase(phaseKeyISO);
-    if (r===b){ showTieBanner(); return; }
-    const color = (r>b) ? 'red' : 'blue';
+    // If someone already wrote a winner, respect it (not tied)
+    {
+      const { data, error } = await supabase
+        .from('winners')
+        .select('color')
+        .eq('phase_key', phaseKeyISO)
+        .limit(1);
+      if (error) throw error;
 
-    // 3) Try to write winner (insert-or-ignore via unique phase_key)
+      const existing = (data?.[0]?.color || '').toLowerCase();
+      if (existing === 'red' || existing === 'blue'){
+        playWinnerFX(existing);
+        return;
+      }
+      if (existing === 'tie'){
+        showTieBanner();
+        return;
+      }
+    }
+
+    // Not a tie, and no stored winner → compute strict majority and insert-or-ignore
+    const color = (r > b) ? 'red' : 'blue';
     const { error: insErr } = await supabase
       .from('winners')
       .insert({ phase_key: phaseKeyISO, color })
@@ -231,21 +246,33 @@ async function finalizeWinnerForKey(phaseKeyISO){
       .single();
 
     if (insErr){
-      // Someone else likely wrote it; read back and display.
-      const { data } = await supabase.from('winners').select('color').eq('phase_key', phaseKeyISO).limit(1);
-      const c = (data?.[0]?.color||'').toLowerCase();
-      if (c==='red' || c==='blue'){ playWinnerFX(c); return; }
+      // Another client wrote something; read back and display,
+      // but still suppress if it somehow shows as tie locally
+      const { data } = await supabase
+        .from('winners')
+        .select('color')
+        .eq('phase_key', phaseKeyISO)
+        .limit(1);
+      const c = (data?.[0]?.color || '').toLowerCase();
+      if (r === b || c === 'tie'){ showTieBanner(); return; }
+      if (c === 'red' || c === 'blue'){ playWinnerFX(c); return; }
       showTieBanner();
       return;
     }
 
     playWinnerFX(color);
   }catch(e){
-    // If anything fails, fall back to read-only poll
+    // Conservative fallback: if uncertain, prefer "no winner" over showing a wrong winner
     try{
-      const { data } = await supabase.from('winners').select('color').eq('phase_key', phaseKeyISO).limit(1);
-      const c = (data?.[0]?.color||'').toLowerCase();
-      if (c==='red' || c==='blue') playWinnerFX(c);
+      const { r, b } = await countVotesForPhase(phaseKeyISO);
+      if (r === b) { showTieBanner(); return; }
+      const { data } = await supabase
+        .from('winners')
+        .select('color')
+        .eq('phase_key', phaseKeyISO)
+        .limit(1);
+      const c = (data?.[0]?.color || '').toLowerCase();
+      if (c === 'red' || c === 'blue') playWinnerFX(c);
       else showTieBanner();
     }catch(_){}
   }
@@ -264,7 +291,7 @@ async function fetchState(){
   setStateUI();
 
   if (prev && serverPhaseEndISO && prev !== serverPhaseEndISO) {
-    // The previous phase just ended at 0 — finalize winner with strict majority (no random).
+    // Phase just flipped → finalize previous phase
     lastFinishedKey = toIso(prev);
     chosen = null;
     voteRedBtn.classList.remove('selected'); voteBlueBtn.classList.remove('selected');
@@ -321,19 +348,32 @@ submitBtn.onclick = async ()=>{
   }catch(e){ toast('Vote failed'); }
 };
 
-/* --- Realtime fixes --- */
+/* --- Realtime: winners --- */
 supabase.channel('winners-phase')
-  .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, (payload)=>{
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, async (payload)=>{
     const rowKey = payload?.new?.phase_key;
     const color  = (payload?.new?.color || '').toLowerCase();
     if (!rowKey || !lastFinishedKey) return;
-    if (toIso(rowKey) === toIso(lastFinishedKey) && (color==='red' || color==='blue')) {
-      playWinnerFX(color);
-    } else if (toIso(rowKey) === toIso(lastFinishedKey) && color==='tie') {
-      showTieBanner();
+    if (toIso(rowKey) !== toIso(lastFinishedKey)) return;
+
+    // Double-check counts for this finished key
+    try{
+      const { r, b } = await countVotesForPhase(lastFinishedKey);
+      if (r === b || color === 'tie'){
+        showTieBanner();       // clears any prior winner visuals
+        return;
+      }
+      if (color === 'red' || color === 'blue'){
+        playWinnerFX(color);
+      }
+    }catch(_){
+      // If we can't verify counts, fall back to showing what DB says unless 'tie'
+      if (color === 'tie') showTieBanner();
+      else if (color === 'red' || color === 'blue') playWinnerFX(color);
     }
   }).subscribe();
 
+/* --- Realtime: live vote counts for current phase --- */
 supabase.channel('phase-votes-live')
   .on('postgres_changes',{event:'*',schema:'public',table:'phase_votes'}, async (payload)=>{
     try{
