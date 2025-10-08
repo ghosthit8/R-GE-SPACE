@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Rage Space — Matchup (2-Round Looping)</title>
+<title>Rage Space — Matchup (2-Round Looping, Winners Carry Images)</title>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
 :root{ --green:#39ff14; --green-bright:#7dff62; --bg:#000; --ink:#e5e5e5; --card:#0b0b0b; --border:#153b16; --muted:#8aff8a; --maxw:980px; }
@@ -33,14 +33,14 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .tab.active{border-color:var(--green);color:var(--green)}
 .tab[disabled]{opacity:.45;cursor:not-allowed}
 
-/* ====== BIG OVERLAY (Final only) ====== */
-#overlay{position:fixed; inset:0; display:none; z-index:9999; background:rgba(0,0,0,0.92)}
+/* overlay */
+#overlay{position:fixed; inset:0; display:none; z-index:9999; background:rgba(0,0,0,.92)}
 #overlay.show{display:block}
-.overlay-bg{position:absolute; inset:0; overflow:hidden; filter:contrast(1.05) saturate(1.1)}
+.overlay-bg{position:absolute; inset:0; overflow:hidden}
 .overlay-art{position:absolute; inset:0; background-size:cover; background-position:center; background-repeat:no-repeat}
-.scanlines{position:absolute; inset:0; background:repeating-linear-gradient(to bottom, rgba(0,0,0,.25) 0px, rgba(0,0,0,.25) 2px, rgba(0,0,0,0) 3px, rgba(0,0,0,0) 4px); mix-blend-mode:multiply; pointer-events:none}
-.vignette{position:absolute; inset:-10%; background:radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,.6) 100%)}
-.overlay-card{position:relative; max-width:min(820px, 92vw); margin:8vh auto 4vh; border:1px solid var(--green); background:rgba(7,7,7,.72); border-radius:18px; padding:22px 18px; box-shadow:0 0 40px rgba(57,255,20,.25)}
+.scanlines{position:absolute; inset:0; background:repeating-linear-gradient(to bottom, rgba(0,0,0,.25) 0px, rgba(0,0,0,.25) 2px, transparent 3px, transparent 4px)}
+.vignette{position:absolute; inset:-10%; background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.6) 100%)}
+.overlay-card{position:relative; max-width:min(820px,92vw); margin:8vh auto 4vh; border:1px solid var(--green); background:rgba(7,7,7,.72); border-radius:18px; padding:22px 18px; box-shadow:0 0 40px rgba(57,255,20,.25)}
 .overlay-card h1{margin:0 0 6px; text-align:center; letter-spacing:2px; font-size:clamp(28px,6vw,54px); text-transform:uppercase}
 .overlay-card .sub{text-align:center; color:var(--muted); margin-bottom:12px; font-size:clamp(12px,2.4vw,14px)}
 .overlay-card .motto{text-align:center; margin-top:8px; color:var(--green-bright); font-weight:700; letter-spacing:.5px}
@@ -113,7 +113,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   </div>
 
 <script>
-/* ---------- Supabase / Globals ---------- */
+/* ---------- Setup ---------- */
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
@@ -125,6 +125,9 @@ const phaseBadge = document.getElementById('phaseKey');
 const loginBadge = document.getElementById('loginBadge');
 const pauseBtn = document.getElementById('btnPause');
 const forceBtn = document.getElementById('btnForce');
+const toastEl = document.getElementById('toast');
+function toast(msg, ms=1400){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
+const iso = (d)=> new Date(d).toISOString().replace(/\.\d{3}Z$/,'Z');
 
 const imgA  = document.getElementById('imgA');
 const imgB  = document.getElementById('imgB');
@@ -147,28 +150,18 @@ const overlaySubtitle = document.getElementById('overlaySubtitle');
 const overlayClose = document.getElementById('overlayClose');
 const confettiCanvas = document.getElementById('confetti');
 
-const toastEl = document.getElementById('toast');
-function toast(msg, ms=1400){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
-const iso = (d)=> new Date(d).toISOString().replace(/\.\d{3}Z$/,'Z');
-
 /* ---------- State ---------- */
 let paused=false, serverPhaseEndISO=null, currentPhaseKey=null, prevPhaseKey=null, periodSec=20, remainingSec=null, lastSyncAt=0, lastCountsAt=0;
 let currentUid=null, chosen=null;
-let activeSlot='sf1'; // 'sf1' | 'sf2' | 'final'
+let activeSlot='sf1'; // 'sf1'|'sf2'|'final'
 let wasInFinalStage=false;
-let overlayGateBase=null;     // the base ISO that is allowed to show champion overlay (set when we ENTER Final)
-let lastEndedISO=null;        // the base ISO that just ended (for internal classification)
+let overlayGateBase=null; // base ISO allowed to trigger champion
 
-/* Freeze images per battle */
-const imgCache = new Map();   // key: "<base>::sf1|sf2|final" -> {A,B}
+// Freeze images per battle: "<baseISO>::sf1|sf2|final" → {A,B}
+const imgCache = new Map();
 let lastPaintedBattleKey=null;
 
-function setActiveTabUI(){
-  [tabSf1,tabSf2,tabFinal].forEach(t=>t.classList.remove('active'));
-  if (activeSlot==='sf1') tabSf1.classList.add('active');
-  if (activeSlot==='sf2') tabSf2.classList.add('active');
-  if (activeSlot==='final') tabFinal.classList.add('active');
-}
+/* ---------- Helpers ---------- */
 async function getUidOrNull(){ const {data:{session}}=await supabase.auth.getSession(); return session?.user?.id ?? null; }
 function paintLoginBadge(){ if(currentUid){loginBadge.textContent='logged in'; loginBadge.classList.add('ok'); loginBadge.classList.remove('warn');} else {loginBadge.textContent='not logged in'; loginBadge.classList.add('warn'); loginBadge.classList.remove('ok');} }
 
@@ -185,6 +178,14 @@ function semiKeysFor(baseISO){ return { sf1:`${baseISO}::sf1`, sf2:`${baseISO}::
 function finalKeyFor(baseISO){ return `${baseISO}::final`; }
 function baseFromKey(k){ return (k||'').split('::')[0] || ''; }
 
+function setActiveTabUI(){
+  [tabSf1,tabSf2,tabFinal].forEach(t=>t.classList.remove('active'));
+  if (activeSlot==='sf1') tabSf1.classList.add('active');
+  if (activeSlot==='sf2') tabSf2.classList.add('active');
+  if (activeSlot==='final') tabFinal.classList.add('active');
+}
+
+/* ---------- Stage detection ---------- */
 async function detectStage(){
   if (!currentPhaseKey || !prevPhaseKey) return {stage:'semis', finalsReady:false};
   const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
@@ -194,18 +195,23 @@ async function detectStage(){
   return {stage: haveBoth ? 'final' : 'semis', finalsReady: haveBoth};
 }
 
-/* ---------- Image paint (frozen per battle) ---------- */
-async function getFinalEntrantSources(){
+/* ---------- Final entrants from semi winners (A1/B1 and A2/B2) ---------- */
+async function getFinalEntrantSourcesFromWinners(){
+  // winners come from PREVIOUS base (prevPhaseKey)
+  if (!prevPhaseKey) return null;
   const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
   const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
   const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
   const c1 = map[sf1], c2 = map[sf2];
   if (!c1 || !c2) return null;
-  return {
-    A: seedUrlFromKey(prevPhaseKey, c1==='red' ? 'A' : 'B'),
-    B: seedUrlFromKey(prevPhaseKey, c2==='red' ? 'A' : 'B')
-  };
+
+  // Final LEFT is winner of Semi 1: uses A1/B1; RIGHT is winner of Semi 2: A2/B2
+  const left = seedUrlFromKey(prevPhaseKey, c1==='red' ? 'A1' : 'B1');
+  const right= seedUrlFromKey(prevPhaseKey, c2==='red' ? 'A2' : 'B2');
+  return {A:left, B:right};
 }
+
+/* ---------- Image paint (frozen per battle) ---------- */
 async function paintImagesForActive(){
   if (!currentPhaseKey) return;
   const battleKey = (activeSlot==='final') ? finalKeyFor(currentPhaseKey)
@@ -222,14 +228,16 @@ async function paintImagesForActive(){
       const A = seedUrlFromKey(currentPhaseKey,'A2'), B = seedUrlFromKey(currentPhaseKey,'B2');
       imgCache.set(battleKey,{A,B}); imgA.src=A; imgB.src=B;
     } else {
-      const finals = await getFinalEntrantSources();
-      const pack = finals || {A: seedUrlFromKey(prevPhaseKey,'A'), B: seedUrlFromKey(prevPhaseKey,'B')};
+      // FINAL must use *previous base* winners (A1/B1 vs A2/B2)
+      const finals = await getFinalEntrantSourcesFromWinners();
+      const pack = finals || {A: seedUrlFromKey(prevPhaseKey,'A1'), B: seedUrlFromKey(prevPhaseKey,'B2')};
       imgCache.set(battleKey, pack); imgA.src=pack.A; imgB.src=pack.B;
     }
   }
   if (activeSlot==='sf1'){ labelA.textContent='Semi 1 — Left'; labelB.textContent='Semi 1 — Right'; }
   else if (activeSlot==='sf2'){ labelA.textContent='Semi 2 — Left'; labelB.textContent='Semi 2 — Right'; }
   else { labelA.textContent='Final — Left'; labelB.textContent='Final — Right'; }
+
   imgA.loading='eager'; imgB.loading='eager'; imgA.decoding='async'; imgB.decoding='async';
   lastPaintedBattleKey=battleKey;
 }
@@ -259,7 +267,7 @@ async function refreshVoteCounts(){
   }catch{}
 }
 
-/* ---------- Winner decide (no overlay here) ---------- */
+/* ---------- Decide & persist winner ---------- */
 async function decideAndPersistWinner(phaseKeyISO){
   const { r, b } = await countVotesFor(phaseKeyISO);
   const color = (r===b) ? (Math.random()<0.5?'red':'blue') : (r>b?'red':'blue');
@@ -272,23 +280,23 @@ async function decideAndPersistWinner(phaseKeyISO){
   return color;
 }
 
-/* ---------- Overlay (Final only) ---------- */
+/* ---------- Overlay (final) ---------- */
 function startConfetti(){ const ctx=confettiCanvas.getContext('2d'); let raf; const parts=Array.from({length:220},()=>({x:Math.random()*innerWidth,y:-20-Math.random()*innerHeight*0.3,vx:(Math.random()-0.5)*2,vy:1.2+Math.random()*2.6,w:3+Math.floor(Math.random()*7),h:3+Math.floor(Math.random()*7),rot:Math.random()*Math.PI,vr:(Math.random()-0.5)*0.2,color:['#39ff14','#7dff62','#00ffd5','#baffc9','#eaff00'][Math.floor(Math.random()*5)]})); function step(){ confettiCanvas.width=innerWidth; confettiCanvas.height=innerHeight; ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height); parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.rot+=p.vr; if(p.y>innerHeight+20){p.y=-10;p.x=Math.random()*innerWidth;} ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);ctx.fillStyle=p.color;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();}); raf=requestAnimationFrame(step);} step(); confettiCanvas._stop=()=>{cancelAnimationFrame(raf); const c=confettiCanvas.getContext('2d'); c.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);} }
 function stopConfetti(){ confettiCanvas._stop && confettiCanvas._stop(); }
-function showChampion(color){
-  const cached = imgCache.get(finalKeyFor(overlayGateBase)) || {};
+function showChampion(color, finalBaseISO){
+  // Use cached FINAL images for that base
+  const cached = imgCache.get(finalKeyFor(finalBaseISO)) || {};
   const src = (color==='red') ? (cached.A || imgA.src) : (cached.B || imgB.src);
   overlayArt.style.backgroundImage = `url("${src}")`;
   overlayTitle.textContent = 'CHAMPION';
   overlaySubtitle.textContent = color==='red' ? 'Final: Left prevails' : 'Final: Right prevails';
   overlay.classList.add('show');
   startConfetti();
-  // auto-close after 6s so loop can continue visibly
   setTimeout(()=>{ overlay.classList.remove('show'); stopConfetti(); }, 6000);
 }
-overlayClose.onclick = ()=>{ overlay.classList.remove('show'); stopConfetti(); };
+overlayClose.onclick=()=>{ overlay.classList.remove('show'); stopConfetti(); };
 
-/* ---------- Timer / Phase handling ---------- */
+/* ---------- Timer / phase handling ---------- */
 function setStateUI(){ stateEl.textContent = paused ? 'PAUSED' : 'LIVE'; pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause'; phaseBadge.textContent='phase: '+(currentPhaseKey||'—'); }
 
 async function fetchState(){
@@ -306,36 +314,47 @@ async function fetchState(){
 
   setStateUI();
 
-  /* Phase flip = some round just ended */
+  // Phase flip → some round just ended
   if (prevEnd && serverPhaseEndISO && prevEnd !== serverPhaseEndISO){
-    lastEndedISO = iso(prevEnd);
+    const justEndedBase = iso(prevEnd);
 
-    // classify the phase that JUST ended based on what stage we were in BEFORE this fetch
+    // Determine what we were in BEFORE this fetch
     if (wasInFinalStage){
-      // FINAL just ended → finalize Final (no overlay HERE; overlay will come from realtime insert listener)
-      await decideAndPersistWinner(finalKeyFor(lastEndedISO));
-      // next phase is Round 1 again (loop) → re-enable semis and reset gating
+      // FINAL just ended → finalize Final AND show overlay immediately
+      const finalKey = finalKeyFor(justEndedBase);
+      const color = await decideAndPersistWinner(finalKey);
+      // Ensure final images are cached for the ending base so overlay matches
+      if (!imgCache.has(finalKey)){
+        const pack = await getFinalEntrantSourcesFromWinners();
+        if (pack) imgCache.set(finalKey, pack);
+      }
+      if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
+
+      // Loop back to Round 1
       tabSf1.disabled = false; tabSf2.disabled = false; tabFinal.disabled = true;
       overlayGateBase = null;
-      activeSlot = 'sf1';
-      setActiveTabUI();
+      activeSlot = 'sf1'; setActiveTabUI();
+      imgCache.clear(); lastPaintedBattleKey=null;
     } else {
-      // SEMIS just ended → finalize both semis (no overlay)
-      const { sf1, sf2 } = semiKeysFor(lastEndedISO);
+      // SEMIS just ended → finalize both semis
+      const { sf1, sf2 } = semiKeysFor(justEndedBase);
       await decideAndPersistWinner(sf1);
       await decideAndPersistWinner(sf2);
-      // we are moving INTO Final now → enable Final, disable semis, set gate
-      tabSf1.disabled = true; tabSf2.disabled = true; tabFinal.disabled = false;
-      overlayGateBase = currentPhaseKey; // only this base may announce champion
-      activeSlot = 'final';
-      setActiveTabUI();
-    }
 
-    // New phase started → clear per-battle paint so fresh images are seeded ONCE
-    imgCache.clear();
-    lastPaintedBattleKey = null;
+      // Move INTO Final: enable Final, disable semis, set gate
+      tabSf1.disabled = true; tabSf2.disabled = true; tabFinal.disabled = false;
+      overlayGateBase = currentPhaseKey; // final that just started
+      activeSlot = 'final'; setActiveTabUI();
+
+      // Pre-cache final images from winners so Final shows correct entrants
+      const pack = await getFinalEntrantSourcesFromWinners();
+      if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
+
+      lastPaintedBattleKey=null;
+    }
   }
 
+  // Update current stage flag
   const { stage } = await detectStage();
   wasInFinalStage = (stage==='final');
 
@@ -343,6 +362,7 @@ async function fetchState(){
   await refreshVoteCounts();
 }
 
+/* ---------- Loops ---------- */
 let rafId=null;
 function stop(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
 async function start(){
@@ -365,16 +385,25 @@ async function start(){
 }
 
 /* ---------- Realtime ---------- */
-// Only show champion when a ::final winner INSERT happens for our gated base
+// Still keep realtime overlay (secondary path). Primary overlay happens on finalize above.
 supabase.channel('winners-final-overlay')
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'},(payload)=>{
     const key = payload?.new?.phase_key || '';
     const color = (payload?.new?.color||'').toLowerCase();
     if (!key.endsWith('::final')) return;
-    if (!overlayGateBase) return;
-    if (baseFromKey(key) !== overlayGateBase) return;
+    const base = baseFromKey(key);
+    if (!overlayGateBase || base !== overlayGateBase) return;
     if (!(color==='red'||color==='blue')) return;
-    showChampion(color);
+
+    // ensure final images cached for this base
+    if (!imgCache.has(finalKeyFor(base))){
+      getFinalEntrantSourcesFromWinners().then(pack=>{
+        if (pack) imgCache.set(finalKeyFor(base), pack);
+        showChampion(color, base);
+      });
+    } else {
+      showChampion(color, base);
+    }
   }).subscribe();
 
 supabase.channel('phase-votes-live')
@@ -409,8 +438,8 @@ submitBtn.onclick=async()=>{
 };
 
 function switchTab(slot){
-  // If Final is active (gate set), semis are dead
-  if (overlayGateBase && (slot==='sf1' || slot==='sf2')) return;
+  // When Final is active, semis are disabled/dead
+  if (overlayGateBase && (slot==='sf1'||slot==='sf2')) return;
   activeSlot = slot;
   setActiveTabUI();
   clearSelection();
@@ -418,9 +447,6 @@ function switchTab(slot){
   paintImagesForActive();
   refreshVoteCounts();
 }
-tabSf1.onclick = ()=> switchTab('sf1');
-tabSf2.onclick = ()=> switchTab('sf2');
-tabFinal.onclick = ()=> { if (!tabFinal.disabled) switchTab('final'); else toast('Final begins next round'); };
 
 /* ---------- Boot ---------- */
 (async()=>{
