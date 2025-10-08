@@ -14,63 +14,51 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
 .wrap{max-width:var(--maxw);margin:16px auto 64px;padding:0 16px}
-.scorebar{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:8px 12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
-.btn{border:1px solid var(--green);color:var(--green);background:transparent;padding:8px 12px;border-radius:10px;cursor:pointer;user-select:none;white-space:nowrap;text-decoration:none;display:inline-block;text-align:center}
-.btn:hover{box-shadow:0 0 12px rgba(57,255,20,.3)}
-.btn[disabled]{opacity:.5;cursor:not-allowed}
-.badge{font-size:12px;opacity:.85;border:1px dashed var(--border);padding:4px 8px;border-radius:6px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
-.tile{position:relative;border:1px solid var(--border);border-radius:16px;overflow:hidden;background:#050505;min-height:240px}
-.tile .img{position:absolute;inset:0;background:#111}
-.tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:saturate(1.05) contrast(1.05)}
-.tile .cap{position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.55);backdrop-filter:blur(2px);padding:6px 10px;border-radius:10px;border:1px solid rgba(57,255,20,.25);font-weight:600}
-.tile.win{outline:2px solid var(--green-bright);box-shadow:0 0 24px rgba(57,255,20,.35) inset,0 0 32px rgba(57,255,20,.2)}
-.pick{display:flex;gap:8px;align-items:center;justify-content:center;padding:12px}
-.pill{border:1px solid var(--border);border-radius:999px;overflow:hidden;display:inline-flex}
-.pill .seg{padding:8px 12px;cursor:pointer}
-.pill .seg.active{background:rgba(57,255,20,.08)}
-.note{font-size:12px;opacity:.75}
-.bar{height:6px;background:linear-gradient(90deg,#a60000,#0058a6);border-radius:6px;margin:0 8px;flex:1;opacity:.75}
-.kv{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.kv .k{opacity:.75}
-.kv .v{font-weight:600}
-small.muted{opacity:.7}
+.scorebar{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
+.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
+.btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
+.tiny{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
+.clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
+.tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px;position:relative}
+.art{aspect-ratio:4/3;width:100%;height:auto;display:block;object-fit:cover}
+.caption{display:block;text-align:center;font-size:12px;color:var(--muted);padding:6px 8px;border-top:1px dashed var(--border)}
+.meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
+.btn.primary.selected{background:rgba(57,255,20,.22);color:var(--ink);box-shadow:0 0 18px rgba(125,255,98,.35), inset 0 0 12px rgba(57,255,20,.15)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18);z-index:50}
+.toast.show{display:block}
+.badge{border:1px solid var(--border);border-radius:8px;padding:2px 8px}
+.badge.warn{border-color:#3b1616;color:#ff6b6b}
+.badge.ok{border-color:#153b16;color:#8aff8a}
 
-/* Overlay modal */
-.overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.82);z-index:50}
-.overlay.show{display:flex}
-.overlay-card{position:relative;width:min(920px,96vw);border-radius:18px;border:1px solid var(--border);background:#060606;overflow:hidden;box-shadow:0 0 24px rgba(57,255,20,.15)}
-.overlay-art{position:relative;height:min(58vh,520px);background:#000}
-.overlay-title{padding:14px 16px 8px;font-size:28px;font-weight:900;letter-spacing:.5px}
-.overlay-sub{padding:0 16px 16px;font-size:14px;opacity:.85}
-.overlay-x{position:absolute;top:10px;right:10px}
-.overlay .scanlines{pointer-events:none}
-
-/* Confetti canvas */
-#confetti{position:fixed;inset:0;display:none;z-index:60;pointer-events:none}
-
-/* Analog-ish scanline streaks */
-.overlay-art::after{
-  content:"";
-  position:absolute;inset:0;
-  background:
-    radial-gradient(ellipse at center, rgba(0,0,0,.0) 0%, rgba(0,0,0,.35) 60%, rgba(0,0,0,.75) 100%),
-    repeating-linear-gradient( to bottom, rgba(255,255,255,.05) 0px, rgba(255,255,255,.05) 2px, rgba(0,0,0,0) 3px, rgba(0,0,0,0) 4px );
-  mix-blend-mode:overlay;
-  pointer-events:none;
+/* Small Winner FX (tile pulse) */
+@keyframes winPulse {
+  0% { box-shadow: 0 0 0px rgba(125,255,98,.0); transform: scale(1);}
+  50% { box-shadow: 0 0 36px rgba(125,255,98,.45); transform: scale(1.01);}
+  100% { box-shadow: 0 0 0px rgba(125,255,98,.0); transform: scale(1);}
 }
-.overlay-card.tie .overlay-art::before{
-  content:"T I E";
-  position:absolute;inset:auto 16px 16px auto;color:#fff;font-weight:900;opacity:.2;font-size:40px;letter-spacing:6px
+.tile.win .art { animation: winPulse 1200ms ease-in-out 2; }
+.tile.win::after{
+  content:"🏁 WINNER";
+  position:absolute; right:10px; top:10px;
+  background:rgba(7,28,7,.9); border:1px solid var(--border);
+  padding:6px 10px; border-radius:10px; font-weight:700;
 }
 
-/* Misc */
-h1{font-size:18px;margin:0;font-weight:800;letter-spacing:.5px}
-.timer{font-variant-numeric:tabular-nums;font-weight:900;letter-spacing:1px;min-width:3ch;text-align:right}
-.mono{font-family:ui-monospace,Consolas,monospace}
-hr{border:none;border-top:1px dashed var(--border);margin:12px 0}
-a{color:var(--green);text-decoration-color:rgba(57,255,20,.55)}
+/* ====== BIG OVERLAY BANNER ====== */
+#overlay{
+  position:fixed; inset:0; display:none; z-index:9999;
+  background:rgba(0,0,0,0.92);
+}
+#overlay.show{ display:block; }
+
+.overlay-bg{
+  position:absolute; inset:0; overflow:hidden;
+  filter: contrast(1.05) saturate(1.1);
+}
+/* Winner art backdrop (image fills screen) */
 .overlay-art{
+  position:absolute; inset:0;
   background-size:cover; background-position:center; background-repeat:no-repeat;
 }
 .overlay-art.split{
@@ -88,133 +76,250 @@ a{color:var(--green);text-decoration-color:rgba(57,255,20,.55)}
       rgba(0,0,0,0.0) 3px,
       rgba(0,0,0,0.0) 4px
     );
+  mix-blend-mode:multiply;
   pointer-events:none;
-  mix-blend-mode:soft-light;
-  opacity:.6;
 }
 .vignette{
-  position:absolute; inset:0;
-  background: radial-gradient(circle at center, rgba(0,0,0,0) 40%, rgba(0,0,0,.5) 100%);
+  position:absolute; inset:-10%;
+  background:radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 100%);
   pointer-events:none;
 }
+
+/* Glitchy title card */
+@keyframes titleJitter {
+  0%,100% { transform: translate(0,0); }
+  20% { transform: translate(1px,-1px); }
+  40% { transform: translate(-1px,1px); }
+  60% { transform: translate(1px,1px); }
+  80% { transform: translate(-1px,-1px); }
+}
+.overlay-card{
+  position:relative;
+  max-width:min(820px, 92vw);
+  margin: 8vh auto 4vh auto;
+  border:1px solid var(--green);
+  background:rgba(7,7,7,.72);
+  border-radius:18px;
+  padding:22px 18px;
+  box-shadow:0 0 40px rgba(57,255,20,.25);
+  animation:titleJitter 2200ms steps(2,end) infinite;
+}
+.overlay-card h1{
+  margin:0 0 6px 0; text-align:center; letter-spacing:2px;
+  font-size: clamp(28px, 6vw, 54px);
+  text-transform:uppercase;
+}
+.overlay-card .sub{
+  text-align:center; color:var(--muted); margin-bottom:12px;
+  font-size: clamp(12px, 2.4vw, 14px);
+}
+.overlay-card .motto{
+  text-align:center; margin-top:8px; color:var(--green-bright);
+  font-weight:700; letter-spacing:.5px;
+}
+
+/* Close button */
+#overlayClose{
+  position:absolute; right:14px; top:12px; z-index:2;
+  border:1px solid var(--green); background:rgba(0,0,0,.6);
+  color:var(--green); border-radius:10px; padding:6px 10px; cursor:pointer;
+}
+
+/* Confetti canvas fills screen */
+#confetti { position:absolute; inset:0; pointer-events:none; }
+
+/* Tie styling tweak */
+.overlay-card.tie{
+  border-color:#4e4e4e; box-shadow:0 0 40px rgba(130,130,130,.25);
+}
+.overlay-card.tie h1{ color:#d4d4d4; }
+.overlay-card.tie .motto{ color:#cfcfcf; }
 </style>
 </head>
 <body>
-<canvas id="confetti"></canvas>
-<div class="wrap">
-  <div class="scorebar">
-    <div class="kv">
-      <span class="k">Phase ends:</span>
-      <span id="phase" class="v mono">—</span>
+  <div class="wrap">
+    <div class="scorebar">
+      <div class="tiny">
+        <strong>Decision in</strong>
+        <span id="clock" class="clock">Sync…</span>
+        <span id="state" class="clock">—</span>
+        <span id="phaseKey" class="clock">phase: —</span>
+        <span id="loginBadge" class="badge">checking auth…</span>
+      </div>
+      <div class="row">
+        <button id="btnPause" class="btn">⏸️ Pause</button>
+        <button id="btnForce" class="btn">🏁 Force Decide</button>
+        <a class="btn" id="openWinnersLink" href="./winners.html" target="_self" rel="noopener">🏁 Winners</a>
+        <button class="btn" id="goWinners" type="button">🧰 Open Winners</button>
+      </div>
     </div>
-    <div class="kv">
-      <span class="k">Timer:</span>
-      <span id="clock" class="v timer">—</span>
+
+    <!-- ENTRY A -->
+    <div class="tile" id="tileA" data-color="red">
+      <img id="imgA" class="art" alt="Entry A"/>
+      <div class="caption" id="countA">0 votes</div>
+      <div class="meta">
+        <span>Entry A</span>
+        <button class="btn primary" id="voteA">Vote This</button>
+      </div>
     </div>
-    <div class="kv">
-      <span class="k">State:</span>
-      <span id="state" class="v">sync…</span>
+
+    <!-- ENTRY B -->
+    <div class="tile" id="tileB" data-color="blue">
+      <img id="imgB" class="art" alt="Entry B"/>
+      <div class="caption" id="countB">0 votes</div>
+      <div class="meta">
+        <span>Entry B</span>
+        <button class="btn primary" id="voteB">Vote This</button>
+      </div>
     </div>
-    <div class="kv"><span class="k">A votes</span><span id="countA" class="v">0</span></div>
-    <div class="bar"></div>
-    <div class="kv"><span class="k">B votes</span><span id="countB" class="v">0</span></div>
-    <div class="kv"><span class="k">You:</span><span id="loginBadge" class="badge">guest</span></div>
+
+    <div class="row">
+      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
+    </div>
   </div>
 
-  <div class="grid">
-    <div id="tileA" class="tile">
-      <div class="img"><img id="imgA" alt="Entry A"/></div>
-      <div class="cap">Entry A</div>
-    </div>
-    <div id="tileB" class="tile">
-      <div class="img"><img id="imgB" alt="Entry B"/></div>
-      <div class="cap">Entry B</div>
-    </div>
-  </div>
+  <div id="toast" class="toast"></div>
 
-  <div class="pick">
-    <div class="pill">
-      <div id="pickA" class="seg">Vote A</div>
-      <div id="pickB" class="seg">Vote B</div>
-    </div>
-    <button id="submit" class="btn">Submit vote</button>
-    <span class="note">Change picks freely until submit.</span>
-  </div>
-
-  <hr/>
-
-  <div class="kv" style="gap:12px">
-    <button id="pause" class="btn">Pause / Resume</button>
-    <button id="force" class="btn">Force decide</button>
-    <a href="./winners.html" class="btn">Winners</a>
-    <small class="muted">Admin controls shown for dev.</small>
-  </div>
-</div>
-
-<!-- Overlay -->
-<div id="overlay" class="overlay">
-  <div class="overlay-card" id="overlayCard">
-    <div class="overlay-art" id="overlayArt">
+  <!-- ===== BIG OVERLAY ===== -->
+  <div id="overlay">
+    <canvas id="confetti"></canvas>
+    <div class="overlay-bg">
+      <div id="overlayArt" class="overlay-art"></div>
       <div class="scanlines"></div>
       <div class="vignette"></div>
-      <button id="overlayClose" class="btn overlay-x">✕</button>
     </div>
-    <div class="overlay-title" id="overlayTitle">—</div>
-    <div class="overlay-sub" id="overlaySubtitle">—</div>
+    <button id="overlayClose" class="btn">✕</button>
+    <div id="overlayCard" class="overlay-card">
+      <h1 id="overlayTitle">CHAMPION</h1>
+      <div class="sub" id="overlaySubtitle">Rage Space</div>
+      <div class="motto">Glory to the machine. Your art devours the bracket</div>
+    </div>
   </div>
-</div>
 
 <script>
-/* ======= CONFIG ======= */
-const SUPABASE_URL  = window.SUPABASE_URL  || 'https://YOUR.supabase.co';
-const SUPABASE_ANON = window.SUPABASE_ANON || 'YOUR_ANON';
-const EDGE_FN = 'dynamic-task'; // your Edge Function name
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+/* ---------- Winners navigation (unchanged helper) ---------- */
+(function(){
+  const btn = document.getElementById('goWinners');
+  if (!btn) return;
+  btn.addEventListener('click', function(ev){
+    ev.preventDefault();
+    const folderHref = location.pathname.replace(/[^/]*$/, '') + 'winners.html';
+    const parts = location.pathname.split('/').filter(Boolean);
+    const repoRoot = parts.length ? `/${parts[0]}/` : '/';
+    const rootHref = `${repoRoot}winners.html`;
+    try { window.location.assign(folderHref); } catch { window.location.href = folderHref; }
+    setTimeout(()=>{ try{ window.location.replace(rootHref); } catch{ window.location.href = rootHref; } }, 150);
+  }, {passive:false});
+})();
 
-// Elements
-const phaseEl = document.getElementById('phase');
+/* =========================
+   App logic
+========================= */
+const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 const clockEl = document.getElementById('clock');
 const stateEl = document.getElementById('state');
-const countA = document.getElementById('countA');
-const countB = document.getElementById('countB');
-const pickA  = document.getElementById('pickA');
-const pickB  = document.getElementById('pickB');
-const submitBtn = document.getElementById('submit');
-const pauseBtn  = document.getElementById('pause');
-const forceBtn  = document.getElementById('force');
+const phaseBadge = document.getElementById('phaseKey');
+const loginBadge = document.getElementById('loginBadge');
+const pauseBtn = document.getElementById('btnPause');
+const forceBtn = document.getElementById('btnForce');
+const submitBtn   = document.getElementById('submitBtn');
+
 const tileA = document.getElementById('tileA');
 const tileB = document.getElementById('tileB');
 const imgA  = document.getElementById('imgA');
 const imgB  = document.getElementById('imgB');
+const voteA = document.getElementById('voteA');
+const voteB = document.getElementById('voteB');
+const countA = document.getElementById('countA');
+const countB = document.getElementById('countB');
 
+const toastEl     = document.getElementById('toast');
+
+/* ======= BIG OVERLAY HOOKS ======= */
 const overlay = document.getElementById('overlay');
+const overlayClose = document.getElementById('overlayClose');
+const overlayArt = document.getElementById('overlayArt');
 const overlayCard = document.getElementById('overlayCard');
-const overlayArt  = document.getElementById('overlayArt');
-const overlayTitle= document.getElementById('overlayTitle');
+const overlayTitle = document.getElementById('overlayTitle');
 const overlaySubtitle = document.getElementById('overlaySubtitle');
 const confetti = document.getElementById('confetti');
+let confettiRAF = null;
 
-// State
-let serverPhaseEndISO = null;
-let lastFinishedKey = null;
+function toast(msg, ms=1600){ toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'), ms); }
+const toIso = (d)=> new Date(d).toISOString();
+
+let rafId = null;
 let paused = false;
-let chosen = null;
-let currentUid = null;
+let remainingSec = null;
+let serverPhaseEndISO = null;
+let lastSyncAt = 0;
 let lastCountsAt = 0;
+let chosen = null; // 'red' or 'blue' (A=red, B=blue)
+let lastFinishedKey = null;
+let currentUid = null;
 
-/* ======= HELPERS ======= */
-const $ = (q)=>document.querySelector(q);
-const toIso = (d)=> new Date(d).toISOString().replace(/\.\d{3}Z$/,'Z');
-const fmtVotes = (n)=> `${n} vote${n===1?'':'s'}`;
-
-function toast(msg){
-  console.log('[toast]', msg);
+async function getUidOrNull() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
+}
+function paintLoginBadge() {
+  if (currentUid) { loginBadge.textContent = "logged in"; loginBadge.classList.remove('warn'); loginBadge.classList.add('ok'); }
+  else { loginBadge.textContent = "not logged in"; loginBadge.classList.remove('ok'); loginBadge.classList.add('warn'); }
 }
 
-// quick auth helper for badge (anon ok)
-function paintLoginBadge(){
-  const el = document.getElementById('loginBadge');
-  el.textContent = currentUid ? currentUid.slice(0,8) : 'guest';
+async function callEdge(method='GET', body=null){
+  const res = await fetch(EDGE_URL, {
+    method,
+    headers: {'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_ANON_KEY}`,'apikey': SUPABASE_ANON_KEY},
+    body: body ? JSON.stringify(body) : null
+  });
+  const raw = await res.text(); let j=null; try{ j=JSON.parse(raw); }catch{}
+  if(!res.ok) throw new Error((j && j.error) || raw || 'edge error');
+  return j?.state || j || {};
+}
+const normalize = (s)=>({
+  phase_end_at: s.phase_end_at ?? null,
+  period_sec: s.period_sec ?? 10,
+  paused: !!s.paused,
+  remaining_sec: (typeof s.remaining_sec === 'number') ? s.remaining_sec : null
+});
+
+const fmtVotes = (n)=> `${n} ${n===1?'vote':'votes'}`;
+async function countVotesForPhase(phaseKeyISO){
+  const { data, error } = await supabase.from('phase_votes').select('vote').eq('phase_key', phaseKeyISO);
+  if (error) throw error;
+  let r=0, b=0; (data||[]).forEach(row => { if(row.vote==='red') r++; else if(row.vote==='blue') b++; });
+  return {r,b};
+}
+async function refreshVoteCounts(){
+  try{
+    if(!serverPhaseEndISO) { countA.textContent = '0 votes'; countB.textContent = '0 votes'; return; }
+    const phaseKey = toIso(serverPhaseEndISO);
+    const { r, b } = await countVotesForPhase(phaseKey);
+    countA.textContent  = fmtVotes(r);
+    countB.textContent  = fmtVotes(b);
+    lastCountsAt = Date.now();
+  }catch(e){}
+}
+
+/* ======= IMAGE SEEDING ======= */
+function seedUrl(phaseKeyISO, suffix){
+  // Deterministic "random" artsy photos per phase
+  const s = encodeURIComponent(`${phaseKeyISO}-${suffix}`);
+  // Bigger than tile to look crisp in overlay too
+  return `https://picsum.photos/seed/${s}/1600/1200`;
+}
+function setImagesForPhase(phaseKeyISO){
+  const srcA = seedUrl(phaseKeyISO, 'A');
+  const srcB = seedUrl(phaseKeyISO, 'B');
+  imgA.src = srcA; imgB.src = srcB;
+  imgA.loading = 'eager'; imgB.loading = 'eager';
+  imgA.decoding = 'async'; imgB.decoding = 'async';
 }
 
 /* ======= WINNER / TIE VISUALS ======= */
@@ -228,6 +333,14 @@ function playWinnerFX(color){
 function showTieBanner(){
   clearWinFX();
   openTieOverlay();
+}
+
+/* NEW: tie → random winner banner */
+function playTieRandomFX(color){
+  clearWinFX();
+  if(color==='red') tileA.classList.add('win');
+  if(color==='blue') tileB.classList.add('win');
+  openTieRandomOverlay(color);
 }
 
 /* Overlay open/close */
@@ -250,24 +363,19 @@ function openTieOverlay(){
   overlay.classList.add('show');
   startConfetti({mode:'tie'});
 }
-function playTieRandomFX(color){
-  clearWinFX();
-  if(color==='red') tileA.classList.add('win');
-  if(color==='blue') tileB.classList.add('win');
-  openTieRandomOverlay(color);
-}
-
+/* NEW: specific tie-random overlay with required wording */
 function openTieRandomOverlay(color){
   const src = (color==='red') ? imgA.src : imgB.src;
+  const which = (color==='red') ? 'Entry A' : 'Entry B';
   overlayArt.className = 'overlay-art';
   overlayArt.style.backgroundImage = `url("${src}")`;
   overlayCard.className = 'overlay-card';
-  const which = (color==='red') ? 'Entry A' : 'Entry B';
   overlayTitle.textContent = `Tie... random winner picked: ${which}`;
   overlaySubtitle.textContent = (color==='red' ? 'Entry A prevails' : 'Entry B prevails');
   overlay.classList.add('show');
   startConfetti({mode:'win'});
 }
+
 function closeOverlay(){
   overlay.classList.remove('show');
   stopConfetti();
@@ -283,185 +391,125 @@ function startConfetti({mode='win'}={}){
     confetti.height = Math.floor(innerHeight * dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
   };
-  resize(); confetti.style.display='block';
-  let parts = Array.from({length:160}, (_,i)=>({
-    x: Math.random()*innerWidth,
-    y: Math.random()*innerHeight,
-    vx:(Math.random()-.5)*3,
-    vy:(Math.random()*-2)-1,
-    s: Math.random()*3+1,
-    a: 1,
-    t: Math.random()*Math.PI*2
-  }));
-  let raf;
-  const tick = ()=>{
-    ctx.clearRect(0,0,confetti.width,confetti.height);
-    parts.forEach(p=>{
-      p.x+=p.vx; p.y+=p.vy; p.vy+=0.03; p.a*=.995; p.t+=.05;
-      ctx.globalAlpha = Math.max(p.a,0);
-      ctx.fillRect(p.x, p.y, p.s, p.s);
+  resize(); window.addEventListener('resize', resize, { once:true });
+
+  const particles = [];
+  const count = mode==='win' ? 220 : 120;
+  const palette = mode==='win'
+    ? ['#39ff14','#7dff62','#00ffd5','#baffc9','#eaff00']
+    : ['#cfcfcf','#a0a0a0','#6ad1ff','#39ff14'];
+
+  for (let i=0;i<count;i++){
+    particles.push({
+      x: Math.random()*innerWidth,
+      y: -10 - Math.random()*innerHeight*0.4,
+      vx: (Math.random()-0.5)*2.0,
+      vy: 1.2 + Math.random()*2.6,
+      w: 3 + Math.floor(Math.random()*7),
+      h: 3 + Math.floor(Math.random()*7),
+      rot: Math.random()*Math.PI,
+      vr: (Math.random()-0.5)*0.2,
+      color: palette[Math.floor(Math.random()*palette.length)],
+      life: 120 + Math.random()*140
     });
-    raf = requestAnimationFrame(tick);
-  };
-  window.addEventListener('resize', resize);
-  tick();
-  confetti._stop = ()=>{ cancelAnimationFrame(raf); confetti.style.display='none'; ctx.clearRect(0,0,confetti.width,confetti.height); };
-}
-function stopConfetti(){ confetti._stop && confetti._stop(); }
-
-/* ======= IMAGE SEEDING ======= */
-function seedUrl(phaseKeyISO, suffix){
-  // Deterministic "random" artsy photos per phase
-  const s = encodeURIComponent(`${phaseKeyISO}-${suffix}`);
-  // Bigger than tile to look crisp in overlay too
-  return `https://picsum.photos/seed/${s}/1600/1200`;
-}
-function setImagesForPhase(phaseKeyISO){
-  imgA.src = seedUrl(phaseKeyISO, 'A');
-  imgB.src = seedUrl(phaseKeyISO, 'B');
-}
-
-/* ======= STATE FETCH / TIMER ======= */
-async function fetchState(){
-  const { data, error } = await client
-    .from('shared_timer')
-    .select('phase_end, state, paused')
-    .limit(1);
-
-  if (error) throw error;
-  const row = data?.[0];
-  if (!row){ phaseEl.textContent='—'; clockEl.textContent='—'; stateEl.textContent='—'; return; }
-
-  serverPhaseEndISO = row.phase_end;
-  phaseEl.textContent = new Date(serverPhaseEndISO).toLocaleString();
-  paused = !!row.paused;
-  stateEl.textContent = row.state || '—';
-
-  // immediately seed images for current phase
-  setImagesForPhase(toIso(serverPhaseEndISO));
-}
-
-function secondsLeft(){
-  if (!serverPhaseEndISO) return 0;
-  const now = Date.now();
-  const end = new Date(serverPhaseEndISO).getTime();
-  return Math.max(0, Math.ceil((end - now)/1000));
-}
-
-let tickRaf;
-async function tick(){
-  if (paused){ clockEl.textContent = 'PAUSE'; tickRaf=requestAnimationFrame(tick); return; }
-  const s = secondsLeft();
-  clockEl.textContent = s.toString().padStart(2,'0');
-
-  // Update live counts ~every 1.5s
-  if (Date.now() - lastCountsAt > 1500) { await refreshCounts(); }
-
-  if (s<=0){
-    await onZero();
-  }else{
-    tickRaf=requestAnimationFrame(tick);
   }
+
+  let t=0, flicker=0;
+  function step(){
+    const w = innerWidth, h = innerHeight;
+    confetti.width = w; confetti.height = h;
+    ctx.clearRect(0,0,w,h);
+
+    if ((t%30)===0) flicker = Math.random()*0.15;
+
+    particles.forEach(p=>{
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.life -= 1;
+      if (p.y > h+20) { p.y = -10; p.x = Math.random()*w; }
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+    });
+
+    ctx.globalAlpha = 0.08 + flicker;
+    ctx.fillStyle = '#000';
+    const stripe = 4;
+    for (let y=0;y<h;y+=stripe){ ctx.fillRect(0,y,w,2); }
+    ctx.globalAlpha = 1;
+
+    t++;
+    confettiRAF = requestAnimationFrame(step);
+  }
+  step();
+}
+function stopConfetti(){
+  if (confettiRAF) cancelAnimationFrame(confettiRAF);
+  confettiRAF = null;
+  const ctx = confetti.getContext('2d');
+  ctx.clearRect(0,0,confetti.width,confetti.height);
 }
 
-async function onZero(){
-  cancelAnimationFrame(tickRaf);
-  clockEl.textContent = '00';
-  // read the finished key (the phase we just ended)
-  lastFinishedKey = toIso(serverPhaseEndISO);
-  try{
+/* ======= TIMER + STATE ======= */
+function setStateUI(){
+  stateEl.textContent = paused ? 'PAUSED' : 'LIVE';
+  pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause';
+  phaseBadge.textContent = 'phase: ' + (serverPhaseEndISO || '—');
+}
+
+async function fetchState(){
+  const s = normalize(await callEdge('GET'));
+  const prev = serverPhaseEndISO;
+  serverPhaseEndISO = s.phase_end_at; paused = s.paused; remainingSec = s.remaining_sec; lastSyncAt = Date.now();
+  setStateUI();
+
+  if (prev && serverPhaseEndISO && prev !== serverPhaseEndISO) {
+    // Phase just flipped → finalize previous phase + load new images for the new phase
+    lastFinishedKey = toIso(prev);
+    chosen = null;
+    voteA.classList.remove('selected'); voteB.classList.remove('selected');
+    submitBtn.textContent = '✅ Submit Vote'; submitBtn.disabled = true;
+    countA.textContent = '0 votes'; countB.textContent = '0 votes';
+    clearWinFX();
     await finalizeWinnerForKey(lastFinishedKey);
-  }catch(e){}
+  } else {
+    submitBtn.disabled = !chosen || !currentUid;
+  }
+
+  // Ensure current phase images are set
+  if (serverPhaseEndISO) setImagesForPhase(toIso(serverPhaseEndISO));
+
+  refreshVoteCounts();
+}
+function stop(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
+async function start(){
+  stop();
+  const tick = async ()=>{
+    if (paused){
+      const remCalc = serverPhaseEndISO ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
+      const sec = (typeof remainingSec === 'number' && !Number.isNaN(remainingSec)) ? Number(remainingSec) : Math.ceil(remCalc/1000);
+      clockEl.textContent = String(Math.max(0, Math.ceil(sec)));
+      if (Date.now() - lastSyncAt > 5000) { try{ await fetchState(); }catch{} }
+    } else {
+      const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
+      clockEl.textContent = String(Math.ceil(rem/1000));
+      if (rem <= 0 || Date.now()-lastSyncAt > 5000) { try{ await fetchState(); }catch{} }
+      if (Date.now() - lastCountsAt > 2000) refreshVoteCounts();
+    }
+    rafId = requestAnimationFrame(tick);
+  };
+  rafId = requestAnimationFrame(tick);
 }
 
-async function start(){ cancelAnimationFrame(tickRaf); await fetchState(); tick(); }
-async function refreshCounts(){
-  try{
-    if (!serverPhaseEndISO){ countA.textContent = '0 votes'; countB.textContent = '0 votes'; return; }
-    const phaseKey = toIso(serverPhaseEndISO);
-    const { r, b } = await countVotesForPhase(phaseKey);
-    countA.textContent  = fmtVotes(r);
-    countB.textContent  = fmtVotes(b);
-    lastCountsAt = Date.now();
-  }catch(e){}
-}
-
-/* ======= IMAGE SEEDING ======= */
-function seedUrl(phaseKeyISO, suffix){
-  // Deterministic "random" artsy photos per phase
-  const s = encodeURIComponent(`${phaseKeyISO}-${suffix}`);
-  // Bigger than tile to look crisp in overlay too
-  return `https://picsum.photos/seed/${s}/1600/1200`;
-}
-function setImagesForPhase(phaseKeyISO){
-  imgA.src = seedUrl(phaseKeyISO, 'A');
-  imgB.src = seedUrl(phaseKeyISO, 'B');
-}
-
-/* ======= DATA OPS ======= */
-async function callEdge(method='POST', body){
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/${EDGE_FN}`, {
-    method,
-    headers: { 'Authorization': `Bearer ${SUPABASE_ANON}`, 'Content-Type':'application/json' },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  if (!res.ok) throw new Error('edge fail');
-  return res.json().catch(()=>({}));
-}
-
-async function getSession(){
-  const { data:{ session } } = await client.auth.getSession();
-  return session;
-}
-
-async function ensureAuth(){
-  const { data: { user } } = await client.auth.getUser();
-  if (user){ currentUid = user.id; paintLoginBadge(); return; }
-  const res = await client.auth.signInAnonymously();
-  if (!res?.data?.user) throw new Error('auth');
-  currentUid = res.data.user.id; paintLoginBadge();
-}
-
-async function submitVote(color){
-  if (!currentUid || !serverPhaseEndISO) return;
-  const phaseKey = toIso(serverPhaseEndISO);
-  const { error } = await client.from('phase_votes').upsert({
-    phase_key: phaseKey,
-    user_id: currentUid,
-    vote: color
-  }, { onConflict: 'phase_key,user_id' });
-  if (error){ toast('vote failed'); return; }
-  toast('vote submitted');
-  await refreshCounts();
-}
-
-async function clearMyVote(){
-  if (!currentUid || !serverPhaseEndISO) return;
-  const phaseKey = toIso(serverPhaseEndISO);
-  await client.from('phase_votes').delete().match({ phase_key: phaseKey, user_id: currentUid });
-}
-
-async function refreshPickUI(){
-  pickA.classList.toggle('active', chosen==='red');
-  pickB.classList.toggle('active', chosen==='blue');
-  submitBtn.disabled = !chosen || !currentUid;
-}
-
-async function countVotesForPhase(phaseKeyISO){
-  const { data, error } = await client.from('phase_votes').select('vote').eq('phase_key', phaseKeyISO);
-  if (error) throw error;
-  let r=0, b=0; (data||[]).forEach(row => { if(row.vote==='red') r++; else if(row.vote==='blue') b++; });
-  return {r,b};
-}
-
-/* ======= DECISION ======= */
+/* ======= STRICT WINNER LOGIC (updated for tie→random) ======= */
 async function finalizeWinnerForKey(phaseKeyISO){
   try{
     const { r, b } = await countVotesForPhase(phaseKeyISO);
 
-    // If a row already exists, just show it (if tie, show tie-random banner with stored color)
+    // If a row already exists, use it; if counts tied, show tie-random banner using stored color
     {
-      const { data, error } = await client
+      const { data, error } = await supabase
         .from('winners')
         .select('color')
         .eq('phase_key', phaseKeyISO)
@@ -471,29 +519,35 @@ async function finalizeWinnerForKey(phaseKeyISO){
       const existing = (data?.[0]?.color || '').toLowerCase();
       if (existing === 'red' || existing === 'blue'){
         if (r === b) { playTieRandomFX(existing); return; }
-        playWinnerFX(existing);
+        playWinnerFX(existing); 
+        return;
+      }
+      if (existing === 'tie'){
+        // legacy rows: display old tie banner
+        showTieBanner();
         return;
       }
     }
 
-    // Decide winner (tie => random)
+    // Decide winner
     let color;
     if (r === b){
+      // Tie ⇒ random pick + store
       color = (Math.random() < 0.5) ? 'red' : 'blue';
     } else {
       color = (r > b) ? 'red' : 'blue';
     }
 
-    // Try to write
-    const { error: insErr } = await client
+    // Try to write winner
+    const { error: insErr } = await supabase
       .from('winners')
       .insert({ phase_key: phaseKeyISO, color })
       .select()
       .single();
 
     if (insErr){
-      // Someone else may have written; read back
-      const { data } = await client
+      // If concurrent insert happened, read back and show
+      const { data } = await supabase
         .from('winners')
         .select('color')
         .eq('phase_key', phaseKeyISO)
@@ -502,21 +556,23 @@ async function finalizeWinnerForKey(phaseKeyISO){
 
       if (r === b && (c === 'red' || c === 'blue')) { playTieRandomFX(c); return; }
       if (c === 'red' || c === 'blue') { playWinnerFX(c); return; }
+      if (c === 'tie') { showTieBanner(); return; }
 
-      // Fallback display only
+      // Fallback: still show locally
       if (r === b){ playTieRandomFX(color); return; }
       playWinnerFX(color);
       return;
     }
 
+    // Show overlay (tie vs normal)
     if (r === b) playTieRandomFX(color);
     else playWinnerFX(color);
 
   }catch(e){
-    // Robust fallbacks
+    // Defensive fallbacks
     try{
       const { r, b } = await countVotesForPhase(phaseKeyISO);
-      const { data } = await client
+      const { data } = await supabase
         .from('winners')
         .select('color')
         .eq('phase_key', phaseKeyISO)
@@ -524,68 +580,76 @@ async function finalizeWinnerForKey(phaseKeyISO){
       const c = (data?.[0]?.color || '').toLowerCase();
       if (r === b && (c==='red'||c==='blue')) playTieRandomFX(c);
       else if (c==='red'||c==='blue') playWinnerFX(c);
+      else if (c==='tie') showTieBanner();
       else if (r === b) playTieRandomFX((Math.random()<0.5)?'red':'blue');
       else playWinnerFX((r>b)?'red':'blue');
     }catch(_){}
   }
 }
 
-/* --- Realtime: winners --- */
-client.channel('winners-phase')
+/* --- Realtime: winners (updated to show tie→random when tied) --- */
+supabase.channel('winners-phase')
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'}, async (payload)=>{
-  const rowKey = payload?.new?.phase_key;
-  const color  = (payload?.new?.color || '').toLowerCase();
-  if (!rowKey || !lastFinishedKey) return;
-  if (toIso(rowKey) !== toIso(lastFinishedKey)) return;
+    const rowKey = payload?.new?.phase_key;
+    const color  = (payload?.new?.color || '').toLowerCase();
+    if (!rowKey || !lastFinishedKey) return;
+    if (toIso(rowKey) !== toIso(lastFinishedKey)) return;
 
-  try{
-    const { r, b } = await countVotesForPhase(lastFinishedKey);
-    if (r === b && (color==='red' || color==='blue')) { playTieRandomFX(color); return; }
-    if (color === 'red' || color === 'blue'){ playWinnerFX(color); }
-  }catch(_){
-    if (color === 'red' || color === 'blue') playWinnerFX(color);
-  }
-}).subscribe();
+    try{
+      const { r, b } = await countVotesForPhase(lastFinishedKey);
+      if (r === b && (color==='red' || color==='blue')) { playTieRandomFX(color); return; }
+      if (color === 'tie') { showTieBanner(); return; }
+      if (color === 'red' || color === 'blue'){ playWinnerFX(color); }
+    }catch(_){
+      if (color === 'tie') showTieBanner();
+      else if (color === 'red' || color === 'blue') playWinnerFX(color);
+    }
+  }).subscribe();
 
 /* --- Realtime: live vote counts for current phase --- */
-client.channel('votes-phase')
-  .on('postgres_changes',{event:'INSERT',schema:'public',table:'phase_votes'}, refreshCounts)
-  .on('postgres_changes',{event:'UPDATE',schema:'public',table:'phase_votes'}, refreshCounts)
-  .on('postgres_changes',{event:'DELETE',schema:'public',table:'phase_votes'}, refreshCounts)
-  .subscribe();
+supabase.channel('phase-votes-live')
+  .on('postgres_changes',{event:'*',schema:'public',table:'phase_votes'}, async (payload)=>{
+    try{
+      const pk = payload?.new?.phase_key || payload?.old?.phase_key;
+      if (!pk || !serverPhaseEndISO) return;
+      if (toIso(pk) === toIso(serverPhaseEndISO)) await refreshVoteCounts();
+    }catch(e){}
+  }).subscribe();
 
-/* ======= UI PICK / SUBMIT ======= */
-pickA.onclick = ()=>{ chosen='red'; refreshPickUI(); };
-pickB.onclick = ()=>{ chosen='blue'; refreshPickUI(); };
-submitBtn.onclick = async ()=>{ if (chosen) await submitVote(chosen); };
+/* --- Controls --- */
+pauseBtn.onclick = async ()=>{ try{ if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'}); await fetchState(); toast('OK'); }catch(e){ toast('Pause/resume failed'); }};
+forceBtn.onclick = async ()=>{ try{ await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision'); }catch(e){ toast('Force failed'); }};
 
-/* ======= CONTROLS ======= */
-pauseBtn.onclick = async ()=>{
+/* --- Voting UX (A maps to 'red', B maps to 'blue') --- */
+voteA.onclick  = ()=>{ chosen='red';  voteA.classList.add('selected');  voteB.classList.remove('selected'); submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
+voteB.onclick  = ()=>{ chosen='blue'; voteB.classList.add('selected'); voteA.classList.remove('selected');  submitBtn.disabled = !currentUid; if(!currentUid) toast('Log in to vote'); };
+submitBtn.onclick = async ()=>{
+  if (!chosen || !serverPhaseEndISO) return;
+  if (!currentUid) { toast('Log in to vote'); return; }
   try{
-    const res = await callEdge('POST',{togglePause:true});
-    paused = !!res?.paused; stateEl.textContent = res?.state ?? stateEl.textContent;
-    toast('OK');
-  }catch(e){ toast('Pause/resume failed'); }
+    const phaseKey = toIso(serverPhaseEndISO);
+    const { error } = await supabase.from('phase_votes').upsert(
+      { phase_key: phaseKey, vote: chosen, user_id: currentUid },
+      { onConflict:'phase_key,user_id' }
+    );
+    if (error) throw error;
+    toast('✔ Vote submitted');
+    submitBtn.textContent = '✔ Voted';
+    submitBtn.disabled = true;
+    refreshVoteCounts();
+  }catch(e){ toast('Vote failed'); }
 };
-forceBtn.onclick = async ()=>{
-  try{
-    await callEdge('POST',{force:true});
-    await fetchState();
-    toast('Forced decision');
-  }catch(e){ toast('Force failed'); }
-};
 
-/* ======= BOOT ======= */
-(async ()=>{
+/* --- Auth + boot --- */
+(async()=>{
   try{
-    await ensureAuth();
-    client.auth.onAuthStateChange((_event, session)=>{
+    currentUid = await getUidOrNull(); paintLoginBadge();
+    supabase.auth.onAuthStateChange(async (_evt, session) => {
       currentUid = session?.user?.id ?? null;
       paintLoginBadge();
       submitBtn.disabled = !chosen || !currentUid;
     });
     await fetchState(); 
-    // Ensure images set immediately on first load if state present
     if (serverPhaseEndISO) setImagesForPhase(toIso(serverPhaseEndISO));
     await start();
   }catch(e){
