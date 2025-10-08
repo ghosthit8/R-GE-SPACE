@@ -56,7 +56,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .brow:first-child{border-top:0}
 .brow.active{outline:2px solid var(--danger); outline-offset:-2px; background:rgba(255,59,59,.07)} /* RED highlight for current match */
 .thumb2{display:flex; gap:8px}
-.thumb{width:44px;height:44px;border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+.thumb{width:44px;height:44px;border-radius:10px;overflow:hidden;border:1px solid var(--border); background:#0b0b0b}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .bmeta{display:flex; flex-direction:column; gap:4px; min-width:0}
 .bline{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
@@ -181,8 +181,8 @@ const showDone = document.getElementById('showDone');
 let paused=false, serverPhaseEndISO=null, currentPhaseKey=null, prevPhaseKey=null, periodSec=20, remainingSec=null, lastSyncAt=0, lastCountsAt=0;
 let currentUid=null, chosen=null;
 let activeSlot='sf1'; // 'sf1'|'sf2'|'final'
-let wasInFinalStage=false;           // true only while the current phase is actually running the Final
-let finalsReady=false;               // both semi winners exist AND final winner not decided yet
+let wasInFinalStage=false;           // true only while the current series is in its Final
+let finalsReady=false;               // both semi winners exist & final winner not decided yet
 let overlayGateBase=null;            // base ISO allowed to trigger champion
 
 // Freeze images per battle: "<baseISO>::sf1|sf2|final" → {A,B}
@@ -206,7 +206,7 @@ function semiKeysFor(baseISO){ return { sf1:`${baseISO}::sf1`, sf2:`${baseISO}::
 function finalKeyFor(baseISO){ return `${baseISO}::final`; }
 function baseFromKey(k){ return (k||'').split('::')[0] || ''; }
 
-/* ---------- Stage detection (robust) ---------- */
+/* ---------- Stage detection ---------- */
 async function detectStage(){
   if (!currentPhaseKey || !prevPhaseKey) return {stage:'semis', finalsReady:false};
   const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
@@ -217,7 +217,6 @@ async function detectStage(){
 
   const haveSemis = (semi||[]).length===2 && semi.every(r=>r.color==='red'||r.color==='blue');
 
-  // If a final winner already exists for prevPhaseKey, we are NOT in a Final stage anymore.
   const { data:fin } = await supabase.from('winners')
     .select('phase_key').eq('phase_key', fKey).limit(1);
 
@@ -260,11 +259,15 @@ async function finalSeedsTitle(){
 async function paintImagesForActive(){
   if (!currentPhaseKey) return;
 
-  const baseForRow = (activeSlot==='final') ? currentPhaseKey
-                   : (wasInFinalStage ? prevPhaseKey : currentPhaseKey);
+  // During Final, QFs should use prevPhaseKey so they show the old (finished) images
+  const baseForRow = (activeSlot==='final')
+    ? currentPhaseKey
+    : (wasInFinalStage ? prevPhaseKey : currentPhaseKey);
 
-  const battleKey = (activeSlot==='final') ? finalKeyFor(baseForRow)
-                    : `${baseForRow}::${activeSlot}`;
+  const battleKey =
+    activeSlot==='final'
+      ? finalKeyFor(baseForRow)
+      : `${baseForRow}::${activeSlot}`;
 
   if (battleKey === lastPaintedBattleKey && imgCache.has(battleKey)) return;
 
@@ -277,12 +280,13 @@ async function paintImagesForActive(){
     const A = seedUrlFromKey(baseForRow,'A2'), B = seedUrlFromKey(baseForRow,'B2');
     imgCache.set(battleKey,{A,B}); imgA.src=A; imgB.src=B;
   } else {
-    // FINAL — only show thumbs when two semi winners exist
+    // FINAL — only show thumbnails when both semi winners exist
     const finals = await getFinalEntrantSourcesFromWinners();
     if (finals) {
       imgCache.set(battleKey, finals);
       imgA.src = finals.A; imgB.src = finals.B;
     } else {
+      // finalists not ready → keep final blank so we don't leak future seeds
       imgCache.delete(battleKey);
       imgA.removeAttribute('src'); imgB.removeAttribute('src');
     }
@@ -302,8 +306,9 @@ async function paintImagesForActive(){
 const fmtVotes=(n)=>`${n} ${n===1?'vote':'votes'}`;
 function currentBattleKey(){
   if (!currentPhaseKey) return null;
-  const baseForRow = (activeSlot==='final') ? currentPhaseKey
-                   : (wasInFinalStage ? prevPhaseKey : currentPhaseKey);
+  const baseForRow = (activeSlot==='final')
+    ? currentPhaseKey
+    : (wasInFinalStage ? prevPhaseKey : currentPhaseKey);
   return (activeSlot==='final') ? finalKeyFor(baseForRow) : `${baseForRow}::${activeSlot}`;
 }
 async function countVotesFor(key){
@@ -368,7 +373,7 @@ async function fetchState(){
   currentPhaseKey = serverPhaseEndISO ? iso(serverPhaseEndISO) : null;
   prevPhaseKey = currentPhaseKey && periodSec ? iso(Date.parse(currentPhaseKey) - periodSec*1000) : null;
 
-  // Determine stage (and whether finalists exist) for current tick
+  // Determine whether we're in Final and whether finalists exist
   const stageInfo = await detectStage();
   wasInFinalStage = (stageInfo.stage==='final');
   finalsReady = stageInfo.finalsReady;
@@ -380,20 +385,24 @@ async function fetchState(){
     const justEndedBase = iso(prevEnd);
 
     if (wasInFinalStage){
-      // We are now in Final (semis just ended in previous base) → prep final
+      // We are now in Final (semis just ended previously) → prep final view
       overlayGateBase = currentPhaseKey;
       activeSlot = 'final';
       const pack = await getFinalEntrantSourcesFromWinners();
       if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
       lastPaintedBattleKey=null;
     } else {
-      // Final just ended in the previous base → persist champion and reset for new cycle
+      // Final just ended → persist champion & reset Final thumbs ONLY
       const finalKeyIso = finalKeyFor(justEndedBase);
       const color = await decideAndPersistWinner(finalKeyIso);
       if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
       overlayGateBase = null;
       activeSlot = 'sf1';
-      imgCache.clear();           // clears Final thumbs so next cycle starts blank
+
+      // *** critical change: clear ONLY final thumbs so QFs stay frozen ***
+      for (const k of [...imgCache.keys()]) {
+        if (k.endsWith('::final')) imgCache.delete(k);
+      }
       lastPaintedBattleKey=null;
     }
   }
@@ -417,23 +426,23 @@ function slotKeyFor(slot, baseISO){
 
 /* Freeze QFs to previous base while in Final; Final thumbs only when winners exist */
 async function thumbsFor(slot){
-  const base = (slot === 'final')
+  const baseForRow = (slot==='final')
     ? currentPhaseKey
     : (wasInFinalStage ? prevPhaseKey : currentPhaseKey);
 
-  if (!base) return {A:'',B:''};
+  if (!baseForRow) return {A:'',B:''};
 
   if (slot === 'final'){
-    if (!finalsReady) return {A:'',B:''};        // hide until two semi winners exist
+    if (!finalsReady) return {A:'',B:''}; // hide until two semi winners exist
     const finals = await getFinalEntrantSourcesFromWinners();
     return finals ? finals : {A:'',B:''};
   }
 
-  const key = `${base}::${slot}`;
+  const key = `${baseForRow}::${slot}`;
   if (imgCache.has(key)) return imgCache.get(key);
 
-  const A = seedUrlFromKey(base, slot==='sf1' ? 'A1' : 'A2');
-  const B = seedUrlFromKey(base, slot==='sf1' ? 'B1' : 'B2');
+  const A = seedUrlFromKey(baseForRow, slot==='sf1' ? 'A1' : 'A2');
+  const B = seedUrlFromKey(baseForRow, slot==='sf1' ? 'B1' : 'B2');
   const pack = {A,B};
   imgCache.set(key, pack);
   return pack;
@@ -516,28 +525,6 @@ async function renderBracket(){
   });
 }
 
-/* ---------- Loops ---------- */
-let rafId=null;
-function stop(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
-async function start(){
-  stop();
-  const loop = async ()=>{
-    if (paused){
-      const remCalc = currentPhaseKey ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
-      const sec = (typeof remainingSec==='number' && !Number.isNaN(remainingSec)) ? Number(remainingSec) : Math.ceil(remCalc/1000);
-      clockEl.textContent = String(Math.max(0, Math.ceil(sec)));
-      if (Date.now()-lastSyncAt > 5000) { try{ await fetchState(); }catch{} }
-    } else {
-      const rem = serverPhaseEndISO ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
-      clockEl.textContent = String(Math.ceil(rem/1000));
-      if (rem<=0 || Date.now()-lastSyncAt>5000) { try{ await fetchState(); }catch{} }
-      if (Date.now()-lastCountsAt>2000) refreshVoteCounts();
-    }
-    rafId = requestAnimationFrame(loop);
-  };
-  rafId = requestAnimationFrame(loop);
-}
-
 /* ---------- Realtime ---------- */
 supabase.channel('winners-final-overlay')
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'},(payload)=>{
@@ -590,6 +577,28 @@ submitBtn.onclick=async()=>{
     refreshVoteCounts();
   }catch{ toast('Vote failed'); }
 };
+
+/* ---------- Loops ---------- */
+let rafId=null;
+function stop(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
+async function start(){
+  stop();
+  const loop = async ()=>{
+    if (paused){
+      const remCalc = currentPhaseKey ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
+      const sec = (typeof remainingSec==='number' && !Number.isNaN(remainingSec)) ? Number(remainingSec) : Math.ceil(remCalc/1000);
+      clockEl.textContent = String(Math.max(0, Math.ceil(sec)));
+      if (Date.now()-lastSyncAt > 5000) { try{ await fetchState(); }catch{} }
+    } else {
+      const rem = serverPhaseEndISO ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
+      clockEl.textContent = String(Math.ceil(rem/1000));
+      if (rem<=0 || Date.now()-lastSyncAt>5000) { try{ await fetchState(); }catch{} }
+      if (Date.now()-lastCountsAt>2000) refreshVoteCounts();
+    }
+    rafId = requestAnimationFrame(loop);
+  };
+  rafId = requestAnimationFrame(loop);
+}
 
 /* ---------- Boot ---------- */
 (async()=>{
