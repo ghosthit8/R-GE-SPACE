@@ -10,11 +10,18 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
 .wrap{max-width:var(--maxw);margin:16px auto 64px;padding:0 16px}
+
+/* top bar */
 .scorebar{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
 .btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
 .btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
 .tiny{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
 .clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
+.badge{border:1px solid var(--border);border-radius:8px;padding:2px 8px}
+.badge.warn{border-color:#3b1616;color:#ff6b6b}
+.badge.ok{border-color:#153b16;color:#8aff8a}
+
+/* current match tiles */
 .tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px;position:relative}
 .art{aspect-ratio:4/3;width:100%;height:auto;display:block;object-fit:cover}
 .caption{display:block;text-align:center;font-size:12px;color:var(--muted);padding:6px 8px;border-top:1px dashed var(--border)}
@@ -23,15 +30,6 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:14px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18);z-index:50}
 .toast.show{display:block}
-.badge{border:1px solid var(--border);border-radius:8px;padding:2px 8px}
-.badge.warn{border-color:#3b1616;color:#ff6b6b}
-.badge.ok{border-color:#153b16;color:#8aff8a}
-
-/* tabs */
-.tabs{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px}
-.tab{border:1px solid var(--border);padding:6px 10px;border-radius:10px;cursor:pointer;background:rgba(7,7,7,.35);color:var(--muted);font-size:13px}
-.tab.active{border-color:var(--green);color:var(--green)}
-.tab[disabled]{opacity:.45;cursor:not-allowed}
 
 /* overlay */
 #overlay{position:fixed; inset:0; display:none; z-index:9999; background:rgba(0,0,0,.92)}
@@ -46,6 +44,29 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .overlay-card .motto{text-align:center; margin-top:8px; color:var(--green-bright); font-weight:700; letter-spacing:.5px}
 #overlayClose{position:absolute; right:14px; top:12px; z-index:2; border:1px solid var(--green); background:rgba(0,0,0,.6); color:var(--green); border-radius:10px; padding:6px 10px; cursor:pointer}
 #confetti{position:absolute; inset:0; pointer-events:none}
+
+/* BRACKET under the current match (accordion-list) */
+.bracket{margin-top:20px; border:1px solid var(--border); border-radius:14px; background:rgba(7,7,7,.5); overflow:hidden}
+.bracket-head{display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--border)}
+.bracket-title{font-weight:700; font-size:18px}
+.switch{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px}
+.brow{display:grid; grid-template-columns:auto 1fr auto; gap:12px; padding:12px 14px; border-top:1px solid var(--border); cursor:pointer}
+.brow.active{outline:1px solid var(--green); background:rgba(57,255,20,.05)}
+.thumb{width:44px;height:44px;border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.bmeta{display:flex; flex-direction:column; gap:4px}
+.bline{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.bbadge{border:1px solid var(--border); border-radius:999px; padding:2px 8px; font-size:12px}
+.bpill{color:var(--muted); font-size:13px}
+.bscore{font-variant-numeric:tabular-nums; font-size:18px}
+.expand{display:none; padding:10px 14px 16px; background:rgba(0,0,0,.35); border-top:1px dashed var(--border)}
+.brow.open + .expand{display:block}
+.expand .mini{display:flex; gap:12px; align-items:center}
+.expand .mini .thumb{width:64px;height:64px;border-radius:12px}
+.expand .go{margin-top:10px}
+.small{font-size:12px; color:var(--muted)}
+/* hide old tabs UI if any */
+.tabs{display:none}
 </style>
 </head>
 <body>
@@ -65,12 +86,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       </div>
     </div>
 
-    <div class="tabs">
-      <button class="tab" id="tabSf1">Round 1 · Semi 1</button>
-      <button class="tab" id="tabSf2">Round 1 · Semi 2</button>
-      <button class="tab" id="tabFinal" disabled>Round 2 · Final</button>
-    </div>
-
+    <!-- Current Match (unchanged logic) -->
     <div class="tile" id="tileA" data-color="red">
       <img id="imgA" class="art" alt="Entry Left"/>
       <div class="caption" id="countA">0 votes</div>
@@ -92,6 +108,20 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
     <div class="row">
       <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
     </div>
+
+    <!-- Bracket list (click to expand/switch) -->
+    <section class="bracket" id="bracket">
+      <div class="bracket-head">
+        <div class="bracket-title">Bracket</div>
+        <label class="switch">
+          <input id="showDone" type="checkbox" />
+          <span>Show finished rounds</span>
+        </label>
+      </div>
+
+      <!-- rows get rendered by JS -->
+      <div id="brows"></div>
+    </section>
   </div>
 
   <div id="toast" class="toast"></div>
@@ -139,16 +169,16 @@ const voteA = document.getElementById('voteA');
 const voteB = document.getElementById('voteB');
 const submitBtn = document.getElementById('submitBtn');
 
-const tabSf1 = document.getElementById('tabSf1');
-const tabSf2 = document.getElementById('tabSf2');
-const tabFinal = document.getElementById('tabFinal');
-
 const overlay = document.getElementById('overlay');
 const overlayArt = document.getElementById('overlayArt');
 const overlayTitle = document.getElementById('overlayTitle');
 const overlaySubtitle = document.getElementById('overlaySubtitle');
 const overlayClose = document.getElementById('overlayClose');
 const confettiCanvas = document.getElementById('confetti');
+
+/* bracket DOM */
+const brows = document.getElementById('brows');
+const showDone = document.getElementById('showDone');
 
 /* ---------- State ---------- */
 let paused=false, serverPhaseEndISO=null, currentPhaseKey=null, prevPhaseKey=null, periodSec=20, remainingSec=null, lastSyncAt=0, lastCountsAt=0;
@@ -178,13 +208,6 @@ function semiKeysFor(baseISO){ return { sf1:`${baseISO}::sf1`, sf2:`${baseISO}::
 function finalKeyFor(baseISO){ return `${baseISO}::final`; }
 function baseFromKey(k){ return (k||'').split('::')[0] || ''; }
 
-function setActiveTabUI(){
-  [tabSf1,tabSf2,tabFinal].forEach(t=>t.classList.remove('active'));
-  if (activeSlot==='sf1') tabSf1.classList.add('active');
-  if (activeSlot==='sf2') tabSf2.classList.add('active');
-  if (activeSlot==='final') tabFinal.classList.add('active');
-}
-
 /* ---------- Stage detection ---------- */
 async function detectStage(){
   if (!currentPhaseKey || !prevPhaseKey) return {stage:'semis', finalsReady:false};
@@ -195,17 +218,14 @@ async function detectStage(){
   return {stage: haveBoth ? 'final' : 'semis', finalsReady: haveBoth};
 }
 
-/* ---------- Final entrants from semi winners (A1/B1 and A2/B2) ---------- */
+/* ---------- Final entrants from semi winners ---------- */
 async function getFinalEntrantSourcesFromWinners(){
-  // winners come from PREVIOUS base (prevPhaseKey)
   if (!prevPhaseKey) return null;
   const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
   const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
   const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
   const c1 = map[sf1], c2 = map[sf2];
   if (!c1 || !c2) return null;
-
-  // Final LEFT is winner of Semi 1: uses A1/B1; RIGHT is winner of Semi 2: A2/B2
   const left = seedUrlFromKey(prevPhaseKey, c1==='red' ? 'A1' : 'B1');
   const right= seedUrlFromKey(prevPhaseKey, c2==='red' ? 'A2' : 'B2');
   return {A:left, B:right};
@@ -228,7 +248,6 @@ async function paintImagesForActive(){
       const A = seedUrlFromKey(currentPhaseKey,'A2'), B = seedUrlFromKey(currentPhaseKey,'B2');
       imgCache.set(battleKey,{A,B}); imgA.src=A; imgB.src=B;
     } else {
-      // FINAL must use *previous base* winners (A1/B1 vs A2/B2)
       const finals = await getFinalEntrantSourcesFromWinners();
       const pack = finals || {A: seedUrlFromKey(prevPhaseKey,'A1'), B: seedUrlFromKey(prevPhaseKey,'B2')};
       imgCache.set(battleKey, pack); imgA.src=pack.A; imgB.src=pack.B;
@@ -240,6 +259,8 @@ async function paintImagesForActive(){
 
   imgA.loading='eager'; imgB.loading='eager'; imgA.decoding='async'; imgB.decoding='async';
   lastPaintedBattleKey=battleKey;
+
+  renderBracket(); // keep bracket thumbs fresh
 }
 
 /* ---------- Votes ---------- */
@@ -264,6 +285,8 @@ async function refreshVoteCounts(){
     countA.textContent=fmtVotes(r);
     countB.textContent=fmtVotes(b);
     lastCountsAt=Date.now();
+    // also update bracket scores
+    updateBracketScores();
   }catch{}
 }
 
@@ -284,7 +307,6 @@ async function decideAndPersistWinner(phaseKeyISO){
 function startConfetti(){ const ctx=confettiCanvas.getContext('2d'); let raf; const parts=Array.from({length:220},()=>({x:Math.random()*innerWidth,y:-20-Math.random()*innerHeight*0.3,vx:(Math.random()-0.5)*2,vy:1.2+Math.random()*2.6,w:3+Math.floor(Math.random()*7),h:3+Math.floor(Math.random()*7),rot:Math.random()*Math.PI,vr:(Math.random()-0.5)*0.2,color:['#39ff14','#7dff62','#00ffd5','#baffc9','#eaff00'][Math.floor(Math.random()*5)]})); function step(){ confettiCanvas.width=innerWidth; confettiCanvas.height=innerHeight; ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height); parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.rot+=p.vr; if(p.y>innerHeight+20){p.y=-10;p.x=Math.random()*innerWidth;} ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);ctx.fillStyle=p.color;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();}); raf=requestAnimationFrame(step);} step(); confettiCanvas._stop=()=>{cancelAnimationFrame(raf); const c=confettiCanvas.getContext('2d'); c.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);} }
 function stopConfetti(){ confettiCanvas._stop && confettiCanvas._stop(); }
 function showChampion(color, finalBaseISO){
-  // Use cached FINAL images for that base
   const cached = imgCache.get(finalKeyFor(finalBaseISO)) || {};
   const src = (color==='red') ? (cached.A || imgA.src) : (cached.B || imgB.src);
   overlayArt.style.backgroundImage = `url("${src}")`;
@@ -318,12 +340,10 @@ async function fetchState(){
   if (prevEnd && serverPhaseEndISO && prevEnd !== serverPhaseEndISO){
     const justEndedBase = iso(prevEnd);
 
-    // Determine what we were in BEFORE this fetch
     if (wasInFinalStage){
-      // FINAL just ended → finalize Final AND show overlay immediately
+      // FINAL just ended
       const finalKey = finalKeyFor(justEndedBase);
       const color = await decideAndPersistWinner(finalKey);
-      // Ensure final images are cached for the ending base so overlay matches
       if (!imgCache.has(finalKey)){
         const pack = await getFinalEntrantSourcesFromWinners();
         if (pack) imgCache.set(finalKey, pack);
@@ -331,47 +351,151 @@ async function fetchState(){
       if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
 
       // Loop back to Round 1
-      tabSf1.disabled = false; tabSf2.disabled = false; tabFinal.disabled = true;
       overlayGateBase = null;
-      activeSlot = 'sf1'; setActiveTabUI();
+      activeSlot = 'sf1';
       imgCache.clear(); lastPaintedBattleKey=null;
     } else {
-      // SEMIS just ended → finalize both semis
+      // SEMIS just ended
       const { sf1, sf2 } = semiKeysFor(justEndedBase);
       await decideAndPersistWinner(sf1);
       await decideAndPersistWinner(sf2);
 
-      // Move INTO Final: enable Final, disable semis, set gate
-      tabSf1.disabled = true; tabSf2.disabled = true; tabFinal.disabled = false;
+      // Move INTO Final
       overlayGateBase = currentPhaseKey; // final that just started
-      activeSlot = 'final'; setActiveTabUI();
-
-      // Pre-cache final images from winners so Final shows correct entrants
+      activeSlot = 'final';
       const pack = await getFinalEntrantSourcesFromWinners();
       if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
-
       lastPaintedBattleKey=null;
     }
   }
 
-  // Update current stage flag based on current data
   const { stage } = await detectStage();
   wasInFinalStage = (stage==='final');
 
-  /* === Explicit tab enable/disable so both semis are clickable in Round 1 === */
-  const inFinal = (stage === 'final');
-  tabFinal.disabled = !inFinal;  // Final disabled in Round 1, enabled in Final
-  tabSf1.disabled   =  inFinal;  // Semis enabled in Round 1, disabled in Final
-  tabSf2.disabled   =  inFinal;
-
-  if (!inFinal) {
-    // In Round 1, clear any stale gate and keep user on a semi tab
-    overlayGateBase = null;
-    if (activeSlot === 'final') { activeSlot = 'sf1'; setActiveTabUI(); }
-  }
-
   await paintImagesForActive();
   await refreshVoteCounts();
+  renderBracket();
+}
+
+/* ---------- Bracket list rendering ---------- */
+function labelFor(slot){
+  if (slot==='sf1') return {round:'QF', title:'Seed A vs Seed B'};
+  if (slot==='sf2') return {round:'QF', title:'Seed C vs Seed D'};
+  return {round:'Final', title:'TBD vs TBD'};
+}
+function slotKeyFor(slot, baseISO){
+  if (slot==='final') return finalKeyFor(baseISO);
+  const { sf1, sf2 } = semiKeysFor(baseISO);
+  return (slot==='sf1'?sf1:sf2);
+}
+async function thumbsFor(slot){
+  // prefer cached; if not cached, synthesize from seeds
+  const base = (slot==='final') ? currentPhaseKey : currentPhaseKey;
+  if (!base) return {A:'',B:''};
+  const key = (slot==='final') ? finalKeyFor(base) : `${base}::${slot}`;
+  if (imgCache.has(key)) return imgCache.get(key);
+  if (slot==='final'){
+    const finals = await getFinalEntrantSourcesFromWinners();
+    if (finals){ imgCache.set(key, finals); return finals; }
+  }
+  // fallback seeds
+  const suffixA = slot==='sf1' ? 'A1' : slot==='sf2' ? 'A2' : 'A1';
+  const suffixB = slot==='sf1' ? 'B1' : slot==='sf2' ? 'B2' : 'B2';
+  const A = seedUrlFromKey(base, suffixA);
+  const B = seedUrlFromKey(base, suffixB);
+  const pack = {A,B}; imgCache.set(key, pack); return pack;
+}
+function rowId(slot){ return `row-${slot}`; }
+function expId(slot){ return `exp-${slot}`; }
+
+function setOpen(slot, open){
+  document.querySelectorAll('.brow').forEach(el=>el.classList.remove('open'));
+  if (open){
+    const r = document.getElementById(rowId(slot));
+    r && r.classList.add('open');
+  }
+}
+
+function switchTo(slot){
+  activeSlot = slot;
+  clearSelection();
+  lastPaintedBattleKey=null;
+  paintImagesForActive();
+  refreshVoteCounts();
+  highlightActiveRow();
+  setOpen(slot,true);
+}
+
+function highlightActiveRow(){
+  document.querySelectorAll('.brow').forEach(el=>el.classList.remove('active'));
+  const r = document.getElementById(rowId(activeSlot));
+  r && r.classList.add('active');
+}
+
+async function updateBracketScores(){
+  const base = currentPhaseKey;
+  if (!base) return;
+  for (const slot of ['sf1','sf2','final']){
+    const key = slotKeyFor(slot, base);
+    const sEl = document.querySelector(`#${rowId(slot)} .bscore`);
+    if (!sEl) continue;
+    try{
+      const {r,b}=await countVotesFor(key);
+      sEl.textContent = `${r} - ${b}`;
+    }catch{
+      sEl.textContent = `0 - 0`;
+    }
+  }
+}
+
+async function renderBracket(){
+  const base = currentPhaseKey;
+  if (!base){ brows.innerHTML=''; return; }
+
+  const rows = await Promise.all(['sf1','sf2','final'].map(async (slot)=>{
+    const {round, title} = labelFor(slot);
+    const thumbs = await thumbsFor(slot);
+    const scoreId = `score-${slot}`;
+    return `
+      <div class="brow" id="${rowId(slot)}" data-slot="${slot}">
+        <div class="thumb"><img src="${thumbs.A}" alt=""></div>
+        <div class="bmeta">
+          <div class="bline"><strong>${title}</strong></div>
+          <div class="bline"><span class="bbadge">${round}</span> <span class="bpill">uses global</span></div>
+        </div>
+        <div class="bscore" id="${scoreId}">0 - 0</div>
+      </div>
+      <div class="expand" id="${expId(slot)}">
+        <div class="mini">
+          <div class="thumb"><img src="${thumbs.A}" alt=""></div>
+          <div class="thumb"><img src="${thumbs.B}" alt=""></div>
+        </div>
+        <div class="small">Tap “Open match” to focus this round above.</div>
+        <div class="go"><button class="btn" data-goto="${slot}">Open match</button></div>
+      </div>
+    `;
+  }));
+
+  brows.innerHTML = rows.join('');
+  highlightActiveRow();
+  setOpen(activeSlot,true);
+  updateBracketScores();
+
+  // handlers
+  brows.querySelectorAll('.brow').forEach(row=>{
+    row.addEventListener('click',(e)=>{
+      const slot = row.dataset.slot;
+      // clicking the row toggles expansion and switches
+      switchTo(slot);
+    });
+  });
+  brows.querySelectorAll('button[data-goto]').forEach(btn=>{
+    btn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const slot = btn.getAttribute('data-goto');
+      switchTo(slot);
+    });
+  });
 }
 
 /* ---------- Loops ---------- */
@@ -397,17 +521,15 @@ async function start(){
 }
 
 /* ---------- Realtime ---------- */
-// Still keep realtime overlay (secondary path). Primary overlay happens on finalize above.
 supabase.channel('winners-final-overlay')
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners'},(payload)=>{
     const key = payload?.new?.phase_key || '';
     const color = (payload?.new?.color||'').toLowerCase();
     if (!key.endsWith('::final')) return;
-    const base = baseFromKey(key);
+    const base = key.split('::')[0];
     if (!overlayGateBase || base !== overlayGateBase) return;
     if (!(color==='red'||color==='blue')) return;
 
-    // ensure final images cached for this base
     if (!imgCache.has(finalKeyFor(base))){
       getFinalEntrantSourcesFromWinners().then(pack=>{
         if (pack) imgCache.set(finalKeyFor(base), pack);
@@ -421,11 +543,13 @@ supabase.channel('winners-final-overlay')
 supabase.channel('phase-votes-live')
   .on('postgres_changes',{event:'*',schema:'public',table:'phase_votes'}, async (payload)=>{
     const pk = payload?.new?.phase_key || payload?.old?.phase_key;
+    if (!pk) return;
+    updateBracketScores();
     const want = currentBattleKey();
     if (pk && want && pk===want) await refreshVoteCounts();
   }).subscribe();
 
-/* ---------- Controls / Voting / Tabs ---------- */
+/* ---------- Controls / Voting ---------- */
 pauseBtn.onclick = async ()=>{ try{ if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'}); await fetchState(); toast('OK'); }catch{ toast('Pause/resume failed'); }};
 forceBtn.onclick = async ()=>{ try{ await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision'); }catch{ toast('Force failed'); }};
 
@@ -449,31 +573,12 @@ submitBtn.onclick=async()=>{
   }catch{ toast('Vote failed'); }
 };
 
-/* === Loosened guard so semis are clickable in Round 1 === */
-function switchTab(slot){
-  const finalActive = !tabFinal.disabled; // true only when Final stage is active
-  if (finalActive && (slot === 'sf1' || slot === 'sf2')) {
-    toast('Semis are closed — Final is live');
-    return;
-  }
-  activeSlot = slot;
-  setActiveTabUI();
-  clearSelection();
-  lastPaintedBattleKey = null;   // force a single fresh paint for this battle key
-  paintImagesForActive();
-  refreshVoteCounts();
-}
-tabSf1.onclick = ()=> switchTab('sf1');
-tabSf2.onclick = ()=> switchTab('sf2');
-tabFinal.onclick = ()=> { if (!tabFinal.disabled) switchTab('final'); else toast('Final begins next round'); };
-
 /* ---------- Boot ---------- */
 (async()=>{
   currentUid = await getUidOrNull(); paintLoginBadge();
   supabase.auth.onAuthStateChange((_evt, session)=>{ currentUid=session?.user?.id ?? null; paintLoginBadge(); submitBtn.disabled=!chosen||!currentUid; });
 
   await fetchState();
-  setActiveTabUI();
   await paintImagesForActive();
   await start();
 })();
