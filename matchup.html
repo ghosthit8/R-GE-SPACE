@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Rage Space — Matchup (2-Round Looping, Winners Carry Images)</title>
+<title>Rage Space — Matchup</title>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
-:root{ --green:#39ff14; --green-bright:#7dff62; --bg:#000; --ink:#e5e5e5; --card:#0b0b0b; --border:#153b16; --muted:#8aff8a; --maxw:980px; }
+:root{ --green:#39ff14; --green-bright:#7dff62; --bg:#000; --ink:#e5e5e5; --card:#0b0b0b; --border:#153b16; --muted:#8aff8a; --maxw:980px; --danger:#ff3b3b; }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
 .wrap{max-width:var(--maxw);margin:16px auto 64px;padding:0 16px}
@@ -45,27 +45,26 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 #overlayClose{position:absolute; right:14px; top:12px; z-index:2; border:1px solid var(--green); background:rgba(0,0,0,.6); color:var(--green); border-radius:10px; padding:6px 10px; cursor:pointer}
 #confetti{position:absolute; inset:0; pointer-events:none}
 
-/* BRACKET under the current match (accordion-list) */
+/* BRACKET under the current match */
 .bracket{margin-top:20px; border:1px solid var(--border); border-radius:14px; background:rgba(7,7,7,.5); overflow:hidden}
 .bracket-head{display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--border)}
 .bracket-title{font-weight:700; font-size:18px}
 .switch{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px}
-.brow{display:grid; grid-template-columns:auto 1fr auto; gap:12px; padding:12px 14px; border-top:1px solid var(--border); cursor:pointer}
-.brow.active{outline:1px solid var(--green); background:rgba(57,255,20,.05)}
+
+/* compact rows (no expand) */
+.brow{display:grid; grid-template-columns:auto auto 1fr auto; gap:10px 12px; padding:12px 14px; border-top:1px solid var(--border); cursor:pointer; align-items:center}
+.brow:first-child{border-top:0}
+.brow.active{outline:2px solid var(--danger); outline-offset:-2px; background:rgba(255,59,59,.07)} /* RED highlight for current match */
+.thumb2{display:flex; gap:8px}
 .thumb{width:44px;height:44px;border-radius:10px;overflow:hidden;border:1px solid var(--border)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.bmeta{display:flex; flex-direction:column; gap:4px}
+.bmeta{display:flex; flex-direction:column; gap:4px; min-width:0}
 .bline{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
 .bbadge{border:1px solid var(--border); border-radius:999px; padding:2px 8px; font-size:12px}
 .bpill{color:var(--muted); font-size:13px}
-.bscore{font-variant-numeric:tabular-nums; font-size:18px}
-.expand{display:none; padding:10px 14px 16px; background:rgba(0,0,0,.35); border-top:1px dashed var(--border)}
-.brow.open + .expand{display:block}
-.expand .mini{display:flex; gap:12px; align-items:center}
-.expand .mini .thumb{width:64px;height:64px;border-radius:12px}
-.expand .go{margin-top:10px}
+.bscore{font-variant-numeric:tabular-nums; font-size:18px; justify-self:end}
+.title{font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .small{font-size:12px; color:var(--muted)}
-/* hide old tabs UI if any */
 .tabs{display:none}
 </style>
 </head>
@@ -86,7 +85,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       </div>
     </div>
 
-    <!-- Current Match (unchanged logic) -->
+    <!-- Current Match (logic unchanged) -->
     <div class="tile" id="tileA" data-color="red">
       <img id="imgA" class="art" alt="Entry Left"/>
       <div class="caption" id="countA">0 votes</div>
@@ -109,7 +108,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
     </div>
 
-    <!-- Bracket list (click to expand/switch) -->
+    <!-- Bracket list -->
     <section class="bracket" id="bracket">
       <div class="bracket-head">
         <div class="bracket-title">Bracket</div>
@@ -118,8 +117,6 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
           <span>Show finished rounds</span>
         </label>
       </div>
-
-      <!-- rows get rendered by JS -->
       <div id="brows"></div>
     </section>
   </div>
@@ -231,6 +228,23 @@ async function getFinalEntrantSourcesFromWinners(){
   return {A:left, B:right};
 }
 
+/* Build a human label for FINAL using semi winners */
+async function finalSeedsTitle(){
+  if (!prevPhaseKey) return 'TBD vs TBD';
+  const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
+  const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
+  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
+  const pick = (slot,color)=> {
+    // map colors to “seeds” for that semi
+    if (slot==='sf1'){ return color==='red' ? 'Seed A' : 'Seed B'; }
+    if (slot==='sf2'){ return color==='red' ? 'Seed C' : 'Seed D'; }
+    return 'TBD';
+  };
+  const s1 = map[sf1] ? pick('sf1',map[sf1]) : null;
+  const s2 = map[sf2] ? pick('sf2',map[sf2]) : null;
+  return (s1 && s2) ? `${s1} vs ${s2}` : 'TBD vs TBD';
+}
+
 /* ---------- Image paint (frozen per battle) ---------- */
 async function paintImagesForActive(){
   if (!currentPhaseKey) return;
@@ -260,7 +274,7 @@ async function paintImagesForActive(){
   imgA.loading='eager'; imgB.loading='eager'; imgA.decoding='async'; imgB.decoding='async';
   lastPaintedBattleKey=battleKey;
 
-  renderBracket(); // keep bracket thumbs fresh
+  renderBracket(); // refresh row thumbs/titles
 }
 
 /* ---------- Votes ---------- */
@@ -285,7 +299,6 @@ async function refreshVoteCounts(){
     countA.textContent=fmtVotes(r);
     countB.textContent=fmtVotes(b);
     lastCountsAt=Date.now();
-    // also update bracket scores
     updateBracketScores();
   }catch{}
 }
@@ -336,7 +349,7 @@ async function fetchState(){
 
   setStateUI();
 
-  // Phase flip → some round just ended
+  // Phase flip
   if (prevEnd && serverPhaseEndISO && prevEnd !== serverPhaseEndISO){
     const justEndedBase = iso(prevEnd);
 
@@ -377,7 +390,7 @@ async function fetchState(){
   renderBracket();
 }
 
-/* ---------- Bracket list rendering ---------- */
+/* ---------- Bracket list rendering (compact) ---------- */
 function labelFor(slot){
   if (slot==='sf1') return {round:'QF', title:'Seed A vs Seed B'};
   if (slot==='sf2') return {round:'QF', title:'Seed C vs Seed D'};
@@ -389,8 +402,7 @@ function slotKeyFor(slot, baseISO){
   return (slot==='sf1'?sf1:sf2);
 }
 async function thumbsFor(slot){
-  // prefer cached; if not cached, synthesize from seeds
-  const base = (slot==='final') ? currentPhaseKey : currentPhaseKey;
+  const base = currentPhaseKey;
   if (!base) return {A:'',B:''};
   const key = (slot==='final') ? finalKeyFor(base) : `${base}::${slot}`;
   if (imgCache.has(key)) return imgCache.get(key);
@@ -406,15 +418,6 @@ async function thumbsFor(slot){
   const pack = {A,B}; imgCache.set(key, pack); return pack;
 }
 function rowId(slot){ return `row-${slot}`; }
-function expId(slot){ return `exp-${slot}`; }
-
-function setOpen(slot, open){
-  document.querySelectorAll('.brow').forEach(el=>el.classList.remove('open'));
-  if (open){
-    const r = document.getElementById(rowId(slot));
-    r && r.classList.add('open');
-  }
-}
 
 function switchTo(slot){
   activeSlot = slot;
@@ -423,7 +426,6 @@ function switchTo(slot){
   paintImagesForActive();
   refreshVoteCounts();
   highlightActiveRow();
-  setOpen(slot,true);
 }
 
 function highlightActiveRow(){
@@ -452,49 +454,39 @@ async function renderBracket(){
   const base = currentPhaseKey;
   if (!base){ brows.innerHTML=''; return; }
 
+  const titles = {
+    sf1: labelFor('sf1').title,
+    sf2: labelFor('sf2').title,
+    final: await finalSeedsTitle() // <-- shows winners of semis when available
+  };
+
   const rows = await Promise.all(['sf1','sf2','final'].map(async (slot)=>{
-    const {round, title} = labelFor(slot);
+    const round = labelFor(slot).round;
     const thumbs = await thumbsFor(slot);
     const scoreId = `score-${slot}`;
     return `
       <div class="brow" id="${rowId(slot)}" data-slot="${slot}">
-        <div class="thumb"><img src="${thumbs.A}" alt=""></div>
-        <div class="bmeta">
-          <div class="bline"><strong>${title}</strong></div>
-          <div class="bline"><span class="bbadge">${round}</span> <span class="bpill">uses global</span></div>
-        </div>
-        <div class="bscore" id="${scoreId}">0 - 0</div>
-      </div>
-      <div class="expand" id="${expId(slot)}">
-        <div class="mini">
+        <div class="bbadge">${round}</div>
+        <div class="thumb2">
           <div class="thumb"><img src="${thumbs.A}" alt=""></div>
           <div class="thumb"><img src="${thumbs.B}" alt=""></div>
         </div>
-        <div class="small">Tap “Open match” to focus this round above.</div>
-        <div class="go"><button class="btn" data-goto="${slot}">Open match</button></div>
+        <div class="bmeta">
+          <div class="title">${slot==='final'?titles.final:titles[slot]||''}</div>
+          <div class="bline"><span class="bpill">uses global</span></div>
+        </div>
+        <div class="bscore" id="${scoreId}">0 - 0</div>
       </div>
     `;
   }));
 
   brows.innerHTML = rows.join('');
   highlightActiveRow();
-  setOpen(activeSlot,true);
   updateBracketScores();
 
-  // handlers
+  // one-tap switch (no expand)
   brows.querySelectorAll('.brow').forEach(row=>{
-    row.addEventListener('click',(e)=>{
-      const slot = row.dataset.slot;
-      // clicking the row toggles expansion and switches
-      switchTo(slot);
-    });
-  });
-  brows.querySelectorAll('button[data-goto]').forEach(btn=>{
-    btn.addEventListener('click',(e)=>{
-      e.stopPropagation();
-      const slot = btn.getAttribute('data-goto');
-      switchTo(slot);
-    });
+    row.addEventListener('click',()=> switchTo(row.dataset.slot));
   });
 }
 
