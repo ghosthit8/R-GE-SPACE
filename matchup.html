@@ -354,9 +354,21 @@ async function fetchState(){
     }
   }
 
-  // Update current stage flag
+  // Update current stage flag based on current data
   const { stage } = await detectStage();
   wasInFinalStage = (stage==='final');
+
+  /* === Explicit tab enable/disable so both semis are clickable in Round 1 === */
+  const inFinal = (stage === 'final');
+  tabFinal.disabled = !inFinal;  // Final disabled in Round 1, enabled in Final
+  tabSf1.disabled   =  inFinal;  // Semis enabled in Round 1, disabled in Final
+  tabSf2.disabled   =  inFinal;
+
+  if (!inFinal) {
+    // In Round 1, clear any stale gate and keep user on a semi tab
+    overlayGateBase = null;
+    if (activeSlot === 'final') { activeSlot = 'sf1'; setActiveTabUI(); }
+  }
 
   await paintImagesForActive();
   await refreshVoteCounts();
@@ -437,16 +449,23 @@ submitBtn.onclick=async()=>{
   }catch{ toast('Vote failed'); }
 };
 
+/* === Loosened guard so semis are clickable in Round 1 === */
 function switchTab(slot){
-  // When Final is active, semis are disabled/dead
-  if (overlayGateBase && (slot==='sf1'||slot==='sf2')) return;
+  const finalActive = !tabFinal.disabled; // true only when Final stage is active
+  if (finalActive && (slot === 'sf1' || slot === 'sf2')) {
+    toast('Semis are closed — Final is live');
+    return;
+  }
   activeSlot = slot;
   setActiveTabUI();
   clearSelection();
-  lastPaintedBattleKey=null;
+  lastPaintedBattleKey = null;   // force a single fresh paint for this battle key
   paintImagesForActive();
   refreshVoteCounts();
 }
+tabSf1.onclick = ()=> switchTab('sf1');
+tabSf2.onclick = ()=> switchTab('sf2');
+tabFinal.onclick = ()=> { if (!tabFinal.disabled) switchTab('final'); else toast('Final begins next round'); };
 
 /* ---------- Boot ---------- */
 (async()=>{
