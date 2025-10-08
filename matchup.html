@@ -56,7 +56,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .brow:first-child{border-top:0}
 .brow.active{outline:2px solid var(--danger); outline-offset:-2px; background:rgba(255,59,59,.07)} /* RED highlight for current match */
 .thumb2{display:flex; gap:8px}
-.thumb{width:44px;height:44px;border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+.thumb{width:44px;height:44px;border-radius:10px;overflow:hidden;border:1px solid var(--border); background:#0b0b0b}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .bmeta{display:flex; flex-direction:column; gap:4px; min-width:0}
 .bline{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
@@ -175,18 +175,20 @@ const confettiCanvas = document.getElementById('confetti');
 
 /* bracket DOM */
 const brows = document.getElementById('brows');
-const showDone = document.getElementById('showDone');
 
 /* ---------- State ---------- */
 let paused=false, serverPhaseEndISO=null, currentPhaseKey=null, prevPhaseKey=null, periodSec=20, remainingSec=null, lastSyncAt=0, lastCountsAt=0;
 let currentUid=null, chosen=null;
 let activeSlot='sf1'; // 'sf1'|'sf2'|'final'
-let wasInFinalStage=false;
-let overlayGateBase=null; // base ISO allowed to trigger champion
+let overlayGateBase=null;
 
 // Freeze images per battle: "<baseISO>::sf1|sf2|final" → {A,B}
 const imgCache = new Map();
 let lastPaintedBattleKey=null;
+
+// stage flags (derived via detectStage)
+let currentStage='semis';     // 'semis' | 'final'
+let finalsReady=false;
 
 /* ---------- Helpers ---------- */
 async function getUidOrNull(){ const {data:{session}}=await supabase.auth.getSession(); return session?.user?.id ?? null; }
@@ -203,7 +205,13 @@ const normalize=(s)=>({phase_end_at:s.phase_end_at??null, period_sec:s.period_se
 function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
 function semiKeysFor(baseISO){ return { sf1:`${baseISO}::sf1`, sf2:`${baseISO}::sf2` }; }
 function finalKeyFor(baseISO){ return `${baseISO}::final`; }
-function baseFromKey(k){ return (k||'').split('::')[0] || ''; }
+
+/* Which base phase key to use for a row */
+function baseForSlot(slot){
+  if (slot==='final') return currentPhaseKey;
+  // When in Final, QF rows should freeze to the previous phase base
+  return (currentStage==='final') ? prevPhaseKey : currentPhaseKey;
+}
 
 /* ---------- Stage detection ---------- */
 async function detectStage(){
@@ -215,7 +223,7 @@ async function detectStage(){
   return {stage: haveBoth ? 'final' : 'semis', finalsReady: haveBoth};
 }
 
-/* ---------- Final entrants from semi winners ---------- */
+/* Final entrants from semi winners */
 async function getFinalEntrantSourcesFromWinners(){
   if (!prevPhaseKey) return null;
   const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
@@ -228,43 +236,46 @@ async function getFinalEntrantSourcesFromWinners(){
   return {A:left, B:right};
 }
 
-/* Build a human label for FINAL using semi winners */
+/* Human title for FINAL using semi winners */
 async function finalSeedsTitle(){
   if (!prevPhaseKey) return 'TBD vs TBD';
   const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
   const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
   const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
-  const pick = (slot,color)=> {
-    // map colors to “seeds” for that semi
-    if (slot==='sf1'){ return color==='red' ? 'Seed A' : 'Seed B'; }
-    if (slot==='sf2'){ return color==='red' ? 'Seed C' : 'Seed D'; }
-    return 'TBD';
-  };
+  const pick = (slot,color)=> slot==='sf1'
+      ? (color==='red' ? 'Seed A' : 'Seed B')
+      : (color==='red' ? 'Seed C' : 'Seed D');
   const s1 = map[sf1] ? pick('sf1',map[sf1]) : null;
   const s2 = map[sf2] ? pick('sf2',map[sf2]) : null;
   return (s1 && s2) ? `${s1} vs ${s2}` : 'TBD vs TBD';
 }
 
 /* ---------- Image paint (frozen per battle) ---------- */
+function battleKeyForActive(){
+  if (!currentPhaseKey) return null;
+  if (activeSlot==='final') return finalKeyFor(currentPhaseKey);
+  const base = baseForSlot(activeSlot);
+  return `${base}::${activeSlot}`;
+}
 async function paintImagesForActive(){
   if (!currentPhaseKey) return;
-  const battleKey = (activeSlot==='final') ? finalKeyFor(currentPhaseKey)
-                    : (activeSlot==='sf1' ? `${currentPhaseKey}::sf1` : `${currentPhaseKey}::sf2`);
+  const battleKey = battleKeyForActive();
+  if (!battleKey) return;
   if (battleKey === lastPaintedBattleKey && imgCache.has(battleKey)) return;
 
   if (imgCache.has(battleKey)){
     const {A,B}=imgCache.get(battleKey); imgA.src=A; imgB.src=B;
   } else {
     if (activeSlot==='sf1'){
-      const A = seedUrlFromKey(currentPhaseKey,'A1'), B = seedUrlFromKey(currentPhaseKey,'B1');
+      const A = seedUrlFromKey(baseForSlot('sf1'),'A1'), B = seedUrlFromKey(baseForSlot('sf1'),'B1');
       imgCache.set(battleKey,{A,B}); imgA.src=A; imgB.src=B;
     } else if (activeSlot==='sf2'){
-      const A = seedUrlFromKey(currentPhaseKey,'A2'), B = seedUrlFromKey(currentPhaseKey,'B2');
+      const A = seedUrlFromKey(baseForSlot('sf2'),'A2'), B = seedUrlFromKey(baseForSlot('sf2'),'B2');
       imgCache.set(battleKey,{A,B}); imgA.src=A; imgB.src=B;
     } else {
       const finals = await getFinalEntrantSourcesFromWinners();
-      const pack = finals || {A: seedUrlFromKey(prevPhaseKey,'A1'), B: seedUrlFromKey(prevPhaseKey,'B2')};
-      imgCache.set(battleKey, pack); imgA.src=pack.A; imgB.src=pack.B;
+      if (finals){ imgCache.set(battleKey, finals); imgA.src=finals.A; imgB.src=finals.B; }
+      else { imgA.src=''; imgB.src=''; }
     }
   }
   if (activeSlot==='sf1'){ labelA.textContent='Semi 1 — Left'; labelB.textContent='Semi 1 — Right'; }
@@ -282,8 +293,8 @@ const fmtVotes=(n)=>`${n} ${n===1?'vote':'votes'}`;
 function currentBattleKey(){
   if (!currentPhaseKey) return null;
   if (activeSlot==='final') return finalKeyFor(currentPhaseKey);
-  const { sf1, sf2 } = semiKeysFor(currentPhaseKey);
-  return activeSlot==='sf1' ? sf1 : sf2;
+  const base = baseForSlot(activeSlot);
+  return `${base}::${activeSlot}`;
 }
 async function countVotesFor(key){
   const { data, error } = await supabase.from('phase_votes').select('vote').eq('phase_key', key);
@@ -347,14 +358,23 @@ async function fetchState(){
   currentPhaseKey = serverPhaseEndISO ? iso(serverPhaseEndISO) : null;
   prevPhaseKey = currentPhaseKey && periodSec ? iso(Date.parse(currentPhaseKey) - periodSec*1000) : null;
 
+  const stageInfo = await detectStage();
+  currentStage = stageInfo.stage;
+  finalsReady = stageInfo.finalsReady;
+
   setStateUI();
 
   // Phase flip
   if (prevEnd && serverPhaseEndISO && prevEnd !== serverPhaseEndISO){
     const justEndedBase = iso(prevEnd);
 
-    if (wasInFinalStage){
-      // FINAL just ended
+    if (currentStage==='final'){ // we just entered final
+      activeSlot = 'final';
+      overlayGateBase = currentPhaseKey;
+      const pack = await getFinalEntrantSourcesFromWinners();
+      if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
+      lastPaintedBattleKey=null;
+    } else { // final just ended and looped back
       const finalKey = finalKeyFor(justEndedBase);
       const color = await decideAndPersistWinner(finalKey);
       if (!imgCache.has(finalKey)){
@@ -363,60 +383,55 @@ async function fetchState(){
       }
       if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
 
-      // Loop back to Round 1
+      // Reset for new round
       overlayGateBase = null;
       activeSlot = 'sf1';
-      imgCache.clear(); lastPaintedBattleKey=null;
-    } else {
-      // SEMIS just ended
-      const { sf1, sf2 } = semiKeysFor(justEndedBase);
-      await decideAndPersistWinner(sf1);
-      await decideAndPersistWinner(sf2);
-
-      // Move INTO Final
-      overlayGateBase = currentPhaseKey; // final that just started
-      activeSlot = 'final';
-      const pack = await getFinalEntrantSourcesFromWinners();
-      if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
+      imgCache.clear(); // clear thumbs so final row will be blank until new winners exist
       lastPaintedBattleKey=null;
     }
   }
-
-  const { stage } = await detectStage();
-  wasInFinalStage = (stage==='final');
 
   await paintImagesForActive();
   await refreshVoteCounts();
   renderBracket();
 }
 
-/* ---------- Bracket list rendering (compact) ---------- */
+/* ---------- Bracket list rendering (compact & stage-aware) ---------- */
 function labelFor(slot){
   if (slot==='sf1') return {round:'QF', title:'Seed A vs Seed B'};
   if (slot==='sf2') return {round:'QF', title:'Seed C vs Seed D'};
   return {round:'Final', title:'TBD vs TBD'};
 }
 function slotKeyFor(slot, baseISO){
-  if (slot==='final') return finalKeyFor(baseISO);
-  const { sf1, sf2 } = semiKeysFor(baseISO);
-  return (slot==='sf1'?sf1:sf2);
+  return (slot==='final') ? finalKeyFor(baseISO) : `${baseISO}::${slot}`;
 }
+
 async function thumbsFor(slot){
-  const base = currentPhaseKey;
+  // compute which base this row should use
+  const base = baseForSlot(slot);
   if (!base) return {A:'',B:''};
-  const key = (slot==='final') ? finalKeyFor(base) : `${base}::${slot}`;
-  if (imgCache.has(key)) return imgCache.get(key);
+
+  // Final thumbs only when winners known
   if (slot==='final'){
+    if (!finalsReady) return {A:'',B:''};
     const finals = await getFinalEntrantSourcesFromWinners();
-    if (finals){ imgCache.set(key, finals); return finals; }
+    if (finals){ imgCache.set(finalKeyFor(currentPhaseKey), finals); return finals; }
+    return {A:'',B:''};
   }
-  // fallback seeds
-  const suffixA = slot==='sf1' ? 'A1' : slot==='sf2' ? 'A2' : 'A1';
-  const suffixB = slot==='sf1' ? 'B1' : slot==='sf2' ? 'B2' : 'B2';
+
+  const key = `${base}::${slot}`;
+  if (imgCache.has(key)) return imgCache.get(key);
+
+  // semi images are always the seeds for that base (frozen)
+  const suffixA = slot==='sf1' ? 'A1' : 'A2';
+  const suffixB = slot==='sf1' ? 'B1' : 'B2';
   const A = seedUrlFromKey(base, suffixA);
   const B = seedUrlFromKey(base, suffixB);
-  const pack = {A,B}; imgCache.set(key, pack); return pack;
+  const pack = {A,B};
+  imgCache.set(key, pack);
+  return pack;
 }
+
 function rowId(slot){ return `row-${slot}`; }
 
 function switchTo(slot){
@@ -435,12 +450,12 @@ function highlightActiveRow(){
 }
 
 async function updateBracketScores(){
-  const base = currentPhaseKey;
-  if (!base) return;
   for (const slot of ['sf1','sf2','final']){
-    const key = slotKeyFor(slot, base);
+    const base = baseForSlot(slot);
+    const key = base ? slotKeyFor(slot, base) : null;
     const sEl = document.querySelector(`#${rowId(slot)} .bscore`);
     if (!sEl) continue;
+    if (!key){ sEl.textContent='0 - 0'; continue; }
     try{
       const {r,b}=await countVotesFor(key);
       sEl.textContent = `${r} - ${b}`;
@@ -451,28 +466,27 @@ async function updateBracketScores(){
 }
 
 async function renderBracket(){
-  const base = currentPhaseKey;
-  if (!base){ brows.innerHTML=''; return; }
-
-  const titles = {
-    sf1: labelFor('sf1').title,
-    sf2: labelFor('sf2').title,
-    final: await finalSeedsTitle() // <-- shows winners of semis when available
-  };
-
   const rows = await Promise.all(['sf1','sf2','final'].map(async (slot)=>{
     const round = labelFor(slot).round;
     const thumbs = await thumbsFor(slot);
     const scoreId = `score-${slot}`;
+
+    const title = (slot==='final')
+      ? (finalsReady ? await finalSeedsTitle() : 'TBD vs TBD')
+      : (slot==='sf1' ? 'Seed A vs Seed B' : 'Seed C vs Seed D');
+
+    const imgA = thumbs.A ? `<img src="${thumbs.A}" alt="">` : '';
+    const imgB = thumbs.B ? `<img src="${thumbs.B}" alt="">` : '';
+
     return `
       <div class="brow" id="${rowId(slot)}" data-slot="${slot}">
         <div class="bbadge">${round}</div>
         <div class="thumb2">
-          <div class="thumb"><img src="${thumbs.A}" alt=""></div>
-          <div class="thumb"><img src="${thumbs.B}" alt=""></div>
+          <div class="thumb">${imgA}</div>
+          <div class="thumb">${imgB}</div>
         </div>
         <div class="bmeta">
-          <div class="title">${slot==='final'?titles.final:titles[slot]||''}</div>
+          <div class="title">${title}</div>
           <div class="bline"><span class="bpill">uses global</span></div>
         </div>
         <div class="bscore" id="${scoreId}">0 - 0</div>
@@ -484,7 +498,7 @@ async function renderBracket(){
   highlightActiveRow();
   updateBracketScores();
 
-  // one-tap switch (no expand)
+  // one-tap switch
   brows.querySelectorAll('.brow').forEach(row=>{
     row.addEventListener('click',()=> switchTo(row.dataset.slot));
   });
