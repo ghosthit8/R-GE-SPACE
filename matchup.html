@@ -15,6 +15,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .scorebar{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
 .btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
 .btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
+.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
 .tiny{display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted)}
 .clock{font-weight:700;border:1px solid var(--border);border-radius:8px;padding:2px 8px}
 .badge{border:1px solid var(--border);border-radius:8px;padding:2px 8px}
@@ -23,6 +24,15 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 
 /* current match tiles */
 .tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px;position:relative}
+.tile.decided::after{
+  content:"DECIDED";
+  position:absolute; inset:12px;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.55);
+  border:2px solid var(--danger); color:#ff6b6b;
+  font-weight:900; letter-spacing:4px; font-size:clamp(24px,6vw,48px);
+  border-radius:14px; pointer-events:none;
+}
 .art{aspect-ratio:4/3;width:100%;height:auto;display:block;object-fit:cover}
 .caption{display:block;text-align:center;font-size:12px;color:var(--muted);padding:6px 8px;border-top:1px dashed var(--border)}
 .meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
@@ -52,9 +62,18 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .switch{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px}
 
 /* compact rows (no expand) */
-.brow{display:grid; grid-template-columns:auto auto 1fr auto; gap:10px 12px; padding:12px 14px; border-top:1px solid var(--border); cursor:pointer; align-items:center}
+.brow{position:relative; display:grid; grid-template-columns:auto auto 1fr auto; gap:10px 12px; padding:12px 14px; border-top:1px solid var(--border); cursor:pointer; align-items:center}
 .brow:first-child{border-top:0}
 .brow.active{outline:2px solid var(--danger); outline-offset:-2px; background:rgba(255,59,59,.07)} /* RED highlight for current match */
+.brow.decided::after{
+  content:"DECIDED";
+  position:absolute; right:14px; top:50%; transform:translateY(-50%);
+  font-weight:900; letter-spacing:2px; border:2px solid var(--danger);
+  color:#ff6b6b; padding:2px 10px; border-radius:10px; opacity:.95; pointer-events:none;
+}
+.brow.decided .bline, .brow.decided .bpill, .brow.decided .title{color:#7a7a7a}
+.brow.decided .bscore{opacity:.7}
+
 .thumb2{display:flex; gap:8px}
 .thumb{width:44px;height:44px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:rgba(0,0,0,.35)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
@@ -276,11 +295,10 @@ async function paintImagesForActive(){
       imgCache.set(battleKey,{A,B}); imgA.src=A; imgB.src=B;
     } else {
       const finals = await getFinalEntrantSourcesFromWinners();
-      // only paint finals if we actually have entrants (both semis decided)
+      // only paint finals if both semis decided
       if (finals){
         imgCache.set(battleKey, finals); imgA.src=finals.A; imgB.src=finals.B;
       } else {
-        // No finals yet → clear images
         imgA.removeAttribute('src'); imgB.removeAttribute('src');
       }
     }
@@ -292,7 +310,8 @@ async function paintImagesForActive(){
   imgA.loading='eager'; imgB.loading='eager'; imgA.decoding='async'; imgB.decoding='async';
   lastPaintedBattleKey=battleKey;
 
-  renderBracket(); // refresh row thumbs/titles
+  renderBracket();
+  applyVotingLockUI(); // <- ensure lock state is applied after paint
 }
 
 /* ---------- Votes ---------- */
@@ -351,6 +370,18 @@ overlayClose.onclick=()=>{ overlay.classList.remove('show'); stopConfetti(); };
 
 /* ---------- Timer / phase handling ---------- */
 function setStateUI(){ stateEl.textContent = paused ? 'PAUSED' : 'LIVE'; pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause'; phaseBadge.textContent='phase: '+(currentPhaseKey||'—'); }
+function votingLockedFor(slot){
+  // Lock voting for semis when we're in FINAL
+  return wasInFinalStage && (slot==='sf1' || slot==='sf2');
+}
+function applyVotingLockUI(){
+  const locked = votingLockedFor(activeSlot);
+  [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
+  document.getElementById('tileA').classList.toggle('decided', locked);
+  document.getElementById('tileB').classList.toggle('decided', locked);
+  if (locked) submitBtn.textContent = 'Voting closed';
+  else submitBtn.textContent = '✅ Submit Vote';
+}
 
 async function fetchState(){
   const s = normalize(await callEdge('GET'));
@@ -406,6 +437,7 @@ async function fetchState(){
   await paintImagesForActive();
   await refreshVoteCounts();
   renderBracket();
+  applyVotingLockUI();
 }
 
 /* ---------- Bracket list rendering (compact) ---------- */
@@ -420,36 +452,30 @@ function slotKeyFor(slot, baseISO){
   return (slot==='sf1'?sf1:sf2);
 }
 async function thumbsFor(slot){
-  // RULES:
-  // - During FINAL: QF rows must show the *losers* from the semis (using prevPhaseKey).
-  // - Final row shows entrants only when both semis have winners; otherwise it stays blank.
-  // - During SEMIS: QF rows show their current seeds (from currentPhaseKey). Final row blank.
+  // FINAL: QF rows show LOSERS from previous semis; Final shows entrants only if both semis decided.
   if (!currentPhaseKey) return {A:'',B:''};
 
-  // FINAL row logic
   if (slot==='final'){
-    if (!wasInFinalStage) return {A:'',B:''}; // hide until both semi winners exist
+    if (!wasInFinalStage) return {A:'',B:''};
     const finals = await getFinalEntrantSourcesFromWinners();
     return finals ?? {A:'',B:''};
   }
 
   // QF rows (sf1/sf2)
   if (wasInFinalStage){
-    // We are in the Final → show LOSERS from the previous semis
     if (!prevPhaseKey) return {A:'',B:''};
     const winnerColor = await getWinnerColorForSemi(prevPhaseKey, slot);
     if (winnerColor){
       const loserSuffix = loserSuffixForSemi(slot, winnerColor);
       const loser = loserSuffix ? seedUrlFromKey(prevPhaseKey, loserSuffix) : '';
-      // show loser duplicated (clear signal that this row is "the picture that lost")
+      // duplicate loser to make it obvious the row is decided
       return {A: loser, B: loser};
     }
-    // fallback if no winner recorded yet (shouldn't happen in final stage)
+    // fallback
     const A = seedUrlFromKey(prevPhaseKey, slot==='sf1' ? 'A1' : 'A2');
     const B = seedUrlFromKey(prevPhaseKey, slot==='sf1' ? 'B1' : 'B2');
     return {A,B};
   } else {
-    // We are in the semis → show current seeds for this semi from the *current* base
     const A = seedUrlFromKey(currentPhaseKey, slot==='sf1' ? 'A1' : 'A2');
     const B = seedUrlFromKey(currentPhaseKey, slot==='sf1' ? 'B1' : 'B2');
     return {A,B};
@@ -464,6 +490,7 @@ function switchTo(slot){
   paintImagesForActive();
   refreshVoteCounts();
   highlightActiveRow();
+  applyVotingLockUI();
 }
 
 function highlightActiveRow(){
@@ -477,8 +504,7 @@ async function updateBracketScores(){
   if (!base) return;
   for (const slot of ['sf1','sf2','final']){
     let keyBase = base;
-    // while in FINAL, QF rows’ scores should come from prevPhaseKey (the finished semis)
-    if (wasInFinalStage && (slot==='sf1' || slot==='sf2')) keyBase = prevPhaseKey || base;
+    if (wasInFinalStage && (slot==='sf1' || slot==='sf2')) keyBase = prevPhaseKey || base; // show finished semi scores
     const key = slotKeyFor(slot, keyBase);
     const sEl = document.querySelector(`#${rowId(slot)} .bscore`);
     if (!sEl) continue;
@@ -498,25 +524,27 @@ async function renderBracket(){
   const titles = {
     sf1: labelFor('sf1').title,
     sf2: labelFor('sf2').title,
-    final: await finalSeedsTitle() // shows winners of semis when available
+    final: await finalSeedsTitle()
   };
 
   const rows = await Promise.all(['sf1','sf2','final'].map(async (slot)=>{
     const round = labelFor(slot).round;
     const thumbs = await thumbsFor(slot);
-    const scoreId = `score-${slot}`;
+    const decided = votingLockedFor(slot); // semis are decided when we're in final
     return `
-      <div class="brow" id="${rowId(slot)}" data-slot="${slot}">
+      <div class="brow ${decided?'decided':''}" id="${rowId(slot)}" data-slot="${slot}">
         <div class="bbadge">${round}</div>
         <div class="thumb2">
           <div class="thumb">${thumbs.A ? `<img src="${thumbs.A}" alt="">` : ''}</div>
           <div class="thumb">${thumbs.B ? `<img src="${thumbs.B}" alt="">` : ''}</div>
         </div>
         <div class="bmeta">
-          <div class="title">${slot==='final'?titles.final:titles[slot]||''}</div>
-          <div class="bline"><span class="bpill">uses global</span></div>
+          <div class="title">${slot==='final'?titles.final:(titles[slot]||'')}</div>
+          <div class="bline">
+            <span class="bpill">${decided?'round decided':'uses global'}</span>
+          </div>
         </div>
-        <div class="bscore" id="${scoreId}">0 - 0</div>
+        <div class="bscore">0 - 0</div>
       </div>
     `;
   }));
@@ -587,9 +615,10 @@ pauseBtn.onclick = async ()=>{ try{ if (paused) await callEdge('POST',{action:'r
 forceBtn.onclick = async ()=>{ try{ await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision'); }catch{ toast('Force failed'); }};
 
 function clearSelection(){ voteA.classList.remove('selected'); voteB.classList.remove('selected'); chosen=null; submitBtn.textContent='✅ Submit Vote'; submitBtn.disabled=!currentUid; }
-voteA.onclick=()=>{ chosen='red'; voteA.classList.add('selected'); voteB.classList.remove('selected'); submitBtn.disabled=!currentUid; };
-voteB.onclick=()=>{ chosen='blue'; voteB.classList.add('selected'); voteA.classList.remove('selected'); submitBtn.disabled=!currentUid; };
+voteA.onclick=()=>{ if (votingLockedFor(activeSlot)) return toast('Voting closed'); chosen='red'; voteA.classList.add('selected'); voteB.classList.remove('selected'); submitBtn.disabled=!currentUid; };
+voteB.onclick=()=>{ if (votingLockedFor(activeSlot)) return toast('Voting closed'); chosen='blue'; voteB.classList.add('selected'); voteA.classList.remove('selected'); submitBtn.disabled=!currentUid; };
 submitBtn.onclick=async()=>{
+  if (votingLockedFor(activeSlot)) return toast('Voting closed');
   const key=currentBattleKey();
   if (!chosen || !key) return;
   if (!currentUid){ toast('Log in to vote'); return; }
