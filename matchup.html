@@ -24,7 +24,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 
 /* current match tiles */
 .tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px;position:relative}
-/* CHANGED: subtle decided badge bottom-left */
+/* subtle decided badge bottom-left (already requested earlier) */
 .tile.decided::after{
   content:"DECIDED";
   position:absolute; bottom:10px; left:10px;
@@ -70,19 +70,43 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18);z-index:50}
 .toast.show{display:block}
 
-/* overlay */
-#overlay{position:fixed; inset:0; display:none; z-index:9999; background:rgba(0,0,0,.92)}
-#overlay.show{display:block}
+/* ===== Winner Overlay (UPDATED to keep art unaltered) ===== */
+#overlay{
+  position:fixed; inset:0; display:none;
+  background:rgba(0,0,0,.92);
+  align-items:center; justify-content:center;
+  z-index:9999;
+  overflow:hidden;
+}
+#overlay.show{display:flex}
+#confetti{position:absolute; inset:0; pointer-events:none; z-index:3}
+
+/* background container layers */
 .overlay-bg{position:absolute; inset:0; overflow:hidden}
-.overlay-art{position:absolute; inset:0; background-size:cover; background-position:center; background-repeat:no-repeat}
-.scanlines{position:absolute; inset:0; background:repeating-linear-gradient(to bottom, rgba(0,0,0,.25) 0px, rgba(0,0,0,.25) 2px, transparent 3px, transparent 4px)}
-.vignette{position:absolute; inset:-10%; background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.6) 100%)}
-.overlay-card{position:relative; max-width:min(820px,92vw); margin:8vh auto 4vh; border:1px solid var(--green); background:rgba(7,7,7,.72); border-radius:18px; padding:22px 18px; box-shadow:0 0 40px rgba(57,255,20,.25)}
-.overlay-card h1{margin:0 0 6px; text-align:center; letter-spacing:2px; font-size:clamp(28px,6vw,54px); text-transform:uppercase}
-.overlay-card .sub{text-align:center; color:var(--muted); margin-bottom:12px; font-size:clamp(12px,2.4vw,14px)}
-.overlay-card .motto{text-align:center; margin-top:8px; color:var(--green-bright); font-weight:700; letter-spacing:.5px}
-#overlayClose{position:absolute; right:14px; top:12px; z-index:2; border:1px solid var(--green); background:rgba(0,0,0,.6); color:var(--green); border-radius:10px; padding:6px 10px; cursor:pointer}
-#confetti{position:absolute; inset:0; pointer-events:none}
+.overlay-art{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:2}
+.overlay-art img{max-width:100%; max-height:100%; object-fit:contain; display:block}
+/* scanlines + vignette moved BEHIND the art so the piece is unaltered */
+.scanlines{position:absolute; inset:0; z-index:1; background:repeating-linear-gradient(to bottom, rgba(0,0,0,.25) 0px, rgba(0,0,0,.25) 2px, transparent 3px, transparent 4px)}
+.vignette{position:absolute; inset:-10%; z-index:1; background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.6) 100%)}
+
+/* champion card pinned to bottom */
+.overlay-card{
+  position:absolute; left:50%; bottom:24px; transform:translateX(-50%);
+  max-width:min(820px,92vw);
+  border:1px solid var(--green); background:rgba(7,7,7,.72);
+  border-radius:18px; padding:22px 18px;
+  box-shadow:0 0 40px rgba(57,255,20,.25);
+  text-align:center; z-index:4;
+}
+.overlay-card h1{margin:0 0 6px; letter-spacing:2px; font-size:clamp(28px,6vw,54px); text-transform:uppercase}
+.overlay-card .sub{color:var(--muted); margin-bottom:12px; font-size:clamp(12px,2.4vw,14px)}
+.overlay-card .motto{color:var(--green-bright); font-weight:700; letter-spacing:.5px}
+
+#overlayClose{
+  position:absolute; right:14px; top:12px; z-index:5;
+  border:1px solid var(--green); background:rgba(0,0,0,.6); color:var(--green);
+  border-radius:10px; padding:6px 10px; cursor:pointer
+}
 
 /* BRACKET under the current match */
 .bracket{margin-top:20px; border:1px solid var(--border); border-radius:14px; background:rgba(7,7,7,.5); overflow:hidden}
@@ -137,7 +161,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
     <div class="tile" id="tileA" data-color="red">
       <div class="artbox">
         <img id="imgA" class="art" alt="Entry Left"/>
-        <!-- NEW: fullscreen button -->
+        <!-- fullscreen button -->
         <button class="fsbtn" data-target="imgA" title="View fullscreen">⛶</button>
       </div>
       <div class="caption" id="countA">0 votes</div>
@@ -150,7 +174,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
     <div class="tile" id="tileB" data-color="blue">
       <div class="artbox">
         <img id="imgB" class="art" alt="Entry Right"/>
-        <!-- NEW: fullscreen button -->
+        <!-- fullscreen button -->
         <button class="fsbtn" data-target="imgB" title="View fullscreen">⛶</button>
       </div>
       <div class="caption" id="countB">0 votes</div>
@@ -179,11 +203,13 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 
   <div id="toast" class="toast"></div>
 
-  <!-- FINAL OVERLAY (existing) -->
+  <!-- FINAL OVERLAY (updated markup: add <img> inside .overlay-art) -->
   <div id="overlay">
     <canvas id="confetti"></canvas>
     <div class="overlay-bg">
-      <div id="overlayArt" class="overlay-art"></div>
+      <div id="overlayArt" class="overlay-art">
+        <img id="overlayArtImg" alt="Winning Art"/>
+      </div>
       <div class="scanlines"></div>
       <div class="vignette"></div>
     </div>
@@ -195,7 +221,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
     </div>
   </div>
 
-  <!-- NEW: Fullscreen overlay for art preview -->
+  <!-- Fullscreen overlay for art preview -->
   <div id="fsOverlay">
     <button id="fsClose">✕</button>
     <img id="fsImage" alt="Fullscreen Art"/>
@@ -229,13 +255,14 @@ const voteB = document.getElementById('voteB');
 const submitBtn = document.getElementById('submitBtn');
 
 const overlay = document.getElementById('overlay');
-const overlayArt = document.getElementById('overlayArt');
+const overlayArt = document.getElementById('overlayArt'); // container (kept for structure)
+const overlayArtImg = document.getElementById('overlayArtImg'); // NEW: actual image to avoid cropping
 const overlayTitle = document.getElementById('overlayTitle');
 const overlaySubtitle = document.getElementById('overlaySubtitle');
 const overlayClose = document.getElementById('overlayClose');
 const confettiCanvas = document.getElementById('confetti');
 
-/* NEW: fullscreen overlay refs */
+/* Fullscreen overlay refs */
 const fsOverlay = document.getElementById('fsOverlay');
 const fsImage   = document.getElementById('fsImage');
 const fsClose   = document.getElementById('fsClose');
@@ -417,19 +444,43 @@ async function decideAndPersistWinner(phaseKeyISO){
 }
 
 /* ---------- Overlay (final) ---------- */
-function startConfetti(){ const ctx=confettiCanvas.getContext('2d'); let raf; const parts=Array.from({length:220},()=>({x:Math.random()*innerWidth,y:-20-Math.random()*innerHeight*0.3,vx:(Math.random()-0.5)*2,vy:1.2+Math.random()*2.6,w:3+Math.floor(Math.random()*7),h:3+Math.floor(Math.random()*7),rot:Math.random()*Math.PI,vr:(Math.random()-0.5)*0.2,color:['#39ff14','#7dff62','#00ffd5','#baffc9','#eaff00'][Math.floor(Math.random()*5)]})); function step(){ confettiCanvas.width=innerWidth; confettiCanvas.height=innerHeight; ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height); parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.rot+=p.vr; if(p.y>innerHeight+20){p.y=-10;p.x=Math.random()*innerWidth;} ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);ctx.fillStyle=p.color;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();}); raf=requestAnimationFrame(step);} step(); confettiCanvas._stop=()=>{cancelAnimationFrame(raf); const c=confettiCanvas.getContext('2d'); c.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);} }
+/* Confetti: green cyberpunk burst for a moment */
+function startConfetti(){
+  const ctx=confettiCanvas.getContext('2d'); let raf;
+  const parts=Array.from({length:220},()=>({
+    x:Math.random()*innerWidth,y:-20-Math.random()*innerHeight*0.3,
+    vx:(Math.random()-0.5)*2,vy:1.2+Math.random()*2.6,
+    w:3+Math.floor(Math.random()*7),h:3+Math.floor(Math.random()*7),
+    rot:Math.random()*Math.PI,vr:(Math.random()-0.5)*0.2,
+    color:['#39ff14','#7dff62','#00ffd5','#baffc9','#eaff00'][Math.floor(Math.random()*5)]
+  }));
+  function step(){
+    confettiCanvas.width=innerWidth; confettiCanvas.height=innerHeight; ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
+    parts.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;p.rot+=p.vr;
+      if(p.y>innerHeight+20){p.y=-10;p.x=Math.random()*innerWidth;}
+      ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);ctx.fillStyle=p.color;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();
+    });
+    raf=requestAnimationFrame(step);
+  }
+  step();
+  confettiCanvas._stop=()=>{cancelAnimationFrame(raf); const c=confettiCanvas.getContext('2d'); c.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);}
+}
 function stopConfetti(){ confettiCanvas._stop && confettiCanvas._stop(); }
+
+/* Show champion without cropping the art (uses <img> with object-fit: contain) */
 function showChampion(color, finalBaseISO){
   const cached = imgCache.get(finalKeyFor(finalBaseISO)) || {};
   const src = (color==='red') ? (cached.A || imgA.src) : (cached.B || imgB.src);
-  overlayArt.style.backgroundImage = `url("${src}")`;
+  overlayArtImg.src = src;            // set image source
+  // no scanlines over the image — scanlines/vignette are behind via z-index
   overlayTitle.textContent = 'CHAMPION';
   overlaySubtitle.textContent = color==='red' ? 'Final: Left prevails' : 'Final: Right prevails';
   overlay.classList.add('show');
   startConfetti();
-  setTimeout(()=>{ overlay.classList.remove('show'); stopConfetti(); }, 6000);
+  setTimeout(()=>{ overlay.classList.remove('show'); stopConfetti(); overlayArtImg.removeAttribute('src'); }, 3000); // brief “moment”
 }
-overlayClose.onclick=()=>{ overlay.classList.remove('show'); stopConfetti(); };
+overlayClose.onclick=()=>{ overlay.classList.remove('show'); stopConfetti(); overlayArtImg.removeAttribute('src'); };
 
 /* ---------- NEW: Fullscreen viewer controls ---------- */
 function openFullscreenFor(imgEl){
