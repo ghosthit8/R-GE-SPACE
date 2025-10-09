@@ -24,16 +24,45 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 
 /* current match tiles */
 .tile{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(7,7,7,.6);margin-top:16px;position:relative}
+/* CHANGED: subtle decided badge bottom-left */
 .tile.decided::after{
   content:"DECIDED";
-  position:absolute; inset:12px;
-  display:flex; align-items:center; justify-content:center;
-  background:rgba(0,0,0,.55);
-  border:2px solid var(--danger); color:#ff6b6b;
-  font-weight:900; letter-spacing:4px; font-size:clamp(24px,6vw,48px);
-  border-radius:14px; pointer-events:none;
+  position:absolute; bottom:10px; left:10px;
+  background:rgba(0,0,0,.6);
+  border:1px solid var(--danger); color:#ff6b6b;
+  font-weight:700; letter-spacing:2px; font-size:12px;
+  padding:4px 8px; border-radius:8px; pointer-events:none;
 }
+
+/* Fullscreen control on each image */
+.artbox{position:relative}
 .art{aspect-ratio:4/3;width:100%;height:auto;display:block;object-fit:cover}
+.fsbtn{
+  position:absolute; top:8px; right:8px;
+  background:rgba(0,0,0,.6); color:var(--green);
+  border:1px solid var(--green); border-radius:8px;
+  padding:4px 8px; cursor:pointer; font-size:14px; line-height:1;
+}
+
+/* fullscreen overlay */
+#fsOverlay{
+  position:fixed; inset:0; display:none;
+  background:rgba(0,0,0,.95);
+  align-items:center; justify-content:center;
+  z-index:10000;
+}
+#fsOverlay.show{display:flex}
+#fsImage{
+  max-width:95%; max-height:95%;
+  box-shadow:0 0 40px rgba(57,255,20,.25);
+  border:1px solid var(--green); border-radius:12px;
+}
+#fsClose{
+  position:absolute; top:12px; right:14px; z-index:1;
+  border:1px solid var(--green); background:rgba(0,0,0,.6); color:var(--green);
+  border-radius:8px; padding:4px 10px; cursor:pointer; font-size:16px;
+}
+
 .caption{display:block;text-align:center;font-size:12px;color:var(--muted);padding:6px 8px;border-top:1px dashed var(--border)}
 .meta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--border)}
 .btn.primary.selected{background:rgba(57,255,20,.22);color:var(--ink);box-shadow:0 0 18px rgba(125,255,98,.35), inset 0 0 12px rgba(57,255,20,.15)}
@@ -106,7 +135,11 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 
     <!-- Current Match -->
     <div class="tile" id="tileA" data-color="red">
-      <img id="imgA" class="art" alt="Entry Left"/>
+      <div class="artbox">
+        <img id="imgA" class="art" alt="Entry Left"/>
+        <!-- NEW: fullscreen button -->
+        <button class="fsbtn" data-target="imgA" title="View fullscreen">⛶</button>
+      </div>
       <div class="caption" id="countA">0 votes</div>
       <div class="meta">
         <span id="labelA">Left</span>
@@ -115,7 +148,11 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
     </div>
 
     <div class="tile" id="tileB" data-color="blue">
-      <img id="imgB" class="art" alt="Entry Right"/>
+      <div class="artbox">
+        <img id="imgB" class="art" alt="Entry Right"/>
+        <!-- NEW: fullscreen button -->
+        <button class="fsbtn" data-target="imgB" title="View fullscreen">⛶</button>
+      </div>
       <div class="caption" id="countB">0 votes</div>
       <div class="meta">
         <span id="labelB">Right</span>
@@ -142,7 +179,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 
   <div id="toast" class="toast"></div>
 
-  <!-- FINAL OVERLAY -->
+  <!-- FINAL OVERLAY (existing) -->
   <div id="overlay">
     <canvas id="confetti"></canvas>
     <div class="overlay-bg">
@@ -156,6 +193,12 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       <div class="sub" id="overlaySubtitle">Rage Space</div>
       <div class="motto">Glory to the machine. Your art devours the bracket</div>
     </div>
+  </div>
+
+  <!-- NEW: Fullscreen overlay for art preview -->
+  <div id="fsOverlay">
+    <button id="fsClose">✕</button>
+    <img id="fsImage" alt="Fullscreen Art"/>
   </div>
 
 <script>
@@ -191,6 +234,11 @@ const overlayTitle = document.getElementById('overlayTitle');
 const overlaySubtitle = document.getElementById('overlaySubtitle');
 const overlayClose = document.getElementById('overlayClose');
 const confettiCanvas = document.getElementById('confetti');
+
+/* NEW: fullscreen overlay refs */
+const fsOverlay = document.getElementById('fsOverlay');
+const fsImage   = document.getElementById('fsImage');
+const fsClose   = document.getElementById('fsClose');
 
 /* bracket DOM */
 const brows = document.getElementById('brows');
@@ -382,6 +430,32 @@ function showChampion(color, finalBaseISO){
   setTimeout(()=>{ overlay.classList.remove('show'); stopConfetti(); }, 6000);
 }
 overlayClose.onclick=()=>{ overlay.classList.remove('show'); stopConfetti(); };
+
+/* ---------- NEW: Fullscreen viewer controls ---------- */
+function openFullscreenFor(imgEl){
+  if (!imgEl || !imgEl.src) return;
+  fsImage.src = imgEl.src;
+  fsOverlay.classList.add('show');
+}
+document.querySelectorAll('.fsbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const targetId = btn.dataset.target;
+    const imgEl = document.getElementById(targetId);
+    openFullscreenFor(imgEl);
+  });
+});
+fsClose.addEventListener('click', ()=>{
+  fsOverlay.classList.remove('show');
+  fsImage.src = '';
+});
+fsOverlay.addEventListener('click', (e)=>{
+  if (e.target === fsOverlay){ fsOverlay.classList.remove('show'); fsImage.src=''; }
+});
+document.addEventListener('keydown', (e)=>{
+  if (e.key === 'Escape' && fsOverlay.classList.contains('show')){
+    fsOverlay.classList.remove('show'); fsImage.src='';
+  }
+});
 
 /* ---------- Timer / phase handling ---------- */
 function setStateUI(){ stateEl.textContent = paused ? 'PAUSED' : 'LIVE'; pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause'; phaseBadge.textContent='phase: '+(currentPhaseKey||'—'); }
