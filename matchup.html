@@ -99,7 +99,6 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       </div>
       <div class="row">
         <button id="btnPause" class="btn">⏸️ Pause</button>
-        <button id="btnForce" class="btn">🏁 Force Decide</button>
         <a class="btn" href="./winners.html">🏁 Winners</a>
       </div>
     </div>
@@ -170,7 +169,6 @@ const stateEl = document.getElementById('state');
 const phaseBadge = document.getElementById('phaseKey');
 const loginBadge = document.getElementById('loginBadge');
 const pauseBtn = document.getElementById('btnPause');
-const forceBtn = document.getElementById('btnForce');
 const toastEl = document.getElementById('toast');
 function toast(msg, ms=1400){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
 const iso = (d)=> new Date(d).toISOString().replace(/\.\d{3}Z$/,'Z');
@@ -205,7 +203,6 @@ let overlayGateBase=null; // base ISO allowed to trigger champion
 
 // Freeze images per battle: "<baseISO>::sf1|sf2|final" → {A,B}
 const imgCache = new Map();
-let lastPaintedBattleKey=null;
 
 /* ---------- Helpers ---------- */
 async function getUidOrNull(){ const {data:{session}}=await supabase.auth.getSession(); return session?.user?.id ?? null; }
@@ -222,7 +219,6 @@ const normalize=(s)=>({phase_end_at:s.phase_end_at??null, period_sec:s.period_se
 function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
 function semiKeysFor(baseISO){ return { sf1:`${baseISO}::sf1`, sf2:`${baseISO}::sf2` }; }
 function finalKeyFor(baseISO){ return `${baseISO}::final`; }
-function baseFromKey(k){ return (k||'').split('::')[0] || ''; }
 
 /* ---------- Stage detection ---------- */
 async function detectStage(){
@@ -247,38 +243,8 @@ async function getFinalEntrantSourcesFromWinners(){
   return {A:left, B:right};
 }
 
-/* Build a human label for FINAL using semi winners */
-async function finalSeedsTitle(){
-  if (!prevPhaseKey) return 'TBD vs TBD';
-  const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
-  const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
-  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
-  const pick = (slot,color)=> {
-    if (slot==='sf1'){ return color==='red' ? 'Seed A' : 'Seed B'; }
-    if (slot==='sf2'){ return color==='red' ? 'Seed C' : 'Seed D'; }
-    return 'TBD';
-  };
-  const s1 = map[sf1] ? pick('sf1',map[sf1]) : null;
-  const s2 = map[sf2] ? pick('sf2',map[sf2]) : null;
-  return (s1 && s2) ? `${s1} vs ${s2}` : 'TBD vs TBD';
-}
-
-/* ---------- Winner/Loser helpers for semis ---------- */
-async function getWinnerColorForSemi(baseISO, slot){
-  const key = `${baseISO}::${slot}`;
-  const { data } = await supabase.from('winners').select('color').eq('phase_key', key).maybeSingle();
-  return (data?.color||null);
-}
-function loserSuffixForSemi(slot, winnerColor){
-  if (!winnerColor) return null;
-  if (slot==='sf1'){ return winnerColor==='red' ? 'B1' : 'A1'; }
-  if (slot==='sf2'){ return winnerColor==='red' ? 'B2' : 'A2'; }
-  return null;
-}
-
-/* ---------- Battle key resolution (FREEZE semis) ---------- */
+/* ---------- Battle key resolution (freeze semis) ---------- */
 function baseForSlot(slot){
-  // For semis during Final, resolve to prevPhaseKey (the semi’s base) so cache is reused.
   if (slot==='final') return currentPhaseKey;
   return wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey;
 }
@@ -286,46 +252,37 @@ function battleKeyFor(slot){
   const base = baseForSlot(slot);
   if (!base) return null;
   if (slot==='final') return finalKeyFor(base);
-  const { sf1, sf2 } = semiKeysFor(base);
-  return slot==='sf1' ? sf1 : sf2;
+  return `${base}::${slot}`;
 }
 
-/* ---------- Image paint (frozen per battle) ---------- */
+/* ---------- Paint current tiles (cached) ---------- */
 async function paintImagesForActive(){
   const bKey = battleKeyFor(activeSlot);
   if (!bKey) return;
 
-  // If we have this battle cached, always use it (prevents reseeding).
   if (imgCache.has(bKey)){
     const {A,B}=imgCache.get(bKey);
     imgA.src=A; imgB.src=B;
   } else {
-    // First time: seed by the resolved base (will be prevPhaseKey for semis during final)
+    // First time we see this battle → seed and cache
     if (activeSlot==='sf1'){
-      const A = seedUrlFromKey(baseForSlot('sf1'),'A1');
-      const B = seedUrlFromKey(baseForSlot('sf1'),'B1');
+      const base = baseForSlot('sf1');
+      const A = seedUrlFromKey(base,'A1'); const B = seedUrlFromKey(base,'B1');
       imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
     } else if (activeSlot==='sf2'){
-      const A = seedUrlFromKey(baseForSlot('sf2'),'A2');
-      const B = seedUrlFromKey(baseForSlot('sf2'),'B2');
+      const base = baseForSlot('sf2');
+      const A = seedUrlFromKey(base,'A2'); const B = seedUrlFromKey(base,'B2');
       imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
     } else {
       const finals = await getFinalEntrantSourcesFromWinners();
-      if (finals){
-        imgCache.set(bKey, finals); imgA.src=finals.A; imgB.src=finals.B;
-      } else {
-        imgA.removeAttribute('src'); imgB.removeAttribute('src');
-      }
+      if (finals){ imgCache.set(bKey, finals); imgA.src=finals.A; imgB.src=finals.B; }
+      else { imgA.removeAttribute('src'); imgB.removeAttribute('src'); }
     }
   }
 
-  // Labels
   if (activeSlot==='sf1'){ labelA.textContent='Semi 1 — Left'; labelB.textContent='Semi 1 — Right'; }
   else if (activeSlot==='sf2'){ labelA.textContent='Semi 2 — Left'; labelB.textContent='Semi 2 — Right'; }
   else { labelA.textContent='Final — Left'; labelB.textContent='Final — Right'; }
-
-  imgA.loading='eager'; imgB.loading='eager'; imgA.decoding='async'; imgB.decoding='async';
-  lastPaintedBattleKey=bKey;
 
   renderBracket();
   applyVotingLockUI();
@@ -333,10 +290,7 @@ async function paintImagesForActive(){
 
 /* ---------- Votes ---------- */
 const fmtVotes=(n)=>`${n} ${n===1?'vote':'votes'}`;
-function currentBattleKey(){
-  const k = battleKeyFor(activeSlot);
-  return k || null;
-}
+function currentBattleKey(){ return battleKeyFor(activeSlot); }
 async function countVotesFor(key){
   const { data, error } = await supabase.from('phase_votes').select('vote').eq('phase_key', key);
   if (error) throw error;
@@ -385,10 +339,7 @@ overlayClose.onclick=()=>{ overlay.classList.remove('show'); stopConfetti(); };
 
 /* ---------- Timer / phase handling ---------- */
 function setStateUI(){ stateEl.textContent = paused ? 'PAUSED' : 'LIVE'; pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause'; phaseBadge.textContent='phase: '+(currentPhaseKey||'—'); }
-function votingLockedFor(slot){
-  // Lock voting for semis when we're in FINAL
-  return wasInFinalStage && (slot==='sf1' || slot==='sf2');
-}
+function votingLockedFor(slot){ return wasInFinalStage && (slot==='sf1' || slot==='sf2'); }
 function applyVotingLockUI(){
   const locked = votingLockedFor(activeSlot);
   [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
@@ -429,7 +380,7 @@ async function fetchState(){
       // Loop back to Round 1
       overlayGateBase = null;
       activeSlot = 'sf1';
-      imgCache.clear(); lastPaintedBattleKey=null;
+      imgCache.clear();
     } else {
       // SEMIS just ended
       const { sf1, sf2 } = semiKeysFor(justEndedBase);
@@ -441,7 +392,6 @@ async function fetchState(){
       activeSlot = 'final';
       const pack = await getFinalEntrantSourcesFromWinners();
       if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
-      lastPaintedBattleKey=null;
     }
   }
 
@@ -474,19 +424,17 @@ async function thumbsFor(slot){
     return finals ?? {A:'',B:''};
   }
 
-  // QFs during Final: show losers from previous semis
+  // QF rows: if we're in Final, show the ORIGINAL entrants of each semi.
   if (wasInFinalStage){
-    if (!prevPhaseKey) return {A:'',B:''};
-    const winnerColor = await getWinnerColorForSemi(prevPhaseKey, slot);
-    if (winnerColor){
-      const loserSuffix = loserSuffixForSemi(slot, winnerColor);
-      const loser = loserSuffix ? seedUrlFromKey(prevPhaseKey, loserSuffix) : '';
-      return {A: loser, B: loser};
-    }
-    const A = seedUrlFromKey(prevPhaseKey, slot==='sf1' ? 'A1' : 'A2');
-    const B = seedUrlFromKey(prevPhaseKey, slot==='sf1' ? 'B1' : 'B2');
+    const base = prevPhaseKey || currentPhaseKey;
+    const key = `${base}::${slot}`;
+    if (imgCache.has(key)) return imgCache.get(key); // exact images that fought
+    // fallback to original seeds from the semi base
+    const A = seedUrlFromKey(base, slot==='sf1' ? 'A1' : 'A2');
+    const B = seedUrlFromKey(base, slot==='sf1' ? 'B1' : 'B2');
     return {A,B};
   } else {
+    // During semis, show current seeds
     const A = seedUrlFromKey(currentPhaseKey, slot==='sf1' ? 'A1' : 'A2');
     const B = seedUrlFromKey(currentPhaseKey, slot==='sf1' ? 'B1' : 'B2');
     return {A,B};
@@ -497,7 +445,6 @@ function rowId(slot){ return `row-${slot}`; }
 function switchTo(slot){
   activeSlot = slot;
   clearSelection();
-  lastPaintedBattleKey=null;
   paintImagesForActive();
   refreshVoteCounts();
   highlightActiveRow();
@@ -522,9 +469,7 @@ async function updateBracketScores(){
     try{
       const {r,b}=await countVotesFor(key);
       sEl.textContent = `${r} - ${b}`;
-    }catch{
-      sEl.textContent = `0 - 0`;
-    }
+    }catch{ sEl.textContent = `0 - 0`; }
   }
 }
 
@@ -622,7 +567,6 @@ supabase.channel('phase-votes-live')
 
 /* ---------- Controls / Voting ---------- */
 pauseBtn.onclick = async ()=>{ try{ if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'}); await fetchState(); toast('OK'); }catch{ toast('Pause/resume failed'); }};
-forceBtn.onclick = async ()=>{ try{ await callEdge('POST',{force:true}); await fetchState(); toast('Forced decision'); }catch{ toast('Force failed'); }};
 
 function clearSelection(){ voteA.classList.remove('selected'); voteB.classList.remove('selected'); chosen=null; submitBtn.textContent='✅ Submit Vote'; submitBtn.disabled=!currentUid; }
 voteA.onclick=()=>{ if (votingLockedFor(activeSlot)) return toast('Voting closed'); chosen='red'; voteA.classList.add('selected'); voteB.classList.remove('selected'); submitBtn.disabled=!currentUid; };
