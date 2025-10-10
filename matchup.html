@@ -4,6 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Rage Space — Matchup</title>
+<link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
 :root{ --green:#39ff14; --green-bright:#7dff62; --bg:#000; --ink:#e5e5e5; --card:#0b0b0b; --border:#153b16; --muted:#8aff8a; --maxw:980px; --danger:#ff3b3b; }
@@ -183,9 +184,31 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .title{font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .small{font-size:12px; color:var(--muted)}
 .tabs{display:none}
+
+/* ======= CYBERPUNK BOOT LOADER ======= */
+#bootLoader{
+  position:fixed; inset:0; z-index:10000;
+  background: radial-gradient(120% 120% at 50% 0%, rgba(0,255,120,.08), rgba(0,0,0,.96) 60%), #000;
+  display:flex; align-items:center; justify-content:center; flex-direction:column;
+  color:var(--green); font-variant-numeric:tabular-nums; text-align:center;
+  transition:opacity .35s ease, visibility .35s ease;
+}
+#bootLoader.hidden{ opacity:0; visibility:hidden; pointer-events:none }
+.boot-title{letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; font-size:14px}
+.boot-bar{width:min(560px,90vw); height:12px; border:1px solid var(--green); border-radius:999px; overflow:hidden; background:rgba(0,255,120,.07)}
+.boot-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--green), var(--green-bright)); box-shadow:0 0 18px rgba(57,255,20,.35) inset}
+.boot-sub{margin-top:8px; color:var(--muted); font-size:12px}
 </style>
 </head>
 <body>
+
+<!-- CYBERPUNK LOADING OVERLAY -->
+<div id="bootLoader" aria-live="polite">
+  <div class="boot-title">Rage Space — syncing…</div>
+  <div class="boot-bar"><div class="boot-fill" id="bootFill"></div></div>
+  <div class="boot-sub" id="bootMsg">initializing</div>
+</div>
+
   <div class="wrap">
     <div class="scorebar">
       <div class="tiny">
@@ -332,6 +355,31 @@ let overlayGateBase=null; // base ISO allowed to trigger champion
 // Freeze images per battle: "<baseISO>::sf1|sf2|final" → {A,B}
 const imgCache = new Map();
 let lastPaintedBattleKey=null;
+
+/* ---------- Boot Loader helper ---------- */
+const bootFill = ()=>document.getElementById('bootFill');
+const bootMsg  = ()=>document.getElementById('bootMsg');
+const bootWrap = ()=>document.getElementById('bootLoader');
+let _bootTarget = 0, _bootTimer=null;
+
+function setBoot(p, msg){
+  _bootTarget = Math.max(_bootTarget, Math.min(100, p));
+  if (msg) bootMsg().textContent = msg;
+}
+function startBootTick(){
+  if (_bootTimer) return;
+  _bootTimer = setInterval(()=>{
+    const el = bootFill();
+    const cur = parseFloat(el.style.width||'0');
+    const toward = (_bootTarget>cur) ? (cur + Math.max(1,( _bootTarget-cur)*0.12)) : (cur + 0.18); // creep if stalled
+    el.style.width = Math.min(99, toward).toFixed(2) + '%';
+  }, 60);
+}
+function endBoot(){
+  clearInterval(_bootTimer); _bootTimer=null;
+  bootFill().style.width='100%';
+  setTimeout(()=> bootWrap().classList.add('hidden'), 280);
+}
 
 /* ---------- Helpers ---------- */
 async function getUidOrNull(){ const {data:{session}}=await supabase.auth.getSession(); return session?.user?.id ?? null; }
@@ -549,12 +597,12 @@ function stopConfetti(){
 
 /* ---------- Typewriter (slower + cancellable) ---------- */
 let _typewriterToken = 0;
-async function typewriter(el, text, speed=85){ // try 70–110 for slower/faster
-  const myToken = ++_typewriterToken;          // cancel previous runs
+async function typewriter(el, text, speed=85){
+  const myToken = ++_typewriterToken;
   el.textContent = '';
   el.classList.add('type-caret');
   for (let i=0;i<text.length;i++){
-    if (myToken !== _typewriterToken) return;  // aborted by new run
+    if (myToken !== _typewriterToken) return;
     el.textContent += text[i];
     await new Promise(r=>setTimeout(r, speed));
   }
@@ -572,7 +620,7 @@ function showChampion(color, finalBaseISO){
   overlayArtImg.src = src;
 
   overlayTitle.textContent = 'CHAMPION';
-  const sub   = (color==='red') ? 'Final: Left prevails' : 'Final: Right prevails';
+  const sub   = (color==='red') ? 'Tie… random winner picked: Left' : 'Tie… random winner picked: Right';
   const motto = 'Glory to the machine. Your art devours the bracket';
 
   overlaySubtitle.textContent = '';
@@ -582,8 +630,8 @@ function showChampion(color, finalBaseISO){
   startConfetti(); // one burst; stops after 5s
 
   (async ()=>{
-    await typewriter(overlaySubtitle, sub,   95); // slower subtitle
-    await typewriter(overlayMotto,   motto,  85); // motto slightly faster
+    await typewriter(overlaySubtitle, sub,   95);
+    await typewriter(overlayMotto,   motto,  85);
   })();
 }
 
@@ -882,14 +930,26 @@ submitBtn.onclick=async()=>{
   }catch{ toast('Vote failed'); }
 };
 
-/* ---------- Boot ---------- */
+/* ---------- Boot (with staged loader) ---------- */
 (async()=>{
+  startBootTick();           setBoot(5,'wiring auth');
   currentUid = await getUidOrNull(); paintLoginBadge();
   supabase.auth.onAuthStateChange((_evt, session)=>{ currentUid=session?.user?.id ?? null; paintLoginBadge(); submitBtn.disabled=!chosen||!currentUid; });
 
+  setBoot(35,'fetching state');
   await fetchState();
+
+  setBoot(58,'seeding images');
   await paintImagesForActive();
+
+  setBoot(74,'loading vote counts');
+  await refreshVoteCounts();
+
+  setBoot(92,'starting engine');
   await start();
+
+  setBoot(100,'ready');
+  endBoot();
 })();
 </script>
 </body>
