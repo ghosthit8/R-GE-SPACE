@@ -348,13 +348,11 @@ const showDone = document.getElementById('showDone');
 /* ---------- State ---------- */
 let paused=false, serverPhaseEndISO=null, currentPhaseKey=null, prevPhaseKey=null, periodSec=20, remainingSec=null, lastSyncAt=0, lastCountsAt=0;
 let currentUid=null, chosen=null;
-/* CHANGED: start at qf1 (was 'sf1') */
-let activeSlot='qf1'; // 'qf1'|'qf2'|'qf3'|'qf4'|'sf1'|'sf2'|'final'
-let wasInSemiStage=false;
+let activeSlot='sf1'; // 'sf1'|'sf2'|'final'
 let wasInFinalStage=false;
 let overlayGateBase=null; // base ISO allowed to trigger champion
 
-// Freeze images per battle
+// Freeze images per battle: "<baseISO>::sf1|sf2|final" → {A,B}
 const imgCache = new Map();
 let lastPaintedBattleKey=null;
 
@@ -373,7 +371,7 @@ function startBootTick(){
   _bootTimer = setInterval(()=>{
     const el = bootFill();
     const cur = parseFloat(el.style.width||'0');
-    const toward = (_bootTarget>cur) ? (cur + Math.max(1,( _bootTarget-cur)*0.12)) : (cur + 0.18);
+    const toward = (_bootTarget>cur) ? (cur + Math.max(1,( _bootTarget-cur)*0.12)) : (cur + 0.18); // creep if stalled
     el.style.width = Math.min(99, toward).toFixed(2) + '%';
   }, 60);
 }
@@ -395,33 +393,22 @@ async function callEdge(method='GET', body=null){
 }
 const normalize=(s)=>({phase_end_at:s.phase_end_at??null, period_sec:s.period_sec??20, paused:!!s.paused, remaining_sec:(typeof s.remaining_sec==='number')?s.remaining_sec:null});
 
-/* ==== KEYS & SEEDS (extended for 8) ==== */
 function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
-function quarterKeysFor(baseISO){ return { qf1:`${baseISO}::qf1`, qf2:`${baseISO}::qf2`, qf3:`${baseISO}::qf3`, qf4:`${baseISO}::qf4` }; }
 function semiKeysFor(baseISO){ return { sf1:`${baseISO}::sf1`, sf2:`${baseISO}::sf2` }; }
 function finalKeyFor(baseISO){ return `${baseISO}::final`; }
 function baseFromKey(k){ return (k||'').split('::')[0] || ''; }
 
-/* ---------- Stage detection (quarters → semis → final) ---------- */
+/* ---------- Stage detection ---------- */
 async function detectStage(){
-  if (!currentPhaseKey || !prevPhaseKey) return {stage:'quarters', semisReady:false, finalsReady:false};
-  const base = prevPhaseKey;
-
-  const q = Object.values(quarterKeysFor(base));
-  const { data:qdata, error:qerr } = await supabase.from('winners').select('phase_key,color').in('phase_key', q);
-  if (qerr) return {stage:'quarters', semisReady:false, finalsReady:false};
-  const qHaveAll = (qdata||[]).length===4;
-
-  const s = Object.values(semiKeysFor(base));
-  const { data:sdata } = await supabase.from('winners').select('phase_key,color').in('phase_key', s);
-  const sHaveBoth = (sdata||[]).length===2;
-
-  if (!qHaveAll) return {stage:'quarters', semisReady:false, finalsReady:false};
-  if (qHaveAll && !sHaveBoth) return {stage:'semis', semisReady:true, finalsReady:false};
-  return {stage:'final', semisReady:true, finalsReady:true};
+  if (!currentPhaseKey || !prevPhaseKey) return {stage:'semis', finalsReady:false};
+  const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
+  const { data, error } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
+  if (error) return {stage:'semis', finalsReady:false};
+  const haveBoth = (data||[]).length===2 && data.every(r => r.color==='red' || r.color==='blue');
+  return {stage: haveBoth ? 'final' : 'semis', finalsReady: haveBoth};
 }
 
-/* ---------- Final entrants from semi winners (unchanged logic) ---------- */
+/* ---------- Final entrants from semi winners ---------- */
 async function getFinalEntrantSourcesFromWinners(){
   if (!prevPhaseKey) return null;
   const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
@@ -429,29 +416,54 @@ async function getFinalEntrantSourcesFromWinners(){
   const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
   const c1 = map[sf1], c2 = map[sf2];
   if (!c1 || !c2) return null;
-  const left  = seedUrlFromKey(prevPhaseKey, c1==='red' ? 'A1' : 'B1');
-  const right = seedUrlFromKey(prevPhaseKey, c2==='red' ? 'A2' : 'B2');
+  const left = seedUrlFromKey(prevPhaseKey, c1==='red' ? 'A1' : 'B1');
+  const right= seedUrlFromKey(prevPhaseKey, c2==='red' ? 'A2' : 'B2');
   return {A:left, B:right};
 }
 
-/* ---------- Battle key resolution (FREEZE) ---------- */
+/* Build a human label for FINAL using semi winners */
+async function finalSeedsTitle(){
+  if (!prevPhaseKey) return 'TBD vs TBD';
+  const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
+  const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
+  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
+  const pick = (slot,color)=> {
+    if (slot==='sf1'){ return color==='red' ? 'Seed A' : 'Seed B'; }
+    if (slot==='sf2'){ return color==='red' ? 'Seed C' : 'Seed D'; }
+    return 'TBD';
+  };
+  const s1 = map[sf1] ? pick('sf1',map[sf1]) : null;
+  const s2 = map[sf2] ? pick('sf2',map[sf2]) : null;
+  return (s1 && s2) ? `${s1} vs ${s2}` : 'TBD vs TBD';
+}
+
+/* ---------- Winner/Loser helpers for semis ---------- */
+async function getWinnerColorForSemi(baseISO, slot){
+  const key = `${baseISO}::${slot}`;
+  const { data } = await supabase.from('winners').select('color').eq('phase_key', key).maybeSingle();
+  return (data?.color||null);
+}
+function loserSuffixForSemi(slot, winnerColor){
+  if (!winnerColor) return null;
+  if (slot==='sf1'){ return winnerColor==='red' ? 'B1' : 'A1'; }
+  if (slot==='sf2'){ return winnerColor==='red' ? 'B2' : 'A2'; }
+  return null;
+}
+
+/* ---------- Battle key resolution (FREEZE semis) ---------- */
 function baseForSlot(slot){
-  // Final uses current base; semis use previous when already in final; quarters use previous when in semis or final
   if (slot==='final') return currentPhaseKey;
-  if (slot==='sf1' || slot==='sf2') return wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey;
-  if (slot.startsWith('qf')) return (wasInSemiStage || wasInFinalStage) ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey;
-  return currentPhaseKey;
+  return wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey;
 }
 function battleKeyFor(slot){
   const base = baseForSlot(slot);
   if (!base) return null;
   if (slot==='final') return finalKeyFor(base);
-  if (slot==='sf1' || slot==='sf2'){ const { sf1, sf2 } = semiKeysFor(base); return slot==='sf1' ? sf1 : sf2; }
-  if (slot==='qf1' || slot==='qf2' || slot==='qf3' || slot==='qf4'){ const m=quarterKeysFor(base); return m[slot]; }
-  return null;
+  const { sf1, sf2 } = semiKeysFor(base);
+  return slot==='sf1' ? sf1 : sf2;
 }
 
-/* ---------- Image paint (now covers QF/SF/Final) ---------- */
+/* ---------- Image paint (frozen per battle) ---------- */
 async function paintImagesForActive(){
   const bKey = battleKeyFor(activeSlot);
   if (!bKey) return;
@@ -460,21 +472,25 @@ async function paintImagesForActive(){
     const {A,B}=imgCache.get(bKey);
     imgA.src=A; imgB.src=B;
   } else {
-    if (activeSlot==='qf1'){ const pack={A:seedUrlFromKey(baseForSlot('qf1'),'A1'),B:seedUrlFromKey(baseForSlot('qf1'),'B1')}; imgCache.set(bKey,pack); imgA.src=pack.A; imgB.src=pack.B; }
-    else if (activeSlot==='qf2'){ const pack={A:seedUrlFromKey(baseForSlot('qf2'),'A2'),B:seedUrlFromKey(baseForSlot('qf2'),'B2')}; imgCache.set(bKey,pack); imgA.src=pack.A; imgB.src=pack.B; }
-    else if (activeSlot==='qf3'){ const pack={A:seedUrlFromKey(baseForSlot('qf3'),'A3'),B:seedUrlFromKey(baseForSlot('qf3'),'B3')}; imgCache.set(bKey,pack); imgA.src=pack.A; imgB.src=pack.B; }
-    else if (activeSlot==='qf4'){ const pack={A:seedUrlFromKey(baseForSlot('qf4'),'A4'),B:seedUrlFromKey(baseForSlot('qf4'),'B4')}; imgCache.set(bKey,pack); imgA.src=pack.A; imgB.src=pack.B; }
-    else if (activeSlot==='sf1'){ const pack={A:seedUrlFromKey(baseForSlot('sf1'),'A1'),B:seedUrlFromKey(baseForSlot('sf1'),'B1')}; imgCache.set(bKey,pack); imgA.src=pack.A; imgB.src=pack.B; }
-    else if (activeSlot==='sf2'){ const pack={A:seedUrlFromKey(baseForSlot('sf2'),'A2'),B:seedUrlFromKey(baseForSlot('sf2'),'B2')}; imgCache.set(bKey,pack); imgA.src=pack.A; imgB.src=pack.B; }
-    else { // final
+    if (activeSlot==='sf1'){
+      const A = seedUrlFromKey(baseForSlot('sf1'),'A1');
+      const B = seedUrlFromKey(baseForSlot('sf1'),'B1');
+      imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
+    } else if (activeSlot==='sf2'){
+      const A = seedUrlFromKey(baseForSlot('sf2'),'A2');
+      const B = seedUrlFromKey(baseForSlot('sf2'),'B2');
+      imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
+    } else {
       const finals = await getFinalEntrantSourcesFromWinners();
-      if (finals){ imgCache.set(bKey, finals); imgA.src=finals.A; imgB.src=finals.B; }
-      else { imgA.removeAttribute('src'); imgB.removeAttribute('src'); }
+      if (finals){
+        imgCache.set(bKey, finals); imgA.src=finals.A; imgB.src=finals.B;
+      } else {
+        imgA.removeAttribute('src'); imgB.removeAttribute('src');
+      }
     }
   }
 
-  if (activeSlot.startsWith('qf')){ labelA.textContent=`${activeSlot.toUpperCase()} — Left`; labelB.textContent=`${activeSlot.toUpperCase()} — Right`; }
-  else if (activeSlot==='sf1'){ labelA.textContent='Semi 1 — Left'; labelB.textContent='Semi 1 — Right'; }
+  if (activeSlot==='sf1'){ labelA.textContent='Semi 1 — Left'; labelB.textContent='Semi 1 — Right'; }
   else if (activeSlot==='sf2'){ labelA.textContent='Semi 2 — Left'; labelB.textContent='Semi 2 — Right'; }
   else { labelA.textContent='Final — Left'; labelB.textContent='Final — Right'; }
 
@@ -519,67 +535,145 @@ async function decideAndPersistWinner(phaseKeyISO){
   return color;
 }
 
-/* ---------- Confetti / Typewriter (unchanged) ---------- */
+/* ---------- Confetti (one burst; stop after 5s) ---------- */
 let _confettiRaf=null;
-function startConfetti(){ /* unchanged body */ 
+function startConfetti(){
   const ctx=confettiCanvas.getContext('2d');
   const W=()=> (confettiCanvas.width = innerWidth);
   const H=()=> (confettiCanvas.height = innerHeight);
   W(); H();
-  const cx = confettiCanvas.width/2; const cy = confettiCanvas.height/3;
+
+  const cx = confettiCanvas.width/2;
+  const cy = confettiCanvas.height/3;
+
   const N = 280;
   const parts = Array.from({length:N}, ()=> {
-    const ang = Math.random()*Math.PI*2; const spd = 3 + Math.random()*7;
-    return { x: cx, y: cy, vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd, w: 3+Math.floor(Math.random()*7), h: 3+Math.floor(Math.random()*7), rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.3, color: ['#39ff14','#7dff62','#00ffd5','#baffc9','#eaff00'][Math.floor(Math.random()*5)] };
+    const ang = Math.random()*Math.PI*2;
+    const spd = 3 + Math.random()*7;
+    return {
+      x: cx, y: cy,
+      vx: Math.cos(ang)*spd,
+      vy: Math.sin(ang)*spd,
+      w: 3+Math.floor(Math.random()*7),
+      h: 3+Math.floor(Math.random()*7),
+      rot: Math.random()*Math.PI,
+      vr: (Math.random()-0.5)*0.3,
+      color: ['#39ff14','#7dff62','#00ffd5','#baffc9','#eaff00'][Math.floor(Math.random()*5)]
+    };
   });
+
   function step(){
-    W(); H(); ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
+    W(); H();
+    ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
     parts.forEach(p=>{
-      p.vy += 0.04; p.vx *= 0.995; p.vy *= 0.995; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
-      if (p.x < -20) p.x = confettiCanvas.width + 20; if (p.x > confettiCanvas.width + 20) p.x = -20;
-      if (p.y < -20) p.y = confettiCanvas.height + 20; if (p.y > confettiCanvas.height + 20) p.y = -20;
-      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.color; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.restore();
+      p.vy += 0.04;         // gravity
+      p.vx *= 0.995; p.vy *= 0.995; // drag
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+
+      // wrap around (no new spawns)
+      if (p.x < -20) p.x = confettiCanvas.width + 20;
+      if (p.x > confettiCanvas.width + 20) p.x = -20;
+      if (p.y < -20) p.y = confettiCanvas.height + 20;
+      if (p.y > confettiCanvas.height + 20) p.y = -20;
+
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot);
+      ctx.fillStyle=p.color; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+      ctx.restore();
     });
     _confettiRaf = requestAnimationFrame(step);
   }
-  cancelAnimationFrame(_confettiRaf); step(); setTimeout(()=> stopConfetti(), 5000);
-}
-function stopConfetti(){ if (_confettiRaf) cancelAnimationFrame(_confettiRaf); _confettiRaf = null; const c=confettiCanvas.getContext('2d'); c.clearRect(0,0,confettiCanvas.width,confettiCanvas.height); }
-let _typewriterToken = 0;
-async function typewriter(el, text, speed=85){ const myToken = ++_typewriterToken; el.textContent = ''; el.classList.add('type-caret'); for (let i=0;i<text.length;i++){ if (myToken !== _typewriterToken) return; el.textContent += text[i]; await new Promise(r=>setTimeout(r, speed)); } if (myToken === _typewriterToken) el.classList.remove('type-caret'); }
+  cancelAnimationFrame(_confettiRaf);
+  step();
 
-/* ---------- Show champion (unchanged) ---------- */
+  // Auto-stop after 5 seconds
+  setTimeout(()=> stopConfetti(), 5000);
+}
+function stopConfetti(){
+  if (_confettiRaf) cancelAnimationFrame(_confettiRaf);
+  _confettiRaf = null;
+  const c=confettiCanvas.getContext('2d');
+  c.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
+}
+
+/* ---------- Typewriter (slower + cancellable) ---------- */
+let _typewriterToken = 0;
+async function typewriter(el, text, speed=85){
+  const myToken = ++_typewriterToken;
+  el.textContent = '';
+  el.classList.add('type-caret');
+  for (let i=0;i<text.length;i++){
+    if (myToken !== _typewriterToken) return;
+    el.textContent += text[i];
+    await new Promise(r=>setTimeout(r, speed));
+  }
+  if (myToken === _typewriterToken) el.classList.remove('type-caret');
+}
+
+/* ---------- Show champion (single trigger per final) ---------- */
 let _openChampionBase = null;
 function showChampion(color, finalBaseISO){
   if (_openChampionBase === finalBaseISO && overlay.classList.contains('show')) return;
   _openChampionBase = finalBaseISO;
+
   const cached = imgCache.get(finalKeyFor(finalBaseISO)) || {};
   const src = (color==='red') ? (cached.A || imgA.src) : (cached.B || imgB.src);
   overlayArtImg.src = src;
+
   overlayTitle.textContent = 'CHAMPION';
   const sub   = (color==='red') ? 'Tie… random winner picked: Left' : 'Tie… random winner picked: Right';
   const motto = 'Glory to the machine. Your art devours the bracket';
-  overlaySubtitle.textContent = ''; overlayMotto.textContent = '';
-  overlay.classList.add('show'); startConfetti();
-  (async ()=>{ await typewriter(overlaySubtitle, sub, 95); await typewriter(overlayMotto, motto, 85); })();
-}
-overlayClose.onclick=()=>{ overlay.classList.remove('show'); stopConfetti(); overlayArtImg.removeAttribute('src'); overlaySubtitle.textContent = ''; overlayMotto.textContent = ''; _typewriterToken++; _openChampionBase = null; };
 
-/* ---------- Fullscreen viewer (unchanged) ---------- */
-function openFullscreenFor(imgEl){ if (!imgEl || !imgEl.src) return; fsImage.src = imgEl.src; fsOverlay.classList.add('show'); }
-document.querySelectorAll('.fsbtn').forEach(btn=>{ btn.addEventListener('click', ()=>{ const targetId = btn.dataset.target; const imgEl = document.getElementById(targetId); openFullscreenFor(imgEl); });});
-fsClose.addEventListener('click', ()=>{ fsOverlay.classList.remove('show'); fsImage.src = ''; });
-fsOverlay.addEventListener('click', (e)=>{ if (e.target === fsOverlay){ fsOverlay.classList.remove('show'); fsImage.src=''; }});
-document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && fsOverlay.classList.contains('show')){ fsOverlay.classList.remove('show'); fsImage.src=''; }});
+  overlaySubtitle.textContent = '';
+  overlayMotto.textContent = '';
+
+  overlay.classList.add('show');
+  startConfetti(); // one burst; stops after 5s
+
+  (async ()=>{
+    await typewriter(overlaySubtitle, sub,   95);
+    await typewriter(overlayMotto,   motto,  85);
+  })();
+}
+
+overlayClose.onclick=()=>{ 
+  overlay.classList.remove('show'); 
+  stopConfetti(); 
+  overlayArtImg.removeAttribute('src');
+  overlaySubtitle.textContent = '';
+  overlayMotto.textContent = '';
+  _typewriterToken++;            // cancel any in-flight typing
+  _openChampionBase = null;      // allow next final
+};
+
+/* ---------- Fullscreen viewer ---------- */
+function openFullscreenFor(imgEl){
+  if (!imgEl || !imgEl.src) return;
+  fsImage.src = imgEl.src;
+  fsOverlay.classList.add('show');
+}
+document.querySelectorAll('.fsbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const targetId = btn.dataset.target;
+    const imgEl = document.getElementById(targetId);
+    openFullscreenFor(imgEl);
+  });
+});
+fsClose.addEventListener('click', ()=>{
+  fsOverlay.classList.remove('show');
+  fsImage.src = '';
+});
+fsOverlay.addEventListener('click', (e)=>{
+  if (e.target === fsOverlay){ fsOverlay.classList.remove('show'); fsImage.src=''; }
+});
+document.addEventListener('keydown', (e)=>{
+  if (e.key === 'Escape' && fsOverlay.classList.contains('show')){
+    fsOverlay.classList.remove('show'); fsImage.src='';
+  }
+});
 
 /* ---------- Timer / phase handling ---------- */
 function setStateUI(){ stateEl.textContent = paused ? 'PAUSED' : 'LIVE'; pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause'; phaseBadge.textContent='phase: '+(currentPhaseKey||'—'); }
-/* voting locks: when in final, SF & QF locked; when in semis, QF locked */
-function votingLockedFor(slot){
-  if (wasInFinalStage) return (slot.startsWith('sf') || slot.startsWith('qf'));
-  if (wasInSemiStage)  return slot.startsWith('qf');
-  return false;
-}
+function votingLockedFor(slot){ return wasInFinalStage && (slot==='sf1' || slot==='sf2'); }
 function applyVotingLockUI(){
   const locked = votingLockedFor(activeSlot);
   [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
@@ -606,9 +700,8 @@ async function fetchState(){
   // Phase flip
   if (prevEnd && serverPhaseEndISO && prevEnd !== serverPhaseEndISO){
     const justEndedBase = iso(prevEnd);
-    const stageBefore = (wasInFinalStage ? 'final' : (wasInSemiStage ? 'semis' : 'quarters'));
 
-    if (stageBefore==='final'){
+    if (wasInFinalStage){
       // FINAL just ended
       const finalKey = finalKeyFor(justEndedBase);
       const color = await decideAndPersistWinner(finalKey);
@@ -618,31 +711,26 @@ async function fetchState(){
       }
       if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
 
-      // Loop back to new tournament
+      // Loop back
       overlayGateBase = null;
-      activeSlot = 'qf1';
+      activeSlot = 'sf1';
       imgCache.clear(); lastPaintedBattleKey=null;
-    } else if (stageBefore==='semis'){
-      // SEMIS just ended → persist sf winners, then move into Final
+    } else {
+      // SEMIS just ended
       const { sf1, sf2 } = semiKeysFor(justEndedBase);
       await decideAndPersistWinner(sf1);
       await decideAndPersistWinner(sf2);
+
+      // Move INTO Final
       overlayGateBase = currentPhaseKey; // final that just started
       activeSlot = 'final';
       const pack = await getFinalEntrantSourcesFromWinners();
       if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
       lastPaintedBattleKey=null;
-    } else {
-      // QUARTERS just ended → persist all qf winners, then go to semis
-      const qs = Object.values(quarterKeysFor(justEndedBase));
-      for (const k of qs){ await decideAndPersistWinner(k); }
-      activeSlot = 'sf1';
-      lastPaintedBattleKey=null;
     }
   }
 
   const { stage } = await detectStage();
-  wasInSemiStage  = (stage==='semis');
   wasInFinalStage = (stage==='final');
 
   await paintImagesForActive();
@@ -651,31 +739,29 @@ async function fetchState(){
   applyVotingLockUI();
 }
 
-/* ---------- Bracket list rendering ---------- */
+/* ---------- Bracket list rendering (compact) ---------- */
 function labelFor(slot){
-  if (slot.startsWith('qf')) return {round:'QF', title:slot.toUpperCase()};
-  if (slot==='sf1') return {round:'SF', title:'Seed A vs Seed B'};
-  if (slot==='sf2') return {round:'SF', title:'Seed C vs Seed D'};
+  if (slot==='sf1') return {round:'QF', title:'Seed A vs Seed B'};
+  if (slot==='sf2') return {round:'QF', title:'Seed C vs Seed D'};
   return {round:'Final', title:'TBD vs TBD'};
 }
 function slotKeyFor(slot, baseISO){
   if (slot==='final') return finalKeyFor(baseISO);
-  if (slot==='sf1' || slot==='sf2'){ const { sf1, sf2 } = semiKeysFor(baseISO); return slot==='sf1'?sf1:sf2; }
-  if (slot.startsWith('qf')){ const q=quarterKeysFor(baseISO); return q[slot]; }
-  return null;
+  const { sf1, sf2 } = semiKeysFor(baseISO);
+  return (slot==='sf1'?sf1:sf2);
 }
 
 /* thumbnails reflect actual battles */
 async function thumbsFor(slot){
   if (!currentPhaseKey) return {A:'',B:''};
 
-  let base;
-  if (slot==='final'){ base = currentPhaseKey; }
-  else if (slot==='sf1' || slot==='sf2'){ base = wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey; }
-  else { /* qf */ base = (wasInSemiStage || wasInFinalStage) ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey; }
+  const base = (slot==='final')
+    ? currentPhaseKey
+    : (wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey);
 
-  const key = slotKeyFor(slot, base);
-  if (!key) return {A:'',B:''};
+  const key = (slot==='final')
+    ? finalKeyFor(base)
+    : (slot==='sf1' ? `${base}::sf1` : `${base}::sf2`);
 
   if (imgCache.has(key)) return imgCache.get(key);
 
@@ -683,14 +769,12 @@ async function thumbsFor(slot){
     const finals = await getFinalEntrantSourcesFromWinners();
     if (finals){ imgCache.set(key, finals); return finals; }
     return {A:'',B:''};
-  } else if (slot.startsWith('sf')){
+  } else {
     const A = seedUrlFromKey(base, slot==='sf1' ? 'A1' : 'A2');
     const B = seedUrlFromKey(base, slot==='sf1' ? 'B1' : 'B2');
-    const pack = {A,B}; imgCache.set(key, pack); return pack;
-  } else { // qf
-    const num = slot==='qf1'?1:slot==='qf2'?2:slot==='qf3'?3:4;
-    const pack = {A:seedUrlFromKey(base,`A${num}`), B:seedUrlFromKey(base,`B${num}`)};
-    imgCache.set(key, pack); return pack;
+    const pack = {A,B};
+    imgCache.set(key, pack);
+    return pack;
   }
 }
 
@@ -715,19 +799,18 @@ function highlightActiveRow(){
 async function updateBracketScores(){
   const base = currentPhaseKey;
   if (!base) return;
-
-  const slots = ['qf1','qf2','qf3','qf4','sf1','sf2','final'];
-  for (const slot of slots){
+  for (const slot of ['sf1','sf2','final']){
     let keyBase = base;
-    if (slot.startsWith('sf') && wasInFinalStage) keyBase = prevPhaseKey || base;
-    if (slot.startsWith('qf') && (wasInSemiStage || wasInFinalStage)) keyBase = prevPhaseKey || base;
+    if (wasInFinalStage && (slot==='sf1' || slot==='sf2')) keyBase = prevPhaseKey || base;
     const key = slotKeyFor(slot, keyBase);
     const sEl = document.querySelector(`#${rowId(slot)} .bscore`);
-    if (!sEl || !key) continue;
+    if (!sEl) continue;
     try{
       const {r,b}=await countVotesFor(key);
       sEl.textContent = `${r} - ${b}`;
-    }catch{ sEl.textContent = `0 - 0`; }
+    }catch{
+      sEl.textContent = `0 - 0`;
+    }
   }
 }
 
@@ -735,24 +818,16 @@ async function renderBracket(){
   const base = currentPhaseKey;
   if (!base){ brows.innerHTML=''; return; }
 
-  const finalTitle = await (async()=>{ 
-    // reuse your existing finalSeedsTitle without deleting lines
-    if (!prevPhaseKey) return 'TBD vs TBD';
-    const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
-    const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
-    const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
-    const pick = (slot,color)=> slot==='sf1' ? (color==='red'?'Seed A':'Seed B') : (color==='red'?'Seed C':'Seed D');
-    const s1 = map[sf1] ? pick('sf1',map[sf1]) : null;
-    const s2 = map[sf2] ? pick('sf2',map[sf2]) : null;
-    return (s1 && s2) ? `${s1} vs ${s2}` : 'TBD vs TBD';
-  })();
+  const titles = {
+    sf1: labelFor('sf1').title,
+    sf2: labelFor('sf2').title,
+    final: await finalSeedsTitle()
+  };
 
-  const slots = ['qf1','qf2','qf3','qf4','sf1','sf2','final'];
-  const rows = await Promise.all(slots.map(async (slot)=>{
+  const rows = await Promise.all(['sf1','sf2','final'].map(async (slot)=>{
     const round = labelFor(slot).round;
     const thumbs = await thumbsFor(slot);
     const decided = votingLockedFor(slot);
-    const title = (slot==='final') ? finalTitle : labelFor(slot).title;
     return `
       <div class="brow ${decided?'decided':''}" id="${rowId(slot)}" data-slot="${slot}">
         <div class="bbadge">${round}</div>
@@ -761,7 +836,7 @@ async function renderBracket(){
           <div class="thumb">${thumbs.B ? `<img src="${thumbs.B}" alt="">` : ''}</div>
         </div>
         <div class="bmeta">
-          <div class="title">${title}</div>
+          <div class="title">${slot==='final'?titles.final:(titles[slot]||'')}</div>
           <div class="bline">
             <span class="bpill">${decided?'round decided':'uses global'}</span>
           </div>
@@ -876,6 +951,265 @@ submitBtn.onclick=async()=>{
   setBoot(100,'ready');
   endBoot();
 })();
+
+<!-- ===== APPEND-ONLY 8-IMAGE UPGRADE (no deletions) ===== -->
+<script>
+(() => {
+  // === New slots & helpers ===
+  const QF_SLOTS = ['qf1','qf2','qf3','qf4'];
+  const ALL_SLOTS = ['qf1','qf2','qf3','qf4','sf1','sf2','final'];
+
+  function quarterKeysFor(baseISO){
+    return { qf1:`${baseISO}::qf1`, qf2:`${baseISO}::qf2`, qf3:`${baseISO}::qf3`, qf4:`${baseISO}::qf4` };
+  }
+  // seeding helpers that match your picsum scheme
+  function seedPairFor(slot, base){
+    const n = slot==='qf1'?1:slot==='qf2'?2:slot==='qf3'?3:slot==='qf4'?4:slot==='sf1'?1:2;
+    return { A: seedUrlFromKey(base,`A${n}`), B: seedUrlFromKey(base,`B${n}`) };
+  }
+
+  // === Stage detection override: quarters -> semis -> final ===
+  const _detectStagePrev = detectStage; // keep ref (not used, but preserved)
+  window.detectStage = async function detectStage8(){
+    if (!currentPhaseKey || !prevPhaseKey) return {stage:'quarters', semisReady:false, finalsReady:false};
+    const base = prevPhaseKey;
+    const q = Object.values(quarterKeysFor(base));
+    const { data:qdata } = await supabase.from('winners').select('phase_key,color').in('phase_key', q);
+    const haveQ = (qdata||[]).length===4;
+
+    const { sf1,sf2 } = semiKeysFor(base);
+    const { data:sdata } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
+    const haveS = (sdata||[]).length===2;
+
+    if (!haveQ) return {stage:'quarters', semisReady:false, finalsReady:false};
+    if (haveQ && !haveS) return {stage:'semis', semisReady:true, finalsReady:false};
+    return {stage:'final', semisReady:true, finalsReady:true};
+  };
+
+  // === Voting lock override: later rounds lock earlier ones ===
+  const _vLockedPrev = votingLockedFor;
+  window.votingLockedFor = function votingLockedFor8(slot){
+    if (wasInFinalStage) return (slot.startsWith('sf') || slot.startsWith('qf'));
+    if (wasInSemiStage)  return slot.startsWith('qf');
+    return false;
+  };
+
+  // === Base & key resolution expanded to QFs ===
+  window.baseForSlot = function baseForSlot8(slot){
+    if (slot==='final') return currentPhaseKey;
+    if (slot==='sf1' || slot==='sf2') return wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey;
+    if (slot.startsWith('qf')) return (wasInSemiStage || wasInFinalStage) ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey;
+    return currentPhaseKey;
+  };
+  window.battleKeyFor = function battleKeyFor8(slot){
+    const base = baseForSlot(slot);
+    if (!base) return null;
+    if (slot==='final') return finalKeyFor(base);
+    if (slot==='sf1' || slot==='sf2'){ const { sf1, sf2 } = semiKeysFor(base); return slot==='sf1'?sf1:sf2; }
+    if (slot.startsWith('qf')){ const q = quarterKeysFor(base); return q[slot]; }
+    return null;
+  };
+
+  // === Paint images now covers QF/SF/Final ===
+  const _paintPrev = paintImagesForActive;
+  window.paintImagesForActive = async function paintImagesForActive8(){
+    const bKey = battleKeyFor(activeSlot);
+    if (!bKey) return;
+
+    if (imgCache.has(bKey)){
+      const {A,B}=imgCache.get(bKey);
+      imgA.src=A; imgB.src=B;
+    } else {
+      if (activeSlot.startsWith('qf') || activeSlot.startsWith('sf')){
+        const pack = seedPairFor(activeSlot, baseForSlot(activeSlot));
+        imgCache.set(bKey, pack); imgA.src=pack.A; imgB.src=pack.B;
+      } else {
+        const finals = await getFinalEntrantSourcesFromWinners();
+        if (finals){ imgCache.set(bKey, finals); imgA.src=finals.A; imgB.src=finals.B; }
+        else { imgA.removeAttribute('src'); imgB.removeAttribute('src'); }
+      }
+    }
+
+    if (activeSlot.startsWith('qf')){ labelA.textContent=`${activeSlot.toUpperCase()} — Left`; labelB.textContent=`${activeSlot.toUpperCase()} — Right`; }
+    else if (activeSlot==='sf1'){ labelA.textContent='Semi 1 — Left'; labelB.textContent='Semi 1 — Right'; }
+    else if (activeSlot==='sf2'){ labelA.textContent='Semi 2 — Left'; labelB.textContent='Semi 2 — Right'; }
+    else { labelA.textContent='Final — Left'; labelB.textContent='Final — Right'; }
+
+    imgA.loading='eager'; imgB.loading='eager'; imgA.decoding='async'; imgB.decoding='async';
+    lastPaintedBattleKey=bKey;
+
+    renderBracket();
+    applyVotingLockUI();
+  };
+
+  // === Bracket rows include QFs ===
+  const _rowId = (slot)=>`row-${slot}`;
+  const _updatePrev = updateBracketScores;
+  window.updateBracketScores = async function updateBracketScores8(){
+    const base = currentPhaseKey; if (!base) return;
+    for (const slot of ALL_SLOTS){
+      let keyBase = base;
+      if (slot.startsWith('sf') && wasInFinalStage) keyBase = prevPhaseKey || base;
+      if (slot.startsWith('qf') && (wasInSemiStage || wasInFinalStage)) keyBase = prevPhaseKey || base;
+      const key = (slot==='final') ? finalKeyFor(keyBase)
+                 : (slot.startsWith('sf') ? (slot==='sf1'?semiKeysFor(keyBase).sf1:semiKeysFor(keyBase).sf2)
+                 : quarterKeysFor(keyBase)[slot]);
+      const sEl = document.querySelector(`#${_rowId(slot)} .bscore`);
+      if (!sEl || !key) continue;
+      try{ const {r,b}=await countVotesFor(key); sEl.textContent = `${r} - ${b}`; }
+      catch{ sEl.textContent = `0 - 0`; }
+    }
+  };
+
+  async function finalTitleFromWinners(){
+    if (!prevPhaseKey) return 'TBD vs TBD';
+    const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
+    const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
+    const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
+    const pick = (slot,color)=> slot==='sf1' ? (color==='red'?'Seed A':'Seed B') : (color==='red'?'Seed C':'Seed D');
+    const s1 = map[sf1] ? pick('sf1',map[sf1]) : null;
+    const s2 = map[sf2] ? pick('sf2',map[sf2]) : null;
+    return (s1 && s2) ? `${s1} vs ${s2}` : 'TBD vs TBD';
+  }
+
+  async function thumbsFor(slot){
+    if (!currentPhaseKey) return {A:'',B:''};
+    let base;
+    if (slot==='final'){ base = currentPhaseKey; }
+    else if (slot.startsWith('sf')){ base = wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey; }
+    else { base = (wasInSemiStage || wasInFinalStage) ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey; }
+    const key = battleKeyFor(slot);
+    if (imgCache.has(key)) return imgCache.get(key);
+    if (slot==='final'){
+      const finals = await getFinalEntrantSourcesFromWinners();
+      if (finals){ imgCache.set(key, finals); return finals; }
+      return {A:'',B:''};
+    }
+    const pack = seedPairFor(slot, base); imgCache.set(key, pack); return pack;
+  }
+
+  window.renderBracket = async function renderBracket8(){
+    const base = currentPhaseKey; if (!base){ brows.innerHTML=''; return; }
+    const finalTitle = await finalTitleFromWinners();
+    const labelFor = (slot)=>{
+      if (slot.startsWith('qf')) return {round:'QF', title:slot.toUpperCase()};
+      if (slot==='sf1') return {round:'SF', title:'Seed A vs Seed B'};
+      if (slot==='sf2') return {round:'SF', title:'Seed C vs Seed D'};
+      return {round:'Final', title:finalTitle};
+    };
+
+    const rows = await Promise.all(ALL_SLOTS.map(async (slot)=>{
+      const lab = labelFor(slot);
+      const thumbs = await thumbsFor(slot);
+      const decided = votingLockedFor(slot);
+      return `
+        <div class="brow ${decided?'decided':''}" id="${_rowId(slot)}" data-slot="${slot}">
+          <div class="bbadge">${lab.round}</div>
+          <div class="thumb2">
+            <div class="thumb">${thumbs.A ? `<img src="${thumbs.A}" alt="">` : ''}</div>
+            <div class="thumb">${thumbs.B ? `<img src="${thumbs.B}" alt="">` : ''}</div>
+          </div>
+          <div class="bmeta">
+            <div class="title">${lab.title}</div>
+            <div class="bline"><span class="bpill">${decided?'round decided':'uses global'}</span></div>
+          </div>
+          <div class="bscore">0 - 0</div>
+        </div>`;
+    }));
+    brows.innerHTML = rows.join('');
+    // click handlers
+    brows.querySelectorAll('.brow').forEach(row=>{
+      row.addEventListener('click',()=>{
+        activeSlot = row.dataset.slot;
+        clearSelection();
+        lastPaintedBattleKey=null;
+        paintImagesForActive();
+        refreshVoteCounts();
+        document.querySelectorAll('.brow').forEach(el=>el.classList.remove('active'));
+        row.classList.add('active');
+        applyVotingLockUI();
+      });
+    });
+    // highlight
+    const r = document.getElementById(_rowId(activeSlot));
+    r && r.classList.add('active');
+    updateBracketScores();
+  };
+
+  // === fetchState override to decide QFs/SFs at phase flips ===
+  const _fetchPrev = fetchState;
+  window.fetchState = async function fetchState8(){
+    const s = normalize(await callEdge('GET'));
+    const prevEnd = serverPhaseEndISO;
+
+    serverPhaseEndISO = s.phase_end_at;
+    paused = s.paused;
+    remainingSec = s.remaining_sec;
+    periodSec = s.period_sec ?? 20;
+    lastSyncAt = Date.now();
+
+    currentPhaseKey = serverPhaseEndISO ? iso(serverPhaseEndISO) : null;
+    prevPhaseKey = currentPhaseKey && periodSec ? iso(Date.parse(currentPhaseKey) - periodSec*1000) : null;
+
+    setStateUI();
+
+    // On phase boundary, persist winners for the round that just ended
+    if (prevEnd && serverPhaseEndISO && prevEnd !== serverPhaseEndISO){
+      const justEndedBase = iso(prevEnd);
+      // figure out which stage we were in
+      let stageBefore = 'quarters';
+      if (wasInFinalStage) stageBefore = 'final';
+      else if (wasInSemiStage) stageBefore = 'semis';
+
+      if (stageBefore==='final'){
+        const finalKey = finalKeyFor(justEndedBase);
+        const color = await decideAndPersistWinner(finalKey);
+        if (!imgCache.has(finalKey)){
+          const pack = await getFinalEntrantSourcesFromWinners();
+          if (pack) imgCache.set(finalKey, pack);
+        }
+        if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
+        // loop to new QFs
+        overlayGateBase = null;
+        activeSlot = 'qf1';
+        imgCache.clear(); lastPaintedBattleKey=null;
+      } else if (stageBefore==='semis'){
+        const { sf1, sf2 } = semiKeysFor(justEndedBase);
+        await decideAndPersistWinner(sf1);
+        await decideAndPersistWinner(sf2);
+        // move into Final
+        overlayGateBase = currentPhaseKey;
+        activeSlot = 'final';
+        const pack = await getFinalEntrantSourcesFromWinners();
+        if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
+        lastPaintedBattleKey=null;
+      } else {
+        // quarters just ended → decide all 4 qfs
+        const qs = Object.values(quarterKeysFor(justEndedBase));
+        for (const k of qs){ await decideAndPersistWinner(k); }
+        activeSlot = 'sf1';
+        lastPaintedBattleKey=null;
+      }
+    }
+
+    const st = await detectStage();
+    wasInSemiStage  = (st.stage==='semis');
+    wasInFinalStage = (st.stage==='final');
+
+    // if we just booted and are still at start, prefer qf1
+    if (!activeSlot || !ALL_SLOTS.includes(activeSlot)) activeSlot = 'qf1';
+
+    await paintImagesForActive();
+    await refreshVoteCounts();
+    renderBracket();
+    applyVotingLockUI();
+  };
+
+  // prefer qf1 on first boot if code previously set sf1
+  if (typeof activeSlot === 'string' && activeSlot === 'sf1') activeSlot = 'qf1';
+})();
+</script>
+<!-- ===== /APPEND-ONLY 8-IMAGE UPGRADE ===== -->
 </script>
 </body>
 </html>
