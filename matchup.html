@@ -69,7 +69,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18);z-index:50}
 .toast.show{display:block}
 
-/* ===== Winner Overlay (art clean, additions for frame + typewriter) ===== */
+/* ===== Winner Overlay (art clean, frame, typewriter) ===== */
 #overlay{
   position:fixed; inset:0; display:none;
   background:rgba(0,0,0,.92);
@@ -79,38 +79,33 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 #overlay.show{display:flex}
 #confetti{position:absolute; inset:0; pointer-events:none; z-index:3}
 
-/* background layers */
+/* stage + art */
 .overlay-bg{position:absolute; inset:0; overflow:hidden}
-.overlay-art{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:2}
-.overlay-art img{max-width:100%; max-height:100%; object-fit:contain; display:block}
-/* scanlines BEHIND the image */
-.scanlines{position:absolute; inset:0; z-index:1; background:repeating-linear-gradient(to bottom, rgba(0,0,0,.25) 0px, rgba(0,0,0,.25) 2px, transparent 3px, transparent 4px)}
-.vignette{position:absolute; inset:-10%; z-index:1; background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.6) 100%)}
+.overlay-stage{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:2}
+.art-wrap{position:relative; display:inline-block; max-width:92vw; max-height:78vh}
+.art-wrap img{max-width:100%; max-height:100%; object-fit:contain; display:block}
 
-/* NEW: frame sits AROUND the image without covering it */
-.art-wrap{position:relative; display:inline-block; max-width:92vw; max-height:78vh; overflow:visible}
+/* GLITCHY SCANLINE FRAME (around the image, not over it) */
 .scanline-frame{ --frame:28px; pointer-events:none; position:absolute; inset:0; }
 .scanline-frame .band{
-  position:absolute;
+  position:absolute; background:
+    repeating-linear-gradient(to right,
+      rgba(57,255,20,.38) 0 2px, transparent 2px 4px),
+    linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,.35));
   filter: drop-shadow(0 0 8px rgba(57,255,20,.35));
   animation: glitchShift 1.2s steps(6,end) infinite, flicker 2.6s steps(20,end) infinite;
 }
-.scanline-frame .top{
-  left:calc(-1*var(--frame)); right:calc(-1*var(--frame)); top:calc(-1*var(--frame)); height:var(--frame);
-  background:repeating-linear-gradient(to right, rgba(57,255,20,.38) 0 2px, transparent 2px 4px), linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,.35));
-}
-.scanline-frame .bottom{
-  left:calc(-1*var(--frame)); right:calc(-1*var(--frame)); bottom:calc(-1*var(--frame)); height:var(--frame);
-  background:repeating-linear-gradient(to right, rgba(57,255,20,.38) 0 2px, transparent 2px 4px), linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,.35));
-}
-.scanline-frame .left{
-  top:calc(-1*var(--frame)); bottom:calc(-1*var(--frame)); left:calc(-1*var(--frame)); width:var(--frame);
-  background:repeating-linear-gradient(to bottom, rgba(57,255,20,.38) 0 2px, transparent 2px 4px), linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.35));
-}
-.scanline-frame .right{
-  top:calc(-1*var(--frame)); bottom:calc(-1*var(--frame)); right:calc(-1*var(--frame)); width:var(--frame);
-  background:repeating-linear-gradient(to bottom, rgba(57,255,20,.38) 0 2px, transparent 2px 4px), linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.35));
-}
+.scanline-frame .top{   left:calc(-1*var(--frame)); right:calc(-1*var(--frame)); top:calc(-1*var(--frame)); height:var(--frame); }
+.scanline-frame .bottom{left:calc(-1*var(--frame)); right:calc(-1*var(--frame)); bottom:calc(-1*var(--frame)); height:var(--frame); }
+.scanline-frame .left{  top:calc(-1*var(--frame)); bottom:calc(-1*var(--frame)); left:calc(-1*var(--frame)); width:var(--frame); background:
+    repeating-linear-gradient(to bottom,
+      rgba(57,255,20,.38) 0 2px, transparent 2px 4px),
+    linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.35)); }
+.scanline-frame .right{ top:calc(-1*var(--frame)); bottom:calc(-1*var(--frame)); right:calc(-1*var(--frame)); width:var(--frame); background:
+    repeating-linear-gradient(to bottom,
+      rgba(57,255,20,.38) 0 2px, transparent 2px 4px),
+    linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.35)); }
+
 @keyframes glitchShift{
   0%{ background-position:0 0, 0 0 }
   50%{ background-position:12px 0, 0 0 }
@@ -126,6 +121,10 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   55%{ opacity:1 }
 }
 
+/* ambient layers BEHIND image */
+.scanlines-behind{position:absolute; inset:0; z-index:1; background:repeating-linear-gradient(to bottom, rgba(0,0,0,.25) 0, rgba(0,0,0,.25) 2px, transparent 3px, transparent 4px)}
+.vignette{position:absolute; inset:-10%; z-index:1; background:radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.6) 100%)}
+
 /* champion card pinned to bottom */
 .overlay-card{
   position:absolute; left:50%; bottom:24px; transform:translateX(-50%);
@@ -135,11 +134,16 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   box-shadow:0 0 40px rgba(57,255,20,.25);
   text-align:center; z-index:4;
 }
-.overlay-card h1{margin:0 0 6px; letter-spacing:2px; font-size:clamp(28px,6vw,54px); text-transform:uppercase}
-.overlay-card .sub{color:var(--muted); margin-bottom:12px; font-size:clamp(12px,2.4vw,14px); min-height:1.4em}
+.overlay-card h1{margin:0 8px 6px; letter-spacing:2px; font-size:clamp(28px,6vw,54px); text-transform:uppercase}
+.overlay-card .sub{color:var(--muted); margin:0 8px 8px; font-size:clamp(12px,2.4vw,14px); min-height:1.4em}
 .overlay-card .motto{color:var(--green-bright); font-weight:700; letter-spacing:.5px; min-height:1.4em}
 
-/* NEW: typewriter caret */
+/* typewriter look + caret */
+.typewriter-text{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
 .type-caret{ border-right:2px solid var(--green); animation: caretBlink .9s steps(1,end) infinite; }
 @keyframes caretBlink{ 50%{ border-right-color:transparent } }
 
@@ -193,7 +197,6 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       </div>
       <div class="row">
         <button id="btnPause" class="btn">⏸️ Pause</button>
-        <!-- Force button removed -->
         <a class="btn" href="./winners.html">🏁 Winners</a>
       </div>
     </div>
@@ -246,8 +249,10 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   <div id="overlay">
     <canvas id="confetti"></canvas>
     <div class="overlay-bg">
-      <div id="overlayArt" class="overlay-art">
-        <!-- NEW: wrap to draw a frame around without covering the art -->
+      <div class="scanlines-behind"></div>
+      <div class="vignette"></div>
+
+      <div class="overlay-stage">
         <div class="art-wrap">
           <img id="overlayArtImg" alt="Winning Art"/>
           <div class="scanline-frame">
@@ -258,14 +263,13 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
           </div>
         </div>
       </div>
-      <div class="scanlines"></div>
-      <div class="vignette"></div>
     </div>
+
     <button id="overlayClose" class="btn">✕</button>
     <div class="overlay-card" id="overlayCard">
       <h1 id="overlayTitle">CHAMPION</h1>
-      <div class="sub" id="overlaySubtitle"></div>
-      <div class="motto" id="overlayMotto"></div>
+      <div class="sub typewriter-text" id="overlaySubtitle"></div>
+      <div class="motto typewriter-text" id="overlayMotto"></div>
     </div>
   </div>
 
@@ -483,8 +487,7 @@ async function decideAndPersistWinner(phaseKeyISO){
   return color;
 }
 
-/* ---------- Overlay (final) ---------- */
-/* Confetti: single burst; auto-stops after 5s (overlay stays open) */
+/* ---------- Confetti (one burst; stop after 5s) ---------- */
 let _confettiRaf=null;
 function startConfetti(){
   const ctx=confettiCanvas.getContext('2d');
@@ -493,7 +496,7 @@ function startConfetti(){
   W(); H();
 
   const cx = confettiCanvas.width/2;
-  const cy = confettiCanvas.height/3; // slightly above center
+  const cy = confettiCanvas.height/3;
 
   const N = 280;
   const parts = Array.from({length:N}, ()=> {
@@ -514,14 +517,12 @@ function startConfetti(){
   function step(){
     W(); H();
     ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
-
     parts.forEach(p=>{
-      p.vy += 0.04;          // gravity
+      p.vy += 0.04;         // gravity
       p.vx *= 0.995; p.vy *= 0.995; // drag
-      p.x += p.vx; p.y += p.vy;
-      p.rot += p.vr;
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr;
 
-      // wrap to keep motion without spawning more
+      // wrap around (no new spawns)
       if (p.x < -20) p.x = confettiCanvas.width + 20;
       if (p.x > confettiCanvas.width + 20) p.x = -20;
       if (p.y < -20) p.y = confettiCanvas.height + 20;
@@ -531,7 +532,6 @@ function startConfetti(){
       ctx.fillStyle=p.color; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
       ctx.restore();
     });
-
     _confettiRaf = requestAnimationFrame(step);
   }
   cancelAnimationFrame(_confettiRaf);
@@ -547,46 +547,54 @@ function stopConfetti(){
   c.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
 }
 
-/* Typewriter helper for subtitle + motto */
-async function typewriter(el, text, speed=18){
+/* ---------- Typewriter (slower + cancellable) ---------- */
+let _typewriterToken = 0;
+async function typewriter(el, text, speed=85){ // try 70–110 for slower/faster
+  const myToken = ++_typewriterToken;          // cancel previous runs
   el.textContent = '';
   el.classList.add('type-caret');
   for (let i=0;i<text.length;i++){
+    if (myToken !== _typewriterToken) return;  // aborted by new run
     el.textContent += text[i];
     await new Promise(r=>setTimeout(r, speed));
   }
-  el.classList.remove('type-caret');
+  if (myToken === _typewriterToken) el.classList.remove('type-caret');
 }
 
-/* Show champion (no auto-close; user closes with ✕) */
+/* ---------- Show champion (single trigger per final) ---------- */
+let _openChampionBase = null;
 function showChampion(color, finalBaseISO){
+  if (_openChampionBase === finalBaseISO && overlay.classList.contains('show')) return;
+  _openChampionBase = finalBaseISO;
+
   const cached = imgCache.get(finalKeyFor(finalBaseISO)) || {};
   const src = (color==='red') ? (cached.A || imgA.src) : (cached.B || imgB.src);
-  overlayArtImg.src = src; // clean image, not cropped
+  overlayArtImg.src = src;
 
   overlayTitle.textContent = 'CHAMPION';
-  const sub = color==='red' ? 'Final: Left prevails' : 'Final: Right prevails';
+  const sub   = (color==='red') ? 'Final: Left prevails' : 'Final: Right prevails';
   const motto = 'Glory to the machine. Your art devours the bracket';
 
-  // Clear and type in the lines
   overlaySubtitle.textContent = '';
   overlayMotto.textContent = '';
 
   overlay.classList.add('show');
-  startConfetti(); // single burst; will stop after 5s
+  startConfetti(); // one burst; stops after 5s
 
   (async ()=>{
-    await typewriter(overlaySubtitle, sub, 16);
-    await typewriter(overlayMotto, motto, 14);
+    await typewriter(overlaySubtitle, sub,   95); // slower subtitle
+    await typewriter(overlayMotto,   motto,  85); // motto slightly faster
   })();
 }
 
 overlayClose.onclick=()=>{ 
   overlay.classList.remove('show'); 
   stopConfetti(); 
-  overlayArtImg.removeAttribute('src'); 
+  overlayArtImg.removeAttribute('src');
   overlaySubtitle.textContent = '';
   overlayMotto.textContent = '';
+  _typewriterToken++;            // cancel any in-flight typing
+  _openChampionBase = null;      // allow next final
 };
 
 /* ---------- Fullscreen viewer ---------- */
@@ -655,7 +663,7 @@ async function fetchState(){
       }
       if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
 
-      // Loop back to Round 1
+      // Loop back
       overlayGateBase = null;
       activeSlot = 'sf1';
       imgCache.clear(); lastPaintedBattleKey=null;
