@@ -4,7 +4,6 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Rage Space — Matchup</title>
-<link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
 :root{ --green:#39ff14; --green-bright:#7dff62; --bg:#000; --ink:#e5e5e5; --card:#0b0b0b; --border:#153b16; --muted:#8aff8a; --maxw:980px; --danger:#ff3b3b; }
@@ -184,31 +183,9 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .title{font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .small{font-size:12px; color:var(--muted)}
 .tabs{display:none}
-
-/* ======= CYBERPUNK BOOT LOADER ======= */
-#bootLoader{
-  position:fixed; inset:0; z-index:10000;
-  background: radial-gradient(120% 120% at 50% 0%, rgba(0,255,120,.08), rgba(0,0,0,.96) 60%), #000;
-  display:flex; align-items:center; justify-content:center; flex-direction:column;
-  color:var(--green); font-variant-numeric:tabular-nums; text-align:center;
-  transition:opacity .35s ease, visibility .35s ease;
-}
-#bootLoader.hidden{ opacity:0; visibility:hidden; pointer-events:none }
-.boot-title{letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; font-size:14px}
-.boot-bar{width:min(560px,90vw); height:12px; border:1px solid var(--green); border-radius:999px; overflow:hidden; background:rgba(0,255,120,.07)}
-.boot-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--green), var(--green-bright)); box-shadow:0 0 18px rgba(57,255,20,.35) inset}
-.boot-sub{margin-top:8px; color:var(--muted); font-size:12px}
 </style>
 </head>
 <body>
-
-<!-- CYBERPUNK LOADING OVERLAY -->
-<div id="bootLoader" aria-live="polite">
-  <div class="boot-title">Rage Space — syncing…</div>
-  <div class="boot-bar"><div class="boot-fill" id="bootFill"></div></div>
-  <div class="boot-sub" id="bootMsg">initializing</div>
-</div>
-
   <div class="wrap">
     <div class="scorebar">
       <div class="tiny">
@@ -346,40 +323,19 @@ const brows = document.getElementById('brows');
 const showDone = document.getElementById('showDone');
 
 /* ---------- State ---------- */
-let paused=false, serverPhaseEndISO=null, currentPhaseKey=null, prevPhaseKey=null, periodSec=20, remainingSec=null, lastSyncAt=0, lastCountsAt=0;
+let paused=false, serverPhaseEndISO=null, currentPhaseKey=null, prevPhaseKey=null, prevPrevPhaseKey=null, periodSec=20, remainingSec=null, lastSyncAt=0, lastCountsAt=0;
 let currentUid=null, chosen=null;
-let activeSlot='sf1'; // 'sf1'|'sf2'|'final'
-let wasInFinalStage=false;
+
+/** Stages: 'qf' | 'sf' | 'final' */
+let stage='qf';
 let overlayGateBase=null; // base ISO allowed to trigger champion
 
-// Freeze images per battle: "<baseISO>::sf1|sf2|final" → {A,B}
+// Which battle the main tiles are showing
+let activeSlot='qf1'; // qf1..qf4, sf1..sf2, final
+
+// Freeze images per battle: "<baseISO>::slot" → {A,B}
 const imgCache = new Map();
 let lastPaintedBattleKey=null;
-
-/* ---------- Boot Loader helper ---------- */
-const bootFill = ()=>document.getElementById('bootFill');
-const bootMsg  = ()=>document.getElementById('bootMsg');
-const bootWrap = ()=>document.getElementById('bootLoader');
-let _bootTarget = 0, _bootTimer=null;
-
-function setBoot(p, msg){
-  _bootTarget = Math.max(_bootTarget, Math.min(100, p));
-  if (msg) bootMsg().textContent = msg;
-}
-function startBootTick(){
-  if (_bootTimer) return;
-  _bootTimer = setInterval(()=>{
-    const el = bootFill();
-    const cur = parseFloat(el.style.width||'0');
-    const toward = (_bootTarget>cur) ? (cur + Math.max(1,( _bootTarget-cur)*0.12)) : (cur + 0.18); // creep if stalled
-    el.style.width = Math.min(99, toward).toFixed(2) + '%';
-  }, 60);
-}
-function endBoot(){
-  clearInterval(_bootTimer); _bootTimer=null;
-  bootFill().style.width='100%';
-  setTimeout(()=> bootWrap().classList.add('hidden'), 280);
-}
 
 /* ---------- Helpers ---------- */
 async function getUidOrNull(){ const {data:{session}}=await supabase.auth.getSession(); return session?.user?.id ?? null; }
@@ -394,122 +350,174 @@ async function callEdge(method='GET', body=null){
 const normalize=(s)=>({phase_end_at:s.phase_end_at??null, period_sec:s.period_sec??20, paused:!!s.paused, remaining_sec:(typeof s.remaining_sec==='number')?s.remaining_sec:null});
 
 function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
-function semiKeysFor(baseISO){ return { sf1:`${baseISO}::sf1`, sf2:`${baseISO}::sf2` }; }
-function finalKeyFor(baseISO){ return `${baseISO}::final`; }
+
+/* Slot → seed suffixes */
+const QF_SEEDS = {
+  qf1: ['A1','B1'],
+  qf2: ['A2','B2'],
+  qf3: ['A3','B3'],
+  qf4: ['A4','B4'],
+};
+/* SF depends on QF winners */
+const SF_PAIRS = {
+  sf1: ['qf1','qf2'],
+  sf2: ['qf3','qf4'],
+};
+
+/* Key helpers */
+function keyOf(slot, baseISO){ return `${baseISO}::${slot}`; }
 function baseFromKey(k){ return (k||'').split('::')[0] || ''; }
 
 /* ---------- Stage detection ---------- */
 async function detectStage(){
-  if (!currentPhaseKey || !prevPhaseKey) return {stage:'semis', finalsReady:false};
-  const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
-  const { data, error } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
-  if (error) return {stage:'semis', finalsReady:false};
-  const haveBoth = (data||[]).length===2 && data.every(r => r.color==='red' || r.color==='blue');
-  return {stage: haveBoth ? 'final' : 'semis', finalsReady: haveBoth};
+  // If we have 2 SF winners from prev phase => we are in FINAL stage
+  if (prevPhaseKey){
+    const sfKeys = ['sf1','sf2'].map(s=>keyOf(s, prevPhaseKey));
+    const { data: sfW } = await supabase.from('winners').select('phase_key').in('phase_key', sfKeys);
+    if ((sfW||[]).length === 2) return 'final';
+  }
+  // If we have 4 QF winners from prev phase => we are in SF stage
+  if (prevPhaseKey){
+    const qfKeys = ['qf1','qf2','qf3','qf4'].map(s=>keyOf(s, prevPhaseKey));
+    const { data: qfW } = await supabase.from('winners').select('phase_key').in('phase_key', qfKeys);
+    if ((qfW||[]).length === 4) return 'sf';
+  }
+  // Otherwise, we're running QFs in the current phase
+  return 'qf';
 }
 
-/* ---------- Final entrants from semi winners ---------- */
-async function getFinalEntrantSourcesFromWinners(){
-  if (!prevPhaseKey) return null;
-  const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
-  const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
-  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
-  const c1 = map[sf1], c2 = map[sf2];
-  if (!c1 || !c2) return null;
-  const left = seedUrlFromKey(prevPhaseKey, c1==='red' ? 'A1' : 'B1');
-  const right= seedUrlFromKey(prevPhaseKey, c2==='red' ? 'A2' : 'B2');
-  return {A:left, B:right};
+/* ---------- Base resolution for any slot ---------- */
+function baseForSlot(slot){
+  if (slot.startsWith('qf')){
+    if (stage==='qf') return currentPhaseKey;
+    if (stage==='sf') return prevPhaseKey;       // QFs happened last phase
+    if (stage==='final') return prevPrevPhaseKey;// QFs happened two phases ago
+  }
+  if (slot.startsWith('sf')){
+    if (stage==='qf') return currentPhaseKey;    // Will be TBD visuals; seeds still derived from current
+    if (stage==='sf') return currentPhaseKey;    // Active
+    if (stage==='final') return prevPhaseKey;    // Semis just finished last phase
+  }
+  // final
+  return currentPhaseKey;
 }
 
-/* Build a human label for FINAL using semi winners */
-async function finalSeedsTitle(){
-  if (!prevPhaseKey) return 'TBD vs TBD';
-  const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
-  const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
-  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
-  const pick = (slot,color)=> {
-    if (slot==='sf1'){ return color==='red' ? 'Seed A' : 'Seed B'; }
-    if (slot==='sf2'){ return color==='red' ? 'Seed C' : 'Seed D'; }
-    return 'TBD';
-  };
-  const s1 = map[sf1] ? pick('sf1',map[sf1]) : null;
-  const s2 = map[sf2] ? pick('sf2',map[sf2]) : null;
-  return (s1 && s2) ? `${s1} vs ${s2}` : 'TBD vs TBD';
+function currentBattleKey(){ const base=baseForSlot(activeSlot); return base ? keyOf(activeSlot, base) : null; }
+
+/* ---------- Count votes for a key ---------- */
+const fmtVotes=(n)=>`${n} ${n===1?'vote':'votes'}`;
+async function countVotesFor(phaseKey){
+  const { data, error } = await supabase.from('phase_votes').select('vote').eq('phase_key', phaseKey);
+  if (error) throw error;
+  let r=0,b=0; (data||[]).forEach(row=>{ if(row.vote==='red') r++; else if(row.vote==='blue') b++; });
+  return {r,b};
 }
 
-/* ---------- Winner/Loser helpers for semis ---------- */
-async function getWinnerColorForSemi(baseISO, slot){
-  const key = `${baseISO}::${slot}`;
-  const { data } = await supabase.from('winners').select('color').eq('phase_key', key).maybeSingle();
+/* ---------- Decide & persist winner for a key ---------- */
+async function decideAndPersistWinner(phaseKeyISO){
+  const { r, b } = await countVotesFor(phaseKeyISO);
+  const color = (r===b) ? (Math.random()<0.5?'red':'blue') : (r>b?'red':'blue');
+  const { error:insErr } = await supabase.from('winners').insert({phase_key: phaseKeyISO, color}).select().single();
+  if (insErr){
+    const { data } = await supabase.from('winners').select('color').eq('phase_key', phaseKeyISO).limit(1);
+    const c=(data?.[0]?.color||'').toLowerCase();
+    if (c==='red'||c==='blue') return c;
+  }
+  return color;
+}
+
+/* ---------- Winner lookups ---------- */
+async function winnerColor(slot, base){
+  const { data } = await supabase.from('winners').select('color').eq('phase_key', keyOf(slot, base)).maybeSingle();
   return (data?.color||null);
 }
-function loserSuffixForSemi(slot, winnerColor){
-  if (!winnerColor) return null;
-  if (slot==='sf1'){ return winnerColor==='red' ? 'B1' : 'A1'; }
-  if (slot==='sf2'){ return winnerColor==='red' ? 'B2' : 'A2'; }
-  return null;
-}
 
-/* ---------- Battle key resolution (FREEZE semis) ---------- */
-function baseForSlot(slot){
-  if (slot==='final') return currentPhaseKey;
-  return wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey;
-}
-function battleKeyFor(slot){
+/* ---------- Build image sources for each slot ---------- */
+async function sourcesFor(slot){
   const base = baseForSlot(slot);
-  if (!base) return null;
-  if (slot==='final') return finalKeyFor(base);
-  const { sf1, sf2 } = semiKeysFor(base);
-  return slot==='sf1' ? sf1 : sf2;
-}
+  if (!base) return {A:'',B:''};
 
-/* ---------- Image paint (frozen per battle) ---------- */
-async function paintImagesForActive(){
-  const bKey = battleKeyFor(activeSlot);
-  if (!bKey) return;
+  // Cached?
+  const cacheKey = keyOf(slot, base);
+  if (imgCache.has(cacheKey)) return imgCache.get(cacheKey);
 
-  if (imgCache.has(bKey)){
-    const {A,B}=imgCache.get(bKey);
-    imgA.src=A; imgB.src=B;
-  } else {
-    if (activeSlot==='sf1'){
-      const A = seedUrlFromKey(baseForSlot('sf1'),'A1');
-      const B = seedUrlFromKey(baseForSlot('sf1'),'B1');
-      imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
-    } else if (activeSlot==='sf2'){
-      const A = seedUrlFromKey(baseForSlot('sf2'),'A2');
-      const B = seedUrlFromKey(baseForSlot('sf2'),'B2');
-      imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
-    } else {
-      const finals = await getFinalEntrantSourcesFromWinners();
-      if (finals){
-        imgCache.set(bKey, finals); imgA.src=finals.A; imgB.src=finals.B;
-      } else {
-        imgA.removeAttribute('src'); imgB.removeAttribute('src');
-      }
-    }
+  // QF seeds are static from seedUrl
+  if (slot.startsWith('qf')){
+    const [sa,sb] = QF_SEEDS[slot];
+    const pack = { A: seedUrlFromKey(base, sa), B: seedUrlFromKey(base, sb) };
+    imgCache.set(cacheKey, pack);
+    return pack;
   }
 
-  if (activeSlot==='sf1'){ labelA.textContent='Semi 1 — Left'; labelB.textContent='Semi 1 — Right'; }
-  else if (activeSlot==='sf2'){ labelA.textContent='Semi 2 — Left'; labelB.textContent='Semi 2 — Right'; }
-  else { labelA.textContent='Final — Left'; labelB.textContent='Final — Right'; }
+  // SF: winners of two QFs
+  if (slot.startsWith('sf')){
+    const [qfa, qfb] = SF_PAIRS[slot];
+    const wa = await winnerColor(qfa, base);
+    const wb = await winnerColor(qfb, base);
+    // If winners not known yet, use seeds as placeholders
+    const leftSeed  = wa==='red' ? QF_SEEDS[qfa][0] : (wa==='blue' ? QF_SEEDS[qfa][1] : QF_SEEDS[qfa][0]);
+    const rightSeed = wb==='red' ? QF_SEEDS[qfb][0] : (wb==='blue' ? QF_SEEDS[qfb][1] : QF_SEEDS[qfb][1]);
+    const pack = { A: seedUrlFromKey(base, leftSeed), B: seedUrlFromKey(base, rightSeed) };
+    imgCache.set(cacheKey, pack);
+    return pack;
+  }
+
+  // FINAL: winners of the two SFs
+  if (slot==='final'){
+    const w1 = await winnerColor('sf1', base);
+    const w2 = await winnerColor('sf2', base);
+    // If SF winners not known, fall back to SF computed sources
+    let left, right;
+    if (!w1 || !w2){
+      const s1 = await sourcesFor('sf1');
+      const s2 = await sourcesFor('sf2');
+      left = s1.A; right = s2.A; // placeholder
+    } else {
+      // resolve back to which QF side produced each SF winner to pick consistent seed
+      // We lean on sourcesFor(sfX) which already froze A/B from QF winners:
+      const s1 = await sourcesFor('sf1');
+      const s2 = await sourcesFor('sf2');
+      left  = (w1==='red') ? s1.A : s1.B;
+      right = (w2==='red') ? s2.A : s2.B;
+    }
+    const pack = { A:left, B:right };
+    imgCache.set(cacheKey, pack);
+    return pack;
+  }
+
+  return {A:'',B:''};
+}
+
+/* ---------- Paint current images ---------- */
+async function paintImagesForActive(){
+  const k = currentBattleKey();
+  if (!k) return;
+
+  const pack = await sourcesFor(activeSlot);
+  imgA.src = pack.A || '';
+  imgB.src = pack.B || '';
+
+  if (activeSlot.startsWith('qf')){
+    const n = activeSlot.slice(2);
+    labelA.textContent=`QF ${n} — Left`;
+    labelB.textContent=`QF ${n} — Right`;
+  } else if (activeSlot.startsWith('sf')){
+    const n = activeSlot.slice(2);
+    labelA.textContent=`SF ${n} — Left`;
+    labelB.textContent=`SF ${n} — Right`;
+  } else {
+    labelA.textContent='Final — Left';
+    labelB.textContent='Final — Right';
+  }
 
   imgA.loading='eager'; imgB.loading='eager'; imgA.decoding='async'; imgB.decoding='async';
-  lastPaintedBattleKey=bKey;
+  lastPaintedBattleKey=k;
 
   renderBracket();
   applyVotingLockUI();
 }
 
-/* ---------- Votes ---------- */
-const fmtVotes=(n)=>`${n} ${n===1?'vote':'votes'}`;
-function currentBattleKey(){ const k = battleKeyFor(activeSlot); return k || null; }
-async function countVotesFor(key){
-  const { data, error } = await supabase.from('phase_votes').select('vote').eq('phase_key', key);
-  if (error) throw error;
-  let r=0,b=0; (data||[]).forEach(row=>{ if(row.vote==='red') r++; else if(row.vote==='blue') b++; });
-  return {r,b};
-}
+/* ---------- Vote counts & UI ---------- */
 async function refreshVoteCounts(){
   try{
     const key=currentBattleKey();
@@ -522,17 +530,20 @@ async function refreshVoteCounts(){
   }catch{}
 }
 
-/* ---------- Decide & persist winner ---------- */
-async function decideAndPersistWinner(phaseKeyISO){
-  const { r, b } = await countVotesFor(phaseKeyISO);
-  const color = (r===b) ? (Math.random()<0.5?'red':'blue') : (r>b?'red':'blue');
-  const { error:insErr } = await supabase.from('winners').insert({phase_key: phaseKeyISO, color}).select().single();
-  if (insErr){
-    const { data } = await supabase.from('winners').select('color').eq('phase_key', phaseKeyISO).limit(1);
-    const c=(data?.[0]?.color||'').toLowerCase();
-    if (c==='red'||c==='blue') return c;
-  }
-  return color;
+/* Voting lock: past rounds lock when we advance stages */
+function votingLockedFor(slot){
+  if (stage==='qf') return !slot.startsWith('qf'); // SF/Final closed
+  if (stage==='sf') return slot.startsWith('qf') || slot==='final'; // only SF open
+  if (stage==='final') return slot!=='final'; // only final open
+  return true;
+}
+function setStateUI(){ stateEl.textContent = paused ? 'PAUSED' : 'LIVE'; pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause'; phaseBadge.textContent='phase: '+(currentPhaseKey||'—'); }
+function applyVotingLockUI(){
+  const locked = votingLockedFor(activeSlot);
+  [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
+  document.getElementById('tileA').classList.toggle('decided', locked);
+  document.getElementById('tileB').classList.toggle('decided', locked);
+  submitBtn.textContent = locked ? 'Voting closed' : '✅ Submit Vote';
 }
 
 /* ---------- Confetti (one burst; stop after 5s) ---------- */
@@ -566,11 +577,10 @@ function startConfetti(){
     W(); H();
     ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
     parts.forEach(p=>{
-      p.vy += 0.04;         // gravity
-      p.vx *= 0.995; p.vy *= 0.995; // drag
+      p.vy += 0.04;
+      p.vx *= 0.995; p.vy *= 0.995;
       p.x += p.vx; p.y += p.vy; p.rot += p.vr;
 
-      // wrap around (no new spawns)
       if (p.x < -20) p.x = confettiCanvas.width + 20;
       if (p.x > confettiCanvas.width + 20) p.x = -20;
       if (p.y < -20) p.y = confettiCanvas.height + 20;
@@ -584,8 +594,6 @@ function startConfetti(){
   }
   cancelAnimationFrame(_confettiRaf);
   step();
-
-  // Auto-stop after 5 seconds
   setTimeout(()=> stopConfetti(), 5000);
 }
 function stopConfetti(){
@@ -595,7 +603,7 @@ function stopConfetti(){
   c.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
 }
 
-/* ---------- Typewriter (slower + cancellable) ---------- */
+/* ---------- Typewriter ---------- */
 let _typewriterToken = 0;
 async function typewriter(el, text, speed=85){
   const myToken = ++_typewriterToken;
@@ -609,25 +617,25 @@ async function typewriter(el, text, speed=85){
   if (myToken === _typewriterToken) el.classList.remove('type-caret');
 }
 
-/* ---------- Show champion (single trigger per final) ---------- */
+/* ---------- Champion overlay ---------- */
 let _openChampionBase = null;
 function showChampion(color, finalBaseISO){
   if (_openChampionBase === finalBaseISO && overlay.classList.contains('show')) return;
   _openChampionBase = finalBaseISO;
 
-  const cached = imgCache.get(finalKeyFor(finalBaseISO)) || {};
+  const cached = imgCache.get(keyOf('final', finalBaseISO)) || {};
   const src = (color==='red') ? (cached.A || imgA.src) : (cached.B || imgB.src);
   overlayArtImg.src = src;
 
   overlayTitle.textContent = 'CHAMPION';
-  const sub   = (color==='red') ? 'Tie… random winner picked: Left' : 'Tie… random winner picked: Right';
+  const sub   = (color==='red') ? 'The left side devours the bracket.' : 'The right side devours the bracket.';
   const motto = 'Glory to the machine. Your art devours the bracket';
 
   overlaySubtitle.textContent = '';
   overlayMotto.textContent = '';
 
   overlay.classList.add('show');
-  startConfetti(); // one burst; stops after 5s
+  startConfetti();
 
   (async ()=>{
     await typewriter(overlaySubtitle, sub,   95);
@@ -641,47 +649,11 @@ overlayClose.onclick=()=>{
   overlayArtImg.removeAttribute('src');
   overlaySubtitle.textContent = '';
   overlayMotto.textContent = '';
-  _typewriterToken++;            // cancel any in-flight typing
-  _openChampionBase = null;      // allow next final
+  _typewriterToken++;
+  _openChampionBase = null;
 };
 
-/* ---------- Fullscreen viewer ---------- */
-function openFullscreenFor(imgEl){
-  if (!imgEl || !imgEl.src) return;
-  fsImage.src = imgEl.src;
-  fsOverlay.classList.add('show');
-}
-document.querySelectorAll('.fsbtn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    const targetId = btn.dataset.target;
-    const imgEl = document.getElementById(targetId);
-    openFullscreenFor(imgEl);
-  });
-});
-fsClose.addEventListener('click', ()=>{
-  fsOverlay.classList.remove('show');
-  fsImage.src = '';
-});
-fsOverlay.addEventListener('click', (e)=>{
-  if (e.target === fsOverlay){ fsOverlay.classList.remove('show'); fsImage.src=''; }
-});
-document.addEventListener('keydown', (e)=>{
-  if (e.key === 'Escape' && fsOverlay.classList.contains('show')){
-    fsOverlay.classList.remove('show'); fsImage.src='';
-  }
-});
-
 /* ---------- Timer / phase handling ---------- */
-function setStateUI(){ stateEl.textContent = paused ? 'PAUSED' : 'LIVE'; pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause'; phaseBadge.textContent='phase: '+(currentPhaseKey||'—'); }
-function votingLockedFor(slot){ return wasInFinalStage && (slot==='sf1' || slot==='sf2'); }
-function applyVotingLockUI(){
-  const locked = votingLockedFor(activeSlot);
-  [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
-  document.getElementById('tileA').classList.toggle('decided', locked);
-  document.getElementById('tileB').classList.toggle('decided', locked);
-  submitBtn.textContent = locked ? 'Voting closed' : '✅ Submit Vote';
-}
-
 async function fetchState(){
   const s = normalize(await callEdge('GET'));
   const prevEnd = serverPhaseEndISO;
@@ -694,44 +666,72 @@ async function fetchState(){
 
   currentPhaseKey = serverPhaseEndISO ? iso(serverPhaseEndISO) : null;
   prevPhaseKey = currentPhaseKey && periodSec ? iso(Date.parse(currentPhaseKey) - periodSec*1000) : null;
+  prevPrevPhaseKey = currentPhaseKey && periodSec ? iso(Date.parse(currentPhaseKey) - 2*periodSec*1000) : null;
 
   setStateUI();
 
-  // Phase flip
+  // Detect current stage *after* we maybe persisted just-finished matches
+  // but first, react to phase flip (persist winners for the phase that just ended)
   if (prevEnd && serverPhaseEndISO && prevEnd !== serverPhaseEndISO){
     const justEndedBase = iso(prevEnd);
 
-    if (wasInFinalStage){
-      // FINAL just ended
-      const finalKey = finalKeyFor(justEndedBase);
+    // Figure out what stage we *were* in at justEndedBase by looking one phase before it
+    // If the phase that ended had SF open, we should see QF winners from its prev phase.
+    // We'll infer using the same rules as detectStage but relative to justEndedBase.
+    const priorToEnded = iso(Date.parse(justEndedBase) - periodSec*1000);
+
+    // Count winners for prior phase:
+    let endedStage = 'qf';
+    {
+      const sfKeys = ['sf1','sf2'].map(s=>keyOf(s, priorToEnded));
+      const { data: sfW } = await supabase.from('winners').select('phase_key').in('phase_key', sfKeys);
+      if ((sfW||[]).length===2) endedStage='final';
+      else {
+        const qfKeys = ['qf1','qf2','qf3','qf4'].map(s=>keyOf(s, priorToEnded));
+        const { data: qfW } = await supabase.from('winners').select('phase_key').in('phase_key', qfKeys);
+        if ((qfW||[]).length===4) endedStage='sf';
+        else endedStage='qf';
+      }
+    }
+
+    if (endedStage==='final'){
+      // FINAL just ended at justEndedBase
+      const finalKey = keyOf('final', justEndedBase);
       const color = await decideAndPersistWinner(finalKey);
       if (!imgCache.has(finalKey)){
-        const pack = await getFinalEntrantSourcesFromWinners();
+        const pack = await sourcesFor('final'); // uses base resolution; okay since we cache by key
         if (pack) imgCache.set(finalKey, pack);
       }
       if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
 
-      // Loop back
+      // Loop back to QFs fresh
       overlayGateBase = null;
-      activeSlot = 'sf1';
+      activeSlot = 'qf1';
       imgCache.clear(); lastPaintedBattleKey=null;
-    } else {
-      // SEMIS just ended
-      const { sf1, sf2 } = semiKeysFor(justEndedBase);
-      await decideAndPersistWinner(sf1);
-      await decideAndPersistWinner(sf2);
+    } else if (endedStage==='sf'){
+      // SF just ended at justEndedBase → persist both SF winners
+      await decideAndPersistWinner(keyOf('sf1', justEndedBase));
+      await decideAndPersistWinner(keyOf('sf2', justEndedBase));
 
-      // Move INTO Final
-      overlayGateBase = currentPhaseKey; // final that just started
+      // Move INTO Final (new current phase)
+      overlayGateBase = currentPhaseKey; // final that just started now
       activeSlot = 'final';
-      const pack = await getFinalEntrantSourcesFromWinners();
-      if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
+      const pack = await sourcesFor('final');
+      if (pack) imgCache.set(keyOf('final', currentPhaseKey), pack);
+      lastPaintedBattleKey=null;
+    } else {
+      // QFs just ended at justEndedBase → persist qf1..qf4
+      for (const qf of ['qf1','qf2','qf3','qf4']){
+        await decideAndPersistWinner(keyOf(qf, justEndedBase));
+      }
+      // Move to Semis
+      activeSlot = 'sf1';
       lastPaintedBattleKey=null;
     }
   }
 
-  const { stage } = await detectStage();
-  wasInFinalStage = (stage==='final');
+  // What stage are we in *now*?
+  stage = await detectStage();
 
   await paintImagesForActive();
   await refreshVoteCounts();
@@ -739,46 +739,36 @@ async function fetchState(){
   applyVotingLockUI();
 }
 
-/* ---------- Bracket list rendering (compact) ---------- */
-function labelFor(slot){
-  if (slot==='sf1') return {round:'QF', title:'Seed A vs Seed B'};
-  if (slot==='sf2') return {round:'QF', title:'Seed C vs Seed D'};
-  return {round:'Final', title:'TBD vs TBD'};
-}
-function slotKeyFor(slot, baseISO){
-  if (slot==='final') return finalKeyFor(baseISO);
-  const { sf1, sf2 } = semiKeysFor(baseISO);
-  return (slot==='sf1'?sf1:sf2);
-}
-
-/* thumbnails reflect actual battles */
-async function thumbsFor(slot){
-  if (!currentPhaseKey) return {A:'',B:''};
-
-  const base = (slot==='final')
-    ? currentPhaseKey
-    : (wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey);
-
-  const key = (slot==='final')
-    ? finalKeyFor(base)
-    : (slot==='sf1' ? `${base}::sf1` : `${base}::sf2`);
-
-  if (imgCache.has(key)) return imgCache.get(key);
-
-  if (slot==='final'){
-    const finals = await getFinalEntrantSourcesFromWinners();
-    if (finals){ imgCache.set(key, finals); return finals; }
-    return {A:'',B:''};
-  } else {
-    const A = seedUrlFromKey(base, slot==='sf1' ? 'A1' : 'A2');
-    const B = seedUrlFromKey(base, slot==='sf1' ? 'B1' : 'B2');
-    const pack = {A,B};
-    imgCache.set(key, pack);
-    return pack;
-  }
-}
-
+/* ---------- Bracket Rendering ---------- */
 function rowId(slot){ return `row-${slot}`; }
+function humanRound(slot){
+  if (slot.startsWith('qf')) return 'QF';
+  if (slot.startsWith('sf')) return 'SF';
+  return 'Final';
+}
+function slotTitle(slot){
+  if (slot.startsWith('qf')) return `Seed ${slot==='qf1'?'A vs B': slot==='qf2'?'C vs D': slot==='qf3'?'E vs F':'G vs H'}`;
+  if (slot.startsWith('sf')){
+    return slot==='sf1' ? 'W(QF1) vs W(QF2)' : 'W(QF3) vs W(QF4)';
+  }
+  return 'W(SF1) vs W(SF2)';
+}
+function isDecided(slot){
+  if (stage==='qf') return !slot.startsWith('qf');
+  if (stage==='sf') return slot.startsWith('qf') || slot==='final';
+  if (stage==='final') return slot!=='final';
+  return true;
+}
+
+async function thumbsFor(slot){
+  const base = baseForSlot(slot);
+  if (!base) return {A:'',B:''};
+  const key = keyOf(slot, base);
+  if (imgCache.has(key)) return imgCache.get(key);
+  const pack = await sourcesFor(slot);
+  imgCache.set(key, pack);
+  return pack;
+}
 
 function switchTo(slot){
   activeSlot = slot;
@@ -797,12 +787,11 @@ function highlightActiveRow(){
 }
 
 async function updateBracketScores(){
-  const base = currentPhaseKey;
-  if (!base) return;
-  for (const slot of ['sf1','sf2','final']){
-    let keyBase = base;
-    if (wasInFinalStage && (slot==='sf1' || slot==='sf2')) keyBase = prevPhaseKey || base;
-    const key = slotKeyFor(slot, keyBase);
+  const all = ['qf1','qf2','qf3','qf4','sf1','sf2','final'];
+  for (const slot of all){
+    const base = baseForSlot(slot);
+    if (!base) continue;
+    const key = keyOf(slot, base);
     const sEl = document.querySelector(`#${rowId(slot)} .bscore`);
     if (!sEl) continue;
     try{
@@ -815,28 +804,19 @@ async function updateBracketScores(){
 }
 
 async function renderBracket(){
-  const base = currentPhaseKey;
-  if (!base){ brows.innerHTML=''; return; }
-
-  const titles = {
-    sf1: labelFor('sf1').title,
-    sf2: labelFor('sf2').title,
-    final: await finalSeedsTitle()
-  };
-
-  const rows = await Promise.all(['sf1','sf2','final'].map(async (slot)=>{
-    const round = labelFor(slot).round;
+  const slots = ['qf1','qf2','qf3','qf4','sf1','sf2','final'];
+  const rows = await Promise.all(slots.map(async (slot)=>{
     const thumbs = await thumbsFor(slot);
-    const decided = votingLockedFor(slot);
+    const decided = isDecided(slot);
     return `
       <div class="brow ${decided?'decided':''}" id="${rowId(slot)}" data-slot="${slot}">
-        <div class="bbadge">${round}</div>
+        <div class="bbadge">${humanRound(slot)}</div>
         <div class="thumb2">
           <div class="thumb">${thumbs.A ? `<img src="${thumbs.A}" alt="">` : ''}</div>
           <div class="thumb">${thumbs.B ? `<img src="${thumbs.B}" alt="">` : ''}</div>
         </div>
         <div class="bmeta">
-          <div class="title">${slot==='final'?titles.final:(titles[slot]||'')}</div>
+          <div class="title">${slotTitle(slot)}</div>
           <div class="bline">
             <span class="bpill">${decided?'round decided':'uses global'}</span>
           </div>
@@ -887,9 +867,9 @@ supabase.channel('winners-final-overlay')
     if (!overlayGateBase || base !== overlayGateBase) return;
     if (!(color==='red'||color==='blue')) return;
 
-    if (!imgCache.has(finalKeyFor(base))){
-      getFinalEntrantSourcesFromWinners().then(pack=>{
-        if (pack) imgCache.set(finalKeyFor(base), pack);
+    if (!imgCache.has(keyOf('final', base))){
+      sourcesFor('final').then(pack=>{
+        if (pack) imgCache.set(keyOf('final', base), pack);
         showChampion(color, base);
       });
     } else {
@@ -930,26 +910,16 @@ submitBtn.onclick=async()=>{
   }catch{ toast('Vote failed'); }
 };
 
-/* ---------- Boot (with staged loader) ---------- */
+/* ---------- Boot ---------- */
 (async()=>{
-  startBootTick();           setBoot(5,'wiring auth');
   currentUid = await getUidOrNull(); paintLoginBadge();
   supabase.auth.onAuthStateChange((_evt, session)=>{ currentUid=session?.user?.id ?? null; paintLoginBadge(); submitBtn.disabled=!chosen||!currentUid; });
 
-  setBoot(35,'fetching state');
   await fetchState();
-
-  setBoot(58,'seeding images');
+  // default to first open round at current stage
+  activeSlot = (stage==='qf') ? 'qf1' : (stage==='sf' ? 'sf1' : 'final');
   await paintImagesForActive();
-
-  setBoot(74,'loading vote counts');
-  await refreshVoteCounts();
-
-  setBoot(92,'starting engine');
   await start();
-
-  setBoot(100,'ready');
-  endBoot();
 })();
 </script>
 </body>
