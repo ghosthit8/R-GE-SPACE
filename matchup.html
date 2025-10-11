@@ -952,11 +952,12 @@ submitBtn.onclick=async()=>{
   endBoot();
 })();
 </script>
-<!-- ===== FIXED-IMAGES BRACKET OVERRIDE (always use the same original 8) ===== -->
+<!-- ===== 8-IMAGE BRACKET UPGRADE (APPEND-ONLY) ===== -->
 <script>
 (() => {
-  // Constant, repeatable 8 entrants (same every time).
-  // Feel free to replace these URLs with your own 8 images.
+  if (typeof window.wasInSemiStage === "undefined") window.wasInSemiStage = false;
+  if (typeof window.wasInFinalStage === "undefined") window.wasInFinalStage = false;
+
   const FIXED8 = [
     "https://picsum.photos/seed/rs1/1600/1200",
     "https://picsum.photos/seed/rs2/1600/1200",
@@ -967,175 +968,252 @@ submitBtn.onclick=async()=>{
     "https://picsum.photos/seed/rs7/1600/1200",
     "https://picsum.photos/seed/rs8/1600/1200",
   ];
-  // QF pairs: qf1:[0,1], qf2:[2,3], qf3:[4,5], qf4:[6,7]
-  const QF_MAP = { qf1:[0,1], qf2:[2,3], qf3:[4,5], qf4:[6,7] };
-  const ALL_SLOTS = ['qf1','qf2','qf3','qf4','sf1','sf2','final'];
 
-  // Utility: read winner color for (baseISO::slot)
+  const QF_MAP = { qf1:[0,1], qf2:[2,3], qf3:[4,5], qf4:[6,7] };
+  const ALL_SLOTS = ["qf1","qf2","qf3","qf4","sf1","sf2","final"];
+
+  const _semiKeysFor = window.semiKeysFor || ((baseISO)=>({ sf1:`${baseISO}::sf1`, sf2:`${baseISO}::sf2` }));
+  const _finalKeyFor = window.finalKeyFor || ((baseISO)=> `${baseISO}::final`);
+  const _quarterKeysFor = (baseISO)=>({ qf1:`${baseISO}::qf1`, qf2:`${baseISO}::qf2`, qf3:`${baseISO}::qf3`, qf4:`${baseISO}::qf4` });
+
   async function readWinnerColor(baseISO, slot){
     const key = `${baseISO}::${slot}`;
-    const { data } = await supabase.from('winners').select('color').eq('phase_key', key).maybeSingle();
-    return (data && (data.color==='red' || data.color==='blue')) ? data.color : null;
+    try {
+      const { data } = await supabase.from('winners').select('color').eq('phase_key', key).maybeSingle();
+      const c = data?.color?.toLowerCase();
+      return (c==='red' || c==='blue') ? c : null;
+    } catch { return null; }
   }
-
-  // Given qf slot + winner color, return index into FIXED8
-  function idxFromQFWinner(qfSlot, color){
+  function idxFromQF(qfSlot, color){
     const pair = QF_MAP[qfSlot]; if (!pair) return null;
-    if (color==='red') return pair[0];
-    if (color==='blue') return pair[1];
-    return null;
+    return color==='red' ? pair[0] : color==='blue' ? pair[1] : null;
   }
 
-  // Figure out the two images for any slot using only the original FIXED8,
-  // using winners from earlier rounds if they exist; otherwise sensible placeholders.
-  async function fixedPackForSlot(slot){
-    // Decide which base tournament ISO to look at for earlier winners.
-    const baseISO = (slot==='final') ? currentPhaseKey
-      : (slot.startsWith('sf') ? (wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey)
-      : /* qf */ (wasInSemiStage || wasInFinalStage) ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey);
+  function baseFor(slot){
+    if (slot==='final') return window.currentPhaseKey;
+    if (slot.startsWith('sf')) return window.wasInFinalStage ? (window.prevPhaseKey || window.currentPhaseKey) : window.currentPhaseKey;
+    if (slot.startsWith('qf')) return (window.wasInSemiStage || window.wasInFinalStage) ? (window.prevPhaseKey || window.currentPhaseKey) : window.currentPhaseKey;
+    return window.currentPhaseKey;
+  }
 
+  window.battleKeyFor = function battleKeyFor_8(slot){
+    const base = baseFor(slot);
+    if (!base) return null;
+    if (slot==='final') return _finalKeyFor(base);
+    if (slot==='sf1' || slot==='sf2'){ const { sf1, sf2 } = _semiKeysFor(base); return slot==='sf1'?sf1:sf2; }
+    return _quarterKeysFor(base)[slot];
+  };
+
+  async function fixedPackForSlot(slot){
+    const baseISO = baseFor(slot);
     if (!baseISO){
-      // No clock yet — return first two as placeholders
       return { A: FIXED8[0], B: FIXED8[1] };
     }
-
     if (slot in QF_MAP){
       const [iA,iB] = QF_MAP[slot];
       return { A: FIXED8[iA], B: FIXED8[iB] };
     }
-
     if (slot==='sf1'){
-      // winners of qf1 and qf2
       const w1 = await readWinnerColor(baseISO, 'qf1');
       const w2 = await readWinnerColor(baseISO, 'qf2');
-      const iLeft  = idxFromQFWinner('qf1', w1) ?? QF_MAP['qf1'][0];
-      const iRight = idxFromQFWinner('qf2', w2) ?? QF_MAP['qf2'][0];
+      const iLeft  = idxFromQF('qf1', w1) ?? QF_MAP.qf1[0];
+      const iRight = idxFromQF('qf2', w2) ?? QF_MAP.qf2[0];
       return { A: FIXED8[iLeft], B: FIXED8[iRight] };
     }
     if (slot==='sf2'){
-      // winners of qf3 and qf4
       const w3 = await readWinnerColor(baseISO, 'qf3');
       const w4 = await readWinnerColor(baseISO, 'qf4');
-      const iLeft  = idxFromQFWinner('qf3', w3) ?? QF_MAP['qf3'][0];
-      const iRight = idxFromQFWinner('qf4', w4) ?? QF_MAP['qf4'][0];
+      const iLeft  = idxFromQF('qf3', w3) ?? QF_MAP.qf3[0];
+      const iRight = idxFromQF('qf4', w4) ?? QF_MAP.qf4[0];
       return { A: FIXED8[iLeft], B: FIXED8[iRight] };
     }
-
     if (slot==='final'){
-      // Prefer winners of semis; if missing, derive from QF winners
-      const s1 = await readWinnerColor((prevPhaseKey || currentPhaseKey), 'sf1');
-      const s2 = await readWinnerColor((prevPhaseKey || currentPhaseKey), 'sf2');
-      let iLeft = null, iRight = null;
-      if (s1){
-        // semi1 winner came from qf1 or qf2 winner
-        const w1 = await readWinnerColor((prevPhaseKey || currentPhaseKey), 'qf1');
-        const w2 = await readWinnerColor((prevPhaseKey || currentPhaseKey), 'qf2');
-        // if s1==='red', left side of sf1 (winner of qf1), else right side (winner of qf2)
-        const idx1 = idxFromQFWinner('qf1', w1);
-        const idx2 = idxFromQFWinner('qf2', w2);
-        iLeft = (s1==='red' ? (idx1 ?? QF_MAP['qf1'][0]) : (idx2 ?? QF_MAP['qf2'][0]));
-      }
-      if (s2){
-        const w3 = await readWinnerColor((prevPhaseKey || currentPhaseKey), 'qf3');
-        const w4 = await readWinnerColor((prevPhaseKey || currentPhaseKey), 'qf4');
-        const idx3 = idxFromQFWinner('qf3', w3);
-        const idx4 = idxFromQFWinner('qf4', w4);
-        iRight = (s2==='red' ? (idx3 ?? QF_MAP['qf3'][0]) : (idx4 ?? QF_MAP['qf4'][0]));
-      }
-      // Fallbacks if semis not decided yet
-      if (iLeft===null){
-        const w1 = await readWinnerColor((prevPhaseKey || currentPhaseKey), 'qf1');
-        const w2 = await readWinnerColor((prevPhaseKey || currentPhaseKey), 'qf2');
-        iLeft = (idxFromQFWinner('qf1', w1) ?? QF_MAP['qf1'][0]);
-      }
-      if (iRight===null){
-        const w3 = await readWinnerColor((prevPhaseKey || currentPhaseKey), 'qf3');
-        const w4 = await readWinnerColor((prevPhaseKey || currentPhaseKey), 'qf4');
-        iRight = (idxFromQFWinner('qf3', w3) ?? QF_MAP['qf3'][0]);
-      }
-      return { A: FIXED8[iLeft], B: FIXED8[iRight] };
+      const sfBase = (window.prevPhaseKey || window.currentPhaseKey) || baseISO;
+      const s1 = await readWinnerColor(sfBase, 'sf1');
+      const s2 = await readWinnerColor(sfBase, 'sf2');
+      const w1 = await readWinnerColor(sfBase, 'qf1');
+      const w2 = await readWinnerColor(sfBase, 'qf2');
+      const w3 = await readWinnerColor(sfBase, 'qf3');
+      const w4 = await readWinnerColor(sfBase, 'qf4');
+      const idx1 = idxFromQF('qf1', w1) ?? QF_MAP.qf1[0];
+      const idx2 = idxFromQF('qf2', w2) ?? QF_MAP.qf2[0];
+      const idx3 = idxFromQF('qf3', w3) ?? QF_MAP.qf3[0];
+      const idx4 = idxFromQF('qf4', w4) ?? QF_MAP.qf4[0];
+      const left  = (s1==='red') ? idx1 : (s1==='blue' ? idx2 : idx1);
+      const right = (s2==='red') ? idx3 : (s2==='blue' ? idx4 : idx3);
+      return { A: FIXED8[left], B: FIXED8[right] };
     }
-
-    // default unreachable
     return { A: FIXED8[0], B: FIXED8[1] };
   }
 
-  // Override painters to *always* use the fixed 8, never baseISO seeds
-  const _paintPrev = paintImagesForActive;
-  window.paintImagesForActive = async function paintImagesForActive_FIXED(){
-    const bKey = battleKeyFor(activeSlot);
-    const pack = await fixedPackForSlot(activeSlot);
-    // don't rely on previous cache packs that used dynamic seeding
-    imgCache.set(bKey, pack);
+  window.votingLockedFor = function votingLockedFor_8(slot){
+    if (window.wasInFinalStage) return (slot.startsWith('sf') || slot.startsWith('qf'));
+    if (window.wasInSemiStage)  return slot.startsWith('qf');
+    return false;
+  };
+
+  window.detectStage = async function detectStage_8(){
+    if (!window.currentPhaseKey || !window.prevPhaseKey) return {stage:'quarters', semisReady:false, finalsReady:false};
+    const base = window.prevPhaseKey;
+    const q = Object.values(_quarterKeysFor(base));
+    const { data:qdata } = await supabase.from('winners').select('phase_key').in('phase_key', q);
+    const qDone = (qdata||[]).length===4;
+    const s = Object.values(_semiKeysFor(base));
+    const { data:sdata } = await supabase.from('winners').select('phase_key').in('phase_key', s);
+    const sDone = (sdata||[]).length===2;
+    if (!qDone) return {stage:'quarters', semisReady:false, finalsReady:false};
+    if (qDone && !sDone) return {stage:'semis', semisReady:true, finalsReady:false};
+    return {stage:'final', semisReady:true, finalsReady:true};
+  };
+
+  window.baseForSlot = function baseForSlot_8(slot){ return baseFor(slot); };
+
+  const _applyVotingLockUI = window.applyVotingLockUI;
+  window.paintImagesForActive = async function paintImagesForActive_8(){
+    const bKey = window.battleKeyFor(window.activeSlot);
+    if (!bKey) return;
+    const pack = await fixedPackForSlot(window.activeSlot);
+    window.imgCache && window.imgCache.set(bKey, pack);
     imgA.src = pack.A; imgB.src = pack.B;
 
-    if (activeSlot.startsWith('qf')){ labelA.textContent=`${activeSlot.toUpperCase()} — Left`; labelB.textContent=`${activeSlot.toUpperCase()} — Right`; }
-    else if (activeSlot==='sf1'){ labelA.textContent='Semi 1 — Left'; labelB.textContent='Semi 1 — Right'; }
-    else if (activeSlot==='sf2'){ labelA.textContent='Semi 2 — Left'; labelB.textContent='Semi 2 — Right'; }
+    if (window.activeSlot.startsWith('qf')){ labelA.textContent=`${window.activeSlot.toUpperCase()} — Left`; labelB.textContent=`${window.activeSlot.toUpperCase()} — Right`; }
+    else if (window.activeSlot==='sf1'){ labelA.textContent='Semi 1 — Left'; labelB.textContent='Semi 1 — Right'; }
+    else if (window.activeSlot==='sf2'){ labelA.textContent='Semi 2 — Left'; labelB.textContent='Semi 2 — Right'; }
     else { labelA.textContent='Final — Left'; labelB.textContent='Final — Right'; }
 
     imgA.loading='eager'; imgB.loading='eager'; imgA.decoding='async'; imgB.decoding='async';
-    lastPaintedBattleKey=bKey;
-    renderBracket();
-    applyVotingLockUI();
+    window.lastPaintedBattleKey=bKey;
+
+    window.renderBracket();
+    _applyVotingLockUI && _applyVotingLockUI();
   };
 
-  // Bracket thumbnails use the same fixed pack logic
-  const _renderPrev = renderBracket;
-  window.renderBracket = async function renderBracket_FIXED(){
-    const slots = ['qf1','qf2','qf3','qf4','sf1','sf2','final'];
-    const labelFor = (slot)=>{
-      if (slot.startsWith('qf')) return {round:'QF', title:slot.toUpperCase()};
-      if (slot==='sf1') return {round:'SF', title:'Winners of QF1 & QF2'};
-      if (slot==='sf2') return {round:'SF', title:'Winners of QF3 & QF4'};
-      return {round:'Final', title:'Winners of SF1 & SF2'};
+  window.thumbsFor = async function thumbsFor_8(slot){ return fixedPackForSlot(slot); };
+
+  window.updateBracketScores = async function updateBracketScores_8(){
+    const base = window.currentPhaseKey; if (!base) return;
+    for (const slot of ALL_SLOTS){
+      let keyBase = base;
+      if (slot.startsWith('sf') && window.wasInFinalStage) keyBase = window.prevPhaseKey || base;
+      if (slot.startsWith('qf') && (window.wasInSemiStage || window.wasInFinalStage)) keyBase = window.prevPhaseKey || base;
+      const key = window.battleKeyFor(slot);
+      const sEl = document.querySelector(`#row-${slot} .bscore`);
+      if (!sEl || !key) continue;
+      try{ const {r,b}=await countVotesFor(key); sEl.textContent = `${r} - ${b}`; }
+      catch{ sEl.textContent = `0 - 0`; }
+    }
+  };
+
+  window.renderBracket = async function renderBracket_8(){
+    const base = window.currentPhaseKey; if (!base){ brows.innerHTML=''; return; }
+    const titles = {
+      qf1:'QF1', qf2:'QF2', qf3:'QF3', qf4:'QF4',
+      sf1:'Winners of QF1 & QF2', sf2:'Winners of QF3 & QF4',
+      final:'Winners of SF1 & SF2'
     };
-    const rows = await Promise.all(slots.map(async (slot)=>{
-      const lab = labelFor(slot);
+    const rows = await Promise.all(ALL_SLOTS.map(async (slot)=>{
+      const round = slot.startsWith('qf')?'QF':(slot.startsWith('sf')?'SF':'Final');
       const thumbs = await fixedPackForSlot(slot);
-      const decided = votingLockedFor(slot);
-      return \`
-        <div class="brow \${decided?'decided':''}" id="row-\${slot}" data-slot="\${slot}">
-          <div class="bbadge">\${lab.round}</div>
+      const decided = window.votingLockedFor(slot);
+      return `
+        <div class="brow ${decided?'decided':''}" id="row-${slot}" data-slot="${slot}">
+          <div class="bbadge">${round}</div>
           <div class="thumb2">
-            <div class="thumb">\${thumbs.A ? \`<img src="\${thumbs.A}" alt="">\` : ''}</div>
-            <div class="thumb">\${thumbs.B ? \`<img src="\${thumbs.B}" alt="">\` : ''}</div>
+            <div class="thumb">${thumbs.A ? `<img src="${thumbs.A}" alt="">` : ''}</div>
+            <div class="thumb">${thumbs.B ? `<img src="${thumbs.B}" alt="">` : ''}</div>
           </div>
           <div class="bmeta">
-            <div class="title">\${lab.title}</div>
-            <div class="bline"><span class="bpill">\${decided?'round decided':'uses global'}</span></div>
+            <div class="title">${titles[slot]}</div>
+            <div class="bline"><span class="bpill">${decided?'round decided':'uses global'}</span></div>
           </div>
           <div class="bscore">0 - 0</div>
-        </div>\`;
+        </div>`;
     }));
     brows.innerHTML = rows.join('');
     brows.querySelectorAll('.brow').forEach(row=>{
       row.addEventListener('click',()=>{
-        activeSlot = row.dataset.slot;
+        window.activeSlot = row.dataset.slot;
         clearSelection();
-        lastPaintedBattleKey=null;
-        paintImagesForActive();
+        window.lastPaintedBattleKey=null;
+        window.paintImagesForActive();
         refreshVoteCounts();
         document.querySelectorAll('.brow').forEach(el=>el.classList.remove('active'));
         row.classList.add('active');
-        applyVotingLockUI();
+        window.applyVotingLockUI && window.applyVotingLockUI();
       });
     });
-    const r = document.getElementById('row-'+activeSlot);
-    r && r.classList.add('active');
-    updateBracketScores();
+    const r = document.getElementById("row-"+window.activeSlot);
+    r && r.classList.add("active");
+    window.updateBracketScores();
   };
 
-  // Also make thumbsFor() use fixed images so score rows and other callers remain consistent
-  window.thumbsFor = async function thumbsFor_FIXED(slot){
-    return fixedPackForSlot(slot);
+  const _showChampion = window.showChampion;
+  window.fetchState = async function fetchState_8(){
+    const s = (await window.callEdge('GET')) || {};
+    const norm = (x)=>({phase_end_at:x.phase_end_at??null, period_sec:x.period_sec??20, paused:!!x.paused, remaining_sec:(typeof x.remaining_sec==='number')?x.remaining_sec:null});
+    const st = norm(s);
+
+    const prevEnd = window.serverPhaseEndISO;
+    window.serverPhaseEndISO = st.phase_end_at;
+    window.paused = st.paused;
+    window.remainingSec = st.remaining_sec;
+    window.periodSec = st.period_sec ?? 20;
+    window.lastSyncAt = Date.now();
+    window.currentPhaseKey = window.serverPhaseEndISO ? window.iso(window.serverPhaseEndISO) : null;
+    window.prevPhaseKey = window.currentPhaseKey && window.periodSec ? window.iso(Date.parse(window.currentPhaseKey) - window.periodSec*1000) : null;
+
+    window.setStateUI && window.setStateUI();
+
+    if (prevEnd && window.serverPhaseEndISO && prevEnd !== window.serverPhaseEndISO){
+      const justEndedBase = window.iso(prevEnd);
+      let stageBefore = 'quarters';
+      if (window.wasInFinalStage) stageBefore = 'final';
+      else if (window.wasInSemiStage) stageBefore = 'semis';
+
+      if (stageBefore==='final'){
+        const finalKey = _finalKeyFor(justEndedBase);
+        const color = await window.decideAndPersistWinner(finalKey);
+        if (!window.imgCache.has(finalKey)){
+          const pack = await fixedPackForSlot('final');
+          if (pack) window.imgCache.set(finalKey, pack);
+        }
+        _showChampion && _showChampion(color, justEndedBase);
+        window.overlayGateBase = null;
+        window.activeSlot = 'qf1';
+        window.imgCache.clear(); window.lastPaintedBattleKey=null;
+      } else if (stageBefore==='semis'){
+        const { sf1, sf2 } = _semiKeysFor(justEndedBase);
+        await window.decideAndPersistWinner(sf1);
+        await window.decideAndPersistWinner(sf2);
+        window.overlayGateBase = window.currentPhaseKey;
+        window.activeSlot = 'final';
+        const pack = await fixedPackForSlot('final');
+        if (pack) window.imgCache.set(_finalKeyFor(window.currentPhaseKey), pack);
+        window.lastPaintedBattleKey=null;
+      } else {
+        const qs = Object.values(_quarterKeysFor(justEndedBase));
+        for (const k of qs){ await window.decideAndPersistWinner(k); }
+        window.activeSlot = 'sf1';
+        window.lastPaintedBattleKey=null;
+      }
+    }
+
+    const stage = await window.detectStage();
+    window.wasInSemiStage  = (stage.stage==='semis');
+    window.wasInFinalStage = (stage.stage==='final');
+
+    if (!window.activeSlot || !ALL_SLOTS.includes(window.activeSlot)) window.activeSlot = 'qf1';
+
+    await window.paintImagesForActive();
+    await window.refreshVoteCounts();
+    window.renderBracket();
+    window.applyVotingLockUI && window.applyVotingLockUI();
   };
 
-  // prefer qf1 on first boot
-  if (typeof activeSlot === 'string' && !activeSlot.startsWith('qf')) activeSlot = 'qf1';
+  if (typeof window.activeSlot === 'string' && window.activeSlot === 'sf1') window.activeSlot = 'qf1';
 })();
 </script>
-<!-- ===== /FIXED-IMAGES BRACKET OVERRIDE ===== -->
+<!-- ===== /8-IMAGE BRACKET UPGRADE ===== -->
 
 </body>
 </html>
