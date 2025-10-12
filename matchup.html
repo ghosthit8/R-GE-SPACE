@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
+/* Hide the QF/SF/Final Left/Right labels under each image */
+#labelA, #labelB { display: none; }
 :root{ --green:#39ff14; --green-bright:#7dff62; --bg:#000; --ink:#e5e5e5; --card:#0b0b0b; --border:#153b16; --muted:#8aff8a; --maxw:980px; --danger:#ff3b3b; }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
@@ -348,11 +350,13 @@ const showDone = document.getElementById('showDone');
 /* ---------- State ---------- */
 let paused=false, serverPhaseEndISO=null, currentPhaseKey=null, prevPhaseKey=null, periodSec=20, remainingSec=null, lastSyncAt=0, lastCountsAt=0;
 let currentUid=null, chosen=null;
-let activeSlot='sf1'; // 'sf1'|'sf2'|'final'
-let wasInFinalStage=false;
+
+/* NEW: 8-entrant flow */
+let activeSlot='qf1'; // 'qf1'|'qf2'|'qf3'|'qf4'|'sf1'|'sf2'|'final'
+let currentStage='qf'; // 'qf'|'sf'|'final'
 let overlayGateBase=null; // base ISO allowed to trigger champion
 
-// Freeze images per battle: "<baseISO>::sf1|sf2|final" → {A,B}
+// Freeze images per battle: "<baseISO>::slot" → {A,B}
 const imgCache = new Map();
 let lastPaintedBattleKey=null;
 
@@ -371,7 +375,7 @@ function startBootTick(){
   _bootTimer = setInterval(()=>{
     const el = bootFill();
     const cur = parseFloat(el.style.width||'0');
-    const toward = (_bootTarget>cur) ? (cur + Math.max(1,( _bootTarget-cur)*0.12)) : (cur + 0.18); // creep if stalled
+    const toward = (_bootTarget>cur) ? (cur + Math.max(1,( _bootTarget-cur)*0.12)) : (cur + 0.18);
     el.style.width = Math.min(99, toward).toFixed(2) + '%';
   }, 60);
 }
@@ -394,116 +398,116 @@ async function callEdge(method='GET', body=null){
 const normalize=(s)=>({phase_end_at:s.phase_end_at??null, period_sec:s.period_sec??20, paused:!!s.paused, remaining_sec:(typeof s.remaining_sec==='number')?s.remaining_sec:null});
 
 function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
+function qfKeysFor(baseISO){ return { qf1:`${baseISO}::qf1`, qf2:`${baseISO}::qf2`, qf3:`${baseISO}::qf3`, qf4:`${baseISO}::qf4` }; }
 function semiKeysFor(baseISO){ return { sf1:`${baseISO}::sf1`, sf2:`${baseISO}::sf2` }; }
 function finalKeyFor(baseISO){ return `${baseISO}::final`; }
-function baseFromKey(k){ return (k||'').split('::')[0] || ''; }
+
+const stageOfSlot = (slot)=> slot.startsWith('qf') ? 'qf' : (slot.startsWith('sf') ? 'sf' : 'final');
+const stageLevel = (st)=> st==='qf'?1: (st==='sf'?2:3);
+const slotLevel  = (slot)=> stageLevel(stageOfSlot(slot));
+function baseAtOffset(n){
+  if (!currentPhaseKey) return null;
+  const t = Date.parse(currentPhaseKey) - Math.max(0,n)*periodSec*1000;
+  return iso(t);
+}
+function baseForSlot(slot){
+  const curLv = stageLevel(currentStage||'qf');
+  const needLv = slotLevel(slot);
+  const delta = curLv - needLv; // 0 = this phase, 1 = prev, 2 = two back
+  if (delta <= 0) return currentPhaseKey;
+  if (delta === 1) return prevPhaseKey || currentPhaseKey;
+  if (delta >= 2)  return baseAtOffset(2);
+  return currentPhaseKey;
+}
 
 /* ---------- Stage detection ---------- */
 async function detectStage(){
-  if (!currentPhaseKey || !prevPhaseKey) return {stage:'semis', finalsReady:false};
-  const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
-  const { data, error } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
-  if (error) return {stage:'semis', finalsReady:false};
-  const haveBoth = (data||[]).length===2 && data.every(r => r.color==='red' || r.color==='blue');
-  return {stage: haveBoth ? 'final' : 'semis', finalsReady: haveBoth};
+  if (!currentPhaseKey || !prevPhaseKey) return {stage:'qf'};
+  // If previous base has SF winners → we're in FINAL
+  const { data:sfW } = await supabase.from('winners').select('phase_key').in('phase_key', [ `${prevPhaseKey}::sf1`, `${prevPhaseKey}::sf2` ]);
+  if ((sfW||[]).length===2) return {stage:'final'};
+  // Else if previous base has all QF winners → we're in SF
+  const { data:qfW } = await supabase.from('winners').select('phase_key').in('phase_key',
+    [ `${prevPhaseKey}::qf1`, `${prevPhaseKey}::qf2`, `${prevPhaseKey}::qf3`, `${prevPhaseKey}::qf4` ]);
+  if ((qfW||[]).length===4) return {stage:'sf'};
+  // Else → still in QF
+  return {stage:'qf'};
 }
 
-/* ---------- Final entrants from semi winners ---------- */
+/* ---------- Build entrants from previous winners ---------- */
+async function getSemiEntrantSourcesFromQFWinners(which /* 'sf1'|'sf2' */){
+  // QF winners live on a base one (or two) periods back from current stage
+  const curLv = stageLevel(currentStage||'qf');
+  const qfBase = (curLv===2) ? prevPhaseKey : (curLv===3 ? baseAtOffset(2) : null);
+  if (!qfBase) return null;
+
+  const { data } = await supabase.from('winners').select('phase_key,color')
+    .in('phase_key',[ `${qfBase}::qf1`, `${qfBase}::qf2`, `${qfBase}::qf3`, `${qfBase}::qf4` ]);
+  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
+
+  const pickFromQF = (qfIdx /*1..4*/, color)=>{
+    const leftSuffix  = `A${qfIdx}`;
+    const rightSuffix = `B${qfIdx}`;
+    return seedUrlFromKey(qfBase, color==='red' ? leftSuffix : rightSuffix);
+  };
+
+  if (which==='sf1'){
+    const c1 = map[`${qfBase}::qf1`], c2 = map[`${qfBase}::qf2`];
+    if (!c1 || !c2) return null;
+    return { A: pickFromQF(1,c1), B: pickFromQF(2,c2) }; // qf1 winner (left) vs qf2 winner (right)
+  } else {
+    const c3 = map[`${qfBase}::qf3`], c4 = map[`${qfBase}::qf4`];
+    if (!c3 || !c4) return null;
+    return { A: pickFromQF(3,c3), B: pickFromQF(4,c4) }; // qf3 winner (left) vs qf4 winner (right)
+  }
+}
+
+/* ======== UPDATED: Final entrants from SF winners (exact images) ======== */
 async function getFinalEntrantSourcesFromWinners(){
   if (!prevPhaseKey) return null;
+
+  // Read SF winners (which side won)
   const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
-  const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
-  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
-  const c1 = map[sf1], c2 = map[sf2];
-  if (!c1 || !c2) return null;
-  const left = seedUrlFromKey(prevPhaseKey, c1==='red' ? 'A1' : 'B1');
-  const right= seedUrlFromKey(prevPhaseKey, c2==='red' ? 'A2' : 'B2');
-  return {A:left, B:right};
-}
+  const { data: winRows, error } = await supabase
+    .from('winners')
+    .select('phase_key,color')
+    .in('phase_key', [sf1, sf2]);
+  if (error) return null;
 
-/* Build a human label for FINAL using semi winners */
-async function finalSeedsTitle(){
-  if (!prevPhaseKey) return 'TBD vs TBD';
-  const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
-  const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
-  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
-  const pick = (slot,color)=> {
-    if (slot==='sf1'){ return color==='red' ? 'Seed A' : 'Seed B'; }
-    if (slot==='sf2'){ return color==='red' ? 'Seed C' : 'Seed D'; }
-    return 'TBD';
-  };
-  const s1 = map[sf1] ? pick('sf1',map[sf1]) : null;
-  const s2 = map[sf2] ? pick('sf2',map[sf2]) : null;
-  return (s1 && s2) ? `${s1} vs ${s2}` : 'TBD vs TBD';
-}
+  const colors = Object.fromEntries((winRows||[]).map(r => [r.phase_key, (r.color||'').toLowerCase()]));
+  const c1 = colors[sf1];
+  const c2 = colors[sf2];
+  if (!(c1 && c2)) return null;
 
-/* ---------- Winner/Loser helpers for semis ---------- */
-async function getWinnerColorForSemi(baseISO, slot){
-  const key = `${baseISO}::${slot}`;
-  const { data } = await supabase.from('winners').select('color').eq('phase_key', key).maybeSingle();
-  return (data?.color||null);
-}
-function loserSuffixForSemi(slot, winnerColor){
-  if (!winnerColor) return null;
-  if (slot==='sf1'){ return winnerColor==='red' ? 'B1' : 'A1'; }
-  if (slot==='sf2'){ return winnerColor==='red' ? 'B2' : 'A2'; }
-  return null;
-}
-
-/* ---------- Battle key resolution (FREEZE semis) ---------- */
-function baseForSlot(slot){
-  if (slot==='final') return currentPhaseKey;
-  return wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey;
-}
-function battleKeyFor(slot){
-  const base = baseForSlot(slot);
-  if (!base) return null;
-  if (slot==='final') return finalKeyFor(base);
-  const { sf1, sf2 } = semiKeysFor(base);
-  return slot==='sf1' ? sf1 : sf2;
-}
-
-/* ---------- Image paint (frozen per battle) ---------- */
-async function paintImagesForActive(){
-  const bKey = battleKeyFor(activeSlot);
-  if (!bKey) return;
-
-  if (imgCache.has(bKey)){
-    const {A,B}=imgCache.get(bKey);
-    imgA.src=A; imgB.src=B;
-  } else {
-    if (activeSlot==='sf1'){
-      const A = seedUrlFromKey(baseForSlot('sf1'),'A1');
-      const B = seedUrlFromKey(baseForSlot('sf1'),'B1');
-      imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
-    } else if (activeSlot==='sf2'){
-      const A = seedUrlFromKey(baseForSlot('sf2'),'A2');
-      const B = seedUrlFromKey(baseForSlot('sf2'),'B2');
-      imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
-    } else {
-      const finals = await getFinalEntrantSourcesFromWinners();
-      if (finals){
-        imgCache.set(bKey, finals); imgA.src=finals.A; imgB.src=finals.B;
-      } else {
-        imgA.removeAttribute('src'); imgB.removeAttribute('src');
-      }
-    }
+  // Ensure we have the exact SF image packs that were displayed
+  async function sfPack(slot /* 'sf1'|'sf2' */){
+    const key = `${prevPhaseKey}::${slot}`;
+    if (imgCache.has(key)) return imgCache.get(key);
+    const rebuilt = await getSemiEntrantSourcesFromQFWinners(slot); // deterministic rebuild
+    if (rebuilt) imgCache.set(key, rebuilt);
+    return rebuilt;
   }
 
-  if (activeSlot==='sf1'){ labelA.textContent='Semi 1 — Left'; labelB.textContent='Semi 1 — Right'; }
-  else if (activeSlot==='sf2'){ labelA.textContent='Semi 2 — Left'; labelB.textContent='Semi 2 — Right'; }
-  else { labelA.textContent='Final — Left'; labelB.textContent='Final — Right'; }
+  const p1 = await sfPack('sf1'); // {A,B} shown in SF1
+  const p2 = await sfPack('sf2'); // {A,B} shown in SF2
+  if (!(p1 && p2 && p1.A && p1.B && p2.A && p2.B)) return null;
 
-  imgA.loading='eager'; imgB.loading='eager'; imgA.decoding='async'; imgB.decoding='async';
-  lastPaintedBattleKey=bKey;
+  // Winner color → which side’s URL advances to Final
+  const leftFinal  = (c1 === 'red') ? p1.A : p1.B;
+  const rightFinal = (c2 === 'red') ? p2.A : p2.B;
 
-  renderBracket();
-  applyVotingLockUI();
+  return { A: leftFinal, B: rightFinal };
 }
 
 /* ---------- Votes ---------- */
 const fmtVotes=(n)=>`${n} ${n===1?'vote':'votes'}`;
-function currentBattleKey(){ const k = battleKeyFor(activeSlot); return k || null; }
+function currentBattleKey(){
+  const base = baseForSlot(activeSlot);
+  if (!base) return null;
+  if (activeSlot.startsWith('qf')) return `${base}::${activeSlot}`;
+  if (activeSlot.startsWith('sf')) return `${base}::${activeSlot}`;
+  return `${base}::final`;
+}
 async function countVotesFor(key){
   const { data, error } = await supabase.from('phase_votes').select('vote').eq('phase_key', key);
   if (error) throw error;
@@ -570,7 +574,7 @@ function startConfetti(){
       p.vx *= 0.995; p.vy *= 0.995; // drag
       p.x += p.vx; p.y += p.vy; p.rot += p.vr;
 
-      // wrap around (no new spawns)
+      // wrap around
       if (p.x < -20) p.x = confettiCanvas.width + 20;
       if (p.x > confettiCanvas.width + 20) p.x = -20;
       if (p.y < -20) p.y = confettiCanvas.height + 20;
@@ -584,8 +588,6 @@ function startConfetti(){
   }
   cancelAnimationFrame(_confettiRaf);
   step();
-
-  // Auto-stop after 5 seconds
   setTimeout(()=> stopConfetti(), 5000);
 }
 function stopConfetti(){
@@ -595,7 +597,7 @@ function stopConfetti(){
   c.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
 }
 
-/* ---------- Typewriter (slower + cancellable) ---------- */
+/* ---------- Typewriter ---------- */
 let _typewriterToken = 0;
 async function typewriter(el, text, speed=85){
   const myToken = ++_typewriterToken;
@@ -609,30 +611,37 @@ async function typewriter(el, text, speed=85){
   if (myToken === _typewriterToken) el.classList.remove('type-caret');
 }
 
-/* ---------- Show champion (single trigger per final) ---------- */
+/* ---------- Show champion (Final only) ---------- */
 let _openChampionBase = null;
 function showChampion(color, finalBaseISO){
   if (_openChampionBase === finalBaseISO && overlay.classList.contains('show')) return;
   _openChampionBase = finalBaseISO;
 
-  const cached = imgCache.get(finalKeyFor(finalBaseISO)) || {};
+  const finalKey = finalKeyFor(finalBaseISO);
+  const cached = imgCache.get(finalKey) || {};
   const src = (color==='red') ? (cached.A || imgA.src) : (cached.B || imgB.src);
   overlayArtImg.src = src;
 
   overlayTitle.textContent = 'CHAMPION';
-  const sub   = (color==='red') ? 'Tie… random winner picked: Left' : 'Tie… random winner picked: Right';
-  const motto = 'Glory to the machine. Your art devours the bracket';
 
-  overlaySubtitle.textContent = '';
-  overlayMotto.textContent = '';
+  countVotesFor(finalKey).then(({ r, b }) => {
+    const sub = (r === b)
+      ? ((color === 'red') ? 'Tie… random winner picked' : 'Tie… random winner picked')
+      : ((color === 'red') ? 'Winner<3' : 'Winner<3');
 
-  overlay.classList.add('show');
-  startConfetti(); // one burst; stops after 5s
+    const motto = 'Glory to the machine. Your art devours the bracket';
 
-  (async ()=>{
-    await typewriter(overlaySubtitle, sub,   95);
-    await typewriter(overlayMotto,   motto,  85);
-  })();
+    overlaySubtitle.textContent = '';
+    overlayMotto.textContent = '';
+
+    overlay.classList.add('show');
+    startConfetti();
+
+    (async ()=>{
+      await typewriter(overlaySubtitle, sub,   95);
+      await typewriter(overlayMotto,   motto,  85);
+    })();
+  });
 }
 
 overlayClose.onclick=()=>{ 
@@ -673,19 +682,76 @@ document.addEventListener('keydown', (e)=>{
 
 /* ---------- Timer / phase handling ---------- */
 function setStateUI(){ stateEl.textContent = paused ? 'PAUSED' : 'LIVE'; pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause'; phaseBadge.textContent='phase: '+(currentPhaseKey||'—'); }
-function votingLockedFor(slot){ return wasInFinalStage && (slot==='sf1' || slot==='sf2'); }
+
+function slotFinished(slot){
+  return slotLevel(slot) < stageLevel(currentStage||'qf');
+}
+function votingLockedFor(slot){
+  return slotLevel(slot) !== stageLevel(currentStage||'qf');
+}
 function applyVotingLockUI(){
   const locked = votingLockedFor(activeSlot);
   [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
-  document.getElementById('tileA').classList.toggle('decided', locked);
-  document.getElementById('tileB').classList.toggle('decided', locked);
-  submitBtn.textContent = locked ? 'Voting closed' : '✅ Submit Vote';
+  // Show DECIDED ribbon only if this slot is finished (older round)
+  const finished = slotFinished(activeSlot);
+  document.getElementById('tileA').classList.toggle('decided', finished);
+  document.getElementById('tileB').classList.toggle('decided', finished);
+  submitBtn.textContent = locked ? (finished?'Voting closed':'Not started') : '✅ Submit Vote';
+}
+
+/* paint images for the chosen slot */
+async function paintImagesForActive(){
+  const slot = activeSlot;
+  const base = baseForSlot(slot);
+  if (!base) return;
+
+  const bKey = `${base}::${slot}`;
+  if (imgCache.has(bKey)){
+    const {A,B}=imgCache.get(bKey); imgA.src=A; imgB.src=B;
+  } else {
+    if (slot.startsWith('qf')){
+      // qf1..qf4 map to A1/B1 .. A4/B4
+      const idx = Number(slot.slice(2)); // 1..4
+      const A = seedUrlFromKey(base, `A${idx}`);
+      const B = seedUrlFromKey(base, `B${idx}`);
+      imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
+    } else if (slot==='sf1' || slot==='sf2'){
+      const pack = await getSemiEntrantSourcesFromQFWinners(slot);
+      if (pack){ imgCache.set(bKey,pack); imgA.src=pack.A; imgB.src=pack.B; }
+      else { imgA.removeAttribute('src'); imgB.removeAttribute('src'); }
+    } else { // final
+      const finals = await getFinalEntrantSourcesFromWinners();
+      if (finals){ imgCache.set(bKey, finals); imgA.src=finals.A; imgB.src=finals.B; }
+      else { imgA.removeAttribute('src'); imgB.removeAttribute('src'); }
+    }
+  }
+
+  // Labels
+  if (slot.startsWith('qf')){
+    const n = slot.slice(2);
+    labelA.textContent=`QF ${n} — Left`;
+    labelB.textContent=`QF ${n} — Right`;
+  } else if (slot==='sf1' || slot==='sf2'){
+    const n = slot.slice(2);
+    labelA.textContent=`SF ${n} — Left`;
+    labelB.textContent=`SF ${n} — Right`;
+  } else {
+    labelA.textContent='Final — Left';
+    labelB.textContent='Final — Right';
+  }
+
+  imgA.loading='eager'; imgB.loading='eager'; imgA.decoding='async'; imgB.decoding='async';
+  lastPaintedBattleKey=bKey;
+
+  renderBracket();
+  applyVotingLockUI();
 }
 
 async function fetchState(){
-  const s = normalize(await callEdge('GET'));
   const prevEnd = serverPhaseEndISO;
+  const prevStage = currentStage;
 
+  const s = normalize(await callEdge('GET'));
   serverPhaseEndISO = s.phase_end_at;
   paused = s.paused;
   remainingSec = s.remaining_sec;
@@ -701,37 +767,52 @@ async function fetchState(){
   if (prevEnd && serverPhaseEndISO && prevEnd !== serverPhaseEndISO){
     const justEndedBase = iso(prevEnd);
 
-    if (wasInFinalStage){
+    if (prevStage === 'final'){
       // FINAL just ended
       const finalKey = finalKeyFor(justEndedBase);
       const color = await decideAndPersistWinner(finalKey);
-      if (!imgCache.has(finalKey)){
-        const pack = await getFinalEntrantSourcesFromWinners();
-        if (pack) imgCache.set(finalKey, pack);
-      }
+      if (!imgCache.has(finalKey)){ const pack = await getFinalEntrantSourcesFromWinners(); if (pack) imgCache.set(finalKey, pack); }
       if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
 
-      // Loop back
+      // Loop back: next phase is fresh QFs
       overlayGateBase = null;
-      activeSlot = 'sf1';
+      activeSlot = 'qf1';
       imgCache.clear(); lastPaintedBattleKey=null;
-    } else {
-      // SEMIS just ended
+
+    } else if (prevStage === 'sf'){
+      // SFs just ended → record SF winners and move to FINAL
       const { sf1, sf2 } = semiKeysFor(justEndedBase);
       await decideAndPersistWinner(sf1);
       await decideAndPersistWinner(sf2);
 
-      // Move INTO Final
       overlayGateBase = currentPhaseKey; // final that just started
       activeSlot = 'final';
       const pack = await getFinalEntrantSourcesFromWinners();
       if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
       lastPaintedBattleKey=null;
+
+    } else {
+      // QFs just ended → record all 4 and move to SF
+      const { qf1,qf2,qf3,qf4 } = qfKeysFor(justEndedBase);
+      await Promise.all([
+        decideAndPersistWinner(qf1),
+        decideAndPersistWinner(qf2),
+        decideAndPersistWinner(qf3),
+        decideAndPersistWinner(qf4),
+      ]);
+
+      activeSlot = 'sf1';
+      // seed SF thumbnails cache for current base
+      const pack1 = await getSemiEntrantSourcesFromQFWinners('sf1');
+      const pack2 = await getSemiEntrantSourcesFromQFWinners('sf2');
+      if (pack1) imgCache.set(`${currentPhaseKey}::sf1`, pack1);
+      if (pack2) imgCache.set(`${currentPhaseKey}::sf2`, pack2);
+      lastPaintedBattleKey=null;
     }
   }
 
   const { stage } = await detectStage();
-  wasInFinalStage = (stage==='final');
+  currentStage = stage;
 
   await paintImagesForActive();
   await refreshVoteCounts();
@@ -741,41 +822,42 @@ async function fetchState(){
 
 /* ---------- Bracket list rendering (compact) ---------- */
 function labelFor(slot){
-  if (slot==='sf1') return {round:'QF', title:'Seed A vs Seed B'};
-  if (slot==='sf2') return {round:'QF', title:'Seed C vs Seed D'};
+  if (slot.startsWith('qf')){
+    const n=slot.slice(2);
+    const seedTitle = ['A vs B','C vs D','E vs F','G vs H'][Number(n)-1] || 'A vs B';
+    return {round:'QF', title:`Seed ${seedTitle}`};
+  }
+  if (slot==='sf1') return {round:'SF', title:'Quarter Finals'};
+  if (slot==='sf2') return {round:'SF', title:'Quarter Finals'};
   return {round:'Final', title:'TBD vs TBD'};
 }
 function slotKeyFor(slot, baseISO){
   if (slot==='final') return finalKeyFor(baseISO);
-  const { sf1, sf2 } = semiKeysFor(baseISO);
-  return (slot==='sf1'?sf1:sf2);
+  return `${baseISO}::${slot}`;
 }
 
 /* thumbnails reflect actual battles */
 async function thumbsFor(slot){
-  if (!currentPhaseKey) return {A:'',B:''};
-
-  const base = (slot==='final')
-    ? currentPhaseKey
-    : (wasInFinalStage ? (prevPhaseKey || currentPhaseKey) : currentPhaseKey);
-
-  const key = (slot==='final')
-    ? finalKeyFor(base)
-    : (slot==='sf1' ? `${base}::sf1` : `${base}::sf2`);
+  const base = baseForSlot(slot);
+  if (!base) return {A:'',B:''};
+  const key = slotKeyFor(slot, base);
 
   if (imgCache.has(key)) return imgCache.get(key);
 
-  if (slot==='final'){
-    const finals = await getFinalEntrantSourcesFromWinners();
-    if (finals){ imgCache.set(key, finals); return finals; }
-    return {A:'',B:''};
-  } else {
-    const A = seedUrlFromKey(base, slot==='sf1' ? 'A1' : 'A2');
-    const B = seedUrlFromKey(base, slot==='sf1' ? 'B1' : 'B2');
-    const pack = {A,B};
-    imgCache.set(key, pack);
-    return pack;
+  if (slot.startsWith('qf')){
+    const idx = Number(slot.slice(2));
+    const pack = { A: seedUrlFromKey(base, `A${idx}`), B: seedUrlFromKey(base, `B${idx}`) };
+    imgCache.set(key, pack); return pack;
   }
+  if (slot==='sf1' || slot==='sf2'){
+    const pack = await getSemiEntrantSourcesFromQFWinners(slot);
+    if (pack){ imgCache.set(key, pack); return pack; }
+    return {A:'',B:''};
+  }
+  // final
+  const finals = await getFinalEntrantSourcesFromWinners();
+  if (finals){ imgCache.set(key, finals); return finals; }
+  return {A:'',B:''};
 }
 
 function rowId(slot){ return `row-${slot}`; }
@@ -797,12 +879,11 @@ function highlightActiveRow(){
 }
 
 async function updateBracketScores(){
-  const base = currentPhaseKey;
-  if (!base) return;
-  for (const slot of ['sf1','sf2','final']){
-    let keyBase = base;
-    if (wasInFinalStage && (slot==='sf1' || slot==='sf2')) keyBase = prevPhaseKey || base;
-    const key = slotKeyFor(slot, keyBase);
+  const slots = ['qf1','qf2','qf3','qf4','sf1','sf2','final'];
+  for (const slot of slots){
+    const base = baseForSlot(slot);
+    if (!base) continue;
+    const key = slotKeyFor(slot, base);
     const sEl = document.querySelector(`#${rowId(slot)} .bscore`);
     if (!sEl) continue;
     try{
@@ -814,20 +895,35 @@ async function updateBracketScores(){
   }
 }
 
+async function finalSeedsTitle(){
+  // Keep existing behavior: uses SF winners to label final
+  if (!prevPhaseKey) return 'TBD vs TBD';
+  const { sf1, sf2 } = semiKeysFor(prevPhaseKey);
+  const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key',[sf1,sf2]);
+  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
+  const pick = (slot,color)=> {
+    if (slot==='sf1'){ return color==='red' ? 'Finals' : 'Finals'; }
+    if (slot==='sf2'){ return color==='red' ? 'Finals' : 'Finals'; }
+    return 'TBD';
+  };
+  const s1 = map[sf1] ? pick('sf1',map[sf1]) : null;
+  const s2 = map[sf2] ? pick('sf2',map[sf2]) : null;
+  return (s1 && s2) ? `${s1} vs ${s2}` : 'TBD vs TBD';
+}
+
 async function renderBracket(){
   const base = currentPhaseKey;
   if (!base){ brows.innerHTML=''; return; }
 
-  const titles = {
-    sf1: labelFor('sf1').title,
-    sf2: labelFor('sf2').title,
-    final: await finalSeedsTitle()
-  };
+  const rowsOrder = ['qf1','qf2','qf3','qf4','sf1','sf2','final'];
+  const titlesFinal = await finalSeedsTitle();
 
-  const rows = await Promise.all(['sf1','sf2','final'].map(async (slot)=>{
+  const rows = await Promise.all(rowsOrder.map(async (slot)=>{
     const round = labelFor(slot).round;
+    const title = (slot==='final') ? titlesFinal : labelFor(slot).title;
     const thumbs = await thumbsFor(slot);
-    const decided = votingLockedFor(slot);
+    const decided = slotFinished(slot);
+    const pillText = decided ? 'round decided' : (slotLevel(slot)===stageLevel(currentStage)?'':'locked');
     return `
       <div class="brow ${decided?'decided':''}" id="${rowId(slot)}" data-slot="${slot}">
         <div class="bbadge">${round}</div>
@@ -836,9 +932,9 @@ async function renderBracket(){
           <div class="thumb">${thumbs.B ? `<img src="${thumbs.B}" alt="">` : ''}</div>
         </div>
         <div class="bmeta">
-          <div class="title">${slot==='final'?titles.final:(titles[slot]||'')}</div>
+          <div class="title">${title}</div>
           <div class="bline">
-            <span class="bpill">${decided?'round decided':'uses global'}</span>
+            <span class="bpill">${pillText}</span>
           </div>
         </div>
         <div class="bscore">0 - 0</div>
@@ -910,10 +1006,10 @@ supabase.channel('phase-votes-live')
 pauseBtn.onclick = async ()=>{ try{ if (paused) await callEdge('POST',{action:'resume'}); else await callEdge('POST',{action:'pause'}); await fetchState(); toast('OK'); }catch{ toast('Pause/resume failed'); }};
 
 function clearSelection(){ voteA.classList.remove('selected'); voteB.classList.remove('selected'); chosen=null; submitBtn.textContent='✅ Submit Vote'; submitBtn.disabled=!currentUid; }
-voteA.onclick=()=>{ if (votingLockedFor(activeSlot)) return toast('Voting closed'); chosen='red'; voteA.classList.add('selected'); voteB.classList.remove('selected'); submitBtn.disabled=!currentUid; };
-voteB.onclick=()=>{ if (votingLockedFor(activeSlot)) return toast('Voting closed'); chosen='blue'; voteB.classList.add('selected'); voteA.classList.remove('selected'); submitBtn.disabled=!currentUid; };
+voteA.onclick=()=>{ if (votingLockedFor(activeSlot)) return toast(slotFinished(activeSlot)?'Voting closed':'Not started'); chosen='red'; voteA.classList.add('selected'); voteB.classList.remove('selected'); submitBtn.disabled=!currentUid; };
+voteB.onclick=()=>{ if (votingLockedFor(activeSlot)) return toast(slotFinished(activeSlot)?'Voting closed':'Not started'); chosen='blue'; voteB.classList.add('selected'); voteA.classList.remove('selected'); submitBtn.disabled=!currentUid; };
 submitBtn.onclick=async()=>{
-  if (votingLockedFor(activeSlot)) return toast('Voting closed');
+  if (votingLockedFor(activeSlot)) return toast(slotFinished(activeSlot)?'Voting closed':'Not started');
   const key=currentBattleKey();
   if (!chosen || !key) return;
   if (!currentUid){ toast('Log in to vote'); return; }
@@ -952,336 +1048,5 @@ submitBtn.onclick=async()=>{
   endBoot();
 })();
 </script>
-<!-- ===== 8-IMAGE BRACKET UPGRADE (APPEND-ONLY, SAFE) ===== -->
-<script>
-try{
-(function(){
-  if (typeof window.wasInSemiStage === "undefined") window.wasInSemiStage = false;
-  if (typeof window.wasInFinalStage === "undefined") window.wasInFinalStage = false;
-
-  var FIXED8 = [
-    "https://picsum.photos/seed/rs1/1600/1200",
-    "https://picsum.photos/seed/rs2/1600/1200",
-    "https://picsum.photos/seed/rs3/1600/1200",
-    "https://picsum.photos/seed/rs4/1600/1200",
-    "https://picsum.photos/seed/rs5/1600/1200",
-    "https://picsum.photos/seed/rs6/1600/1200",
-    "https://picsum.photos/seed/rs7/1600/1200",
-    "https://picsum.photos/seed/rs8/1600/1200"
-  ];
-  var QF_MAP = { qf1:[0,1], qf2:[2,3], qf3:[4,5], qf4:[6,7] };
-  var ALL_SLOTS = ["qf1","qf2","qf3","qf4","sf1","sf2","final"];
-
-  var _semiKeysFor = window.semiKeysFor || function(baseISO){ return { sf1: (baseISO+"::sf1"), sf2: (baseISO+"::sf2") }; };
-  var _finalKeyFor = window.finalKeyFor || function(baseISO){ return baseISO+"::final"; };
-  function _quarterKeysFor(baseISO){ return { qf1:(baseISO+"::qf1"), qf2:(baseISO+"::qf2"), qf3:(baseISO+"::qf3"), qf4:(baseISO+"::qf4") }; }
-
-  function baseFor(slot){
-    if (slot==="final") return window.currentPhaseKey;
-    if (slot.indexOf("sf")===0) return window.wasInFinalStage ? (window.prevPhaseKey || window.currentPhaseKey) : window.currentPhaseKey;
-    if (slot.indexOf("qf")===0) return (window.wasInSemiStage || window.wasInFinalStage) ? (window.prevPhaseKey || window.currentPhaseKey) : window.currentPhaseKey;
-    return window.currentPhaseKey;
-  }
-
-  window.battleKeyFor = function(slot){
-    var base = baseFor(slot); if (!base) return null;
-    if (slot==="final") return _finalKeyFor(base);
-    if (slot==="sf1" || slot==="sf2"){
-      var sk = _semiKeysFor(base); return slot==="sf1" ? sk.sf1 : sk.sf2;
-    }
-    return _quarterKeysFor(base)[slot];
-  };
-
-  function idxFromQF(slot,color){
-    var pair = QF_MAP[slot]; if (!pair) return null;
-    if (color==="red") return pair[0];
-    if (color==="blue") return pair[1];
-    return null;
-  }
-
-  function readWinnerColor(baseISO, slot){
-    return supabase.from("winners").select("color").eq("phase_key", baseISO+"::"+slot).maybeSingle()
-      .then(function(r){
-        var c = r && r.data && (r.data.color||"").toLowerCase();
-        return (c==="red"||c==="blue")?c:null;
-      })
-      .catch(function(){ return null; });
-  }
-
-  function fixedPackForSlot(slot){
-    var baseISO = baseFor(slot);
-    if (!baseISO){ return Promise.resolve({A:FIXED8[0], B:FIXED8[1]}); }
-
-    if (QF_MAP.hasOwnProperty(slot)){
-      var pair = QF_MAP[slot];
-      return Promise.resolve({A:FIXED8[pair[0]], B:FIXED8[pair[1]]});
-    }
-
-    if (slot==="sf1"){
-      return Promise.all([readWinnerColor(baseISO,"qf1"), readWinnerColor(baseISO,"qf2")]).then(function(w){
-        var iL = idxFromQF("qf1", w[0]); if (iL===null) iL = QF_MAP.qf1[0];
-        var iR = idxFromQF("qf2", w[1]); if (iR===null) iR = QF_MAP.qf2[0];
-        return {A:FIXED8[iL], B:FIXED8[iR]};
-      });
-    }
-    if (slot==="sf2"){
-      return Promise.all([readWinnerColor(baseISO,"qf3"), readWinnerColor(baseISO,"qf4")]).then(function(w){
-        var iL = idxFromQF("qf3", w[0]); if (iL===null) iL = QF_MAP.qf3[0];
-        var iR = idxFromQF("qf4", w[1]); if (iR===null) iR = QF_MAP.qf4[0];
-        return {A:FIXED8[iL], B:FIXED8[iR]};
-      });
-    }
-    if (slot==="final"){
-      var sfBase = (window.prevPhaseKey || window.currentPhaseKey) || baseISO;
-      return Promise.all([
-        readWinnerColor(sfBase,"sf1"),
-        readWinnerColor(sfBase,"sf2"),
-        readWinnerColor(sfBase,"qf1"),
-        readWinnerColor(sfBase,"qf2"),
-        readWinnerColor(sfBase,"qf3"),
-        readWinnerColor(sfBase,"qf4")
-      ]).then(function(w){
-        var s1=w[0], s2=w[1], w1=w[2], w2=w[3], w3=w[4], w4=w[5];
-        var idx1 = idxFromQF("qf1", w1); if (idx1===null) idx1=QF_MAP.qf1[0];
-        var idx2 = idxFromQF("qf2", w2); if (idx2===null) idx2=QF_MAP.qf2[0];
-        var idx3 = idxFromQF("qf3", w3); if (idx3===null) idx3=QF_MAP.qf3[0];
-        var idx4 = idxFromQF("qf4", w4); if (idx4===null) idx4=QF_MAP.qf4[0];
-        var left  = (s1==="red") ? idx1 : (s1==="blue" ? idx2 : idx1);
-        var right = (s2==="red") ? idx3 : (s2==="blue" ? idx4 : idx3);
-        return {A:FIXED8[left], B:FIXED8[right]};
-      });
-    }
-    return Promise.resolve({A:FIXED8[0], B:FIXED8[1]});
-  }
-
-  window.votingLockedFor = function(slot){
-    if (window.wasInFinalStage) return (slot.indexOf("sf")===0 || slot.indexOf("qf")===0);
-    if (window.wasInSemiStage)  return slot.indexOf("qf")===0;
-    return false;
-  };
-
-  window.detectStage = function(){
-    if (!window.currentPhaseKey || !window.prevPhaseKey) return Promise.resolve({stage:"quarters", semisReady:false, finalsReady:false});
-    var base = window.prevPhaseKey;
-    var qs = Object.values(_quarterKeysFor(base));
-    var ss = Object.values(_semiKeysFor(base));
-    return supabase.from("winners").select("phase_key").in("phase_key", qs).then(function(qr){
-      var qDone = (qr && qr.data ? qr.data.length : 0)===4;
-      return supabase.from("winners").select("phase_key").in("phase_key", ss).then(function(sr){
-        var sDone = (sr && sr.data ? sr.data.length : 0)===2;
-        if (!qDone) return {stage:"quarters", semisReady:false, finalsReady:false};
-        if (qDone && !sDone) return {stage:"semis", semisReady:true, finalsReady:false};
-        return {stage:"final", semisReady:true, finalsReady:true};
-      });
-    });
-  };
-
-  window.baseForSlot = function(slot){ return baseFor(slot); };
-
-  var _applyVotingLockUI = window.applyVotingLockUI;
-  window.paintImagesForActive = function(){
-    var bKey = window.battleKeyFor(window.activeSlot);
-    if (!bKey) return;
-    fixedPackForSlot(window.activeSlot).then(function(pack){
-      if (window.imgCache && window.imgCache.set) window.imgCache.set(bKey, pack);
-      imgA.src = pack.A; imgB.src = pack.B;
-      if (window.activeSlot.indexOf("qf")===0){ labelA.textContent=window.activeSlot.toUpperCase()+" — Left"; labelB.textContent=window.activeSlot.toUpperCase()+" — Right"; }
-      else if (window.activeSlot==="sf1"){ labelA.textContent="Semi 1 — Left"; labelB.textContent="Semi 1 — Right"; }
-      else if (window.activeSlot==="sf2"){ labelA.textContent="Semi 2 — Left"; labelB.textContent="Semi 2 — Right"; }
-      else { labelA.textContent="Final — Left"; labelB.textContent="Final — Right"; }
-      imgA.loading="eager"; imgB.loading="eager"; imgA.decoding="async"; imgB.decoding="async";
-      window.lastPaintedBattleKey=bKey;
-      window.renderBracket();
-      if (_applyVotingLockUI) _applyVotingLockUI();
-    });
-  };
-
-  window.thumbsFor = function(slot){ return fixedPackForSlot(slot); };
-
-  window.updateBracketScores = function(){
-    var base = window.currentPhaseKey; if (!base) return;
-    var slots = ALL_SLOTS.slice();
-    function next(i){
-      if (i>=slots.length) return;
-      var slot = slots[i];
-      var key = window.battleKeyFor(slot);
-      var sEl = document.querySelector("#row-"+slot+" .bscore");
-      if (!sEl || !key){ return next(i+1); }
-      countVotesFor(key).then(function(v){ sEl.textContent = (v.r+" - "+v.b); next(i+1); })
-      .catch(function(){ sEl.textContent="0 - 0"; next(i+1); });
-    }
-    next(0);
-  };
-
-  window.renderBracket = function(){
-    var base = window.currentPhaseKey; if (!base){ brows.innerHTML=""; return; }
-    var titles = { qf1:"QF1", qf2:"QF2", qf3:"QF3", qf4:"QF4", sf1:"Winners of QF1 & QF2", sf2:"Winners of QF3 & QF4", final:"Winners of SF1 & SF2" };
-    var htmlRows = "";
-    var i=0;
-    function addRow(slot){
-      var round = (slot.indexOf("qf")===0)?"QF":(slot.indexOf("sf")===0)?"SF":"Final";
-      fixedPackForSlot(slot).then(function(thumbs){
-        var decided = window.votingLockedFor(slot);
-        htmlRows += '<div class="brow '+(decided?'decided':'')+'" id="row-'+slot+'" data-slot="'+slot+'">'
-          +'<div class="bbadge">'+round+'</div>'
-          +'<div class="thumb2">'
-            +'<div class="thumb">'+(thumbs.A?('<img src="'+thumbs.A+'" alt="">'):'')+'</div>'
-            +'<div class="thumb">'+(thumbs.B?('<img src="'+thumbs.B+'" alt="">'):'')+'</div>'
-          +'</div>'
-          +'<div class="bmeta">'
-            +'<div class="title">'+titles[slot]+'</div>'
-            +'<div class="bline"><span class="bpill">'+(decided?'round decided':'uses global')+'</span></div>'
-          +'</div>'
-          +'<div class="bscore">0 - 0</div>'
-        +'</div>';
-        i++; if (i<ALL_SLOTS.length) addRow(ALL_SLOTS[i]); else finish();
-      });
-    }
-    function finish(){
-      brows.innerHTML = htmlRows;
-      var rows = brows.querySelectorAll('.brow');
-      rows.forEach(function(row){
-        row.addEventListener('click', function(){
-          window.activeSlot = row.getAttribute('data-slot');
-          clearSelection();
-          window.lastPaintedBattleKey=null;
-          window.paintImagesForActive();
-          refreshVoteCounts();
-          document.querySelectorAll('.brow').forEach(function(el){ el.classList.remove('active'); });
-          row.classList.add('active');
-          if (window.applyVotingLockUI) window.applyVotingLockUI();
-        });
-      });
-      var r = document.getElementById("row-"+window.activeSlot); if (r) r.classList.add("active");
-      window.updateBracketScores();
-    }
-    addRow(ALL_SLOTS[0]);
-  };
-
-  if (typeof window.activeSlot !== "string" || ["sf1","sf2","final"].indexOf(window.activeSlot)>=0){
-    window.activeSlot = "qf1";
-  }
-})();
-}catch(e){ console.error("8-image upgrade error:", e); }
-</script>
-<!-- ===== /8-IMAGE BRACKET UPGRADE (SAFE) ===== -->
-
-
-<!-- ===== BOOTFIX: ensure bracket & images render before timer state ===== -->
-<script>
-try{
-  (function(){
-    // 1) Soft-wrap renderBracket to allow rendering when base is not ready
-    if (typeof window.renderBracket === "function") {
-      var _rb = window.renderBracket;
-      window.renderBracket = function(){
-        try{
-          // if original returns early due to missing base, make a minimal bracket from fixed slots
-          var bBefore = document.getElementById('brows') && document.getElementById('brows').innerHTML;
-          _rb();
-          var hasRows = document.querySelector('.brow');
-          if (!hasRows) {
-            var slots = ["qf1","qf2","qf3","qf4","sf1","sf2","final"];
-            var titles = { qf1:"QF1", qf2:"QF2", qf3:"QF3", qf4:"QF4", sf1:"Winners of QF1 & QF2", sf2:"Winners of QF3 & QF4", final:"Winners of SF1 & SF2" };
-            var htmlRows = "";
-            var i=0;
-            function addRow(slot){
-              var round = slot.indexOf("qf")===0?"QF":(slot.indexOf("sf")===0?"SF":"Final");
-              (window.thumbsFor ? window.thumbsFor(slot) : Promise.resolve({A:"",B:""})).then(function(thumbs){
-                htmlRows += '<div class="brow" id="row-'+slot+'" data-slot="'+slot+'">'
-                  +'<div class="bbadge">'+round+'</div>'
-                  +'<div class="thumb2">'
-                    +'<div class="thumb">'+(thumbs.A?('<img src="'+thumbs.A+'" alt="">'):'')+'</div>'
-                    +'<div class="thumb">'+(thumbs.B?('<img src="'+thumbs.B+'" alt="">'):'')+'</div>'
-                  +'</div>'
-                  +'<div class="bmeta">'
-                    +'<div class="title">'+titles[slot]+'</div>'
-                    +'<div class="bline"><span class="bpill">uses global</span></div>'
-                  +'</div>'
-                  +'<div class="bscore">0 - 0</div>'
-                +'</div>';
-                i++; if (i<slots.length) addRow(slots[i]); else finish();
-              });
-            }
-            function finish(){
-              var brows = document.getElementById('brows');
-              if (brows) {
-                brows.innerHTML = htmlRows;
-                brows.querySelectorAll('.brow').forEach(function(row){
-                  row.addEventListener('click', function(){
-                    window.activeSlot = row.getAttribute('data-slot');
-                    if (window.clearSelection) window.clearSelection();
-                    window.lastPaintedBattleKey=null;
-                    if (window.paintImagesForActive) window.paintImagesForActive();
-                    if (window.refreshVoteCounts) window.refreshVoteCounts();
-                    document.querySelectorAll('.brow').forEach(function(el){ el.classList.remove('active'); });
-                    row.classList.add('active');
-                    if (window.applyVotingLockUI) window.applyVotingLockUI();
-                  });
-                });
-                var r = document.getElementById('row-'+(window.activeSlot||'qf1')); if (r) r.classList.add('active');
-              }
-            }
-            addRow(slots[0]);
-          }
-        }catch(e){ console.warn("renderBracket bootfix:", e); }
-      }
-    }
-
-    // 2) Seed immediately once DOM is ready
-    document.addEventListener('DOMContentLoaded', function(){
-      try{
-        if (typeof window.activeSlot !== "string") window.activeSlot = "qf1";
-        if (window.paintImagesForActive) window.paintImagesForActive();
-        if (window.renderBracket) window.renderBracket();
-        if (window.refreshVoteCounts) window.refreshVoteCounts();
-      }catch(e){ console.warn("bootfix DOMContentLoaded:", e); }
-    });
-  })();
-}catch(e){ console.error("bootfix error:", e); }
-</script>
-<!-- ===== /BOOTFIX ===== -->
-
-<!-- ===== HOTFIX: always paint current images even if no battle key yet ===== -->
-<script>
-try{
-  (function(){
-    // If our override exists, wrap it to ignore null battleKey
-    var _paint = window.paintImagesForActive;
-    if (typeof _paint === "function") {
-      window.paintImagesForActive = function(){
-        try{
-          var slot = window.activeSlot || "qf1";
-          // Use fixedPackForSlot directly; don't bail if battleKey is null yet
-          var packP = (window.fixedPackForSlot ? window.fixedPackForSlot(slot) : Promise.resolve({A:"",B:""}));
-          packP.then(function(pack){
-            if (pack && pack.A) imgA.src = pack.A;
-            if (pack && pack.B) imgB.src = pack.B;
-            if (slot.indexOf("qf")===0){ labelA.textContent=slot.toUpperCase()+" — Left"; labelB.textContent=slot.toUpperCase()+" — Right"; }
-            else if (slot==="sf1"){ labelA.textContent="Semi 1 — Left"; labelB.textContent="Semi 1 — Right"; }
-            else if (slot==="sf2"){ labelA.textContent="Semi 2 — Left"; labelB.textContent="Semi 2 — Right"; }
-            else { labelA.textContent="Final — Left"; labelB.textContent="Final — Right"; }
-            if (window.renderBracket) window.renderBracket();
-            if (window.applyVotingLockUI) window.applyVotingLockUI();
-          });
-        }catch(e){ console.warn("paintImagesForActive hotfix:", e); }
-      };
-    }
-    // Force the default visible slot to QF1 on first load
-    if (typeof window.activeSlot !== "string" || !/^qf[1-4]$/.test(window.activeSlot)){
-      window.activeSlot = "qf1";
-    }
-    // Paint immediately on DOM ready
-    document.addEventListener('DOMContentLoaded', function(){
-      try{
-        window.activeSlot = "qf1";
-        if (window.paintImagesForActive) window.paintImagesForActive();
-        if (window.refreshVoteCounts) window.refreshVoteCounts();
-      }catch(e){ console.warn("hotfix DOM:", e); }
-    });
-  })();
-}catch(e){ console.error("hotfix error:", e); }
-</script>
-<!-- ===== /HOTFIX ===== -->
 </body>
 </html>
