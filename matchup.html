@@ -952,13 +952,14 @@ submitBtn.onclick=async()=>{
   endBoot();
 })();
 </script>
-<!-- ===== 8-IMAGE BRACKET UPGRADE (APPEND-ONLY) ===== -->
+<!-- ===== 8-IMAGE BRACKET UPGRADE (APPEND-ONLY, SAFE) ===== -->
 <script>
-(() => {
+try{
+(function(){
   if (typeof window.wasInSemiStage === "undefined") window.wasInSemiStage = false;
   if (typeof window.wasInFinalStage === "undefined") window.wasInFinalStage = false;
 
-  const FIXED8 = [
+  var FIXED8 = [
     "https://picsum.photos/seed/rs1/1600/1200",
     "https://picsum.photos/seed/rs2/1600/1200",
     "https://picsum.photos/seed/rs3/1600/1200",
@@ -966,254 +967,321 @@ submitBtn.onclick=async()=>{
     "https://picsum.photos/seed/rs5/1600/1200",
     "https://picsum.photos/seed/rs6/1600/1200",
     "https://picsum.photos/seed/rs7/1600/1200",
-    "https://picsum.photos/seed/rs8/1600/1200",
+    "https://picsum.photos/seed/rs8/1600/1200"
   ];
+  var QF_MAP = { qf1:[0,1], qf2:[2,3], qf3:[4,5], qf4:[6,7] };
+  var ALL_SLOTS = ["qf1","qf2","qf3","qf4","sf1","sf2","final"];
 
-  const QF_MAP = { qf1:[0,1], qf2:[2,3], qf3:[4,5], qf4:[6,7] };
-  const ALL_SLOTS = ["qf1","qf2","qf3","qf4","sf1","sf2","final"];
-
-  const _semiKeysFor = window.semiKeysFor || ((baseISO)=>({ sf1:`${baseISO}::sf1`, sf2:`${baseISO}::sf2` }));
-  const _finalKeyFor = window.finalKeyFor || ((baseISO)=> `${baseISO}::final`);
-  const _quarterKeysFor = (baseISO)=>({ qf1:`${baseISO}::qf1`, qf2:`${baseISO}::qf2`, qf3:`${baseISO}::qf3`, qf4:`${baseISO}::qf4` });
-
-  async function readWinnerColor(baseISO, slot){
-    const key = `${baseISO}::${slot}`;
-    try {
-      const { data } = await supabase.from('winners').select('color').eq('phase_key', key).maybeSingle();
-      const c = data?.color?.toLowerCase();
-      return (c==='red' || c==='blue') ? c : null;
-    } catch { return null; }
-  }
-  function idxFromQF(qfSlot, color){
-    const pair = QF_MAP[qfSlot]; if (!pair) return null;
-    return color==='red' ? pair[0] : color==='blue' ? pair[1] : null;
-  }
+  var _semiKeysFor = window.semiKeysFor || function(baseISO){ return { sf1: (baseISO+"::sf1"), sf2: (baseISO+"::sf2") }; };
+  var _finalKeyFor = window.finalKeyFor || function(baseISO){ return baseISO+"::final"; };
+  function _quarterKeysFor(baseISO){ return { qf1:(baseISO+"::qf1"), qf2:(baseISO+"::qf2"), qf3:(baseISO+"::qf3"), qf4:(baseISO+"::qf4") }; }
 
   function baseFor(slot){
-    if (slot==='final') return window.currentPhaseKey;
-    if (slot.startsWith('sf')) return window.wasInFinalStage ? (window.prevPhaseKey || window.currentPhaseKey) : window.currentPhaseKey;
-    if (slot.startsWith('qf')) return (window.wasInSemiStage || window.wasInFinalStage) ? (window.prevPhaseKey || window.currentPhaseKey) : window.currentPhaseKey;
+    if (slot==="final") return window.currentPhaseKey;
+    if (slot.indexOf("sf")===0) return window.wasInFinalStage ? (window.prevPhaseKey || window.currentPhaseKey) : window.currentPhaseKey;
+    if (slot.indexOf("qf")===0) return (window.wasInSemiStage || window.wasInFinalStage) ? (window.prevPhaseKey || window.currentPhaseKey) : window.currentPhaseKey;
     return window.currentPhaseKey;
   }
 
-  window.battleKeyFor = function battleKeyFor_8(slot){
-    const base = baseFor(slot);
-    if (!base) return null;
-    if (slot==='final') return _finalKeyFor(base);
-    if (slot==='sf1' || slot==='sf2'){ const { sf1, sf2 } = _semiKeysFor(base); return slot==='sf1'?sf1:sf2; }
+  window.battleKeyFor = function(slot){
+    var base = baseFor(slot); if (!base) return null;
+    if (slot==="final") return _finalKeyFor(base);
+    if (slot==="sf1" || slot==="sf2"){
+      var sk = _semiKeysFor(base); return slot==="sf1" ? sk.sf1 : sk.sf2;
+    }
     return _quarterKeysFor(base)[slot];
   };
 
-  async function fixedPackForSlot(slot){
-    const baseISO = baseFor(slot);
-    if (!baseISO){
-      return { A: FIXED8[0], B: FIXED8[1] };
-    }
-    if (slot in QF_MAP){
-      const [iA,iB] = QF_MAP[slot];
-      return { A: FIXED8[iA], B: FIXED8[iB] };
-    }
-    if (slot==='sf1'){
-      const w1 = await readWinnerColor(baseISO, 'qf1');
-      const w2 = await readWinnerColor(baseISO, 'qf2');
-      const iLeft  = idxFromQF('qf1', w1) ?? QF_MAP.qf1[0];
-      const iRight = idxFromQF('qf2', w2) ?? QF_MAP.qf2[0];
-      return { A: FIXED8[iLeft], B: FIXED8[iRight] };
-    }
-    if (slot==='sf2'){
-      const w3 = await readWinnerColor(baseISO, 'qf3');
-      const w4 = await readWinnerColor(baseISO, 'qf4');
-      const iLeft  = idxFromQF('qf3', w3) ?? QF_MAP.qf3[0];
-      const iRight = idxFromQF('qf4', w4) ?? QF_MAP.qf4[0];
-      return { A: FIXED8[iLeft], B: FIXED8[iRight] };
-    }
-    if (slot==='final'){
-      const sfBase = (window.prevPhaseKey || window.currentPhaseKey) || baseISO;
-      const s1 = await readWinnerColor(sfBase, 'sf1');
-      const s2 = await readWinnerColor(sfBase, 'sf2');
-      const w1 = await readWinnerColor(sfBase, 'qf1');
-      const w2 = await readWinnerColor(sfBase, 'qf2');
-      const w3 = await readWinnerColor(sfBase, 'qf3');
-      const w4 = await readWinnerColor(sfBase, 'qf4');
-      const idx1 = idxFromQF('qf1', w1) ?? QF_MAP.qf1[0];
-      const idx2 = idxFromQF('qf2', w2) ?? QF_MAP.qf2[0];
-      const idx3 = idxFromQF('qf3', w3) ?? QF_MAP.qf3[0];
-      const idx4 = idxFromQF('qf4', w4) ?? QF_MAP.qf4[0];
-      const left  = (s1==='red') ? idx1 : (s1==='blue' ? idx2 : idx1);
-      const right = (s2==='red') ? idx3 : (s2==='blue' ? idx4 : idx3);
-      return { A: FIXED8[left], B: FIXED8[right] };
-    }
-    return { A: FIXED8[0], B: FIXED8[1] };
+  function idxFromQF(slot,color){
+    var pair = QF_MAP[slot]; if (!pair) return null;
+    if (color==="red") return pair[0];
+    if (color==="blue") return pair[1];
+    return null;
   }
 
-  window.votingLockedFor = function votingLockedFor_8(slot){
-    if (window.wasInFinalStage) return (slot.startsWith('sf') || slot.startsWith('qf'));
-    if (window.wasInSemiStage)  return slot.startsWith('qf');
+  function readWinnerColor(baseISO, slot){
+    return supabase.from("winners").select("color").eq("phase_key", baseISO+"::"+slot).maybeSingle()
+      .then(function(r){
+        var c = r && r.data && (r.data.color||"").toLowerCase();
+        return (c==="red"||c==="blue")?c:null;
+      })
+      .catch(function(){ return null; });
+  }
+
+  function fixedPackForSlot(slot){
+    var baseISO = baseFor(slot);
+    if (!baseISO){ return Promise.resolve({A:FIXED8[0], B:FIXED8[1]}); }
+
+    if (QF_MAP.hasOwnProperty(slot)){
+      var pair = QF_MAP[slot];
+      return Promise.resolve({A:FIXED8[pair[0]], B:FIXED8[pair[1]]});
+    }
+
+    if (slot==="sf1"){
+      return Promise.all([readWinnerColor(baseISO,"qf1"), readWinnerColor(baseISO,"qf2")]).then(function(w){
+        var iL = idxFromQF("qf1", w[0]); if (iL===null) iL = QF_MAP.qf1[0];
+        var iR = idxFromQF("qf2", w[1]); if (iR===null) iR = QF_MAP.qf2[0];
+        return {A:FIXED8[iL], B:FIXED8[iR]};
+      });
+    }
+    if (slot==="sf2"){
+      return Promise.all([readWinnerColor(baseISO,"qf3"), readWinnerColor(baseISO,"qf4")]).then(function(w){
+        var iL = idxFromQF("qf3", w[0]); if (iL===null) iL = QF_MAP.qf3[0];
+        var iR = idxFromQF("qf4", w[1]); if (iR===null) iR = QF_MAP.qf4[0];
+        return {A:FIXED8[iL], B:FIXED8[iR]};
+      });
+    }
+    if (slot==="final"){
+      var sfBase = (window.prevPhaseKey || window.currentPhaseKey) || baseISO;
+      return Promise.all([
+        readWinnerColor(sfBase,"sf1"),
+        readWinnerColor(sfBase,"sf2"),
+        readWinnerColor(sfBase,"qf1"),
+        readWinnerColor(sfBase,"qf2"),
+        readWinnerColor(sfBase,"qf3"),
+        readWinnerColor(sfBase,"qf4")
+      ]).then(function(w){
+        var s1=w[0], s2=w[1], w1=w[2], w2=w[3], w3=w[4], w4=w[5];
+        var idx1 = idxFromQF("qf1", w1); if (idx1===null) idx1=QF_MAP.qf1[0];
+        var idx2 = idxFromQF("qf2", w2); if (idx2===null) idx2=QF_MAP.qf2[0];
+        var idx3 = idxFromQF("qf3", w3); if (idx3===null) idx3=QF_MAP.qf3[0];
+        var idx4 = idxFromQF("qf4", w4); if (idx4===null) idx4=QF_MAP.qf4[0];
+        var left  = (s1==="red") ? idx1 : (s1==="blue" ? idx2 : idx1);
+        var right = (s2==="red") ? idx3 : (s2==="blue" ? idx4 : idx3);
+        return {A:FIXED8[left], B:FIXED8[right]};
+      });
+    }
+    return Promise.resolve({A:FIXED8[0], B:FIXED8[1]});
+  }
+
+  window.votingLockedFor = function(slot){
+    if (window.wasInFinalStage) return (slot.indexOf("sf")===0 || slot.indexOf("qf")===0);
+    if (window.wasInSemiStage)  return slot.indexOf("qf")===0;
     return false;
   };
 
-  window.detectStage = async function detectStage_8(){
-    if (!window.currentPhaseKey || !window.prevPhaseKey) return {stage:'quarters', semisReady:false, finalsReady:false};
-    const base = window.prevPhaseKey;
-    const q = Object.values(_quarterKeysFor(base));
-    const { data:qdata } = await supabase.from('winners').select('phase_key').in('phase_key', q);
-    const qDone = (qdata||[]).length===4;
-    const s = Object.values(_semiKeysFor(base));
-    const { data:sdata } = await supabase.from('winners').select('phase_key').in('phase_key', s);
-    const sDone = (sdata||[]).length===2;
-    if (!qDone) return {stage:'quarters', semisReady:false, finalsReady:false};
-    if (qDone && !sDone) return {stage:'semis', semisReady:true, finalsReady:false};
-    return {stage:'final', semisReady:true, finalsReady:true};
-  };
-
-  window.baseForSlot = function baseForSlot_8(slot){ return baseFor(slot); };
-
-  const _applyVotingLockUI = window.applyVotingLockUI;
-  window.paintImagesForActive = async function paintImagesForActive_8(){
-    const bKey = window.battleKeyFor(window.activeSlot);
-    if (!bKey) return;
-    const pack = await fixedPackForSlot(window.activeSlot);
-    window.imgCache && window.imgCache.set(bKey, pack);
-    imgA.src = pack.A; imgB.src = pack.B;
-
-    if (window.activeSlot.startsWith('qf')){ labelA.textContent=`${window.activeSlot.toUpperCase()} — Left`; labelB.textContent=`${window.activeSlot.toUpperCase()} — Right`; }
-    else if (window.activeSlot==='sf1'){ labelA.textContent='Semi 1 — Left'; labelB.textContent='Semi 1 — Right'; }
-    else if (window.activeSlot==='sf2'){ labelA.textContent='Semi 2 — Left'; labelB.textContent='Semi 2 — Right'; }
-    else { labelA.textContent='Final — Left'; labelB.textContent='Final — Right'; }
-
-    imgA.loading='eager'; imgB.loading='eager'; imgA.decoding='async'; imgB.decoding='async';
-    window.lastPaintedBattleKey=bKey;
-
-    window.renderBracket();
-    _applyVotingLockUI && _applyVotingLockUI();
-  };
-
-  window.thumbsFor = async function thumbsFor_8(slot){ return fixedPackForSlot(slot); };
-
-  window.updateBracketScores = async function updateBracketScores_8(){
-    const base = window.currentPhaseKey; if (!base) return;
-    for (const slot of ALL_SLOTS){
-      let keyBase = base;
-      if (slot.startsWith('sf') && window.wasInFinalStage) keyBase = window.prevPhaseKey || base;
-      if (slot.startsWith('qf') && (window.wasInSemiStage || window.wasInFinalStage)) keyBase = window.prevPhaseKey || base;
-      const key = window.battleKeyFor(slot);
-      const sEl = document.querySelector(`#row-${slot} .bscore`);
-      if (!sEl || !key) continue;
-      try{ const {r,b}=await countVotesFor(key); sEl.textContent = `${r} - ${b}`; }
-      catch{ sEl.textContent = `0 - 0`; }
-    }
-  };
-
-  window.renderBracket = async function renderBracket_8(){
-    const base = window.currentPhaseKey; if (!base){ brows.innerHTML=''; return; }
-    const titles = {
-      qf1:'QF1', qf2:'QF2', qf3:'QF3', qf4:'QF4',
-      sf1:'Winners of QF1 & QF2', sf2:'Winners of QF3 & QF4',
-      final:'Winners of SF1 & SF2'
-    };
-    const rows = await Promise.all(ALL_SLOTS.map(async (slot)=>{
-      const round = slot.startsWith('qf')?'QF':(slot.startsWith('sf')?'SF':'Final');
-      const thumbs = await fixedPackForSlot(slot);
-      const decided = window.votingLockedFor(slot);
-      return `
-        <div class="brow ${decided?'decided':''}" id="row-${slot}" data-slot="${slot}">
-          <div class="bbadge">${round}</div>
-          <div class="thumb2">
-            <div class="thumb">${thumbs.A ? `<img src="${thumbs.A}" alt="">` : ''}</div>
-            <div class="thumb">${thumbs.B ? `<img src="${thumbs.B}" alt="">` : ''}</div>
-          </div>
-          <div class="bmeta">
-            <div class="title">${titles[slot]}</div>
-            <div class="bline"><span class="bpill">${decided?'round decided':'uses global'}</span></div>
-          </div>
-          <div class="bscore">0 - 0</div>
-        </div>`;
-    }));
-    brows.innerHTML = rows.join('');
-    brows.querySelectorAll('.brow').forEach(row=>{
-      row.addEventListener('click',()=>{
-        window.activeSlot = row.dataset.slot;
-        clearSelection();
-        window.lastPaintedBattleKey=null;
-        window.paintImagesForActive();
-        refreshVoteCounts();
-        document.querySelectorAll('.brow').forEach(el=>el.classList.remove('active'));
-        row.classList.add('active');
-        window.applyVotingLockUI && window.applyVotingLockUI();
+  window.detectStage = function(){
+    if (!window.currentPhaseKey || !window.prevPhaseKey) return Promise.resolve({stage:"quarters", semisReady:false, finalsReady:false});
+    var base = window.prevPhaseKey;
+    var qs = Object.values(_quarterKeysFor(base));
+    var ss = Object.values(_semiKeysFor(base));
+    return supabase.from("winners").select("phase_key").in("phase_key", qs).then(function(qr){
+      var qDone = (qr && qr.data ? qr.data.length : 0)===4;
+      return supabase.from("winners").select("phase_key").in("phase_key", ss).then(function(sr){
+        var sDone = (sr && sr.data ? sr.data.length : 0)===2;
+        if (!qDone) return {stage:"quarters", semisReady:false, finalsReady:false};
+        if (qDone && !sDone) return {stage:"semis", semisReady:true, finalsReady:false};
+        return {stage:"final", semisReady:true, finalsReady:true};
       });
     });
-    const r = document.getElementById("row-"+window.activeSlot);
-    r && r.classList.add("active");
-    window.updateBracketScores();
   };
 
-  const _showChampion = window.showChampion;
-  window.fetchState = async function fetchState_8(){
-    const s = (await window.callEdge('GET')) || {};
-    const norm = (x)=>({phase_end_at:x.phase_end_at??null, period_sec:x.period_sec??20, paused:!!x.paused, remaining_sec:(typeof x.remaining_sec==='number')?x.remaining_sec:null});
-    const st = norm(s);
+  window.baseForSlot = function(slot){ return baseFor(slot); };
 
-    const prevEnd = window.serverPhaseEndISO;
-    window.serverPhaseEndISO = st.phase_end_at;
-    window.paused = st.paused;
-    window.remainingSec = st.remaining_sec;
-    window.periodSec = st.period_sec ?? 20;
-    window.lastSyncAt = Date.now();
-    window.currentPhaseKey = window.serverPhaseEndISO ? window.iso(window.serverPhaseEndISO) : null;
-    window.prevPhaseKey = window.currentPhaseKey && window.periodSec ? window.iso(Date.parse(window.currentPhaseKey) - window.periodSec*1000) : null;
+  var _applyVotingLockUI = window.applyVotingLockUI;
+  window.paintImagesForActive = function(){
+    var bKey = window.battleKeyFor(window.activeSlot);
+    if (!bKey) return;
+    fixedPackForSlot(window.activeSlot).then(function(pack){
+      if (window.imgCache && window.imgCache.set) window.imgCache.set(bKey, pack);
+      imgA.src = pack.A; imgB.src = pack.B;
+      if (window.activeSlot.indexOf("qf")===0){ labelA.textContent=window.activeSlot.toUpperCase()+" — Left"; labelB.textContent=window.activeSlot.toUpperCase()+" — Right"; }
+      else if (window.activeSlot==="sf1"){ labelA.textContent="Semi 1 — Left"; labelB.textContent="Semi 1 — Right"; }
+      else if (window.activeSlot==="sf2"){ labelA.textContent="Semi 2 — Left"; labelB.textContent="Semi 2 — Right"; }
+      else { labelA.textContent="Final — Left"; labelB.textContent="Final — Right"; }
+      imgA.loading="eager"; imgB.loading="eager"; imgA.decoding="async"; imgB.decoding="async";
+      window.lastPaintedBattleKey=bKey;
+      window.renderBracket();
+      if (_applyVotingLockUI) _applyVotingLockUI();
+    });
+  };
 
-    window.setStateUI && window.setStateUI();
+  window.thumbsFor = function(slot){ return fixedPackForSlot(slot); };
 
-    if (prevEnd && window.serverPhaseEndISO && prevEnd !== window.serverPhaseEndISO){
-      const justEndedBase = window.iso(prevEnd);
-      let stageBefore = 'quarters';
-      if (window.wasInFinalStage) stageBefore = 'final';
-      else if (window.wasInSemiStage) stageBefore = 'semis';
+  window.updateBracketScores = function(){
+    var base = window.currentPhaseKey; if (!base) return;
+    var slots = ALL_SLOTS.slice();
+    function next(i){
+      if (i>=slots.length) return;
+      var slot = slots[i];
+      var key = window.battleKeyFor(slot);
+      var sEl = document.querySelector("#row-"+slot+" .bscore");
+      if (!sEl || !key){ return next(i+1); }
+      countVotesFor(key).then(function(v){ sEl.textContent = (v.r+" - "+v.b); next(i+1); })
+      .catch(function(){ sEl.textContent="0 - 0"; next(i+1); });
+    }
+    next(0);
+  };
 
-      if (stageBefore==='final'){
-        const finalKey = _finalKeyFor(justEndedBase);
-        const color = await window.decideAndPersistWinner(finalKey);
-        if (!window.imgCache.has(finalKey)){
-          const pack = await fixedPackForSlot('final');
-          if (pack) window.imgCache.set(finalKey, pack);
-        }
-        _showChampion && _showChampion(color, justEndedBase);
-        window.overlayGateBase = null;
-        window.activeSlot = 'qf1';
-        window.imgCache.clear(); window.lastPaintedBattleKey=null;
-      } else if (stageBefore==='semis'){
-        const { sf1, sf2 } = _semiKeysFor(justEndedBase);
-        await window.decideAndPersistWinner(sf1);
-        await window.decideAndPersistWinner(sf2);
-        window.overlayGateBase = window.currentPhaseKey;
-        window.activeSlot = 'final';
-        const pack = await fixedPackForSlot('final');
-        if (pack) window.imgCache.set(_finalKeyFor(window.currentPhaseKey), pack);
-        window.lastPaintedBattleKey=null;
-      } else {
-        const qs = Object.values(_quarterKeysFor(justEndedBase));
-        for (const k of qs){ await window.decideAndPersistWinner(k); }
-        window.activeSlot = 'sf1';
-        window.lastPaintedBattleKey=null;
+  window.renderBracket = function(){
+    var base = window.currentPhaseKey; if (!base){ brows.innerHTML=""; return; }
+    var titles = { qf1:"QF1", qf2:"QF2", qf3:"QF3", qf4:"QF4", sf1:"Winners of QF1 & QF2", sf2:"Winners of QF3 & QF4", final:"Winners of SF1 & SF2" };
+    var htmlRows = "";
+    var i=0;
+    function addRow(slot){
+      var round = (slot.indexOf("qf")===0)?"QF":(slot.indexOf("sf")===0)?"SF":"Final";
+      fixedPackForSlot(slot).then(function(thumbs){
+        var decided = window.votingLockedFor(slot);
+        htmlRows += '<div class="brow '+(decided?'decided':'')+'" id="row-'+slot+'" data-slot="'+slot+'">'
+          +'<div class="bbadge">'+round+'</div>'
+          +'<div class="thumb2">'
+            +'<div class="thumb">'+(thumbs.A?('<img src="'+thumbs.A+'" alt="">'):'')+'</div>'
+            +'<div class="thumb">'+(thumbs.B?('<img src="'+thumbs.B+'" alt="">'):'')+'</div>'
+          +'</div>'
+          +'<div class="bmeta">'
+            +'<div class="title">'+titles[slot]+'</div>'
+            +'<div class="bline"><span class="bpill">'+(decided?'round decided':'uses global')+'</span></div>'
+          +'</div>'
+          +'<div class="bscore">0 - 0</div>'
+        +'</div>';
+        i++; if (i<ALL_SLOTS.length) addRow(ALL_SLOTS[i]); else finish();
+      });
+    }
+    function finish(){
+      brows.innerHTML = htmlRows;
+      var rows = brows.querySelectorAll('.brow');
+      rows.forEach(function(row){
+        row.addEventListener('click', function(){
+          window.activeSlot = row.getAttribute('data-slot');
+          clearSelection();
+          window.lastPaintedBattleKey=null;
+          window.paintImagesForActive();
+          refreshVoteCounts();
+          document.querySelectorAll('.brow').forEach(function(el){ el.classList.remove('active'); });
+          row.classList.add('active');
+          if (window.applyVotingLockUI) window.applyVotingLockUI();
+        });
+      });
+      var r = document.getElementById("row-"+window.activeSlot); if (r) r.classList.add("active");
+      window.updateBracketScores();
+    }
+    addRow(ALL_SLOTS[0]);
+  };
+
+  if (typeof window.activeSlot !== "string" || ["sf1","sf2","final"].indexOf(window.activeSlot)>=0){
+    window.activeSlot = "qf1";
+  }
+})();
+}catch(e){ console.error("8-image upgrade error:", e); }
+</script>
+<!-- ===== /8-IMAGE BRACKET UPGRADE (SAFE) ===== -->
+
+
+<!-- ===== BOOTFIX: ensure bracket & images render before timer state ===== -->
+<script>
+try{
+  (function(){
+    // 1) Soft-wrap renderBracket to allow rendering when base is not ready
+    if (typeof window.renderBracket === "function") {
+      var _rb = window.renderBracket;
+      window.renderBracket = function(){
+        try{
+          // if original returns early due to missing base, make a minimal bracket from fixed slots
+          var bBefore = document.getElementById('brows') && document.getElementById('brows').innerHTML;
+          _rb();
+          var hasRows = document.querySelector('.brow');
+          if (!hasRows) {
+            var slots = ["qf1","qf2","qf3","qf4","sf1","sf2","final"];
+            var titles = { qf1:"QF1", qf2:"QF2", qf3:"QF3", qf4:"QF4", sf1:"Winners of QF1 & QF2", sf2:"Winners of QF3 & QF4", final:"Winners of SF1 & SF2" };
+            var htmlRows = "";
+            var i=0;
+            function addRow(slot){
+              var round = slot.indexOf("qf")===0?"QF":(slot.indexOf("sf")===0?"SF":"Final");
+              (window.thumbsFor ? window.thumbsFor(slot) : Promise.resolve({A:"",B:""})).then(function(thumbs){
+                htmlRows += '<div class="brow" id="row-'+slot+'" data-slot="'+slot+'">'
+                  +'<div class="bbadge">'+round+'</div>'
+                  +'<div class="thumb2">'
+                    +'<div class="thumb">'+(thumbs.A?('<img src="'+thumbs.A+'" alt="">'):'')+'</div>'
+                    +'<div class="thumb">'+(thumbs.B?('<img src="'+thumbs.B+'" alt="">'):'')+'</div>'
+                  +'</div>'
+                  +'<div class="bmeta">'
+                    +'<div class="title">'+titles[slot]+'</div>'
+                    +'<div class="bline"><span class="bpill">uses global</span></div>'
+                  +'</div>'
+                  +'<div class="bscore">0 - 0</div>'
+                +'</div>';
+                i++; if (i<slots.length) addRow(slots[i]); else finish();
+              });
+            }
+            function finish(){
+              var brows = document.getElementById('brows');
+              if (brows) {
+                brows.innerHTML = htmlRows;
+                brows.querySelectorAll('.brow').forEach(function(row){
+                  row.addEventListener('click', function(){
+                    window.activeSlot = row.getAttribute('data-slot');
+                    if (window.clearSelection) window.clearSelection();
+                    window.lastPaintedBattleKey=null;
+                    if (window.paintImagesForActive) window.paintImagesForActive();
+                    if (window.refreshVoteCounts) window.refreshVoteCounts();
+                    document.querySelectorAll('.brow').forEach(function(el){ el.classList.remove('active'); });
+                    row.classList.add('active');
+                    if (window.applyVotingLockUI) window.applyVotingLockUI();
+                  });
+                });
+                var r = document.getElementById('row-'+(window.activeSlot||'qf1')); if (r) r.classList.add('active');
+              }
+            }
+            addRow(slots[0]);
+          }
+        }catch(e){ console.warn("renderBracket bootfix:", e); }
       }
     }
 
-    const stage = await window.detectStage();
-    window.wasInSemiStage  = (stage.stage==='semis');
-    window.wasInFinalStage = (stage.stage==='final');
-
-    if (!window.activeSlot || !ALL_SLOTS.includes(window.activeSlot)) window.activeSlot = 'qf1';
-
-    await window.paintImagesForActive();
-    await window.refreshVoteCounts();
-    window.renderBracket();
-    window.applyVotingLockUI && window.applyVotingLockUI();
-  };
-
-  if (typeof window.activeSlot === 'string' && window.activeSlot === 'sf1') window.activeSlot = 'qf1';
-})();
+    // 2) Seed immediately once DOM is ready
+    document.addEventListener('DOMContentLoaded', function(){
+      try{
+        if (typeof window.activeSlot !== "string") window.activeSlot = "qf1";
+        if (window.paintImagesForActive) window.paintImagesForActive();
+        if (window.renderBracket) window.renderBracket();
+        if (window.refreshVoteCounts) window.refreshVoteCounts();
+      }catch(e){ console.warn("bootfix DOMContentLoaded:", e); }
+    });
+  })();
+}catch(e){ console.error("bootfix error:", e); }
 </script>
-<!-- ===== /8-IMAGE BRACKET UPGRADE ===== -->
+<!-- ===== /BOOTFIX ===== -->
 
+<!-- ===== HOTFIX: always paint current images even if no battle key yet ===== -->
+<script>
+try{
+  (function(){
+    // If our override exists, wrap it to ignore null battleKey
+    var _paint = window.paintImagesForActive;
+    if (typeof _paint === "function") {
+      window.paintImagesForActive = function(){
+        try{
+          var slot = window.activeSlot || "qf1";
+          // Use fixedPackForSlot directly; don't bail if battleKey is null yet
+          var packP = (window.fixedPackForSlot ? window.fixedPackForSlot(slot) : Promise.resolve({A:"",B:""}));
+          packP.then(function(pack){
+            if (pack && pack.A) imgA.src = pack.A;
+            if (pack && pack.B) imgB.src = pack.B;
+            if (slot.indexOf("qf")===0){ labelA.textContent=slot.toUpperCase()+" — Left"; labelB.textContent=slot.toUpperCase()+" — Right"; }
+            else if (slot==="sf1"){ labelA.textContent="Semi 1 — Left"; labelB.textContent="Semi 1 — Right"; }
+            else if (slot==="sf2"){ labelA.textContent="Semi 2 — Left"; labelB.textContent="Semi 2 — Right"; }
+            else { labelA.textContent="Final — Left"; labelB.textContent="Final — Right"; }
+            if (window.renderBracket) window.renderBracket();
+            if (window.applyVotingLockUI) window.applyVotingLockUI();
+          });
+        }catch(e){ console.warn("paintImagesForActive hotfix:", e); }
+      };
+    }
+    // Force the default visible slot to QF1 on first load
+    if (typeof window.activeSlot !== "string" || !/^qf[1-4]$/.test(window.activeSlot)){
+      window.activeSlot = "qf1";
+    }
+    // Paint immediately on DOM ready
+    document.addEventListener('DOMContentLoaded', function(){
+      try{
+        window.activeSlot = "qf1";
+        if (window.paintImagesForActive) window.paintImagesForActive();
+        if (window.refreshVoteCounts) window.refreshVoteCounts();
+      }catch(e){ console.warn("hotfix DOM:", e); }
+    });
+  })();
+}catch(e){ console.error("hotfix error:", e); }
+</script>
+<!-- ===== /HOTFIX ===== -->
 </body>
 </html>
