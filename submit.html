@@ -46,7 +46,7 @@ hr.sep{border:0;border-top:1px dashed var(--border); margin:12px 0}
 }
 .dropzone strong{color:var(--ink)}
 .dropzone.dragover{border-color:var(--green); box-shadow:0 0 16px rgba(57,255,20,.25);}
-.dropnote{font-size:12px; color:var(--muted); margin-top:6px}
+.dropnote{font-size:12px; color:#var(--muted); margin-top:6px}
 
 /* Progress bar */
 .progress{
@@ -174,7 +174,6 @@ function setFile(f){
   if (!f.type.startsWith('image/')){ toast('File must be an image'); return; }
   if (f.size > 10 * 1024 * 1024){ toast('Max 10MB'); return; }
 
-  // use DataTransfer to set <input type="file"> so form logic sees it
   const dt = new DataTransfer();
   dt.items.add(f);
   fileInput.files = dt.files;
@@ -184,7 +183,6 @@ function setFile(f){
   fileInfo.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
   filePreview.style.display='flex';
 }
-
 fileInput.addEventListener('change', ()=> setFile(fileInput.files?.[0]||null));
 
 /* ---------- drag & drop ---------- */
@@ -217,9 +215,7 @@ function snapProgress100(){
   progressBar.style.width='100%';
   setTimeout(()=>{ progress.style.display='none'; progressBar.style.width='0%'; }, 700);
 }
-
 async function uploadToStorage(uid, file){
-  // Bucket must exist: 'art-uploads' (public read)
   const today = new Date();
   const yyyy = today.getUTCFullYear();
   const mm = String(today.getUTCMonth()+1).padStart(2,'0');
@@ -227,7 +223,6 @@ async function uploadToStorage(uid, file){
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
   const path = `${uid}/${yyyy}/${mm}/${dd}/${crypto.randomUUID()}-${safeName}`;
 
-  // Start progress (supabase-js upload doesn't expose byte progress; we show indeterminate)
   showProgressIndeterminate();
 
   const { error:upErr } = await supabase.storage.from('art-uploads').upload(path, file, {
@@ -240,7 +235,6 @@ async function uploadToStorage(uid, file){
   const { data } = supabase.storage.from('art-uploads').getPublicUrl(path);
   if (!data?.publicUrl) { progress.style.display='none'; throw new Error('No public URL returned'); }
 
-  // Finish bar
   snapProgress100();
   return data.publicUrl;
 }
@@ -261,7 +255,6 @@ btn.addEventListener('click', async ()=>{
   const file = fileInput.files?.[0];
 
   try{
-    // Prefer file if provided
     if (file){
       if (!file.type.startsWith('image/')){ return toast('File must be an image'); }
       if (file.size > 10*1024*1024){ return toast('Max 10MB'); }
@@ -269,23 +262,21 @@ btn.addEventListener('click', async ()=>{
       finalUrl = await uploadToStorage(uid, file);
     }
 
-    // If no file and no URL, block
     if (!finalUrl){ return toast('Select a file or paste an image URL'); }
     if (!/^https?:\/\//i.test(finalUrl)){ return toast('URL must start with http(s)://'); }
 
     const title = (titleEl.value||'').trim();
     const artist = (artistEl.value||'').trim();
 
+    /* user_id removed — DB trigger stamps auth.uid() */
     const { error } = await supabase.from('art_queue').insert({
       image_url: finalUrl,
       title,
       artist,
-      user_id: uid,
       status: 'pending'
     });
     if (error) throw error;
 
-    // Reset UI
     imageUrl.value=''; titleEl.value=''; artistEl.value=''; agree.checked=false;
     if (fileInput.value) fileInput.value='';
     filePreview.style.display='none';
@@ -293,25 +284,18 @@ btn.addEventListener('click', async ()=>{
     toast('Your art is added to the queue ✅');
     statusEl.textContent = 'Submitted!';
   }catch(e){
-    console.error(e);
-    toast('Submit failed');
-    statusEl.textContent = 'Error: could not submit.';
+    console.error('Submit error:', e);
+    const msg = e?.message || e?.error_description || 'Submit failed';
+    toast(msg);
+    statusEl.textContent = msg;
   }
 });
 </script>
 
 <!--
-STORAGE SETUP (once):
-1) Create a public bucket named: art-uploads
-2) Storage policies:
-   -- Public read:
-      create policy "public read" on storage.objects
-      for select using (bucket_id = 'art-uploads');
-   -- Authenticated write:
-      create policy "authed upload" on storage.objects
-      for insert with check (bucket_id = 'art-uploads' and auth.role() = 'authenticated');
-
-(Optional) If you want per-user folder enforcement, I can add a path-prefix policy.
+Storage bucket must exist: art-uploads (public read).
+DB must have: trigger that sets user_id := auth.uid() on art_queue inserts,
+and the authenticated INSERT policy with a non-null WITH CHECK expression.
 -->
 </body>
 </html>
