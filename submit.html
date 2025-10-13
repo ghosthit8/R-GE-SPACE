@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Rage Space — Submit Art</title>
+
+<link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+<style>
+:root{
+  --green:#39ff14; --bg:#000; --ink:#e5e5e5; --border:#153b16; --muted:#8aff8a; --card:#0b0b0b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
+.wrap{max-width:760px;margin:20px auto 80px;padding:0 16px}
+h1{letter-spacing:2px;text-transform:uppercase;font-size:28px;margin:24px 0 8px}
+p{color:var(--muted)}
+a.btn, button.btn{
+  border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;
+  padding:10px 14px;cursor:pointer;text-decoration:none;display:inline-block;text-align:center
+}
+.card{border:1px solid var(--border);border-radius:14px;background:rgba(7,7,7,.6);padding:16px;margin-top:16px}
+.label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.input, .textarea{
+  width:100%;border:1px solid var(--border);border-radius:10px;background:#0b0b0b;color:var(--ink);
+  padding:10px 12px;font-size:14px
+}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.help{font-size:12px;color:#9adf9a}
+.badge{display:inline-block;border:1px solid var(--border);border-radius:8px;padding:4px 8px;margin-left:8px}
+.note{font-size:12px;color:var(--muted)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18);z-index:50}
+.toast.show{display:block}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+      <h1>Submit Art <span id="loginBadge" class="badge">checking auth…</span></h1>
+      <a class="btn" href="./menu.html">← Menu</a>
+    </div>
+    <p>Upload a link to your artwork. It will be added to the queue and automatically inserted into the next tournament cycle at the Round of 32. After you submit, you’ll see a confirmation message.</p>
+
+    <div class="card">
+      <label class="label" for="imageUrl">Image URL (required)</label>
+      <input class="input" id="imageUrl" type="url" placeholder="https://... (jpg, png, webp, etc.)" required>
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label class="label" for="title">Title (optional)</label>
+          <input class="input" id="title" type="text" placeholder="Title of your piece">
+        </div>
+        <div>
+          <label class="label" for="artist">Artist (optional)</label>
+          <input class="input" id="artist" type="text" placeholder="Your name / alias">
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <label style="display:flex;gap:10px;align-items:flex-start;">
+          <input id="agree" type="checkbox">
+          <span class="note">I confirm I have the rights to share this image and it follows Rage Space rules (18+, no real-death gore, no doxxing, no organized hate propaganda).</span>
+        </label>
+      </div>
+
+      <div style="display:flex;gap:10px;align-items:center;margin-top:14px;">
+        <button class="btn" id="btnSubmit">Submit to Queue</button>
+        <span id="status" class="help"></span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px;">
+      <div style="font-weight:700;margin-bottom:6px;">How it works</div>
+      <ol class="note" style="margin:0;padding-left:18px;line-height:1.5">
+        <li>Your link is stored in the queue.</li>
+        <li>When the next tournament cycle begins (R32), queued pieces are randomly mapped onto the default seeds.</li>
+        <li>You’ll see your piece appear in the bracket thumbnails when the new cycle starts.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+<script>
+/* ---------- Supabase ---------- */
+const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const loginBadge = document.getElementById('loginBadge');
+const toastEl = document.getElementById('toast');
+function toast(msg, ms=1500){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
+
+async function getUid(){ const {data:{session}} = await supabase.auth.getSession(); return session?.user?.id || null; }
+function paintLoginBadge(uid){ if(uid){ loginBadge.textContent='logged in'; loginBadge.style.borderColor='#153b16'; } else { loginBadge.textContent='anon ok'; loginBadge.style.borderColor='#153b16'; } }
+
+/* ---------- Form ---------- */
+const imageUrl = document.getElementById('imageUrl');
+const titleEl  = document.getElementById('title');
+const artistEl = document.getElementById('artist');
+const agree    = document.getElementById('agree');
+const btn      = document.getElementById('btnSubmit');
+const statusEl = document.getElementById('status');
+
+(async()=>{
+  paintLoginBadge(await getUid());
+  supabase.auth.onAuthStateChange((_evt, session)=> paintLoginBadge(session?.user?.id || null));
+})();
+
+btn.addEventListener('click', async ()=>{
+  statusEl.textContent = '';
+  const url = (imageUrl.value||'').trim();
+  const title = (titleEl.value||'').trim();
+  const artist = (artistEl.value||'').trim();
+
+  if (!url){ return toast('Add an image URL'); }
+  if (!agree.checked){ return toast('Please confirm rights & rules'); }
+
+  try{
+    const uid = await getUid();
+    const { error } = await supabase.from('art_queue').insert({
+      image_url: url,
+      title,
+      artist,
+      user_id: uid,
+      status: 'pending'
+    });
+    if (error) throw error;
+
+    imageUrl.value=''; titleEl.value=''; artistEl.value=''; agree.checked=false;
+    toast('Your art is added to the queue ✅');
+    statusEl.textContent = 'Submitted!';
+  }catch(e){
+    console.error(e);
+    toast('Submit failed');
+    statusEl.textContent = 'Error: could not submit.';
+  }
+});
+</script>
+
+<!--
+=== Minimal tables (run once in SQL editor) ===
+
+create table if not exists public.art_queue (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  user_id uuid,
+  image_url text not null,
+  title text,
+  artist text,
+  status text default 'pending' check (status in ('pending','used','rejected')),
+  used_at timestamptz
+);
+
+create table if not exists public.art_injections (
+  base_iso text not null,
+  slot text not null,          -- e.g. 'r32_7'
+  submission_id uuid,          -- references art_queue(id)
+  image_url text not null,     -- denormalized for speed
+  assigned_at timestamptz default now(),
+  primary key (base_iso, slot)
+);
+
+create table if not exists public.art_cycle_claims (
+  base_iso text primary key,   -- claim token so only one client assigns per cycle
+  claimed_at timestamptz default now()
+);
+
+-- (Optional) RLS: allow inserts to art_queue; read everyone
+-- adjust to your auth model.
+-->
+</body>
+</html>
