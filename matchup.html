@@ -5,9 +5,55 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Rage Space — Matchup</title>
 <link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2">
+/* ---- Robust decided-rows visibility controller (injected) ---- */
+(function(){
+  function byId(id){ return document.getElementById(id); }
+  const showDone = byId('showDone');
+  const bracketEl = byId('bracket');
+  const brows = byId('brows');
+
+  function updateDecidedVisibility(){
+    if (!brows || !showDone) return;
+    const hide = !showDone.checked;
+    // Toggle container class (CSS fallback) and inline style (authoritative)
+    if (bracketEl){
+      bracketEl.classList.toggle('hide-done', hide);
+    }
+    const rows = brows.querySelectorAll('.brow.decided');
+    rows.forEach(el => {
+      // Inline style wins no matter what stylesheet says
+      el.style.display = hide ? 'none' : '';
+    });
+  }
+
+  if (showDone){
+    // Restore saved preference (default: show = true)
+    try{
+      const saved = localStorage.getItem('rs_show_done');
+      if (saved === '0') showDone.checked = false;
+    }catch(e){}
+    showDone.addEventListener('change', function(){
+      try{ localStorage.setItem('rs_show_done', showDone.checked ? '1' : '0'); }catch(e){}
+      updateDecidedVisibility();
+    });
+  }
+
+  // Watch the bracket list for re-renders and re-apply
+  if (brows && 'MutationObserver' in window){
+    const mo = new MutationObserver(updateDecidedVisibility);
+    mo.observe(brows, {childList:true, subtree:true});
+  }
+
+  // Initial kick (double-tap for async content)
+  updateDecidedVisibility();
+  setTimeout(updateDecidedVisibility, 400);
+})();
+/* ---- /Robust decided-rows visibility controller ---- */
+
+</script>
 <style>
-/* Hide the QF/SF/Final Left/Right labels under each image */
+/* Hide the R32/R16/QF/SF/Final Left/Right labels under each image */
 #labelA, #labelB { display: none; }
 :root{ --green:#39ff14; --green-bright:#7dff62; --bg:#000; --ink:#e5e5e5; --card:#0b0b0b; --border:#153b16; --muted:#8aff8a; --maxw:980px; --danger:#ff3b3b; }
 *{box-sizing:border-box}
@@ -200,6 +246,10 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 .boot-bar{width:min(560px,90vw); height:12px; border:1px solid var(--green); border-radius:999px; overflow:hidden; background:rgba(0,255,120,.07)}
 .boot-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--green), var(--green-bright)); box-shadow:0 0 18px rgba(57,255,20,.35) inset}
 .boot-sub{margin-top:8px; color:var(--muted); font-size:12px}
+
+/* Hide decided rows when the toggle is off (fallback) */
+#bracket.hide-done .brow.decided{ display:none; }
+
 </style>
 </head>
 <body>
@@ -351,9 +401,9 @@ const showDone = document.getElementById('showDone');
 let paused=false, serverPhaseEndISO=null, currentPhaseKey=null, prevPhaseKey=null, periodSec=20, remainingSec=null, lastSyncAt=0, lastCountsAt=0;
 let currentUid=null, chosen=null;
 
-/* NEW: 16-entrant flow */
-let activeSlot='r16_1'; // 'r16_1'..'r16_8' | 'qf1'..'qf4' | 'sf1'|'sf2' | 'final'
-let currentStage='r16'; // 'r16'|'qf'|'sf'|'final'
+/* NEW: 32-entrant flow */
+let activeSlot='r32_1'; // 'r32_1'..'r32_16' | 'r16_1'..'r16_8' | 'qf1'..'qf4' | 'sf1'|'sf2' | 'final'
+let currentStage='r32'; // 'r32'|'r16'|'qf'|'sf'|'final'
 let overlayGateBase=null; // base ISO allowed to trigger champion
 
 // Freeze images per battle: "<baseISO>::slot" → {A,B}
@@ -399,6 +449,10 @@ const normalize=(s)=>({phase_end_at:s.phase_end_at??null, period_sec:s.period_se
 
 /* deterministic seeds */
 function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
+
+function r32KeysFor(baseISO){
+  const o={}; for(let i=1;i<=16;i++) o[`r32_${i}`]=`${baseISO}::r32_${i}`; return o;
+}
 function r16KeysFor(baseISO){
   const o={}; for(let i=1;i<=8;i++) o[`r16_${i}`]=`${baseISO}::r16_${i}`; return o;
 }
@@ -407,12 +461,13 @@ function semiKeysFor(baseISO){ return { sf1:`${baseISO}::sf1`, sf2:`${baseISO}::
 function finalKeyFor(baseISO){ return `${baseISO}::final`; }
 
 const stageOfSlot = (slot)=>{
+  if (slot.startsWith('r32')) return 'r32';
   if (slot.startsWith('r16')) return 'r16';
   if (slot.startsWith('qf'))  return 'qf';
   if (slot.startsWith('sf'))  return 'sf';
   return 'final';
 };
-const stageLevel = (st)=> st==='r16'?1 : (st==='qf'?2 : (st==='sf'?3 : 4));
+const stageLevel = (st)=> st==='r32'?1 : (st==='r16'?2 : (st==='qf'?3 : (st==='sf'?4 : 5)));
 const slotLevel  = (slot)=> stageLevel(stageOfSlot(slot));
 
 function baseAtOffset(n){
@@ -421,23 +476,23 @@ function baseAtOffset(n){
   return iso(t);
 }
 function baseForSlot(slot){
-  const curLv = stageLevel(currentStage||'r16');
+  const curLv = stageLevel(currentStage||'r32');
   const needLv = slotLevel(slot);
-  const delta = curLv - needLv; // 0 = this phase, 1 = prev, 2 = two back, 3 = three back
+  const delta = curLv - needLv; // 0 = this phase, 1..4 = previous phases back
   if (delta <= 0) return currentPhaseKey;
   return baseAtOffset(delta);
 }
 function baseForCompletedStage(stage){
-  const curLv = stageLevel(currentStage||'r16');
+  const curLv = stageLevel(currentStage||'r32');
   const needLv = stageLevel(stage);
-  const delta = curLv - needLv; // how many periods back the *completed* stage sits
+  const delta = curLv - needLv;
   if (delta <= 0) return null;
   return baseAtOffset(delta);
 }
 
 /* ---------- Stage detection ---------- */
 async function detectStage(){
-  if (!currentPhaseKey || !prevPhaseKey) return {stage:'r16'};
+  if (!currentPhaseKey || !prevPhaseKey) return {stage:'r32'};
 
   // If previous base has both SF winners → we're in FINAL
   const { data:sfW } = await supabase.from('winners').select('phase_key').in('phase_key', [ `${prevPhaseKey}::sf1`, `${prevPhaseKey}::sf2` ]);
@@ -453,42 +508,72 @@ async function detectStage(){
   const { data:r16W } = await supabase.from('winners').select('phase_key').in('phase_key', r16Keys);
   if ((r16W||[]).length===8) return {stage:'qf'};
 
-  // Else → still in R16
-  return {stage:'r16'};
+  // Else if previous base has all R32 winners → we're in R16
+  const r32Keys = Array.from({length:16}, (_,i)=> `${prevPhaseKey}::r32_${i+1}`);
+  const { data:r32W } = await supabase.from('winners').select('phase_key').in('phase_key', r32Keys);
+  if ((r32W||[]).length===16) return {stage:'r16'};
+
+  // Else → still in R32
+  return {stage:'r32'};
 }
 
 /* ---------- Build entrants from previous winners ---------- */
-/* QF entrants from R16 winners */
+/* R16 entrants from R32 winners (pairs: 1/2, 3/4, ..., 15/16) */
+async function getR16EntrantSourcesFromR32Winners(which /* 'r16_1'..'r16_8' */){
+  const r32Base = baseForCompletedStage('r32');
+  if (!r32Base) return null;
+
+  const idx = Number(which.split('_')[1]); // 1..8
+  const pair = [idx*2-1, idx*2]; // [1,2], [3,4], ...
+  const keys = pair.map(i=>`${r32Base}::r32_${i}`);
+  const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key', keys);
+  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
+
+  const pickFromR32 = (i, color)=> seedUrlFromKey(r32Base, color==='red' ? `A${i}` : `B${i}`);
+
+  const cA = map[keys[0]];
+  const cB = map[keys[1]];
+  if (!(cA && cB)) return null;
+
+  return { A: pickFromR32(pair[0], cA), B: pickFromR32(pair[1], cB) };
+}
+
+/* QF entrants from R16 winners (pairs: r16_1/2 → qf1, 3/4 → qf2, 5/6 → qf3, 7/8 → qf4) */
 async function getQFEntrantSourcesFromR16Winners(which /* 'qf1'|'qf2'|'qf3'|'qf4' */){
   const r16Base = baseForCompletedStage('r16');
   if (!r16Base) return null;
 
-  // Map QF → R16 pairs
-  const pairs = {
-    qf1: [1,2],
-    qf2: [3,4],
-    qf3: [5,6],
-    qf4: [7,8],
+  const slots = {
+    qf1:['r16_1','r16_2'],
+    qf2:['r16_3','r16_4'],
+    qf3:['r16_5','r16_6'],
+    qf4:['r16_7','r16_8'],
   }[which];
-  if (!pairs) return null;
+  if (!slots) return null;
 
-  const [iA, iB] = pairs;
-  const { data } = await supabase.from('winners').select('phase_key,color')
-    .in('phase_key', [ `${r16Base}::r16_${iA}`, `${r16Base}::r16_${iB}` ]);
-  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
+  const keys = slots.map(s=>`${r16Base}::${s}`);
+  const { data } = await supabase.from('winners').select('phase_key,color').in('phase_key', keys);
+  const colors = Object.fromEntries((data||[]).map(r=>[r.phase_key, r.color]));
 
-  const pickFromR16 = (idx, color)=>{
-    return seedUrlFromKey(r16Base, color==='red' ? `A${idx}` : `B${idx}`);
-  };
+  async function r16Pack(slot /* 'r16_1'..'r16_8' */){
+    const key = `${r16Base}::${slot}`;
+    if (imgCache.has(key)) return imgCache.get(key);
+    // rebuild from R32 winners
+    const rebuilt = await getR16EntrantSourcesFromR32Winners(slot);
+    if (rebuilt) imgCache.set(key, rebuilt);
+    return rebuilt;
+  }
 
-  const cA = map[`${r16Base}::r16_${iA}`];
-  const cB = map[`${r16Base}::r16_${iB}`];
-  if (!cA || !cB) return null;
+  const pL = await r16Pack(slots[0]);
+  const pR = await r16Pack(slots[1]);
+  if (!(pL && pR)) return null;
 
-  return { A: pickFromR16(iA, cA), B: pickFromR16(iB, cB) };
+  const leftSrc  = (String(colors[keys[0]]).toLowerCase()==='red') ? pL.A : pL.B;
+  const rightSrc = (String(colors[keys[1]]).toLowerCase()==='red') ? pR.A : pR.B;
+  return { A: leftSrc, B: rightSrc };
 }
 
-/* SF entrants from QF winners (rebuilds QF packs from R16 winners) */
+/* SF entrants from QF winners (rebuild QF packs from R16 winners) */
 async function getSemiEntrantSourcesFromQFWinners(which /* 'sf1'|'sf2' */){
   const qfBase = baseForCompletedStage('qf');
   if (!qfBase) return null;
@@ -499,7 +584,6 @@ async function getSemiEntrantSourcesFromQFWinners(which /* 'sf1'|'sf2' */){
   const colors = Object.fromEntries((winRows||[]).map(r=>[r.phase_key, (r.color||'').toLowerCase()]));
   if (!(colors[keys[0]] && colors[keys[1]])) return null;
 
-  // Rebuild QF packs deterministically via R16 winners
   async function qfPack(slot /* 'qf1'..'qf4' */){
     const key = `${qfBase}::${slot}`;
     if (imgCache.has(key)) return imgCache.get(key);
@@ -507,8 +591,9 @@ async function getSemiEntrantSourcesFromQFWinners(which /* 'sf1'|'sf2' */){
     if (rebuilt) imgCache.set(key, rebuilt);
     return rebuilt;
   }
-  const pLeft  = await qfPack(slots[0]); // {A,B}
-  const pRight = await qfPack(slots[1]); // {A,B}
+
+  const pLeft  = await qfPack(slots[0]);
+  const pRight = await qfPack(slots[1]);
   if (!(pLeft && pRight)) return null;
 
   const leftSrc  = (colors[keys[0]]==='red') ? pLeft.A : pLeft.B;
@@ -516,7 +601,7 @@ async function getSemiEntrantSourcesFromQFWinners(which /* 'sf1'|'sf2' */){
   return { A: leftSrc, B: rightSrc };
 }
 
-/* Final entrants from SF winners (rebuilds SF packs from QF winners) */
+/* Final entrants from SF winners (rebuild SF packs from QF winners) */
 async function getFinalEntrantSourcesFromWinners(){
   const sfBase = baseForCompletedStage('sf');
   if (!sfBase) return null;
@@ -532,7 +617,6 @@ async function getFinalEntrantSourcesFromWinners(){
   const c2 = colors[sf2];
   if (!(c1 && c2)) return null;
 
-  // Ensure we can reconstruct SF packs deterministically
   async function sfPack(slot /* 'sf1'|'sf2' */){
     const key = `${sfBase}::${slot}`;
     if (imgCache.has(key)) return imgCache.get(key);
@@ -735,10 +819,10 @@ document.addEventListener('keydown', (e)=>{
 function setStateUI(){ stateEl.textContent = paused ? 'PAUSED' : 'LIVE'; pauseBtn.textContent = paused ? '▶️ Resume' : '⏸️ Pause'; phaseBadge.textContent='phase: '+(currentPhaseKey||'—'); }
 
 function slotFinished(slot){
-  return slotLevel(slot) < stageLevel(currentStage||'r16');
+  return slotLevel(slot) < stageLevel(currentStage||'r32');
 }
 function votingLockedFor(slot){
-  return slotLevel(slot) !== stageLevel(currentStage||'r16');
+  return slotLevel(slot) !== stageLevel(currentStage||'r32');
 }
 function applyVotingLockUI(){
   const locked = votingLockedFor(activeSlot);
@@ -760,12 +844,15 @@ async function paintImagesForActive(){
   if (imgCache.has(bKey)){
     const {A,B}=imgCache.get(bKey); imgA.src=A; imgB.src=B;
   } else {
-    if (slot.startsWith('r16')){
-      // r16_1..r16_8 map to A1/B1 .. A8/B8
-      const idx = Number(slot.split('_')[1]); // 1..8
+    if (slot.startsWith('r32')){
+      const idx = Number(slot.split('_')[1]); // 1..16
       const A = seedUrlFromKey(base, `A${idx}`);
       const B = seedUrlFromKey(base, `B${idx}`);
       imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
+    } else if (slot.startsWith('r16')){
+      const pack = await getR16EntrantSourcesFromR32Winners(slot);
+      if (pack){ imgCache.set(bKey,pack); imgA.src=pack.A; imgB.src=pack.B; }
+      else { imgA.removeAttribute('src'); imgB.removeAttribute('src'); }
     } else if (slot.startsWith('qf')){
       const pack = await getQFEntrantSourcesFromR16Winners(slot);
       if (pack){ imgCache.set(bKey,pack); imgA.src=pack.A; imgB.src=pack.B; }
@@ -782,7 +869,11 @@ async function paintImagesForActive(){
   }
 
   // Labels (kept for accessibility; visually hidden by CSS)
-  if (slot.startsWith('r16')){
+  if (slot.startsWith('r32')){
+    const n = slot.split('_')[1];
+    labelA.textContent=`R32 ${n} — Left`;
+    labelB.textContent=`R32 ${n} — Right`;
+  } else if (slot.startsWith('r16')){
     const n = slot.split('_')[1];
     labelA.textContent=`R16 ${n} — Left`;
     labelB.textContent=`R16 ${n} — Right`;
@@ -833,9 +924,9 @@ async function fetchState(){
       if (!imgCache.has(finalKey)){ const pack = await getFinalEntrantSourcesFromWinners(); if (pack) imgCache.set(finalKey, pack); }
       if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
 
-      // Loop back: next phase is fresh R16
+      // Loop back: next phase is fresh R32
       overlayGateBase = null;
-      activeSlot = 'r16_1';
+      activeSlot = 'r32_1';
       imgCache.clear(); lastPaintedBattleKey=null;
 
     } else if (prevStage === 'sf'){
@@ -861,20 +952,18 @@ async function fetchState(){
       ]);
 
       activeSlot = 'sf1';
-      // seed SF thumbnails cache for current base
       const pack1 = await getSemiEntrantSourcesFromQFWinners('sf1');
       const pack2 = await getSemiEntrantSourcesFromQFWinners('sf2');
       if (pack1) imgCache.set(`${currentPhaseKey}::sf1`, pack1);
       if (pack2) imgCache.set(`${currentPhaseKey}::sf2`, pack2);
       lastPaintedBattleKey=null;
 
-    } else {
+    } else if (prevStage === 'r16'){
       // R16 just ended → record all 8 and move to QF
       const r16 = r16KeysFor(justEndedBase);
       await Promise.all(Object.values(r16).map(k=>decideAndPersistWinner(k)));
 
       activeSlot = 'qf1';
-      // seed QF thumbnails cache for current base
       const qp1 = await getQFEntrantSourcesFromR16Winners('qf1');
       const qp2 = await getQFEntrantSourcesFromR16Winners('qf2');
       const qp3 = await getQFEntrantSourcesFromR16Winners('qf3');
@@ -883,6 +972,20 @@ async function fetchState(){
       if (qp2) imgCache.set(`${currentPhaseKey}::qf2`, qp2);
       if (qp3) imgCache.set(`${currentPhaseKey}::qf3`, qp3);
       if (qp4) imgCache.set(`${currentPhaseKey}::qf4`, qp4);
+      lastPaintedBattleKey=null;
+
+    } else {
+      // R32 just ended → record all 16 and move to R16
+      const r32 = r32KeysFor(justEndedBase);
+      await Promise.all(Object.values(r32).map(k=>decideAndPersistWinner(k)));
+
+      activeSlot = 'r16_1';
+      // seed R16 thumbnails cache for current base
+      for (let i=1;i<=8;i++){
+        const slot = `r16_${i}`;
+        const pack = await getR16EntrantSourcesFromR32Winners(slot);
+        if (pack) imgCache.set(`${currentPhaseKey}::${slot}`, pack);
+      }
       lastPaintedBattleKey=null;
     }
   }
@@ -898,10 +1001,16 @@ async function fetchState(){
 
 /* ---------- Bracket list rendering (compact) ---------- */
 function labelFor(slot){
+  if (slot.startsWith('r32')){
+    const n = Number(slot.split('_')[1]);
+    const seeds = ['A vs B','C vs D','E vs F','G vs H','I vs J','K vs L','M vs N','O vs P',
+                   'Q vs R','S vs T','U vs V','W vs X','Y vs Z','AA vs AB','AC vs AD','AE vs AF'];
+    return {round:'R32', title:`Seed ${seeds[n-1] || 'A vs B'}`};
+  }
   if (slot.startsWith('r16')){
     const n = Number(slot.split('_')[1]);
-    const letters = ['A vs B','C vs D','E vs F','G vs H','I vs J','K vs L','M vs N','O vs P'];
-    return {round:'R16', title:`Seed ${letters[n-1] || 'A vs B'}`};
+    const seeds = ['R32 1/2','R32 3/4','R32 5/6','R32 7/8','R32 9/10','R32 11/12','R32 13/14','R32 15/16'];
+    return {round:'R16', title:`Winners of ${seeds[n-1] || 'R32'}`};
   }
   if (slot.startsWith('qf')){
     const labels = {qf1:'Winners of R16 1/2', qf2:'Winners of R16 3/4', qf3:'Winners of R16 5/6', qf4:'Winners of R16 7/8'};
@@ -923,10 +1032,15 @@ async function thumbsFor(slot){
 
   if (imgCache.has(key)) return imgCache.get(key);
 
-  if (slot.startsWith('r16')){
+  if (slot.startsWith('r32')){
     const idx = Number(slot.split('_')[1]);
     const pack = { A: seedUrlFromKey(base, `A${idx}`), B: seedUrlFromKey(base, `B${idx}`) };
     imgCache.set(key, pack); return pack;
+  }
+  if (slot.startsWith('r16')){
+    const pack = await getR16EntrantSourcesFromR32Winners(slot);
+    if (pack){ imgCache.set(key, pack); return pack; }
+    return {A:'',B:''};
   }
   if (slot.startsWith('qf')){
     const pack = await getQFEntrantSourcesFromR16Winners(slot);
@@ -964,6 +1078,8 @@ function highlightActiveRow(){
 
 async function updateBracketScores(){
   const slots = [
+    'r32_1','r32_2','r32_3','r32_4','r32_5','r32_6','r32_7','r32_8',
+    'r32_9','r32_10','r32_11','r32_12','r32_13','r32_14','r32_15','r32_16',
     'r16_1','r16_2','r16_3','r16_4','r16_5','r16_6','r16_7','r16_8',
     'qf1','qf2','qf3','qf4','sf1','sf2','final'
   ];
@@ -983,7 +1099,7 @@ async function updateBracketScores(){
 }
 
 async function finalSeedsTitle(){
-  if (currentStage==='final' || currentStage==='sf' || currentStage==='qf'){
+  if (currentStage==='final' || currentStage==='sf' || currentStage==='qf' || currentStage==='r16'){
     const sfBase = baseForCompletedStage('sf');
     if (!sfBase) return 'TBD vs TBD';
     const { data } = await supabase.from('winners').select('phase_key,color')
@@ -999,6 +1115,8 @@ async function renderBracket(){
   if (!base){ brows.innerHTML=''; return; }
 
   const rowsOrder = [
+    'r32_1','r32_2','r32_3','r32_4','r32_5','r32_6','r32_7','r32_8',
+    'r32_9','r32_10','r32_11','r32_12','r32_13','r32_14','r32_15','r32_16',
     'r16_1','r16_2','r16_3','r16_4','r16_5','r16_6','r16_7','r16_8',
     'qf1','qf2','qf3','qf4','sf1','sf2','final'
   ];
