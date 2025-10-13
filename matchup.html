@@ -1252,5 +1252,117 @@ submitBtn.onclick=async()=>{
   endBoot();
 })();
 </script>
+<script>
+/* ===== Rage Space: Show/Hide Finished Rounds (drop-in) =====
+   Paste this block before </body>. No other edits required. */
+
+(function(){
+  // 1) Ensure CSS exists (injected once)
+  (function injectCSS(){
+    if (document.getElementById('rs_hide_done_css')) return;
+    const css = document.createElement('style');
+    css.id = 'rs_hide_done_css';
+    css.textContent = `
+      /* Hide decided rows when bracket has .hide-done */
+      #bracket.hide-done .brow.decided{ display:none !important; }
+    `;
+    document.head.appendChild(css);
+  })();
+
+  // 2) Locate or create bracket container + list
+  const bracketEl = document.getElementById('bracket')
+                    || document.querySelector('.bracket')
+                    || (function(){ const s=document.createElement('section'); s.className='bracket'; s.id='bracket'; document.body.appendChild(s); return s; })();
+
+  let brows = document.getElementById('brows') || bracketEl.querySelector('#brows');
+  if (!brows){
+    brows = document.createElement('div');
+    brows.id = 'brows';
+    bracketEl.appendChild(brows);
+  }
+
+  // 3) Inject a header with the toggle if not present
+  let head = bracketEl.querySelector('.bracket-head');
+  if (!head){
+    head = document.createElement('div');
+    head.className = 'bracket-head';
+    const title = document.createElement('div');
+    title.className = 'bracket-title';
+    title.textContent = 'Bracket';
+    head.appendChild(title);
+    bracketEl.insertBefore(head, bracketEl.firstChild);
+  }
+
+  let showDone = document.getElementById('showDone');
+  if (!showDone){
+    const label = document.createElement('label');
+    label.className = 'switch';
+    label.style.cssText = 'margin-left:auto;display:flex;align-items:center;gap:8px';
+
+    showDone = document.createElement('input');
+    showDone.type = 'checkbox';
+    showDone.id = 'showDone';
+
+    const span = document.createElement('span');
+    span.textContent = 'Show finished rounds';
+
+    // restore preference (default = show)
+    try{
+      const saved = localStorage.getItem('rs_show_done');
+      showDone.checked = saved !== '0';
+    }catch(e){ showDone.checked = true; }
+
+    label.appendChild(showDone);
+    label.appendChild(span);
+    head.appendChild(label);
+  }
+
+  // 4) Decide if a row is "finished" using multiple heuristics (robust)
+  function isRowDecided(row){
+    if (!row) return false;
+    // A) has .decided class
+    if (row.classList.contains('decided')) return true;
+    // B) data attribute
+    if (row.getAttribute('data-decided') === '1' || row.getAttribute('aria-checked') === 'true') return true;
+    // C) badge/pill text that indicates decided/locked
+    const pill = row.querySelector('.bpill,.badge,.bline');
+    const txt = (pill?.textContent || row.textContent || '').toLowerCase();
+    if (/\bdecided\b/.test(txt) || /\bfinished\b/.test(txt)) return true;
+    // D) overlay text node “DECIDED”
+    if ([...row.querySelectorAll('*')].some(n=>/DECIDED/i.test(n.textContent||''))) return true;
+    return false;
+  }
+
+  // 5) Apply visibility based on toggle (also adds class on container)
+  function applyShowDone(){
+    const hide = !showDone.checked;
+    bracketEl.classList.toggle('hide-done', hide);
+
+    // Inline fallback that wins over any CSS order
+    const rows = brows.querySelectorAll('.brow, [class*="row"], [data-slot]');
+    rows.forEach(row=>{
+      const decided = isRowDecided(row);
+      if (decided){
+        // normalize class so CSS can hit too
+        row.classList.add('decided');
+        row.style.display = hide ? 'none' : '';
+      }
+    });
+
+    try{ localStorage.setItem('rs_show_done', hide ? '0' : '1'); }catch(e){}
+  }
+
+  // 6) Re-apply when list changes (your code often re-renders the bracket)
+  if ('MutationObserver' in window){
+    const mo = new MutationObserver(applyShowDone);
+    mo.observe(brows, {childList:true, subtree:true});
+  }
+
+  // 7) Hook up toggle + initial pass
+  showDone.addEventListener('change', applyShowDone);
+  applyShowDone();
+  setTimeout(applyShowDone, 300); // one more pass for async renders
+})();
+</script>
 </body>
 </html>
