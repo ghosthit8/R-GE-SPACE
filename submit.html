@@ -297,5 +297,94 @@ Storage bucket must exist: art-uploads (public read).
 DB must have: trigger that sets user_id := auth.uid() on art_queue inserts,
 and the authenticated INSERT policy with a non-null WITH CHECK expression.
 -->
+<style>
+  .rs-debug {
+    position: fixed; right: 10px; bottom: 10px; z-index: 99999;
+    background: rgba(0,0,0,.85); border: 1px solid #153b16; border-radius: 12px;
+    padding: 10px 12px; color: #39ff14; font: 12px/1.2 system-ui, Arial, sans-serif;
+    box-shadow: 0 0 16px rgba(57,255,20,.15);
+  }
+  .rs-debug b { color: #b3ffb3 }
+  .rs-debug button {
+    margin-top: 6px; width: 100%; border: 1px solid #39ff14; background: transparent;
+    color: #39ff14; border-radius: 10px; padding: 6px 8px; cursor: pointer;
+  }
+</style>
+
+<div class="rs-debug">
+  <div>BASE: <b id="rsBaseKey">…</b></div>
+  <div>STAGE: <b id="rsStage">…</b></div>
+  <button id="rsForce">Force Inject R32</button>
+  <div id="rsMsg" style="margin-top:6px;opacity:.9"></div>
+</div>
+
+<script>
+(function(){
+  const msg = (t)=>{ document.getElementById('rsMsg').textContent = t; };
+
+  function showKeys(){
+    try {
+      document.getElementById('rsBaseKey').textContent = window.currentPhaseKey || '(unknown)';
+      document.getElementById('rsStage').textContent   = window.currentStage || '(unknown)';
+    } catch(e){ console.warn(e); }
+  }
+
+  // Safety: warm injections & repaint if we’re already in R32 when the page loads
+  async function warmIfR32(){
+    try{
+      if (typeof currentStage !== 'undefined' &&
+          currentStage === 'r32' &&
+          typeof currentPhaseKey !== 'undefined' &&
+          typeof ensureR32InjectionsFor === 'function') {
+        await ensureR32InjectionsFor(currentPhaseKey);
+        if (typeof paintImagesForActive === 'function') await paintImagesForActive();
+        if (typeof renderBracket === 'function') await renderBracket();
+      }
+    }catch(e){ console.error('warmIfR32 failed', e); }
+  }
+
+  // Force-inject handler (skips claim; just assigns now)
+  async function forceInject(){
+    try{
+      if (typeof currentPhaseKey === 'undefined') return msg('No base key yet.');
+      // If your integrator functions exist, use them
+      if (typeof assignQueuedToR32 === 'function') {
+        msg('Assigning from queue…');
+        await assignQueuedToR32(currentPhaseKey);
+        await ensureR32InjectionsFor(currentPhaseKey);
+        if (typeof paintImagesForActive === 'function') await paintImagesForActive();
+        if (typeof renderBracket === 'function') await renderBracket();
+        msg('Done. Check R32.');
+        return;
+      }
+      // Fallback: do a minimal inline assignment (oldest pending -> r32_1)
+      if (typeof supabase === 'undefined') return msg('Supabase not ready.');
+      msg('Assigning (fallback)…');
+      const { data: q } = await supabase.from('art_queue')
+        .select('id,image_url').eq('status','pending').order('created_at',{ascending:true}).limit(1);
+      if (!q || !q.length) return msg('Queue empty.');
+      const row = q[0];
+      await supabase.from('art_injections').upsert({
+        base_iso: currentPhaseKey, slot: 'r32_1',
+        submission_id: row.id, image_url: row.image_url
+      });
+      await supabase.from('art_queue').update({ status:'used', used_at: new Date().toISOString() }).eq('id', row.id);
+      if (typeof paintImagesForActive === 'function') await paintImagesForActive();
+      if (typeof renderBracket === 'function') await renderBracket();
+      msg('Injected into r32_1.');
+    }catch(e){
+      console.error(e);
+      msg(e?.message || 'Failed.');
+    }
+  }
+
+  document.getElementById('rsForce').addEventListener('click', forceInject);
+  showKeys();
+  warmIfR32();
+
+  // If your app updates stage/base later, keep badge fresh
+  setInterval(showKeys, 1500);
+})();
+</script>
 </body>
 </html>
