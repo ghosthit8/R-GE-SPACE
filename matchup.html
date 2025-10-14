@@ -1256,20 +1256,20 @@ submitBtn.onclick=async()=>{
   endBoot();
 })();
 </script>
-<script>
-/* ===== Rage Space: Show/Hide Finished Rounds (drop-in) =====
-   Paste this block before 
+<!-- ⬇️ REPLACE your previous Force decide script with this version -->
 <script>
 /* ===== Force decide → advance one stage (testing helper) =====
    - Uses existing vote logic (votes win, ties random)
-   - Decides ALL matchups for the CURRENT stage base
-   - Seeds next stage thumbnails for the CURRENT base
-   - Jumps UI to the first match of the next stage
+   - Decides ALL matchups for the CURRENT stage on THIS base
+   - Seeds next stage packs
+   - Persists next stage/slot to `tournament_state` (if available)
+   - Clears and restarts local countdown so the seconds actually move
 */
 (function(){
   const forceBtn = document.getElementById('btnForce');
   if (!forceBtn) return;
 
+  /* ---------- Local helpers & compatibility shims ---------- */
   const slotsR32 = Array.from({length:16}, (_,i)=>`r32_${i+1}`);
   const slotsR16 = Array.from({length:8},  (_,i)=>`r16_${i+1}`);
   const slotsQF  = ['qf1','qf2','qf3','qf4'];
@@ -1290,6 +1290,40 @@ submitBtn.onclick=async()=>{
     if (stage==='final') return 'final';
     return 'r32_1';
   }
+  function getStageSeconds(stage){
+    // Prefer your app's configured durations if present; fall back to a sane default.
+    if (window.STAGE_SECONDS && window.STAGE_SECONDS[stage]) return window.STAGE_SECONDS[stage];
+    if (window.STAGE_LENGTHS && window.STAGE_LENGTHS[stage]) return window.STAGE_LENGTHS[stage];
+    // Default for testing; adjust if you want a different test length:
+    return 20;
+  }
+  function stopLocalCountdown(){
+    // Try to stop whatever ticking mechanism the page uses.
+    if (window.stopCountdown) { try{ window.stopCountdown(); }catch{} }
+    if (window.clearCountdown) { try{ window.clearCountdown(); }catch{} }
+    if (window.tickHandle) { try{ clearInterval(window.tickHandle); }catch{} }
+    if (window.timerId) { try{ clearInterval(window.timerId); }catch{} }
+  }
+  function startLocalCountdown(seconds){
+    // Prefer your app's own starter if exposed
+    if (window.startCountdown) { try{ window.startCountdown(seconds); return; }catch{} }
+    if (window.resetCountdown)  { try{ window.resetCountdown(seconds);  return; }catch{} }
+    // Minimal fallback: update a common clock element if present
+    const el = document.getElementById('clock') || document.querySelector('[data-clock], .clock, .timer');
+    if (!el) return;
+    let secs = seconds|0;
+    el.textContent = secs;
+    if (window.__forceTimer) clearInterval(window.__forceTimer);
+    window.__forceTimer = setInterval(()=>{
+      secs = Math.max(0, secs-1);
+      el.textContent = secs;
+      if (secs<=0){ clearInterval(window.__forceTimer); }
+    }, 1000);
+  }
+  function toast(msg){
+    if (window.toast) return window.toast(msg);
+    console.log('[force]', msg);
+  }
 
   async function getWinnerMap(keys){
     const { data, error } = await supabase.from('winners')
@@ -1300,16 +1334,16 @@ submitBtn.onclick=async()=>{
     (data||[]).forEach(r => map[r.phase_key] = (r.color||'').toLowerCase());
     return map;
   }
-
   async function decideAll(keys){
     const out = {};
     for (const k of keys){
-      const c = await decideAndPersistWinner(k);
+      const c = await decideAndPersistWinner(k); // your existing function
       out[k] = c;
     }
     return out;
   }
 
+  // Deterministic R32 pack for seeding r16
   function r32Pack(base){
     const A = {}, B = {};
     for (let i=1;i<=16;i++){
@@ -1319,6 +1353,7 @@ submitBtn.onclick=async()=>{
     return {A,B};
   }
 
+  // Seed the NEXT stage packs so thumbs/current tiles match right away
   async function seedNextStageForBase(base, curStage){
     const clearKeys = [];
     if (curStage==='r32'){ for(let i=1;i<=8;i++) clearKeys.push(`${base}::r16_${i}`); }
@@ -1332,29 +1367,18 @@ submitBtn.onclick=async()=>{
       const r32Keys = slotsR32.map(s => `${base}::${s}`);
       const decided = await getWinnerMap(r32Keys);
       for (let i=1;i<=8;i++){
-        const leftIdx  = i*2-1;
-        const rightIdx = i*2;
-        const cL = decided[`${base}::r32_${leftIdx}`];
-        const cR = decided[`${base}::r32_${rightIdx}`];
+        const L = i*2-1, R = i*2;
+        const cL = decided[`${base}::r32_${L}`];
+        const cR = decided[`${base}::r32_${R}`];
         if (!cL || !cR) continue;
-        const pack = {
-          A: (cL==='red') ? A[leftIdx]  : B[leftIdx],
-          B: (cR==='red') ? A[rightIdx] : B[rightIdx],
-        };
-        imgCache.set(`${base}::r16_${i}`, pack);
+        imgCache.set(`${base}::r16_${i}`, {
+          A: (cL==='red') ? A[L]  : B[L],
+          B: (cR==='red') ? A[R]  : B[R],
+        });
       }
     } else if (curStage==='r16'){
       const r16Keys = slotsR16.map(s => `${base}::${s}`);
       const r16Wins = await getWinnerMap(r16Keys);
-
-      for (let i=1;i<=8;i++){
-        if (!imgCache.has(`${base}::r16_${i}`)){
-          // Best-effort fallback; upstream code can populate as needed
-          const fallback = null;
-          if (fallback) imgCache.set(`${base}::r16_${i}`, fallback);
-        }
-      }
-
       const pairs = { qf1:[1,2], qf2:[3,4], qf3:[5,6], qf4:[7,8] };
       for (const [qf, [l,r]] of Object.entries(pairs)){
         const packL = imgCache.get(`${base}::r16_${l}`) || {};
@@ -1362,16 +1386,14 @@ submitBtn.onclick=async()=>{
         const cL = r16Wins[`${base}::r16_${l}`];
         const cR = r16Wins[`${base}::r16_${r}`];
         if (!cL || !cR) continue;
-        const pack = {
+        imgCache.set(`${base}::${qf}`, {
           A: (cL==='red') ? packL.A : packL.B,
           B: (cR==='red') ? packR.A : packR.B,
-        };
-        imgCache.set(`${base}::${qf}`, pack);
+        });
       }
     } else if (curStage==='qf'){
       const qfKeys = slotsQF.map(s => `${base}::${s}`);
       const qfWins = await getWinnerMap(qfKeys);
-
       const pairs = { sf1:['qf1','qf2'], sf2:['qf3','qf4'] };
       for (const [sf, [l,r]] of Object.entries(pairs)){
         const packL = imgCache.get(`${base}::${l}`) || {};
@@ -1379,41 +1401,62 @@ submitBtn.onclick=async()=>{
         const cL = qfWins[`${base}::${l}`];
         const cR = qfWins[`${base}::${r}`];
         if (!cL || !cR) continue;
-        const pack = {
+        imgCache.set(`${base}::${sf}`, {
           A: (cL==='red') ? packL.A : packL.B,
           B: (cR==='red') ? packR.A : packR.B,
-        };
-        imgCache.set(`${base}::${sf}`, pack);
+        });
       }
     } else if (curStage==='sf'){
       const sfKeys = slotsSF.map(s => `${base}::${s}`);
       const sfWins = await getWinnerMap(sfKeys);
-
       const p1 = imgCache.get(`${base}::sf1`) || {};
       const p2 = imgCache.get(`${base}::sf2`) || {};
       const c1 = sfWins[`${base}::sf1`];
       const c2 = sfWins[`${base}::sf2`];
       if (c1 && c2){
-        const finals = {
+        imgCache.set(`${base}::final`, {
           A: (c1==='red') ? p1.A : p1.B,
           B: (c2==='red') ? p2.A : p2.B,
-        };
-        imgCache.set(`${base}::final`, finals);
+        });
       }
+    }
+  }
+
+  // (Optional but recommended) persist round jump so any realtime listeners snap forward
+  async function writeTournamentState(base, stage, slot, seconds){
+    try{
+      const now = new Date();
+      const ends = new Date(now.getTime() + (seconds*1000));
+      // This shape matches a common schema used earlier; if your columns differ,
+      // this will simply no-op on error and the local UI will still advance.
+      await supabase.from('tournament_state').upsert({
+        phase_key: base,
+        stage,
+        slot,
+        starts_at: now.toISOString(),
+        ends_at: ends.toISOString()
+      }, { onConflict: 'phase_key' });
+    }catch(e){
+      console.warn('tournament_state upsert failed (non-fatal)', e);
     }
   }
 
   async function forceAdvance(){
     try{
-      if (!currentPhaseKey || !currentStage){
+      if (!window.currentPhaseKey || !window.currentStage){
         toast('State not ready'); return;
       }
+
       forceBtn.disabled = true;
       forceBtn.textContent = 'Working…';
 
-      const stage = currentStage;
-      const base  = currentPhaseKey;
+      const stage = window.currentStage;    // 'r32'|'r16'|'qf'|'sf'|'final'
+      const base  = window.currentPhaseKey; // current base key
 
+      // 0) Stop any active countdown to avoid the “decided flash” issue
+      stopLocalCountdown();
+
+      // 1) Decide all matchups for the current stage (or just Final)
       if (stage === 'r32'){
         await decideAll(slotsR32.map(s => `${base}::${s}`));
       } else if (stage === 'r16'){
@@ -1424,28 +1467,37 @@ submitBtn.onclick=async()=>{
         await decideAll(slotsSF.map(s => `${base}::${s}`));
       } else if (stage === 'final'){
         const color = await decideAndPersistWinner(`${base}::final`);
-        overlayGateBase = base;
-        showChampion(color, base);
+        window.overlayGateBase = base;
+        if (window.showChampion) showChampion(color, base);
+        await (window.refreshVoteCounts?.() || Promise.resolve());
+        await (window.renderBracket?.() || Promise.resolve());
         toast('Champion decided');
-        await refreshVoteCounts();
-        await renderBracket();
         return;
       }
 
+      // 2) Seed the NEXT stage thumbnail packs
       await seedNextStageForBase(base, stage);
 
+      // 3) Compute next stage + first slot, persist to DB (if table exists)
       const nStage = nextStageOf(stage);
       if (!nStage){ toast('No further stage'); return; }
+      const nSlot  = firstSlotOf(nStage);
+      const nextSecs = getStageSeconds(nStage);
+      await writeTournamentState(base, nStage, nSlot, nextSecs);
 
-      currentStage = nStage;
-      activeSlot   = firstSlotOf(nStage);
+      // 4) Update local state & repaint
+      window.currentStage = nStage;
+      window.activeSlot   = nSlot;
 
-      if (nStage === 'final') overlayGateBase = base;
+      if (nStage === 'final') window.overlayGateBase = base;
 
-      await paintImagesForActive();
-      await refreshVoteCounts();
-      await renderBracket();
-      applyVotingLockUI();
+      await (window.paintImagesForActive?.() || Promise.resolve());
+      await (window.refreshVoteCounts?.() || Promise.resolve());
+      await (window.renderBracket?.() || Promise.resolve());
+      if (window.applyVotingLockUI) window.applyVotingLockUI();
+
+      // 5) Start a fresh countdown so seconds visibly move
+      startLocalCountdown(nextSecs);
 
       toast(`Advanced to ${nStage.toUpperCase()}`);
     } catch (e){
