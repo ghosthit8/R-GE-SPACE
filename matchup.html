@@ -869,13 +869,9 @@ async function paintImagesForActive(){
   if (imgCache.has(bKey)){
     const {A,B}=imgCache.get(bKey); imgA.src=A; imgB.src=B;
   } else {
-    if (slot.startsWith('r32')) {
-  const pack = await getR32EntrantSourcesFromStorage(slot);
-  if (pack){ imgCache.set(key, pack); return pack; }
-  const idx = Number(slot.split('_')[1]);
-  const fallback = { A: seedUrlFromKey(base, `A${idx}`), B: seedUrlFromKey(base, `B${idx}`) };
-  imgCache.set(key, fallback); return fallback;
-}`);
+    if (slot.startsWith('r32')){
+      const idx = Number(slot.split('_')[1]); // 1..16
+      const A = seedUrlFromKey(base, `A${idx}`);
       const B = seedUrlFromKey(base, `B${idx}`);
       imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
     } else if (slot.startsWith('r16')){
@@ -1394,58 +1390,7 @@ submitBtn.onclick=async()=>{
 })();
 
 
-/* ===== R32 from Storage: art-uploads ===== */
-const BUCKET_ART = 'art-uploads';
-const PUBLIC_BASE = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_ART}`;
-
-// Recursively list up to ~1000 files across 0/1-level folders.
-async function listArtUploads(limit=64){
-  try{
-    const root = await supabase.storage.from(BUCKET_ART).list('', { limit: 100, sortBy:{column:'created_at', order:'desc'} });
-    const folders = (root.data||[]).filter(x=>x.id && x.metadata && x.metadata.name==null && x.name); // supabase v2 marks folder entries with null metadata for size/type
-    const filesRoot = (root.data||[]).filter(x=>x.metadata && x.metadata.size>0);
-    let all = filesRoot.map(f=>({ path: f.name, created_at: f.created_at }));
-    // One level deep
-    for (const f of folders){
-      const sub = await supabase.storage.from(BUCKET_ART).list(f.name, { limit: 200, sortBy:{column:'created_at', order:'desc'} });
-      (sub.data||[]).forEach(it=>{
-        if (it.metadata && it.metadata.size>0){
-          all.push({ path: `${f.name}/${it.name}`, created_at: it.created_at });
-        }
-      });
-    }
-    all.sort((a,b)=> new Date(b.created_at)-new Date(a.created_at));
-    return all.slice(0, limit).map(x=> `${PUBLIC_BASE}/${x.path}`);
-  }catch(e){ return []; }
-}
-
-// Cache baseISO -> 16 pairs [{A,B}...]
-const r32FromStorage = new Map();
-
-async function ensureR32PairsFromStorage(baseISO){
-  if (r32FromStorage.has(baseISO)) return r32FromStorage.get(baseISO);
-  const urls = await listArtUploads(64);
-  const pairs = [];
-  for (let i=0;i<16;i++){
-    const A = urls[i*2]   || seedUrlFromKey(baseISO, `A${i+1}`);
-    const B = urls[i*2+1] || seedUrlFromKey(baseISO, `B${i+1}`);
-    pairs.push({A,B});
-  }
-  r32FromStorage.set(baseISO, pairs);
-  return pairs;
-}
-
-async function getR32EntrantSourcesFromStorage(slot){
-  try{
-    const base = baseForSlot(slot);
-    if (!base) return null;
-    const pairs = await ensureR32PairsFromStorage(base);
-    const idx = Math.max(1, Math.min(16, Number(slot.split('_')[1]))) - 1;
-    return pairs[idx] || null;
-  }catch(e){ return null; }
-}
-
-/* ===== Next-stage queue (uses existing winner->entrant helpers) ===== */
+/* ===== Next-stage queue (safe, standalone) ===== */
 function nextStageOf(stage){
   return stage==='r32' ? 'r16' :
          stage==='r16' ? 'qf'  :
@@ -1506,7 +1451,6 @@ async function renderNextRoundQueue(){
   if (cards.length){ grid.innerHTML=cards.join(''); grid.hidden=false; hintEl.textContent='Preview of upcoming matchups.'; }
   else { grid.hidden=true; hintEl.textContent='Next round will populate once more matches finish.'; }
 }
-// modest boot
 window.addEventListener('load', ()=>{ setTimeout(()=>{ try{ renderNextRoundQueue(); }catch{} }, 400); });
 try{
   const qChan = supabase.channel('queue-listener');
