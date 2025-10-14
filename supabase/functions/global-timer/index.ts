@@ -9,7 +9,7 @@ const corsHeaders: Record<string, string> = {
 };
 
 // ---- tuning ----
-const DEFAULT_PERIOD_SEC = 20;   // was 10
+const DEFAULT_PERIOD_SEC = 21600;   // was 10
 const GRACE_MS = 1200;          // wait a bit after 0s to absorb last-second votes
 
 const nowIso = () => new Date().toISOString();
