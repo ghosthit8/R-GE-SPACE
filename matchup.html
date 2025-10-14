@@ -288,7 +288,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
         <button id="btnPause" class="btn">⏸️ Pause</button>
         <a class="btn" href="./winners.html">🏁 Winners</a>
       </div>
-    </div
+    </div>
 
 <!-- Images in the Queue (next round) -->
 <details id="queueWrap" class="queue">
@@ -299,7 +299,7 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
   </div>
 </details>
 
->
+
 
     <!-- Current Match -->
     <div class="tile" id="tileA" data-color="red">
@@ -869,9 +869,13 @@ async function paintImagesForActive(){
   if (imgCache.has(bKey)){
     const {A,B}=imgCache.get(bKey); imgA.src=A; imgB.src=B;
   } else {
-    if (slot.startsWith('r32')){
-      const idx = Number(slot.split('_')[1]); // 1..16
-      const A = seedUrlFromKey(base, `A${idx}`);
+    if (slot.startsWith('r32')) {
+  const pack = await getR32EntrantSourcesFromStorage(slot);
+  if (pack){ imgCache.set(key, pack); return pack; }
+  const idx = Number(slot.split('_')[1]);
+  const fallback = { A: seedUrlFromKey(base, `A${idx}`), B: seedUrlFromKey(base, `B${idx}`) };
+  imgCache.set(key, fallback); return fallback;
+}`);
       const B = seedUrlFromKey(base, `B${idx}`);
       imgCache.set(bKey,{A,B}); imgA.src=A; imgB.src=B;
     } else if (slot.startsWith('r16')){
@@ -920,7 +924,6 @@ async function paintImagesForActive(){
 
   renderBracket();
   applyVotingLockUI();
-renderNextRoundQueue();
 }
 
 async function fetchState(){
@@ -1023,7 +1026,6 @@ async function fetchState(){
   await refreshVoteCounts();
   renderBracket();
   applyVotingLockUI();
-renderNextRoundQueue();
 }
 
 /* ---------- Bracket list rendering (compact) ---------- */
@@ -1192,8 +1194,7 @@ async function start(){
       const remCalc = currentPhaseKey ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
       const sec = (typeof remainingSec==='number' && !Number.isNaN(remainingSec)) ? Number(remainingSec) : Math.ceil(remCalc/1000);
       clockEl.textContent = String(Math.max(0, Math.ceil(sec)));
-      if (Date.now()-lastSyncAt > 5000) { try{ await fetchState(); renderNextRoundQueue();
-}catch{} }
+      if (Date.now()-lastSyncAt > 5000) { try{ await fetchState(); }catch{} }
     } else {
       const rem = serverPhaseEndISO ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
       clockEl.textContent = String(Math.ceil(rem/1000));
@@ -1354,123 +1355,7 @@ submitBtn.onclick=async()=>{
     if (row.getAttribute('data-decided') === '1' || row.getAttribute('aria-checked') === 'true') return true;
     // C) badge/pill text that indicates decided/locked
     const pill = row.querySelector('.bpill,.badge,.bline');
-    const txt = (pill?.textContent || row.text
-
-/* ===== Next-stage queue ===== */
-function nextStageOf(stage){
-  return stage==='r32' ? 'r16' :
-         stage==='r16' ? 'qf'  :
-         stage==='qf'  ? 'sf'  :
-         stage==='sf'  ? 'final' : 'r32';
-}
-
-function slotsForStage(stage){
-  if (stage==='r32')  return Array.from({length:16}, (_,i)=>`r32_${i+1}`);
-  if (stage==='r16')  return Array.from({length:8},  (_,i)=>`r16_${i+1}`);
-  if (stage==='qf')   return ['qf1','qf2','qf3','qf4'];
-  if (stage==='sf')   return ['sf1','sf2'];
-  return ['final'];
-}
-
-async function packForStageSlot(stage, slot){
-  if (stage==='r16'){
-    if (typeof getR16EntrantSourcesFromR32Winners === 'function') {
-      return await getR16EntrantSourcesFromR32Winners(slot);
-    }
-  }
-  if (stage==='qf'){
-    if (typeof getQFEntrantSourcesFromR16Winners === 'function') {
-      return await getQFEntrantSourcesFromR16Winners(slot);
-    }
-  }
-  if (stage==='sf'){
-    if (typeof getSemiEntrantSourcesFromQFWinners === 'function') {
-      return await getSemiEntrantSourcesFromQFWinners(slot);
-    }
-  }
-  if (stage==='final'){
-    if (typeof getFinalEntrantSourcesFromWinners === 'function') {
-      return await getFinalEntrantSourcesFromWinners();
-    }
-  }
-  return null;
-}
-
-async function renderNextRoundQueue(){
-  const wrap   = document.getElementById('queueWrap');
-  const grid   = document.getElementById('queueGrid');
-  const hintEl = document.getElementById('queueHint');
-  if (!wrap || !grid || !hintEl) return;
-
-  const next = nextStageOf(window.currentStage || 'r32');
-
-  const prevComplete = (stage)=>{
-    if (typeof baseForCompletedStage === 'function') {
-      return baseForCompletedStage(stage);
-    }
-    // fallback: if helper missing, only show for stages after r32
-    return stage !== 'r32';
-  };
-
-  const needPrevComplete =
-    (next==='r16' && !prevComplete('r32')) ||
-    (next==='qf'  && !prevComplete('r16')) ||
-    (next==='sf'  && !prevComplete('qf'))  ||
-    (next==='final' && !prevComplete('sf'));
-
-  if (needPrevComplete){
-    grid.hidden = true;
-    hintEl.textContent = 'Next round will populate once this round completes.';
-    return;
-  }
-
-  const slots = slotsForStage(next);
-  const cards = [];
-
-  if (next==='final'){
-    const pack = await packForStageSlot('final', 'final');
-    if (pack && pack.A && pack.B){
-      cards.push(`
-        <div class="qpair">
-          <div class="imgs">
-            <img class="qthumb" src="${pack.A}" alt="Finalist A"/>
-            <img class="qthumb" src="${pack.B}" alt="Finalist B"/>
-          </div>
-          <div class="qcap">Final — A vs B</div>
-        </div>
-      `);
-    }
-  } else {
-    for (const s of slots){
-      const pack = await packForStageSlot(next, s);
-      if (pack && pack.A && pack.B){
-        const label = next==='r16' ? s.toUpperCase().replace('_',' ') :
-                       next==='qf'  ? s.toUpperCase() :
-                       next==='sf'  ? s.toUpperCase() : s;
-        cards.push(`
-          <div class="qpair">
-            <div class="imgs">
-              <img class="qthumb" src="${pack.A}" alt="${label} Left"/>
-              <img class="qthumb" src="${pack.B}" alt="${label} Right"/>
-            </div>
-            <div class="qcap">${label} — next round</div>
-          </div>
-        `);
-      }
-    }
-  }
-
-  if (cards.length){
-    grid.innerHTML = cards.join('');
-    grid.hidden = false;
-    hintEl.textContent = 'Preview of upcoming matchups.';
-  } else {
-    grid.hidden = true;
-    hintEl.textContent = 'Next round will populate once more matches finish.';
-  }
-}
-
-Content || '').toLowerCase();
+    const txt = (pill?.textContent || row.textContent || '').toLowerCase();
     if (/\bdecided\b/.test(txt) || /\bfinished\b/.test(txt)) return true;
     // D) overlay text node “DECIDED”
     if ([...row.querySelectorAll('*')].some(n=>/DECIDED/i.test(n.textContent||''))) return true;
@@ -1508,14 +1393,126 @@ Content || '').toLowerCase();
   setTimeout(applyShowDone, 300); // one more pass for async renders
 })();
 
-// ---- Queue auto-refresh on winners insert ----
-try {
+
+/* ===== R32 from Storage: art-uploads ===== */
+const BUCKET_ART = 'art-uploads';
+const PUBLIC_BASE = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_ART}`;
+
+// Recursively list up to ~1000 files across 0/1-level folders.
+async function listArtUploads(limit=64){
+  try{
+    const root = await supabase.storage.from(BUCKET_ART).list('', { limit: 100, sortBy:{column:'created_at', order:'desc'} });
+    const folders = (root.data||[]).filter(x=>x.id && x.metadata && x.metadata.name==null && x.name); // supabase v2 marks folder entries with null metadata for size/type
+    const filesRoot = (root.data||[]).filter(x=>x.metadata && x.metadata.size>0);
+    let all = filesRoot.map(f=>({ path: f.name, created_at: f.created_at }));
+    // One level deep
+    for (const f of folders){
+      const sub = await supabase.storage.from(BUCKET_ART).list(f.name, { limit: 200, sortBy:{column:'created_at', order:'desc'} });
+      (sub.data||[]).forEach(it=>{
+        if (it.metadata && it.metadata.size>0){
+          all.push({ path: `${f.name}/${it.name}`, created_at: it.created_at });
+        }
+      });
+    }
+    all.sort((a,b)=> new Date(b.created_at)-new Date(a.created_at));
+    return all.slice(0, limit).map(x=> `${PUBLIC_BASE}/${x.path}`);
+  }catch(e){ return []; }
+}
+
+// Cache baseISO -> 16 pairs [{A,B}...]
+const r32FromStorage = new Map();
+
+async function ensureR32PairsFromStorage(baseISO){
+  if (r32FromStorage.has(baseISO)) return r32FromStorage.get(baseISO);
+  const urls = await listArtUploads(64);
+  const pairs = [];
+  for (let i=0;i<16;i++){
+    const A = urls[i*2]   || seedUrlFromKey(baseISO, `A${i+1}`);
+    const B = urls[i*2+1] || seedUrlFromKey(baseISO, `B${i+1}`);
+    pairs.push({A,B});
+  }
+  r32FromStorage.set(baseISO, pairs);
+  return pairs;
+}
+
+async function getR32EntrantSourcesFromStorage(slot){
+  try{
+    const base = baseForSlot(slot);
+    if (!base) return null;
+    const pairs = await ensureR32PairsFromStorage(base);
+    const idx = Math.max(1, Math.min(16, Number(slot.split('_')[1]))) - 1;
+    return pairs[idx] || null;
+  }catch(e){ return null; }
+}
+
+/* ===== Next-stage queue (uses existing winner->entrant helpers) ===== */
+function nextStageOf(stage){
+  return stage==='r32' ? 'r16' :
+         stage==='r16' ? 'qf'  :
+         stage==='qf'  ? 'sf'  :
+         stage==='sf'  ? 'final' : 'r32';
+}
+function slotsForStage(stage){
+  if (stage==='r32')  return Array.from({length:16}, (_,i)=>`r32_${i+1}`);
+  if (stage==='r16')  return Array.from({length:8},  (_,i)=>`r16_${i+1}`);
+  if (stage==='qf')   return ['qf1','qf2','qf3','qf4'];
+  if (stage==='sf')   return ['sf1','sf2'];
+  return ['final'];
+}
+async function packForStageSlot(stage, slot){
+  if (stage==='r16'  && typeof getR16EntrantSourcesFromR32Winners==='function') return await getR16EntrantSourcesFromR32Winners(slot);
+  if (stage==='qf'   && typeof getQFEntrantSourcesFromR16Winners==='function')   return await getQFEntrantSourcesFromR16Winners(slot);
+  if (stage==='sf'   && typeof getSemiEntrantSourcesFromQFWinners==='function')  return await getSemiEntrantSourcesFromQFWinners(slot);
+  if (stage==='final'&& typeof getFinalEntrantSourcesFromWinners==='function')   return await getFinalEntrantSourcesFromWinners();
+  return null;
+}
+async function renderNextRoundQueue(){
+  const grid   = document.getElementById('queueGrid');
+  const hintEl = document.getElementById('queueHint');
+  if (!grid || !hintEl) return;
+  const next = nextStageOf(window.currentStage || 'r32');
+  const prevComplete = (stage)=>{
+    try { return typeof baseForCompletedStage==='function' ? baseForCompletedStage(stage) : (stage!=='r32'); }
+    catch(e){ return null; }
+  };
+  const needPrevComplete =
+    (next==='r16' && !prevComplete('r32')) ||
+    (next==='qf'  && !prevComplete('r16')) ||
+    (next==='sf'  && !prevComplete('qf'))  ||
+    (next==='final' && !prevComplete('sf'));
+  if (needPrevComplete){
+    grid.hidden = true; hintEl.textContent='Next round will populate once this round completes.'; return;
+  }
+  const slots = slotsForStage(next);
+  const cards = [];
+  if (next==='final'){
+    const pack = await packForStageSlot('final','final');
+    if (pack?.A && pack?.B){
+      cards.push(`<div class="qpair"><div class="imgs">
+        <img class="qthumb" src="${pack.A}"/><img class="qthumb" src="${pack.B}"/>
+      </div><div class="qcap">Final — A vs B</div></div>`);
+    }
+  } else {
+    for (const s of slots){
+      const pack = await packForStageSlot(next, s);
+      if (pack?.A && pack?.B){
+        const label = next==='r16' ? s.toUpperCase().replace('_',' ') : s.toUpperCase();
+        cards.push(`<div class="qpair"><div class="imgs">
+          <img class="qthumb" src="${pack.A}"/><img class="qthumb" src="${pack.B}"/>
+        </div><div class="qcap">${label} — next round</div></div>`);
+      }
+    }
+  }
+  if (cards.length){ grid.innerHTML=cards.join(''); grid.hidden=false; hintEl.textContent='Preview of upcoming matchups.'; }
+  else { grid.hidden=true; hintEl.textContent='Next round will populate once more matches finish.'; }
+}
+// modest boot
+window.addEventListener('load', ()=>{ setTimeout(()=>{ try{ renderNextRoundQueue(); }catch{} }, 400); });
+try{
   const qChan = supabase.channel('queue-listener');
-  qChan.on('postgres_changes',
-    { event: 'INSERT', schema: 'public', table: 'winners' },
-    async () => { try { renderNextRoundQueue(); } catch (_) {} }
-  ).subscribe();
-} catch (e) { /* noop */ }
+  qChan.on('postgres_changes', {event:'INSERT', schema:'public', table:'winners'}, ()=>{ try{ renderNextRoundQueue(); }catch{} }).subscribe();
+}catch{}
+
 </script>
 </body>
 </html>
