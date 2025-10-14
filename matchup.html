@@ -1364,5 +1364,42 @@ submitBtn.onclick=async()=>{
   setTimeout(applyShowDone, 300); // one more pass for async renders
 })();
 </script>
+<script>
+/* ===== Loop watchdog & resume-on-load ===== */
+(function(){
+  // Recompute state once on load, and anytime the tab becomes visible again.
+  async function refreshPaint(){
+    if (typeof fetchState === 'function') await fetchState();
+    if (typeof currentStage !== 'undefined' && currentStage === 'r32' &&
+        typeof currentPhaseKey !== 'undefined' &&
+        typeof ensureR32InjectionsFor === 'function') {
+      await ensureR32InjectionsFor(currentPhaseKey);
+    }
+    if (typeof paintImagesForActive === 'function') await paintImagesForActive();
+    if (typeof renderBracket === 'function') await renderBracket();
+  }
+
+  // Fire once on load.
+  refreshPaint().catch(console.error);
+
+  // Visibility resume
+  document.addEventListener('visibilitychange', ()=>{
+    if (!document.hidden) refreshPaint().catch(console.error);
+  });
+
+  // Heartbeat: every 15s, if we’re past the server phase end, refresh & advance UI.
+  setInterval(async ()=>{
+    try{
+      if (typeof serverPhaseEndISO === 'string'){
+        const now = Date.now();
+        const endMs = new Date(serverPhaseEndISO).getTime();
+        if (!Number.isNaN(endMs) && now >= endMs - 500){ // tiny early trigger
+          await refreshPaint();
+        }
+      }
+    }catch(e){ console.warn('loop watchdog', e); }
+  }, 15000);
+})();
+</script>
 </body>
 </html>
