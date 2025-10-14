@@ -250,6 +250,20 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 /* Hide decided rows when the toggle is off (fallback) */
 #bracket.hide-done .brow.decided{ display:none; }
 
+
+/* ===== Queue (next round) ===== */
+.queue{ margin-top:12px; border:1px solid var(--border); border-radius:14px; background:rgba(7,7,7,.55) }
+.queue[open]{ box-shadow:0 0 18px rgba(57,255,20,.12)}
+.queue-summary{ cursor:pointer; list-style:none; padding:12px 14px; font-weight:700 }
+.queue-summary::marker{display:none}
+.queue-body{ border-top:1px solid var(--border); padding:10px 12px }
+.queue-hint{ color:var(--muted); font-size:12px; padding:4px 0 8px }
+.queue-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:10px }
+.qpair{ border:1px solid var(--border); border-radius:12px; overflow:hidden; background:rgba(0,0,0,.35) }
+.qpair .imgs{ display:grid; grid-template-columns:1fr 1fr; gap:1px; background:rgba(0,0,0,.5) }
+.qthumb{ aspect-ratio:1/1; width:100%; height:auto; object-fit:cover; display:block }
+.qcap{ text-align:center; font-size:11px; color:var(--muted); padding:6px 6px }
+
 </style>
 </head>
 <body>
@@ -274,7 +288,18 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
         <button id="btnPause" class="btn">⏸️ Pause</button>
         <a class="btn" href="./winners.html">🏁 Winners</a>
       </div>
-    </div>
+    </div
+
+<!-- Images in the Queue (next round) -->
+<details id="queueWrap" class="queue">
+  <summary class="queue-summary">🧾 Images in the Queue (next round)</summary>
+  <div id="queueBody" class="queue-body">
+    <div id="queueHint" class="queue-hint">Next round will populate once this round completes.</div>
+    <div id="queueGrid" class="queue-grid" hidden></div>
+  </div>
+</details>
+
+>
 
     <!-- Current Match -->
     <div class="tile" id="tileA" data-color="red">
@@ -895,6 +920,7 @@ async function paintImagesForActive(){
 
   renderBracket();
   applyVotingLockUI();
+await renderNextRoundQueue();
 }
 
 async function fetchState(){
@@ -997,6 +1023,7 @@ async function fetchState(){
   await refreshVoteCounts();
   renderBracket();
   applyVotingLockUI();
+await renderNextRoundQueue();
 }
 
 /* ---------- Bracket list rendering (compact) ---------- */
@@ -1165,7 +1192,8 @@ async function start(){
       const remCalc = currentPhaseKey ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
       const sec = (typeof remainingSec==='number' && !Number.isNaN(remainingSec)) ? Number(remainingSec) : Math.ceil(remCalc/1000);
       clockEl.textContent = String(Math.max(0, Math.ceil(sec)));
-      if (Date.now()-lastSyncAt > 5000) { try{ await fetchState(); }catch{} }
+      if (Date.now()-lastSyncAt > 5000) { try{ await fetchState(); await renderNextRoundQueue();
+}catch{} }
     } else {
       const rem = serverPhaseEndISO ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
       clockEl.textContent = String(Math.ceil(rem/1000));
@@ -1326,7 +1354,123 @@ submitBtn.onclick=async()=>{
     if (row.getAttribute('data-decided') === '1' || row.getAttribute('aria-checked') === 'true') return true;
     // C) badge/pill text that indicates decided/locked
     const pill = row.querySelector('.bpill,.badge,.bline');
-    const txt = (pill?.textContent || row.textContent || '').toLowerCase();
+    const txt = (pill?.textContent || row.text
+
+/* ===== Next-stage queue ===== */
+function nextStageOf(stage){
+  return stage==='r32' ? 'r16' :
+         stage==='r16' ? 'qf'  :
+         stage==='qf'  ? 'sf'  :
+         stage==='sf'  ? 'final' : 'r32';
+}
+
+function slotsForStage(stage){
+  if (stage==='r32')  return Array.from({length:16}, (_,i)=>`r32_${i+1}`);
+  if (stage==='r16')  return Array.from({length:8},  (_,i)=>`r16_${i+1}`);
+  if (stage==='qf')   return ['qf1','qf2','qf3','qf4'];
+  if (stage==='sf')   return ['sf1','sf2'];
+  return ['final'];
+}
+
+async function packForStageSlot(stage, slot){
+  if (stage==='r16'){
+    if (typeof getR16EntrantSourcesFromR32Winners === 'function') {
+      return await getR16EntrantSourcesFromR32Winners(slot);
+    }
+  }
+  if (stage==='qf'){
+    if (typeof getQFEntrantSourcesFromR16Winners === 'function') {
+      return await getQFEntrantSourcesFromR16Winners(slot);
+    }
+  }
+  if (stage==='sf'){
+    if (typeof getSemiEntrantSourcesFromQFWinners === 'function') {
+      return await getSemiEntrantSourcesFromQFWinners(slot);
+    }
+  }
+  if (stage==='final'){
+    if (typeof getFinalEntrantSourcesFromWinners === 'function') {
+      return await getFinalEntrantSourcesFromWinners();
+    }
+  }
+  return null;
+}
+
+async function renderNextRoundQueue(){
+  const wrap   = document.getElementById('queueWrap');
+  const grid   = document.getElementById('queueGrid');
+  const hintEl = document.getElementById('queueHint');
+  if (!wrap || !grid || !hintEl) return;
+
+  const next = nextStageOf(window.currentStage || 'r32');
+
+  const prevComplete = (stage)=>{
+    if (typeof baseForCompletedStage === 'function') {
+      return baseForCompletedStage(stage);
+    }
+    // fallback: if helper missing, only show for stages after r32
+    return stage !== 'r32';
+  };
+
+  const needPrevComplete =
+    (next==='r16' && !prevComplete('r32')) ||
+    (next==='qf'  && !prevComplete('r16')) ||
+    (next==='sf'  && !prevComplete('qf'))  ||
+    (next==='final' && !prevComplete('sf'));
+
+  if (needPrevComplete){
+    grid.hidden = true;
+    hintEl.textContent = 'Next round will populate once this round completes.';
+    return;
+  }
+
+  const slots = slotsForStage(next);
+  const cards = [];
+
+  if (next==='final'){
+    const pack = await packForStageSlot('final', 'final');
+    if (pack && pack.A && pack.B){
+      cards.push(`
+        <div class="qpair">
+          <div class="imgs">
+            <img class="qthumb" src="${pack.A}" alt="Finalist A"/>
+            <img class="qthumb" src="${pack.B}" alt="Finalist B"/>
+          </div>
+          <div class="qcap">Final — A vs B</div>
+        </div>
+      `);
+    }
+  } else {
+    for (const s of slots){
+      const pack = await packForStageSlot(next, s);
+      if (pack && pack.A && pack.B){
+        const label = next==='r16' ? s.toUpperCase().replace('_',' ') :
+                       next==='qf'  ? s.toUpperCase() :
+                       next==='sf'  ? s.toUpperCase() : s;
+        cards.push(`
+          <div class="qpair">
+            <div class="imgs">
+              <img class="qthumb" src="${pack.A}" alt="${label} Left"/>
+              <img class="qthumb" src="${pack.B}" alt="${label} Right"/>
+            </div>
+            <div class="qcap">${label} — next round</div>
+          </div>
+        `);
+      }
+    }
+  }
+
+  if (cards.length){
+    grid.innerHTML = cards.join('');
+    grid.hidden = false;
+    hintEl.textContent = 'Preview of upcoming matchups.';
+  } else {
+    grid.hidden = true;
+    hintEl.textContent = 'Next round will populate once more matches finish.';
+  }
+}
+
+Content || '').toLowerCase();
     if (/\bdecided\b/.test(txt) || /\bfinished\b/.test(txt)) return true;
     // D) overlay text node “DECIDED”
     if ([...row.querySelectorAll('*')].some(n=>/DECIDED/i.test(n.textContent||''))) return true;
@@ -1363,6 +1507,15 @@ submitBtn.onclick=async()=>{
   applyShowDone();
   setTimeout(applyShowDone, 300); // one more pass for async renders
 })();
+
+// ---- Queue auto-refresh on winners insert ----
+try {
+  const qChan = supabase.channel('queue-listener');
+  qChan.on('postgres_changes',
+    { event: 'INSERT', schema: 'public', table: 'winners' },
+    async () => { try { await renderNextRoundQueue(); } catch (_) {} }
+  ).subscribe();
+} catch (e) { /* noop */ }
 </script>
 </body>
 </html>
