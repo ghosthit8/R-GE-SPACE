@@ -272,6 +272,10 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       </div>
       <div class="row">
         <button id="btnPause" class="btn">⏸️ Pause</button>
+
+        <!-- ⬇️ NEW: force decide & advance -->
+        <button id="btnForce" class="btn">⚡ Force decide → next</button>
+
         <a class="btn" href="./winners.html">🏁 Winners</a>
       </div>
     </div>
@@ -1254,7 +1258,210 @@ submitBtn.onclick=async()=>{
 </script>
 <script>
 /* ===== Rage Space: Show/Hide Finished Rounds (drop-in) =====
-   Paste this block before </body>. No other edits required. */
+   Paste this block before 
+<script>
+/* ===== Force decide → advance one stage (testing helper) =====
+   - Uses existing vote logic (votes win, ties random)
+   - Decides ALL matchups for the CURRENT stage base
+   - Seeds next stage thumbnails for the CURRENT base
+   - Jumps UI to the first match of the next stage
+*/
+(function(){
+  const forceBtn = document.getElementById('btnForce');
+  if (!forceBtn) return;
+
+  const slotsR32 = Array.from({length:16}, (_,i)=>`r32_${i+1}`);
+  const slotsR16 = Array.from({length:8},  (_,i)=>`r16_${i+1}`);
+  const slotsQF  = ['qf1','qf2','qf3','qf4'];
+  const slotsSF  = ['sf1','sf2'];
+
+  function nextStageOf(stage){
+    if (stage==='r32') return 'r16';
+    if (stage==='r16') return 'qf';
+    if (stage==='qf')  return 'sf';
+    if (stage==='sf')  return 'final';
+    return null;
+  }
+  function firstSlotOf(stage){
+    if (stage==='r32') return 'r32_1';
+    if (stage==='r16') return 'r16_1';
+    if (stage==='qf')  return 'qf1';
+    if (stage==='sf')  return 'sf1';
+    if (stage==='final') return 'final';
+    return 'r32_1';
+  }
+
+  async function getWinnerMap(keys){
+    const { data, error } = await supabase.from('winners')
+      .select('phase_key,color')
+      .in('phase_key', keys);
+    if (error) console.warn('getWinnerMap error', error);
+    const map = {};
+    (data||[]).forEach(r => map[r.phase_key] = (r.color||'').toLowerCase());
+    return map;
+  }
+
+  async function decideAll(keys){
+    const out = {};
+    for (const k of keys){
+      const c = await decideAndPersistWinner(k);
+      out[k] = c;
+    }
+    return out;
+  }
+
+  function r32Pack(base){
+    const A = {}, B = {};
+    for (let i=1;i<=16;i++){
+      A[i] = seedUrlFromKey(base, `A${i}`);
+      B[i] = seedUrlFromKey(base, `B${i}`);
+    }
+    return {A,B};
+  }
+
+  async function seedNextStageForBase(base, curStage){
+    const clearKeys = [];
+    if (curStage==='r32'){ for(let i=1;i<=8;i++) clearKeys.push(`${base}::r16_${i}`); }
+    if (curStage==='r16'){ clearKeys.push(`${base}::qf1`,`${base}::qf2`,`${base}::qf3`,`${base}::qf4`); }
+    if (curStage==='qf'){  clearKeys.push(`${base}::sf1`,`${base}::sf2`); }
+    if (curStage==='sf'){  clearKeys.push(`${base}::final`); }
+    clearKeys.forEach(k => imgCache.delete(k));
+
+    if (curStage==='r32'){
+      const {A,B} = r32Pack(base);
+      const r32Keys = slotsR32.map(s => `${base}::${s}`);
+      const decided = await getWinnerMap(r32Keys);
+      for (let i=1;i<=8;i++){
+        const leftIdx  = i*2-1;
+        const rightIdx = i*2;
+        const cL = decided[`${base}::r32_${leftIdx}`];
+        const cR = decided[`${base}::r32_${rightIdx}`];
+        if (!cL || !cR) continue;
+        const pack = {
+          A: (cL==='red') ? A[leftIdx]  : B[leftIdx],
+          B: (cR==='red') ? A[rightIdx] : B[rightIdx],
+        };
+        imgCache.set(`${base}::r16_${i}`, pack);
+      }
+    } else if (curStage==='r16'){
+      const r16Keys = slotsR16.map(s => `${base}::${s}`);
+      const r16Wins = await getWinnerMap(r16Keys);
+
+      for (let i=1;i<=8;i++){
+        if (!imgCache.has(`${base}::r16_${i}`)){
+          // Best-effort fallback; upstream code can populate as needed
+          const fallback = null;
+          if (fallback) imgCache.set(`${base}::r16_${i}`, fallback);
+        }
+      }
+
+      const pairs = { qf1:[1,2], qf2:[3,4], qf3:[5,6], qf4:[7,8] };
+      for (const [qf, [l,r]] of Object.entries(pairs)){
+        const packL = imgCache.get(`${base}::r16_${l}`) || {};
+        const packR = imgCache.get(`${base}::r16_${r}`) || {};
+        const cL = r16Wins[`${base}::r16_${l}`];
+        const cR = r16Wins[`${base}::r16_${r}`];
+        if (!cL || !cR) continue;
+        const pack = {
+          A: (cL==='red') ? packL.A : packL.B,
+          B: (cR==='red') ? packR.A : packR.B,
+        };
+        imgCache.set(`${base}::${qf}`, pack);
+      }
+    } else if (curStage==='qf'){
+      const qfKeys = slotsQF.map(s => `${base}::${s}`);
+      const qfWins = await getWinnerMap(qfKeys);
+
+      const pairs = { sf1:['qf1','qf2'], sf2:['qf3','qf4'] };
+      for (const [sf, [l,r]] of Object.entries(pairs)){
+        const packL = imgCache.get(`${base}::${l}`) || {};
+        const packR = imgCache.get(`${base}::${r}`) || {};
+        const cL = qfWins[`${base}::${l}`];
+        const cR = qfWins[`${base}::${r}`];
+        if (!cL || !cR) continue;
+        const pack = {
+          A: (cL==='red') ? packL.A : packL.B,
+          B: (cR==='red') ? packR.A : packR.B,
+        };
+        imgCache.set(`${base}::${sf}`, pack);
+      }
+    } else if (curStage==='sf'){
+      const sfKeys = slotsSF.map(s => `${base}::${s}`);
+      const sfWins = await getWinnerMap(sfKeys);
+
+      const p1 = imgCache.get(`${base}::sf1`) || {};
+      const p2 = imgCache.get(`${base}::sf2`) || {};
+      const c1 = sfWins[`${base}::sf1`];
+      const c2 = sfWins[`${base}::sf2`];
+      if (c1 && c2){
+        const finals = {
+          A: (c1==='red') ? p1.A : p1.B,
+          B: (c2==='red') ? p2.A : p2.B,
+        };
+        imgCache.set(`${base}::final`, finals);
+      }
+    }
+  }
+
+  async function forceAdvance(){
+    try{
+      if (!currentPhaseKey || !currentStage){
+        toast('State not ready'); return;
+      }
+      forceBtn.disabled = true;
+      forceBtn.textContent = 'Working…';
+
+      const stage = currentStage;
+      const base  = currentPhaseKey;
+
+      if (stage === 'r32'){
+        await decideAll(slotsR32.map(s => `${base}::${s}`));
+      } else if (stage === 'r16'){
+        await decideAll(slotsR16.map(s => `${base}::${s}`));
+      } else if (stage === 'qf'){
+        await decideAll(slotsQF.map(s => `${base}::${s}`));
+      } else if (stage === 'sf'){
+        await decideAll(slotsSF.map(s => `${base}::${s}`));
+      } else if (stage === 'final'){
+        const color = await decideAndPersistWinner(`${base}::final`);
+        overlayGateBase = base;
+        showChampion(color, base);
+        toast('Champion decided');
+        await refreshVoteCounts();
+        await renderBracket();
+        return;
+      }
+
+      await seedNextStageForBase(base, stage);
+
+      const nStage = nextStageOf(stage);
+      if (!nStage){ toast('No further stage'); return; }
+
+      currentStage = nStage;
+      activeSlot   = firstSlotOf(nStage);
+
+      if (nStage === 'final') overlayGateBase = base;
+
+      await paintImagesForActive();
+      await refreshVoteCounts();
+      await renderBracket();
+      applyVotingLockUI();
+
+      toast(`Advanced to ${nStage.toUpperCase()}`);
+    } catch (e){
+      console.error(e);
+      toast('Force-advance failed');
+    } finally{
+      forceBtn.disabled = false;
+      forceBtn.textContent = '⚡ Force decide → next';
+    }
+  }
+
+  forceBtn.addEventListener('click', forceAdvance);
+})();
+</script>
+
+</body>. No other edits required. */
 
 (function(){
   // 1) Ensure CSS exists (injected once)
@@ -1401,5 +1608,208 @@ submitBtn.onclick=async()=>{
   }, 15000);
 })();
 </script>
+
+<script>
+/* ===== Force decide → advance one stage (testing helper) =====
+   - Uses existing vote logic (votes win, ties random)
+   - Decides ALL matchups for the CURRENT stage base
+   - Seeds next stage thumbnails for the CURRENT base
+   - Jumps UI to the first match of the next stage
+*/
+(function(){
+  const forceBtn = document.getElementById('btnForce');
+  if (!forceBtn) return;
+
+  const slotsR32 = Array.from({length:16}, (_,i)=>`r32_${i+1}`);
+  const slotsR16 = Array.from({length:8},  (_,i)=>`r16_${i+1}`);
+  const slotsQF  = ['qf1','qf2','qf3','qf4'];
+  const slotsSF  = ['sf1','sf2'];
+
+  function nextStageOf(stage){
+    if (stage==='r32') return 'r16';
+    if (stage==='r16') return 'qf';
+    if (stage==='qf')  return 'sf';
+    if (stage==='sf')  return 'final';
+    return null;
+  }
+  function firstSlotOf(stage){
+    if (stage==='r32') return 'r32_1';
+    if (stage==='r16') return 'r16_1';
+    if (stage==='qf')  return 'qf1';
+    if (stage==='sf')  return 'sf1';
+    if (stage==='final') return 'final';
+    return 'r32_1';
+  }
+
+  async function getWinnerMap(keys){
+    const { data, error } = await supabase.from('winners')
+      .select('phase_key,color')
+      .in('phase_key', keys);
+    if (error) console.warn('getWinnerMap error', error);
+    const map = {};
+    (data||[]).forEach(r => map[r.phase_key] = (r.color||'').toLowerCase());
+    return map;
+  }
+
+  async function decideAll(keys){
+    const out = {};
+    for (const k of keys){
+      const c = await decideAndPersistWinner(k);
+      out[k] = c;
+    }
+    return out;
+  }
+
+  function r32Pack(base){
+    const A = {}, B = {};
+    for (let i=1;i<=16;i++){
+      A[i] = seedUrlFromKey(base, `A${i}`);
+      B[i] = seedUrlFromKey(base, `B${i}`);
+    }
+    return {A,B};
+  }
+
+  async function seedNextStageForBase(base, curStage){
+    const clearKeys = [];
+    if (curStage==='r32'){ for(let i=1;i<=8;i++) clearKeys.push(`${base}::r16_${i}`); }
+    if (curStage==='r16'){ clearKeys.push(`${base}::qf1`,`${base}::qf2`,`${base}::qf3`,`${base}::qf4`); }
+    if (curStage==='qf'){  clearKeys.push(`${base}::sf1`,`${base}::sf2`); }
+    if (curStage==='sf'){  clearKeys.push(`${base}::final`); }
+    clearKeys.forEach(k => imgCache.delete(k));
+
+    if (curStage==='r32'){
+      const {A,B} = r32Pack(base);
+      const r32Keys = slotsR32.map(s => `${base}::${s}`);
+      const decided = await getWinnerMap(r32Keys);
+      for (let i=1;i<=8;i++){
+        const leftIdx  = i*2-1;
+        const rightIdx = i*2;
+        const cL = decided[`${base}::r32_${leftIdx}`];
+        const cR = decided[`${base}::r32_${rightIdx}`];
+        if (!cL || !cR) continue;
+        const pack = {
+          A: (cL==='red') ? A[leftIdx]  : B[leftIdx],
+          B: (cR==='red') ? A[rightIdx] : B[rightIdx],
+        };
+        imgCache.set(`${base}::r16_${i}`, pack);
+      }
+    } else if (curStage==='r16'){
+      const r16Keys = slotsR16.map(s => `${base}::${s}`);
+      const r16Wins = await getWinnerMap(r16Keys);
+
+      for (let i=1;i<=8;i++){
+        if (!imgCache.has(`${base}::r16_${i}`)){
+          // Best-effort fallback; upstream code can populate as needed
+          const fallback = null;
+          if (fallback) imgCache.set(`${base}::r16_${i}`, fallback);
+        }
+      }
+
+      const pairs = { qf1:[1,2], qf2:[3,4], qf3:[5,6], qf4:[7,8] };
+      for (const [qf, [l,r]] of Object.entries(pairs)){
+        const packL = imgCache.get(`${base}::r16_${l}`) || {};
+        const packR = imgCache.get(`${base}::r16_${r}`) || {};
+        const cL = r16Wins[`${base}::r16_${l}`];
+        const cR = r16Wins[`${base}::r16_${r}`];
+        if (!cL || !cR) continue;
+        const pack = {
+          A: (cL==='red') ? packL.A : packL.B,
+          B: (cR==='red') ? packR.A : packR.B,
+        };
+        imgCache.set(`${base}::${qf}`, pack);
+      }
+    } else if (curStage==='qf'){
+      const qfKeys = slotsQF.map(s => `${base}::${s}`);
+      const qfWins = await getWinnerMap(qfKeys);
+
+      const pairs = { sf1:['qf1','qf2'], sf2:['qf3','qf4'] };
+      for (const [sf, [l,r]] of Object.entries(pairs)){
+        const packL = imgCache.get(`${base}::${l}`) || {};
+        const packR = imgCache.get(`${base}::${r}`) || {};
+        const cL = qfWins[`${base}::${l}`];
+        const cR = qfWins[`${base}::${r}`];
+        if (!cL || !cR) continue;
+        const pack = {
+          A: (cL==='red') ? packL.A : packL.B,
+          B: (cR==='red') ? packR.A : packR.B,
+        };
+        imgCache.set(`${base}::${sf}`, pack);
+      }
+    } else if (curStage==='sf'){
+      const sfKeys = slotsSF.map(s => `${base}::${s}`);
+      const sfWins = await getWinnerMap(sfKeys);
+
+      const p1 = imgCache.get(`${base}::sf1`) || {};
+      const p2 = imgCache.get(`${base}::sf2`) || {};
+      const c1 = sfWins[`${base}::sf1`];
+      const c2 = sfWins[`${base}::sf2`];
+      if (c1 && c2){
+        const finals = {
+          A: (c1==='red') ? p1.A : p1.B,
+          B: (c2==='red') ? p2.A : p2.B,
+        };
+        imgCache.set(`${base}::final`, finals);
+      }
+    }
+  }
+
+  async function forceAdvance(){
+    try{
+      if (!currentPhaseKey || !currentStage){
+        toast('State not ready'); return;
+      }
+      forceBtn.disabled = true;
+      forceBtn.textContent = 'Working…';
+
+      const stage = currentStage;
+      const base  = currentPhaseKey;
+
+      if (stage === 'r32'){
+        await decideAll(slotsR32.map(s => `${base}::${s}`));
+      } else if (stage === 'r16'){
+        await decideAll(slotsR16.map(s => `${base}::${s}`));
+      } else if (stage === 'qf'){
+        await decideAll(slotsQF.map(s => `${base}::${s}`));
+      } else if (stage === 'sf'){
+        await decideAll(slotsSF.map(s => `${base}::${s}`));
+      } else if (stage === 'final'){
+        const color = await decideAndPersistWinner(`${base}::final`);
+        overlayGateBase = base;
+        showChampion(color, base);
+        toast('Champion decided');
+        await refreshVoteCounts();
+        await renderBracket();
+        return;
+      }
+
+      await seedNextStageForBase(base, stage);
+
+      const nStage = nextStageOf(stage);
+      if (!nStage){ toast('No further stage'); return; }
+
+      currentStage = nStage;
+      activeSlot   = firstSlotOf(nStage);
+
+      if (nStage === 'final') overlayGateBase = base;
+
+      await paintImagesForActive();
+      await refreshVoteCounts();
+      await renderBracket();
+      applyVotingLockUI();
+
+      toast(`Advanced to ${nStage.toUpperCase()}`);
+    } catch (e){
+      console.error(e);
+      toast('Force-advance failed');
+    } finally{
+      forceBtn.disabled = false;
+      forceBtn.textContent = '⚡ Force decide → next';
+    }
+  }
+
+  forceBtn.addEventListener('click', forceAdvance);
+})();
+</script>
+
 </body>
 </html>
