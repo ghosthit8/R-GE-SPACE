@@ -920,7 +920,7 @@ async function paintImagesForActive(){
 
   renderBracket();
   applyVotingLockUI();
-await renderNextRoundQueue();
+renderNextRoundQueue();
 }
 
 async function fetchState(){
@@ -1023,7 +1023,7 @@ async function fetchState(){
   await refreshVoteCounts();
   renderBracket();
   applyVotingLockUI();
-await renderNextRoundQueue();
+renderNextRoundQueue();
 }
 
 /* ---------- Bracket list rendering (compact) ---------- */
@@ -1192,7 +1192,7 @@ async function start(){
       const remCalc = currentPhaseKey ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
       const sec = (typeof remainingSec==='number' && !Number.isNaN(remainingSec)) ? Number(remainingSec) : Math.ceil(remCalc/1000);
       clockEl.textContent = String(Math.max(0, Math.ceil(sec)));
-      if (Date.now()-lastSyncAt > 5000) { try{ await fetchState(); await renderNextRoundQueue();
+      if (Date.now()-lastSyncAt > 5000) { try{ await fetchState(); renderNextRoundQueue();
 }catch{} }
     } else {
       const rem = serverPhaseEndISO ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
@@ -1513,7 +1513,7 @@ try {
   const qChan = supabase.channel('queue-listener');
   qChan.on('postgres_changes',
     { event: 'INSERT', schema: 'public', table: 'winners' },
-    async () => { try { await renderNextRoundQueue(); } catch (_) {} }
+    async () => { try { renderNextRoundQueue(); } catch (_) {} }
   ).subscribe();
 } catch (e) { /* noop */ }
 </script>
