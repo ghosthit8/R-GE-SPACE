@@ -249,7 +249,17 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
 
 /* Hide decided rows when the toggle is off (fallback) */
 #bracket.hide-done .brow.decided{ display:none; }
-
+/* ===== Loader centering fix (mobile-safe) ===== */
+#bootLoader{
+  position:fixed; inset:0; z-index:10000;
+  display:grid; place-items:center;
+  padding: env(safe-area-inset);
+  height: 100dvh;
+}
+#bootLoader *{
+  left:auto !important; right:auto !important;
+  transform:none !important;
+}
 </style>
 </head>
 <body>
@@ -1624,50 +1634,7 @@ submitBtn.onclick=async()=>{
 })();
 </script>
 <script>
-/* ===== Loop watchdog & resume-on-load ===== */
-(function(){
-  // Recompute state once on load, and anytime the tab becomes visible again.
-  async function refreshPaint(){
-    if (typeof fetchState === 'function') await fetchState();
-    if (typeof currentStage !== 'undefined' && currentStage === 'r32' &&
-        typeof currentPhaseKey !== 'undefined' &&
-        typeof ensureR32InjectionsFor === 'function') {
-      await ensureR32InjectionsFor(currentPhaseKey);
-    }
-    if (typeof paintImagesForActive === 'function') await paintImagesForActive();
-    if (typeof renderBracket === 'function') await renderBracket();
-  }
-
-  // Fire once on load.
-  refreshPaint().catch(console.error);
-
-  // Visibility resume
-  document.addEventListener('visibilitychange', ()=>{
-    if (!document.hidden) refreshPaint().catch(console.error);
-  });
-
-  // Heartbeat: every 15s, if we’re past the server phase end, refresh & advance UI.
-  setInterval(async ()=>{
-    try{
-      if (typeof serverPhaseEndISO === 'string'){
-        const now = Date.now();
-        const endMs = new Date(serverPhaseEndISO).getTime();
-        if (!Number.isNaN(endMs) && now >= endMs - 500){ // tiny early trigger
-          await refreshPaint();
-        }
-      }
-    }catch(e){ console.warn('loop watchdog', e); }
-  }, 15000);
-})();
-</script>
-
-<script>
-/* ===== Force decide → advance one stage (testing helper) =====
-   - Uses existing vote logic (votes win, ties random)
-   - Decides ALL matchups for the CURRENT stage base
-   - Seeds next stage thumbnails for the CURRENT base
-   - Jumps UI to the first match of the next stage
-*/
+/* ===== Force decide → advance one stage (testing helper, final) ===== */
 (function(){
   const forceBtn = document.getElementById('btnForce');
   if (!forceBtn) return;
@@ -1693,169 +1660,81 @@ submitBtn.onclick=async()=>{
     return 'r32_1';
   }
 
-  async function getWinnerMap(keys){
-    const { data, error } = await supabase.from('winners')
-      .select('phase_key,color')
-      .in('phase_key', keys);
-    if (error) console.warn('getWinnerMap error', error);
-    const map = {};
-    (data||[]).forEach(r => map[r.phase_key] = (r.color||'').toLowerCase());
-    return map;
+  function stopLocalCountdown(){
+    try{ if (window.stopCountdown) stopCountdown(); }catch{}
+    try{ if (window.clearCountdown) clearCountdown(); }catch{}
+    try{ if (window.tickHandle) clearInterval(window.tickHandle); }catch{}
+    try{ if (window.timerId) clearInterval(window.timerId); }catch{}
+    try{ if (window.__forceTimer) clearInterval(window.__forceTimer); }catch{}
   }
 
   async function decideAll(keys){
-    const out = {};
-    for (const k of keys){
-      const c = await decideAndPersistWinner(k);
-      out[k] = c;
-    }
+    const out={};
+    for (const k of keys){ out[k]=await decideAndPersistWinner(k); }
     return out;
   }
 
-  function r32Pack(base){
-    const A = {}, B = {};
-    for (let i=1;i<=16;i++){
-      A[i] = seedUrlFromKey(base, `A${i}`);
-      B[i] = seedUrlFromKey(base, `B${i}`);
-    }
-    return {A,B};
-  }
-
   async function seedNextStageForBase(base, curStage){
-    const clearKeys = [];
-    if (curStage==='r32'){ for(let i=1;i<=8;i++) clearKeys.push(`${base}::r16_${i}`); }
-    if (curStage==='r16'){ clearKeys.push(`${base}::qf1`,`${base}::qf2`,`${base}::qf3`,`${base}::qf4`); }
-    if (curStage==='qf'){  clearKeys.push(`${base}::sf1`,`${base}::sf2`); }
-    if (curStage==='sf'){  clearKeys.push(`${base}::final`); }
-    clearKeys.forEach(k => imgCache.delete(k));
-
     if (curStage==='r32'){
-      const {A,B} = r32Pack(base);
-      const r32Keys = slotsR32.map(s => `${base}::${s}`);
-      const decided = await getWinnerMap(r32Keys);
       for (let i=1;i<=8;i++){
-        const leftIdx  = i*2-1;
-        const rightIdx = i*2;
-        const cL = decided[`${base}::r32_${leftIdx}`];
-        const cR = decided[`${base}::r32_${rightIdx}`];
-        if (!cL || !cR) continue;
-        const pack = {
-          A: (cL==='red') ? A[leftIdx]  : B[leftIdx],
-          B: (cR==='red') ? A[rightIdx] : B[rightIdx],
-        };
-        imgCache.set(`${base}::r16_${i}`, pack);
+        const slot=`r16_${i}`;
+        const pack=await getR16EntrantSourcesFromR32Winners(slot);
+        if (pack) imgCache.set(`${base}::${slot}`,pack);
       }
     } else if (curStage==='r16'){
-      const r16Keys = slotsR16.map(s => `${base}::${s}`);
-      const r16Wins = await getWinnerMap(r16Keys);
-
-      for (let i=1;i<=8;i++){
-        if (!imgCache.has(`${base}::r16_${i}`)){
-          // Best-effort fallback; upstream code can populate as needed
-          const fallback = null;
-          if (fallback) imgCache.set(`${base}::r16_${i}`, fallback);
-        }
-      }
-
-      const pairs = { qf1:[1,2], qf2:[3,4], qf3:[5,6], qf4:[7,8] };
-      for (const [qf, [l,r]] of Object.entries(pairs)){
-        const packL = imgCache.get(`${base}::r16_${l}`) || {};
-        const packR = imgCache.get(`${base}::r16_${r}`) || {};
-        const cL = r16Wins[`${base}::r16_${l}`];
-        const cR = r16Wins[`${base}::r16_${r}`];
-        if (!cL || !cR) continue;
-        const pack = {
-          A: (cL==='red') ? packL.A : packL.B,
-          B: (cR==='red') ? packR.A : packR.B,
-        };
-        imgCache.set(`${base}::${qf}`, pack);
+      const qp=['qf1','qf2','qf3','qf4'];
+      for (const q of qp){
+        const pack=await getQFEntrantSourcesFromR16Winners(q);
+        if (pack) imgCache.set(`${base}::${q}`,pack);
       }
     } else if (curStage==='qf'){
-      const qfKeys = slotsQF.map(s => `${base}::${s}`);
-      const qfWins = await getWinnerMap(qfKeys);
-
-      const pairs = { sf1:['qf1','qf2'], sf2:['qf3','qf4'] };
-      for (const [sf, [l,r]] of Object.entries(pairs)){
-        const packL = imgCache.get(`${base}::${l}`) || {};
-        const packR = imgCache.get(`${base}::${r}`) || {};
-        const cL = qfWins[`${base}::${l}`];
-        const cR = qfWins[`${base}::${r}`];
-        if (!cL || !cR) continue;
-        const pack = {
-          A: (cL==='red') ? packL.A : packL.B,
-          B: (cR==='red') ? packR.A : packR.B,
-        };
-        imgCache.set(`${base}::${sf}`, pack);
+      const sf=['sf1','sf2'];
+      for (const s of sf){
+        const pack=await getSemiEntrantSourcesFromQFWinners(s);
+        if (pack) imgCache.set(`${base}::${s}`,pack);
       }
     } else if (curStage==='sf'){
-      const sfKeys = slotsSF.map(s => `${base}::${s}`);
-      const sfWins = await getWinnerMap(sfKeys);
-
-      const p1 = imgCache.get(`${base}::sf1`) || {};
-      const p2 = imgCache.get(`${base}::sf2`) || {};
-      const c1 = sfWins[`${base}::sf1`];
-      const c2 = sfWins[`${base}::sf2`];
-      if (c1 && c2){
-        const finals = {
-          A: (c1==='red') ? p1.A : p1.B,
-          B: (c2==='red') ? p2.A : p2.B,
-        };
-        imgCache.set(`${base}::final`, finals);
-      }
+      const pack=await getFinalEntrantSourcesFromWinners();
+      if (pack) imgCache.set(`${base}::final`,pack);
     }
   }
 
   async function forceAdvance(){
     try{
-      if (!currentPhaseKey || !currentStage){
-        toast('State not ready'); return;
-      }
-      forceBtn.disabled = true;
-      forceBtn.textContent = 'Working…';
+      stopLocalCountdown();
 
+      const base = currentPhaseKey;
       const stage = currentStage;
-      const base  = currentPhaseKey;
 
-      if (stage === 'r32'){
-        await decideAll(slotsR32.map(s => `${base}::${s}`));
-      } else if (stage === 'r16'){
-        await decideAll(slotsR16.map(s => `${base}::${s}`));
-      } else if (stage === 'qf'){
-        await decideAll(slotsQF.map(s => `${base}::${s}`));
-      } else if (stage === 'sf'){
-        await decideAll(slotsSF.map(s => `${base}::${s}`));
-      } else if (stage === 'final'){
-        const color = await decideAndPersistWinner(`${base}::final`);
-        overlayGateBase = base;
-        showChampion(color, base);
+      if (!base || !stage){ toast('No current stage'); return; }
+
+      if (stage==='r32')      await decideAll(slotsR32.map(s=>`${base}::${s}`));
+      else if (stage==='r16') await decideAll(slotsR16.map(s=>`${base}::${s}`));
+      else if (stage==='qf')  await decideAll(slotsQF.map(s=>`${base}::${s}`));
+      else if (stage==='sf')  await decideAll(slotsSF.map(s=>`${base}::${s}`));
+      else if (stage==='final'){
+        const color=await decideAndPersistWinner(`${base}::final`);
+        if (overlayGateBase===base) showChampion(color, base);
+        await fetchState();
         toast('Champion decided');
-        await refreshVoteCounts();
-        await renderBracket();
         return;
       }
 
       await seedNextStageForBase(base, stage);
-
-      const nStage = nextStageOf(stage);
-      if (!nStage){ toast('No further stage'); return; }
-
-      currentStage = nStage;
-      activeSlot   = firstSlotOf(nStage);
-
-      if (nStage === 'final') overlayGateBase = base;
+      const nStage=nextStageOf(stage);
+      currentStage=nStage;
+      activeSlot=firstSlotOf(nStage);
 
       await paintImagesForActive();
       await refreshVoteCounts();
-      await renderBracket();
+      renderBracket();
       applyVotingLockUI();
+      await fetchState();
 
       toast(`Advanced to ${nStage.toUpperCase()}`);
-    } catch (e){
+    }catch(e){
       console.error(e);
       toast('Force-advance failed');
-    } finally{
-      forceBtn.disabled = false;
-      forceBtn.textContent = '⚡ Force decide → next';
     }
   }
 
