@@ -272,7 +272,8 @@ body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Aria
       </div>
       <div class="row">
         <button id="btnPause" class="btn">⏸️ Pause</button>
-        <a class="btn" href="./winners.html">🏁 Winners</a>
+<button id="btnForceNext" class="btn">⚡ Force next round</button>
+<a class="btn" href="./winners.html">🏁 Winners</a>
       </div>
     </div>
 
@@ -1250,6 +1251,130 @@ submitBtn.onclick=async()=>{
 
   setBoot(100,'ready');
   endBoot();
+})();
+</script>
+<script>
+/* ===== ⚡ Force next round (surgical & compatible) ===== */
+(function(){
+  const btn = document.getElementById('btnForceNext');
+  if (!btn) return;
+
+  const slotsR32 = Array.from({length:16}, (_,i)=>`r32_${i+1}`);
+  const slotsR16 = Array.from({length:8},  (_,i)=>`r16_${i+1}`);
+  const slotsQF  = ['qf1','qf2','qf3','qf4'];
+  const slotsSF  = ['sf1','sf2'];
+
+  const nextStageOf = (stage)=>
+    stage==='r32'?'r16' :
+    stage==='r16'?'qf'  :
+    stage==='qf' ?'sf'  :
+    stage==='sf' ?'final': null;
+
+  const firstSlotOf = (stage)=>
+    stage==='r32'?'r32_1' :
+    stage==='r16'?'r16_1' :
+    stage==='qf' ?'qf1'   :
+    stage==='sf' ?'sf1'   : 'final';
+
+  // Your system records winners for a just-ended stage at the *previous* base.
+  const prevBase = ()=> baseAtOffset(1) || currentPhaseKey;
+
+  async function decideAllAtBase(base, list){
+    for (const slot of list){
+      const key = slot==='final' ? `${base}::final` : `${base}::${slot}`;
+      await decideAndPersistWinner(key);
+    }
+  }
+
+  // Pre-seed next stage thumbnails at the *current* base so images show instantly.
+  async function seedNextStageThumbs(baseForThumbs, stageLeaving){
+    if (stageLeaving==='r32'){
+      for (let i=1;i<=8;i++){
+        const slot=`r16_${i}`;
+        const pack=await getR16EntrantSourcesFromR32Winners(slot);
+        if (pack) imgCache.set(`${baseForThumbs}::${slot}`, pack);
+      }
+    } else if (stageLeaving==='r16'){
+      for (const q of ['qf1','qf2','qf3','qf4']){
+        const pack=await getQFEntrantSourcesFromR16Winners(q);
+        if (pack) imgCache.set(`${baseForThumbs}::${q}`, pack);
+      }
+    } else if (stageLeaving==='qf'){
+      for (const s of ['sf1','sf2']){
+        const pack=await getSemiEntrantSourcesFromQFWinners(s);
+        if (pack) imgCache.set(`${baseForThumbs}::${s}`, pack);
+      }
+    } else if (stageLeaving==='sf'){
+      const pack=await getFinalEntrantSourcesFromWinners();
+      if (pack) imgCache.set(`${baseForThumbs}::final`, pack);
+    }
+  }
+
+  async function forceNext(){
+    try{
+      btn.disabled = true;
+
+      // Stop the live loop so we don't fight with refreshes mid-advance.
+      try{ stop(); }catch(e){}
+
+      if (!currentStage || !currentPhaseKey){
+        toast('State not ready'); return;
+      }
+
+      const stage = currentStage;
+      const pBase = prevBase();        // where winners for the *leaving* stage are stored
+      const cBase = currentPhaseKey;   // where we'll seed next-stage thumbs
+
+      if (stage==='r32')      await decideAllAtBase(pBase, slotsR32);
+      else if (stage==='r16') await decideAllAtBase(pBase, slotsR16);
+      else if (stage==='qf')  await decideAllAtBase(pBase, slotsQF);
+      else if (stage==='sf')  await decideAllAtBase(pBase, slotsSF);
+      else if (stage==='final'){
+        // Decide champion immediately and show overlay.
+        const color = await decideAndPersistWinner(`${pBase}::final`);
+        if (!imgCache.has(`${pBase}::final`)){
+          const pack = await getFinalEntrantSourcesFromWinners();
+          if (pack) imgCache.set(`${pBase}::final`, pack);
+        }
+        overlayGateBase = pBase;
+        showChampion(color, pBase);
+        await renderBracket();
+        await refreshVoteCounts();
+        toast('Champion decided');
+        return;
+      }
+
+      // Seed images for the stage we're entering (so UI updates instantly)
+      await seedNextStageThumbs(cBase, stage);
+
+      // Locally advance
+      const nStage = nextStageOf(stage);
+      currentStage = nStage;
+      activeSlot   = firstSlotOf(nStage);
+      if (nStage==='final') overlayGateBase = cBase;
+
+      // Repaint UI
+      await paintImagesForActive();
+      await refreshVoteCounts();
+      await renderBracket();
+      applyVotingLockUI();
+
+      // Best-effort sync with backend state without blocking UI
+      try{ await fetchState(); }catch{}
+
+      toast(`Advanced to ${nStage.toUpperCase()}`);
+
+    } catch(e){
+      console.error(e);
+      toast('Force next failed');
+    } finally {
+      btn.disabled = false;
+      // Resume your loop
+      try{ start(); }catch(e){}
+    }
+  }
+
+  btn.addEventListener('click', forceNext);
 })();
 </script>
 <script>
