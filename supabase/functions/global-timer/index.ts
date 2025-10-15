@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// ===== CORS =====
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -8,147 +9,141 @@ const corsHeaders: Record<string, string> = {
   "Content-Type": "application/json",
 };
 
-// ---- tuning ----
-const DEFAULT_PERIOD_SEC = 30;   // was 10
-const GRACE_MS = 1200;          // wait a bit after 0s to absorb last-second votes
+// ===== Config (env) =====
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const nowIso = () => new Date().toISOString();
-function secondsUntil(iso: string | null): number {
-  if (!iso) return 0;
-  const ms = new Date(iso).getTime() - Date.now();
-  return Math.max(0, Math.ceil(ms / 1000));
-}
-const canonicalISO = (iso: string) => new Date(iso).toISOString();
+// Round length for testing; you can override via DB "timer_state" row (period_sec)
+const DEFAULT_PERIOD_SEC = 30;
+const GRACE_MS = 1200; // absorb last-second votes
+const REST = `${SUPABASE_URL}/rest/v1`;
 
+// ===== Types =====
 type Row = {
   id: number;
   phase_end_at: string | null;
   period_sec: number;
   paused: boolean;
   paused_remaining_sec: number | null;
-  updated_at: string | null;
-};
-type State = {
-  phase_end_at: string;
-  period_sec: number;
-  paused: boolean;
-  remaining_sec: number;
+  updated_at: string;
 };
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+// ===== Utils =====
+const nowIso = () => new Date().toISOString();
+const isoToMs = (iso: string | null) => (iso ? Date.parse(iso) : 0);
+function secondsUntil(iso: string | null): number {
+  if (!iso) return 0;
+  const ms = isoToMs(iso) - Date.now();
+  return Math.max(0, Math.floor(ms / 1000));
+}
+function canonicalISO(iso: string): string {
+  const d = new Date(iso);
+  d.setMinutes(0, 0, 0);
+  const base = d.toISOString();
+  return `${base}::r32`;
+}
 
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const serviceRole = Deno.env.get("SERVICE_ROLE_KEY")!;
-  const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const admin = createClient(url, serviceRole);
+// ===== DB Clients =====
+function adminClient() {
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+}
+function anonHeaders() {
+  return { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" };
+}
 
-  // helper: idempotent winner check
-  async function winnerExists(phaseKey: string) {
-    const { data } = await admin.from("winners").select("id").eq("phase_key", phaseKey).limit(1);
-    return (data?.length ?? 0) > 0;
+// ===== R32 backfill (idempotent) =====
+async function backfillR32Winners(admin: ReturnType<typeof createClient>, baseISO: string) {
+  const r32Keys = Array.from({ length: 16 }, (_, i) => `${baseISO}::r32_${i + 1}`);
+  const { data: have, error: selErr } = await admin
+    .from('winners')
+    .select('phase_key')
+    .in('phase_key', r32Keys);
+  if (selErr) {
+    console.warn('backfillR32Winners select err', selErr);
+    return;
   }
-
-  // helper: atomic decision inside the DB (always using canonical ISO)
-  async function decideInDB(phaseKeyRaw: string) {
-    const phaseKey = canonicalISO(phaseKeyRaw);
-    if (await winnerExists(phaseKey)) return; // fast-path
-    const res = await fetch(`${url}/rest/v1/rpc/decide_winner`, {
-      method: "POST",
-      headers: {
-        apikey: anon,
-        Authorization: `Bearer ${anon}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ phase_key: phaseKey }),
-    });
-    // 204/200 OK; 409 is fine (conflict handled by SQL). Log other errors.
-    if (!res.ok && res.status !== 409) {
-      const t = await res.text().catch(() => "");
-      console.error("decide_winner RPC failed", res.status, t);
+  const haveSet = new Set((have ?? []).map(r => (r as any).phase_key));
+  for (const k of r32Keys) {
+    if (!haveSet.has(k)) {
+      try {
+        await fetch(`${REST}/rpc/decide_winner`, { method: 'POST', headers: anonHeaders(), body: JSON.stringify({ phase_key: k }) });
+      } catch (e) {
+        console.warn('backfill decide_winner failed', k, e);
+      }
     }
   }
+}
 
-  // load or bootstrap state
-  const { data: s0, error: e0 } = await admin
-    .from("tournament_state")
-    .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
-    .eq("id", 1).single();
+// ===== Decide one phase now =====
+async function decideInDB(phaseKey: string) {
+  try {
+    await fetch(`${REST}/rpc/decide_winner`, { method: 'POST', headers: anonHeaders(), body: JSON.stringify({ phase_key: phaseKey }) });
+  } catch (_) {}
+}
+
+// ===== Request Handler =====
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const admin = adminClient();
+
+  // Ensure single row "timer_state" exists
+  const { data: s0 } = await admin.from('timer_state').select('*').eq('id', 1).single();
   let s = s0 as Row | null;
-  if (!s || e0) {
-    const period = DEFAULT_PERIOD_SEC; // ← use constant
+  const period = (s?.period_sec ?? DEFAULT_PERIOD_SEC);
+  if (!s) {
     const end = new Date(Date.now() + period * 1000).toISOString();
-    const { data: upserted, error: ue } = await admin
-      .from("tournament_state")
+    const { data: upserted } = await admin
+      .from('timer_state')
       .upsert({ id: 1, phase_end_at: end, period_sec: period, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
-      .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
+      .select('*')
       .single();
-    if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
     s = upserted as Row;
   }
 
   if (req.method === "POST") {
-    const body = await req.json().catch(() => ({} as any));
+    let body: any = {};
+    try { body = await req.json(); } catch {}
 
-    // Force: decide (with a short grace), then roll
+    if (body?.action === "backfill_r32" && body?.base) {
+      await backfillR32Winners(admin, body.base);
+      return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+    }
+
     if (body?.force === true) {
-      const finishedPhase = canonicalISO(s!.phase_end_at ?? nowIso());
-      await new Promise((r) => setTimeout(r, GRACE_MS));        // ← grace
-      await decideInDB(finishedPhase);
-      const newEnd = new Date(Date.parse(finishedPhase) + s!.period_sec * 1000).toISOString();
-      const { data: upd, error: ue } = await admin
-        .from("tournament_state")
-        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
-        .eq("id", 1).select("*").single();
-      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
-      s = upd as Row;
-    }
+      const finishedBase = canonicalISO(s!.phase_end_at ?? nowIso()).split('::')[0];
+      await new Promise((r) => setTimeout(r, GRACE_MS));
+      await decideInDB(`${finishedBase}::tick`);
+      await backfillR32Winners(admin, finishedBase);
 
-    // Pause captures remaining and freezes
-    if (body?.action === "pause" && !s!.paused) {
-      const remainingNow = secondsUntil(s!.phase_end_at);
-      const { data: upd, error: ue } = await admin
-        .from("tournament_state")
-        .update({ paused: true, paused_remaining_sec: remainingNow, updated_at: nowIso() })
-        .eq("id", 1).select("*").single();
-      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
-      s = upd as Row;
-    }
-
-    // Resume re-computes a new canonical end
-    if (body?.action === "resume" && s!.paused) {
-      const remaining = s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at);
-      const newEnd = new Date(Date.now() + remaining * 1000).toISOString();
-      const { data: upd, error: ue } = await admin
-        .from("tournament_state")
-        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
-        .eq("id", 1).select("*").single();
-      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
-      s = upd as Row;
+      const nextEnd = new Date(Date.now() + period * 1000).toISOString();
+      await admin.from('timer_state').update({ phase_end_at: nextEnd, updated_at: nowIso() }).eq('id', 1);
+      const { data: s1 } = await admin.from('timer_state').select('*').eq('id', 1).single();
+      return new Response(JSON.stringify({ state: s1 }), { headers: corsHeaders });
     }
   }
 
-  // Strict boundary: decide at 0s (with grace) and catch-up deterministically
-  if (!s!.paused) {
-    while (secondsUntil(s!.phase_end_at) <= 0) {
-      const finishedPhase = canonicalISO(s!.phase_end_at ?? nowIso());
-      await new Promise((r) => setTimeout(r, GRACE_MS));        // ← grace
-      await decideInDB(finishedPhase);
-      const nextEnd = new Date(Date.parse(finishedPhase) + s!.period_sec * 1000).toISOString();
-      const { data: upd, error: ue } = await admin
-        .from("tournament_state")
-        .update({ phase_end_at: nextEnd, updated_at: nowIso() })
-        .eq("id", 1).select("*").single();
-      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
-      s = upd as Row;
-    }
+  // ===== GET catch-up loop =====
+  let safety = 0;
+  while (safety++ < 64) {
+    const remain = secondsUntil(s!.phase_end_at);
+    if (remain > 0 || s!.paused) break;
+
+    const finishedBase = canonicalISO(s!.phase_end_at ?? nowIso()).split('::')[0];
+    await new Promise((r) => setTimeout(r, GRACE_MS));
+    await decideInDB(`${finishedBase}::tick`);
+    await backfillR32Winners(admin, finishedBase);
+
+    const nextEnd = new Date(Date.now() + period * 1000).toISOString();
+    const { data: s2 } = await admin.from('timer_state').update({ phase_end_at: nextEnd, updated_at: nowIso() }).eq('id', 1).select('*').single();
+    s = s2 as Row;
   }
 
   const remaining = s!.paused
     ? (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at))
     : secondsUntil(s!.phase_end_at);
 
-  const state: State = {
+  const state = {
     phase_end_at: s!.phase_end_at ?? nowIso(),
     period_sec: s!.period_sec,
     paused: s!.paused,
