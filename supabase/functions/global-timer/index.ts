@@ -74,10 +74,10 @@ async function backfillR32Winners(admin: ReturnType<typeof createClient>, baseIS
       try {
         // Your RPC should be idempotent; if already decided, it should no-op.
         await fetch(`${REST}/rpc/decide_winner`, {
-          method: "POST",
-          headers: anonHeaders(),
-          body: JSON.stringify({ phase_key: k }),
-        });
+  method: "POST",
+  headers: anonHeaders(),
+  body: JSON.stringify({ p_phase_key: k }),
+});
       } catch (e) {
         console.warn("decide_winner failed for", k, e);
       }
