@@ -456,15 +456,9 @@ function r32KeysFor(baseISO){
 function r16KeysFor(baseISO){
   const o={}; for(let i=1;i<=8;i++) o[`r16_${i}`]=`${baseISO}::r16_${i}`; return o;
 }
-<script>
-// BEFORE (yours)
 function qfKeysFor(baseISO){ return { qf1:`${baseISO}::qf1`, qf2:`${baseISO}::qf2`, qf3:`${baseISO}::qf3`, qf4:`${baseISO}::qf4` }; }
 function semiKeysFor(baseISO){ return { sf1:`${baseISO}::sf1`, sf2:`${baseISO}::sf2` }; }
-
-// AFTER (use underscores; your slot names "qf1/sf1" can stay the same)
-function qfKeysFor(baseISO){ return { qf1:`${baseISO}::qf_1`, qf2:`${baseISO}::qf_2`, qf3:`${baseISO}::qf_3`, qf4:`${baseISO}::qf_4` }; }
-function semiKeysFor(baseISO){ return { sf1:`${baseISO}::sf_1`, sf2:`${baseISO}::sf_2` }; }
-</script>
+function finalKeyFor(baseISO){ return `${baseISO}::final`; }
 
 const stageOfSlot = (slot)=>{
   if (slot.startsWith('r32')) return 'r32';
@@ -496,39 +490,32 @@ function baseForCompletedStage(stage){
   return baseAtOffset(delta);
 }
 
-<script>
+/* ---------- Stage detection ---------- */
 async function detectStage(){
-  // If timer keys aren’t ready yet, stay at R32 for a tick
-  if (!currentPhaseKey || !prevPhaseKey) return { stage: 'r32' };
+  if (!currentPhaseKey || !prevPhaseKey) return {stage:'r32'};
 
-  // Use HEAD counts so it's fast
-  const cnt = async (pattern) => {
-    const { count, error } = await supabase
-      .from('winners')
-      .select('phase_key', { head: true, count: 'exact' })
-      .like('phase_key', `${prevPhaseKey}::${pattern}`);
-    if (error) { console.warn('count error', pattern, error); return 0; }
-    return count ?? 0;
-  };
+  // If previous base has both SF winners → we're in FINAL
+  const { data:sfW } = await supabase.from('winners').select('phase_key').in('phase_key', [ `${prevPhaseKey}::sf1`, `${prevPhaseKey}::sf2` ]);
+  if ((sfW||[]).length===2) return {stage:'final'};
 
-  const r32 = await cnt('r32_%');
-  if (r32 < 16) return { stage: 'r32' };
+  // Else if previous base has all QF winners → we're in SF
+  const { data:qfW } = await supabase.from('winners').select('phase_key').in('phase_key',
+    [ `${prevPhaseKey}::qf1`, `${prevPhaseKey}::qf2`, `${prevPhaseKey}::qf3`, `${prevPhaseKey}::qf4` ]);
+  if ((qfW||[]).length===4) return {stage:'sf'};
 
-  const r16 = await cnt('r16_%');
-  if (r16 < 8)  return { stage: 'r16' };
+  // Else if previous base has all R16 winners → we're in QF
+  const r16Keys = Array.from({length:8}, (_,i)=> `${prevPhaseKey}::r16_${i+1}`);
+  const { data:r16W } = await supabase.from('winners').select('phase_key').in('phase_key', r16Keys);
+  if ((r16W||[]).length===8) return {stage:'qf'};
 
-  const qf  = await cnt('qf_%');     // ← underscore
-  if (qf  < 4)  return { stage: 'qf' };
+  // Else if previous base has all R32 winners → we're in R16
+  const r32Keys = Array.from({length:16}, (_,i)=> `${prevPhaseKey}::r32_${i+1}`);
+  const { data:r32W } = await supabase.from('winners').select('phase_key').in('phase_key', r32Keys);
+  if ((r32W||[]).length===16) return {stage:'r16'};
 
-  const sf  = await cnt('sf_%');     // ← underscore
-  if (sf  < 2)  return { stage: 'sf' };
-
-  const fin = await cnt('final');
-  if (fin < 1)  return { stage: 'final' };
-
-  return { stage: 'done' };
+  // Else → still in R32
+  return {stage:'r32'};
 }
-</script>
 
 /* ---------- Build entrants from previous winners ---------- */
 /* R16 entrants from R32 winners (pairs: 1/2, 3/4, ..., 15/16) */
