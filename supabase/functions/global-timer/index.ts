@@ -1,4 +1,4 @@
-// Supabase Edge Function: global-timer (trimmed for server-side R32 backfill)
+// Supabase Edge Function: global-timer (server-side R32 backfill, no ::tick writes)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -38,13 +38,11 @@ function secondsUntil(iso: string | null): number {
 }
 function baseFromISO(iso: string) {
   const d = new Date(iso);
-  d.setMinutes(0, 0, 0);                   // bucket by hour (matches your UI logic)
+  d.setMinutes(0, 0, 0);           // bucket by hour (matches your UI logic)
   return d.toISOString();
 }
 function adminClient() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 }
 function anonHeaders() {
   return {
@@ -72,14 +70,17 @@ async function backfillR32Winners(admin: ReturnType<typeof createClient>, baseIS
   for (const k of r32Keys) {
     if (!haveSet.has(k)) {
       try {
-        // Your RPC should be idempotent; if already decided, it should no-op.
-        await fetch(`${REST}/rpc/decide_winner`, {
-  method: "POST",
-  headers: anonHeaders(),
-  body: JSON.stringify({ p_phase_key: k }),
-});
+        const resp = await fetch(`${REST}/rpc/decide_winner`, {
+          method: "POST",
+          headers: anonHeaders(),
+          body: JSON.stringify({ p_phase_key: k }), // ✅ correct arg name
+        });
+        if (!resp.ok) {
+          const txt = await resp.text();
+          console.warn("decide_winner RPC failed", k, resp.status, txt);
+        }
       } catch (e) {
-        console.warn("decide_winner failed for", k, e);
+        console.warn("decide_winner RPC error", k, e);
       }
     }
   }
@@ -129,7 +130,7 @@ Deno.serve(async (req: Request) => {
     if (body?.force === true) {
       const finishedBase = baseFromISO(s!.phase_end_at ?? nowIso());
       await new Promise((r) => setTimeout(r, GRACE_MS));
-      await backfillR32Winners(admin, finishedBase);     // ← THIS is the only write path
+      await backfillR32Winners(admin, finishedBase);     // ← ONLY write path
 
       // Roll the timer forward
       const nextEnd = new Date(Date.now() + period * 1000).toISOString();
