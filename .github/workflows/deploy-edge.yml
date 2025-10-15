@@ -8,7 +8,7 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping global-timer 6x to simulate 10s cadence
+      - name: Ping global-timer 6x to simulate ~10s cadence
         run: |
           for i in {1..6}; do
             curl -sS -X GET \
