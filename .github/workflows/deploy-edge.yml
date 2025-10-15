@@ -1,14 +1,31 @@
-name: Edge Decider (ping every minute)
+name: Edge Decider (deploy + ping)
 on:
-  schedule:
-    - cron: "*/1 * * * *"   # every minute
   workflow_dispatch:
+  push:
+    paths:
+      - "supabase/functions/global-timer/**"
+  schedule:
+    - cron: "*/1 * * * *"   # every minute (testing)
 
 jobs:
-  ping:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping global-timer 6x to simulate 10s cadence
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+      - name: Deploy global-timer
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_ID }}   # <-- your secret name
+        run: |
+          supabase functions deploy global-timer --project-ref "$PROJECT_REF"
+          supabase functions list --project-ref "$PROJECT_REF"
+
+  ping:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping global-timer 6x (~10s cadence)
         run: |
           for i in {1..6}; do
             curl -sS -X GET \
