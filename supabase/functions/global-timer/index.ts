@@ -1,4 +1,5 @@
-// Supabase Edge Function: global-timer (server-side R32 backfill, no ::tick writes)
+// Supabase Edge Function: global-timer (server-side bracket materialization)
+// Rounds: R32 -> R16 -> QF -> SF -> Final (idempotent; no ::tick writes)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -38,11 +39,18 @@ function secondsUntil(iso: string | null): number {
 }
 function baseFromISO(iso: string) {
   const d = new Date(iso);
-  d.setMinutes(0, 0, 0);           // bucket by hour (matches your UI logic)
+  d.setMinutes(0, 0, 0);                   // bucket by hour (matches UI logic)
   return d.toISOString();
 }
 function adminClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+}
+function serviceHeaders() {
+  return {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    "Content-Type": "application/json",
+  };
 }
 function anonHeaders() {
   return {
@@ -52,38 +60,93 @@ function anonHeaders() {
   };
 }
 
-// ───────────────────────────────── R32 backfill (idempotent)
-async function backfillR32Winners(admin: ReturnType<typeof createClient>, baseISO: string) {
-  const r32Keys = Array.from({ length: 16 }, (_, i) => `${baseISO}::r32_${i + 1}`);
+// ───────────────────────────────── DB helpers
+async function getExisting(admin: ReturnType<typeof createClient>, keys: string[]) {
+  const { data, error } = await admin.from("winners").select("phase_key").in("phase_key", keys);
+  if (error) { console.warn("getExisting error", error); return new Set<string>(); }
+  return new Set((data ?? []).map((r: any) => r.phase_key as string));
+}
 
-  const { data: have, error: selErr } = await admin
-    .from("winners")
-    .select("phase_key")
-    .in("phase_key", r32Keys);
-
-  if (selErr) {
-    console.warn("backfillR32Winners select err", selErr);
-    return;
-  }
-
-  const haveSet = new Set((have ?? []).map((r: any) => r.phase_key));
-  for (const k of r32Keys) {
-    if (!haveSet.has(k)) {
-      try {
-        const resp = await fetch(`${REST}/rpc/decide_winner`, {
-          method: "POST",
-          headers: anonHeaders(),
-          body: JSON.stringify({ p_phase_key: k }), // ✅ correct arg name
-        });
-        if (!resp.ok) {
-          const txt = await resp.text();
-          console.warn("decide_winner RPC failed", k, resp.status, txt);
-        }
-      } catch (e) {
-        console.warn("decide_winner RPC error", k, e);
-      }
+async function callDecideWinner(phaseKey: string) {
+  try {
+    const resp = await fetch(`${REST}/rpc/decide_winner`, {
+      method: "POST",
+      headers: serviceHeaders(),                // Service role for writes
+      body: JSON.stringify({ p_phase_key: phaseKey }),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      console.warn("decide_winner failed", phaseKey, resp.status, txt);
     }
+  } catch (e) {
+    console.warn("decide_winner error", phaseKey, e);
   }
+}
+
+// ───────────────────────────────── Backfills
+// 1) Ensure 16 r32_* winners exist for a base
+async function backfillR32(admin: ReturnType<typeof createClient>, baseISO: string) {
+  const keys = Array.from({ length: 16 }, (_, i) => `${baseISO}::r32_${i + 1}`);
+  const have = await getExisting(admin, keys);
+  for (const k of keys) if (!have.has(k)) await callDecideWinner(k);
+}
+
+// 2) Generic "pair up" round: make outPrefix_# from inPrefix_# pairs
+async function backfillPairs(
+  admin: ReturnType<typeof createClient>,
+  baseISO: string,
+  inPrefix: "r32_" | "r16_" | "qf_" | "sf_",
+  outPrefix: "r16_" | "qf_" | "sf_",
+  outCount: number
+) {
+  const inKeys = Array.from({ length: outCount * 2 }, (_, i) => `${baseISO}::${inPrefix}${i + 1}`);
+  const outKeys = Array.from({ length: outCount }, (_, i) => `${baseISO}::${outPrefix}${i + 1}`);
+
+  const haveIn = await getExisting(admin, inKeys);
+  const haveOut = await getExisting(admin, outKeys);
+
+  for (let i = 0; i < outCount; i++) {
+    const outK = outKeys[i];
+    if (haveOut.has(outK)) continue;
+    const a = `${baseISO}::${inPrefix}${i * 2 + 1}`;
+    const b = `${baseISO}::${inPrefix}${i * 2 + 2}`;
+    if (haveIn.has(a) && haveIn.has(b)) await callDecideWinner(outK);
+  }
+}
+
+// 3) Final (sf_1 + sf_2 -> final)
+async function backfillFinal(admin: ReturnType<typeof createClient>, baseISO: string) {
+  const in1 = `${baseISO}::sf_1`;
+  const in2 = `${baseISO}::sf_2`;
+  const out = `${baseISO}::final`;
+
+  const have = await getExisting(admin, [in1, in2, out]);
+  if (!have.has(out) && have.has(in1) && have.has(in2)) {
+    await callDecideWinner(out);
+  }
+}
+
+// Convenience wrappers by round
+async function backfillR16(admin: ReturnType<typeof createClient>, baseISO: string) {
+  // r32_1+2 -> r16_1, ..., r32_15+16 -> r16_8
+  await backfillPairs(admin, baseISO, "r32_", "r16_", 8);
+}
+async function backfillQF(admin: ReturnType<typeof createClient>, baseISO: string) {
+  // r16_1+2 -> qf_1, ..., r16_7+8 -> qf_4
+  await backfillPairs(admin, baseISO, "r16_", "qf_", 4);
+}
+async function backfillSF(admin: ReturnType<typeof createClient>, baseISO: string) {
+  // qf_1+2 -> sf_1, qf_3+4 -> sf_2
+  await backfillPairs(admin, baseISO, "qf_", "sf_", 2);
+}
+
+// Single entry point: run all rounds in order (safe & idempotent)
+async function backfillAllRounds(admin: ReturnType<typeof createClient>, baseISO: string) {
+  await backfillR32(admin, baseISO);
+  await backfillR16(admin, baseISO);
+  await backfillQF(admin, baseISO);
+  await backfillSF(admin, baseISO);
+  await backfillFinal(admin, baseISO);
 }
 
 // ───────────────────────────────── HTTP handler
@@ -122,15 +185,15 @@ Deno.serve(async (req: Request) => {
 
     // Optional idempotent nudge from submit.html
     if (body?.action === "backfill_r32" && body?.base) {
-      await backfillR32Winners(admin, body.base);
+      await backfillR32(admin, body.base);
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
     }
 
-    // Manual force-advance for testing (no ::tick writes)
+    // Manual force-advance for testing (no client writes)
     if (body?.force === true) {
       const finishedBase = baseFromISO(s!.phase_end_at ?? nowIso());
       await new Promise((r) => setTimeout(r, GRACE_MS));
-      await backfillR32Winners(admin, finishedBase);     // ← ONLY write path
+      await backfillAllRounds(admin, finishedBase);
 
       // Roll the timer forward
       const nextEnd = new Date(Date.now() + period * 1000).toISOString();
@@ -140,7 +203,7 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // ── GET: headless catch-up loop (no ::tick writes; just backfill + roll)
+  // ── GET: headless catch-up loop (process all overdue phases)
   let safety = 0;
   while (safety++ < 64) {
     const remain = secondsUntil(s!.phase_end_at);
@@ -148,7 +211,7 @@ Deno.serve(async (req: Request) => {
 
     const finishedBase = baseFromISO(s!.phase_end_at ?? nowIso());
     await new Promise((r) => setTimeout(r, GRACE_MS));
-    await backfillR32Winners(admin, finishedBase);       // ← idempotent R32 materialization
+    await backfillAllRounds(admin, finishedBase);
 
     // roll forward
     const nextEnd = new Date(Date.now() + period * 1000).toISOString();
