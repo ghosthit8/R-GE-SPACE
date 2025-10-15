@@ -1,9 +1,6 @@
-// Supabase Edge Function: global-timer (server-side bracket materialization)
-// Rounds: R32 -> R16 -> QF -> SF -> Final (idempotent; no ::tick writes)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// ───────────────────────────────── CORS
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -11,224 +8,147 @@ const corsHeaders: Record<string, string> = {
   "Content-Type": "application/json",
 };
 
-// ───────────────────────────────── Env
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+// ---- tuning ----
+const DEFAULT_PERIOD_SEC = 30;   // was 10
+const GRACE_MS = 1200;          // wait a bit after 0s to absorb last-second votes
 
-const DEFAULT_PERIOD_SEC = 30;     // 30s for testing; raise later
-const GRACE_MS = 1200;             // absorb last-second votes
-const REST = `${SUPABASE_URL}/rest/v1`;
+const nowIso = () => new Date().toISOString();
+function secondsUntil(iso: string | null): number {
+  if (!iso) return 0;
+  const ms = new Date(iso).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / 1000));
+}
+const canonicalISO = (iso: string) => new Date(iso).toISOString();
 
-type TimerRow = {
+type Row = {
   id: number;
   phase_end_at: string | null;
   period_sec: number;
   paused: boolean;
   paused_remaining_sec: number | null;
-  updated_at: string;
+  updated_at: string | null;
+};
+type State = {
+  phase_end_at: string;
+  period_sec: number;
+  paused: boolean;
+  remaining_sec: number;
 };
 
-// ───────────────────────────────── Utils
-const nowIso = () => new Date().toISOString();
-const isoToMs = (iso: string | null) => (iso ? Date.parse(iso) : 0);
-function secondsUntil(iso: string | null): number {
-  if (!iso) return 0;
-  const ms = isoToMs(iso) - Date.now();
-  return Math.max(0, Math.floor(ms / 1000));
-}
-function baseFromISO(iso: string) {
-  const d = new Date(iso);
-  d.setMinutes(0, 0, 0);                   // bucket by hour (matches UI logic)
-  return d.toISOString();
-}
-function adminClient() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-}
-function serviceHeaders() {
-  return {
-    apikey: SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-    "Content-Type": "application/json",
-  };
-}
-function anonHeaders() {
-  return {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    "Content-Type": "application/json",
-  };
-}
-
-// ───────────────────────────────── DB helpers
-async function getExisting(admin: ReturnType<typeof createClient>, keys: string[]) {
-  const { data, error } = await admin.from("winners").select("phase_key").in("phase_key", keys);
-  if (error) { console.warn("getExisting error", error); return new Set<string>(); }
-  return new Set((data ?? []).map((r: any) => r.phase_key as string));
-}
-
-async function callDecideWinner(phaseKey: string) {
-  try {
-    const resp = await fetch(`${REST}/rpc/decide_winner`, {
-      method: "POST",
-      headers: serviceHeaders(),                // Service role for writes
-      body: JSON.stringify({ p_phase_key: phaseKey }),
-    });
-    if (!resp.ok) {
-      const txt = await resp.text();
-      console.warn("decide_winner failed", phaseKey, resp.status, txt);
-    }
-  } catch (e) {
-    console.warn("decide_winner error", phaseKey, e);
-  }
-}
-
-// ───────────────────────────────── Backfills
-// 1) Ensure 16 r32_* winners exist for a base
-async function backfillR32(admin: ReturnType<typeof createClient>, baseISO: string) {
-  const keys = Array.from({ length: 16 }, (_, i) => `${baseISO}::r32_${i + 1}`);
-  const have = await getExisting(admin, keys);
-  for (const k of keys) if (!have.has(k)) await callDecideWinner(k);
-}
-
-// 2) Generic "pair up" round: make outPrefix_# from inPrefix_# pairs
-async function backfillPairs(
-  admin: ReturnType<typeof createClient>,
-  baseISO: string,
-  inPrefix: "r32_" | "r16_" | "qf_" | "sf_",
-  outPrefix: "r16_" | "qf_" | "sf_",
-  outCount: number
-) {
-  const inKeys = Array.from({ length: outCount * 2 }, (_, i) => `${baseISO}::${inPrefix}${i + 1}`);
-  const outKeys = Array.from({ length: outCount }, (_, i) => `${baseISO}::${outPrefix}${i + 1}`);
-
-  const haveIn = await getExisting(admin, inKeys);
-  const haveOut = await getExisting(admin, outKeys);
-
-  for (let i = 0; i < outCount; i++) {
-    const outK = outKeys[i];
-    if (haveOut.has(outK)) continue;
-    const a = `${baseISO}::${inPrefix}${i * 2 + 1}`;
-    const b = `${baseISO}::${inPrefix}${i * 2 + 2}`;
-    if (haveIn.has(a) && haveIn.has(b)) await callDecideWinner(outK);
-  }
-}
-
-// 3) Final (sf_1 + sf_2 -> final)
-async function backfillFinal(admin: ReturnType<typeof createClient>, baseISO: string) {
-  const in1 = `${baseISO}::sf_1`;
-  const in2 = `${baseISO}::sf_2`;
-  const out = `${baseISO}::final`;
-
-  const have = await getExisting(admin, [in1, in2, out]);
-  if (!have.has(out) && have.has(in1) && have.has(in2)) {
-    await callDecideWinner(out);
-  }
-}
-
-// Convenience wrappers by round
-async function backfillR16(admin: ReturnType<typeof createClient>, baseISO: string) {
-  // r32_1+2 -> r16_1, ..., r32_15+16 -> r16_8
-  await backfillPairs(admin, baseISO, "r32_", "r16_", 8);
-}
-async function backfillQF(admin: ReturnType<typeof createClient>, baseISO: string) {
-  // r16_1+2 -> qf_1, ..., r16_7+8 -> qf_4
-  await backfillPairs(admin, baseISO, "r16_", "qf_", 4);
-}
-async function backfillSF(admin: ReturnType<typeof createClient>, baseISO: string) {
-  // qf_1+2 -> sf_1, qf_3+4 -> sf_2
-  await backfillPairs(admin, baseISO, "qf_", "sf_", 2);
-}
-
-// Single entry point: run all rounds in order (safe & idempotent)
-async function backfillAllRounds(admin: ReturnType<typeof createClient>, baseISO: string) {
-  await backfillR32(admin, baseISO);
-  await backfillR16(admin, baseISO);
-  await backfillQF(admin, baseISO);
-  await backfillSF(admin, baseISO);
-  await backfillFinal(admin, baseISO);
-}
-
-// ───────────────────────────────── HTTP handler
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const admin = adminClient();
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const serviceRole = Deno.env.get("SERVICE_ROLE_KEY")!;
+  const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const admin = createClient(url, serviceRole);
 
-  // Ensure timer_state row exists
-  const { data: s0 } = await admin.from("timer_state").select("*").eq("id", 1).single();
-  let s = s0 as TimerRow | null;
-  const period = s?.period_sec ?? DEFAULT_PERIOD_SEC;
+  // helper: idempotent winner check
+  async function winnerExists(phaseKey: string) {
+    const { data } = await admin.from("winners").select("id").eq("phase_key", phaseKey).limit(1);
+    return (data?.length ?? 0) > 0;
+  }
 
-  if (!s) {
+  // helper: atomic decision inside the DB (always using canonical ISO)
+  async function decideInDB(phaseKeyRaw: string) {
+    const phaseKey = canonicalISO(phaseKeyRaw);
+    if (await winnerExists(phaseKey)) return; // fast-path
+    const res = await fetch(`${url}/rest/v1/rpc/decide_winner`, {
+      method: "POST",
+      headers: {
+        apikey: anon,
+        Authorization: `Bearer ${anon}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ phase_key: phaseKey }),
+    });
+    // 204/200 OK; 409 is fine (conflict handled by SQL). Log other errors.
+    if (!res.ok && res.status !== 409) {
+      const t = await res.text().catch(() => "");
+      console.error("decide_winner RPC failed", res.status, t);
+    }
+  }
+
+  // load or bootstrap state
+  const { data: s0, error: e0 } = await admin
+    .from("tournament_state")
+    .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
+    .eq("id", 1).single();
+  let s = s0 as Row | null;
+  if (!s || e0) {
+    const period = DEFAULT_PERIOD_SEC; // ← use constant
     const end = new Date(Date.now() + period * 1000).toISOString();
     const { data: upserted, error: ue } = await admin
-      .from("timer_state")
-      .upsert({
-        id: 1,
-        phase_end_at: end,
-        period_sec: period,
-        paused: false,
-        paused_remaining_sec: null,
-        updated_at: nowIso(),
-      })
-      .select("*")
+      .from("tournament_state")
+      .upsert({ id: 1, phase_end_at: end, period_sec: period, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
+      .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
       .single();
     if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
-    s = upserted as TimerRow;
+    s = upserted as Row;
   }
 
-  // ── POST controls
   if (req.method === "POST") {
-    let body: any = {};
-    try { body = await req.json(); } catch {}
+    const body = await req.json().catch(() => ({} as any));
 
-    // Optional idempotent nudge from submit.html
-    if (body?.action === "backfill_r32" && body?.base) {
-      await backfillR32(admin, body.base);
-      return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+    // Force: decide (with a short grace), then roll
+    if (body?.force === true) {
+      const finishedPhase = canonicalISO(s!.phase_end_at ?? nowIso());
+      await new Promise((r) => setTimeout(r, GRACE_MS));        // ← grace
+      await decideInDB(finishedPhase);
+      const newEnd = new Date(Date.parse(finishedPhase) + s!.period_sec * 1000).toISOString();
+      const { data: upd, error: ue } = await admin
+        .from("tournament_state")
+        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
+        .eq("id", 1).select("*").single();
+      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
+      s = upd as Row;
     }
 
-    // Manual force-advance for testing (no client writes)
-    if (body?.force === true) {
-      const finishedBase = baseFromISO(s!.phase_end_at ?? nowIso());
-      await new Promise((r) => setTimeout(r, GRACE_MS));
-      await backfillAllRounds(admin, finishedBase);
+    // Pause captures remaining and freezes
+    if (body?.action === "pause" && !s!.paused) {
+      const remainingNow = secondsUntil(s!.phase_end_at);
+      const { data: upd, error: ue } = await admin
+        .from("tournament_state")
+        .update({ paused: true, paused_remaining_sec: remainingNow, updated_at: nowIso() })
+        .eq("id", 1).select("*").single();
+      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
+      s = upd as Row;
+    }
 
-      // Roll the timer forward
-      const nextEnd = new Date(Date.now() + period * 1000).toISOString();
-      await admin.from("timer_state").update({ phase_end_at: nextEnd, updated_at: nowIso() }).eq("id", 1);
-      const { data: s1 } = await admin.from("timer_state").select("*").eq("id", 1).single();
-      return new Response(JSON.stringify({ state: s1 }), { headers: corsHeaders });
+    // Resume re-computes a new canonical end
+    if (body?.action === "resume" && s!.paused) {
+      const remaining = s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at);
+      const newEnd = new Date(Date.now() + remaining * 1000).toISOString();
+      const { data: upd, error: ue } = await admin
+        .from("tournament_state")
+        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
+        .eq("id", 1).select("*").single();
+      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
+      s = upd as Row;
     }
   }
 
-  // ── GET: headless catch-up loop (process all overdue phases)
-  let safety = 0;
-  while (safety++ < 64) {
-    const remain = secondsUntil(s!.phase_end_at);
-    if (remain > 0 || s!.paused) break;
-
-    const finishedBase = baseFromISO(s!.phase_end_at ?? nowIso());
-    await new Promise((r) => setTimeout(r, GRACE_MS));
-    await backfillAllRounds(admin, finishedBase);
-
-    // roll forward
-    const nextEnd = new Date(Date.now() + period * 1000).toISOString();
-    const { data: s2 } = await admin
-      .from("timer_state")
-      .update({ phase_end_at: nextEnd, updated_at: nowIso() })
-      .eq("id", 1)
-      .select("*")
-      .single();
-    s = s2 as TimerRow;
+  // Strict boundary: decide at 0s (with grace) and catch-up deterministically
+  if (!s!.paused) {
+    while (secondsUntil(s!.phase_end_at) <= 0) {
+      const finishedPhase = canonicalISO(s!.phase_end_at ?? nowIso());
+      await new Promise((r) => setTimeout(r, GRACE_MS));        // ← grace
+      await decideInDB(finishedPhase);
+      const nextEnd = new Date(Date.parse(finishedPhase) + s!.period_sec * 1000).toISOString();
+      const { data: upd, error: ue } = await admin
+        .from("tournament_state")
+        .update({ phase_end_at: nextEnd, updated_at: nowIso() })
+        .eq("id", 1).select("*").single();
+      if (ue) return new Response(JSON.stringify({ error: ue.message }), { status: 500, headers: corsHeaders });
+      s = upd as Row;
+    }
   }
 
   const remaining = s!.paused
     ? (s!.paused_remaining_sec ?? secondsUntil(s!.phase_end_at))
     : secondsUntil(s!.phase_end_at);
 
-  const state = {
+  const state: State = {
     phase_end_at: s!.phase_end_at ?? nowIso(),
     period_sec: s!.period_sec,
     paused: s!.paused,
