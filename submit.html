@@ -3,537 +3,391 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Rage Space — Submit Art</title>
-
+<title>Rage Space — Submit</title>
 <link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-
 <style>
 :root{
-  --green:#39ff14; --bg:#000; --ink:#e5e5e5; --border:#153b16; --muted:#8aff8a; --card:#0b0b0b;
+  --green:#39ff14; --green2:#7dff62; --ink:#e5e5e5;
+  --bg:#000; --card:#090909; --border:#153b16; --muted:#8aff8a;
+  --maxw:860px;
 }
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
-.wrap{max-width:760px;margin:20px auto 80px;padding:0 16px}
-h1{letter-spacing:2px;text-transform:uppercase;font-size:28px;margin:24px 0 8px}
-p{color:var(--muted)}
-a.btn, button.btn{
-  border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;
-  padding:10px 14px;cursor:pointer;text-decoration:none;display:inline-block;text-align:center
+*{box-sizing: border-box}
+html,body{height:100%}
+body{
+  margin:0; background: radial-gradient(120% 120% at 50% 0%, rgba(0,255,120,.08), rgba(0,0,0,.96) 60%), #000;
+  color:var(--green); font-family: system-ui, Arial, Helvetica, sans-serif;
 }
-.card{border:1px solid var(--border);border-radius:14px;background:rgba(7,7,7,.6);padding:16px;margin-top:16px}
-.label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
-.input, .textarea{
-  width:100%;border:1px solid var(--border);border-radius:10px;background:#0b0b0b;color:var(--ink);
-  padding:10px 12px;font-size:14px
+.wrap{max-width:var(--maxw); margin:28px auto 80px; padding:0 16px}
+.hdr{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  border:1px solid var(--border); border-radius:14px; background:rgba(7,7,7,.55); padding:12px 14px;
 }
-.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.help{font-size:12px;color:#9adf9a}
-.badge{display:inline-block;border:1px solid var(--border);border-radius:8px;padding:4px 8px;margin-left:8px}
-.note{font-size:12px;color:var(--muted)}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#071c07;color:var(--green);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:none;box-shadow:0 0 18px rgba(57,255,20,.18);z-index:50}
-.toast.show{display:block}
-.preview{margin-top:10px; display:flex; align-items:center; gap:10px;}
-.preview img{max-height:90px; border-radius:10px; border:1px solid var(--border);}
-.hint{font-size:12px; color:#a9f0a9}
-hr.sep{border:0;border-top:1px dashed var(--border); margin:12px 0}
+.h1{letter-spacing:2px; text-transform:uppercase; font-size:18px; font-weight:800}
+.badge{border:1px solid var(--border); border-radius:8px; padding:2px 8px}
+.btn{
+  border:1px solid var(--green); color:var(--green); background:transparent;
+  border-radius:12px; padding:10px 14px; cursor:pointer; text-decoration:none; display:inline-flex; gap:8px; align-items:center;
+}
+.btn:hover{box-shadow:0 0 14px rgba(57,255,20,.22)}
+.btn.big{font-size:18px; padding:16px 18px}
+.btn.ghost{opacity:.9}
+.btn[disabled]{opacity:.45; cursor:not-allowed; box-shadow:none}
 
-/* Drag & drop */
-.dropzone{
-  margin-top:6px; border:1.5px dashed var(--border); border-radius:14px; padding:16px;
-  display:flex; align-items:center; justify-content:center; text-align:center;
-  background:rgba(10,10,10,.35);
-}
-.dropzone strong{color:var(--ink)}
-.dropzone.dragover{border-color:var(--green); box-shadow:0 0 16px rgba(57,255,20,.25);}
-.dropnote{font-size:12px; color:#var(--muted); margin-top:6px}
+.card{border:1px solid var(--border); border-radius:16px; background:rgba(9,9,9,.6); padding:16px}
+.row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.small{font-size:12px; color:var(--muted)}
+.mono{font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace}
+.center{display:flex; justify-content:center; align-items:center; gap:12px}
 
-/* Progress bar */
-.progress{
-  margin-top:12px; width:100%; height:10px; border-radius:999px; border:1px solid var(--border);
-  background:#0a0a0a; overflow:hidden; display:none;
-}
-.progress .bar{
-  height:100%; width:0%;
-  background:linear-gradient(90deg, rgba(57,255,20,.35), rgba(57,255,20,.85));
-  box-shadow:0 0 10px rgba(57,255,20,.25) inset;
-  transition:width .25s ease;
-}
-.progress.indeterminate .bar{
-  width:30%;
-  animation:indet 1.2s linear infinite;
-}
-@keyframes indet{
-  0% {transform:translateX(-100%);}
-  100% {transform:translateX(300%);}
-}
+hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 
-/* ===== Queue Modal ===== */
-.modal-overlay{
-  position:fixed;top:0;left:0;width:100%;height:100%;
-  background:rgba(0,0,0,.8);
-  display:none;align-items:center;justify-content:center;
-  z-index:1000;
+/* Minimal uploader */
+#pickZone{
+  display:grid; gap:12px; justify-items:center; text-align:center;
+  padding:24px; border:1px dashed var(--border); border-radius:16px; background:rgba(0,0,0,.35);
 }
-.modal{
-  position:relative;
-  background:rgba(10,10,10,.95);
-  border:1px solid var(--border);
-  border-radius:16px;
-  max-width:90%;max-height:80%;
-  overflow:auto;padding:20px;
-}
-.modal h2{margin:0 0 8px 0;font-size:20px;text-align:center}
-.modal-sub{color:var(--muted);font-size:12px;text-align:center;margin-bottom:8px}
-.queue-grid{
+#fileName{font-size:12px; color:var(--muted)}
+.input{width:100%; border:1px solid var(--border); border-radius:10px; background:#0b0b0b; color:var(--ink); padding:10px 12px; font-size:14px}
+.hidden{display:none !important}
+
+/* Queue grid */
+.grid{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+  grid-template-columns: repeat(auto-fill, minmax(120px,1fr));
   gap:12px;
-  margin-top:12px;
 }
-.queue-item{display:flex;flex-direction:column}
-.queue-item img{
-  width:100%;border-radius:8px;border:1px solid var(--border);
-  display:block;aspect-ratio:1/1;object-fit:cover;
+.thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:rgba(0,0,0,.35)}
+.thumb img{width:100%; height:100%; object-fit:cover; aspect-ratio:1/1; display:block}
+.thumb .idx{position:absolute; top:6px; left:6px; font-size:12px; background:rgba(0,0,0,.6); border:1px solid var(--border); border-radius:8px; padding:2px 6px}
+
+/* Toast */
+.toast{
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px;
+  background:#071c07; color:var(--green); border:1px solid var(--border);
+  border-radius:12px; padding:10px 14px; display:none; z-index:50; box-shadow:0 0 18px rgba(57,255,20,.18);
 }
-.queue-item span{
-  display:block;text-align:center;font-size:12px;margin-top:4px;word-break:break-all;
+.toast.show{display:block}
+
+/* Timer row */
+.timer{
+  display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;
+  border:1px solid var(--border); border-radius:12px; background:rgba(7,7,7,.55); padding:10px 12px;
 }
-.modal-close{
-  position:absolute;top:16px;right:20px;
-  font-size:22px;cursor:pointer;color:var(--green);
-}
-.modal-close:hover{color:#7dff62}
+.clock{font-weight:800; border:1px solid var(--border); border-radius:8px; padding:2px 8px; min-width:52px; text-align:center}
+.stage{border:1px solid var(--border); border-radius:8px; padding:2px 8px}
 </style>
 </head>
 <body>
   <div class="wrap">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-      <h1>Submit Art <span id="loginBadge" class="badge">checking auth…</span></h1>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button id="viewQueueBtn" class="btn">📜 View Queue</button>
-        <a class="btn" href="./menu.html">← Menu</a>
+    <div class="hdr">
+      <div class="row">
+        <div class="h1">Submit Art</div>
+        <span id="authBadge" class="badge">checking auth…</span>
       </div>
+      <a class="btn ghost" href="./menu.html">← Menu</a>
     </div>
-    <p>Upload a file (drag & drop) or paste a link to your artwork. It will be added to the queue and automatically inserted into the next tournament cycle at the Round of 32. After you submit, you’ll see a confirmation message.</p>
 
-    <div class="card">
-      <!-- Dropzone + file input -->
-      <div id="dropzone" class="dropzone">
-        <div>
-          <div><strong>Drag & drop</strong> an image here</div>
-          <div class="dropnote">or click to choose a file</div>
-        </div>
+    <!-- Minimal uploader -->
+    <div class="card" style="margin-top:16px">
+      <div id="pickZone">
+        <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
+        <div id="fileName" class="small">jpg / png / webp — 10MB max</div>
+        <input id="fileInput" type="file" accept="image/*" class="hidden">
+        <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
+        <div class="small mono" id="previewHint"></div>
       </div>
-      <input class="input" id="fileInput" type="file" accept="image/*" style="display:none;">
-      <div class="preview" id="filePreview" style="display:none;">
-        <img id="previewImg" alt="preview"/>
-        <span class="hint" id="fileInfo"></span>
-      </div>
-
-      <div class="progress" id="progress"><div class="bar" id="progressBar"></div></div>
 
       <hr class="sep">
 
-      <!-- URL fallback -->
-      <label class="label" for="imageUrl">OR paste an Image URL</label>
-      <input class="input" id="imageUrl" type="url" placeholder="https://... (jpg, png, webp, etc.)">
+      <label class="row small" style="align-items:flex-start">
+        <input id="consent" type="checkbox">
+        <span>I am 18+, no sexual minors, no Nazi BS.</span>
+      </label>
 
-      <div class="row" style="margin-top:12px;">
-        <div>
-          <label class="label" for="title">Title (optional)</label>
-          <input class="input" id="title" type="text" placeholder="Title of your piece">
-        </div>
-        <div>
-          <label class="label" for="artist">Artist (optional)</label>
-          <input class="input" id="artist" type="text" placeholder="Your name / alias">
-        </div>
+      <div class="center" style="margin-top:10px">
+        <button id="btnSubmit" class="btn">✅ Submit</button>
+        <span id="submitMsg" class="small"></span>
       </div>
-
-      <div style="margin-top:12px;">
-        <label style="display:flex;gap:10px;align-items:flex-start;">
-          <input id="agree" type="checkbox">
-          <span class="note">I confirm I have the rights to share this image and it follows Rage Space rules (18+, no real-death gore, no doxxing, no organized hate propaganda).</span>
-        </label>
-      </div>
-
-      <div style="display:flex;gap:10px;align-items:center;margin-top:14px;">
-        <button class="btn" id="btnSubmit">Submit to Queue</button>
-        <span id="status" class="help"></span>
-      </div>
-      <div class="hint" style="margin-top:8px;">If a file is selected/dropped, we’ll upload it and use that. If not, we’ll use the URL.</div>
     </div>
 
-    <div class="card" style="margin-top:18px;">
-      <div style="font-weight:700;margin-bottom:6px/">How it works</div>
-      <ol class="note" style="margin:0;padding-left:18px;line-height:1.5">
-        <li>Your image (uploaded or linked) is stored in the queue.</li>
-        <li>When the next tournament cycle begins (R32), queued pieces are randomly mapped onto the default seeds.</li>
-        <li>You’ll see your piece appear in the bracket thumbnails when the new cycle starts.</li>
-      </ol>
+    <!-- Live tournament status -->
+    <div class="card" style="margin-top:16px">
+      <div class="timer">
+        <div class="row">
+          <span>🕒 Tournament Clock</span>
+          <span id="clock" class="clock">—</span>
+        </div>
+        <div class="row">
+          <span>🏷️ Current Round</span>
+          <span id="stage" class="stage">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queue -->
+    <div class="card" style="margin-top:16px">
+      <div class="row" style="justify-content:space-between">
+        <strong>📜 In the Queue</strong>
+        <span class="small">Oldest first → next in</span>
+      </div>
+      <div id="queue" class="grid" style="margin-top:12px"></div>
+      <div id="queueEmpty" class="small" style="margin-top:6px; display:none">No items in queue.</div>
     </div>
   </div>
 
   <div id="toast" class="toast"></div>
 
-  <!-- Queue Modal -->
-  <div class="modal-overlay" id="queueModal" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="queueTitle">
-      <div class="modal-close" id="queueClose" title="Close">✖</div>
-      <h2 id="queueTitle">🖼️ Images in Queue</h2>
-      <div class="modal-sub">Oldest files first → next to be added to the tournament</div>
-      <div id="queueGrid" class="queue-grid"></div>
-    </div>
-  </div>
-
 <script>
-/* ---------- Supabase ---------- */
+/* ---------- Supabase + constants ---------- */
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
+const BUCKET = 'art-uploads';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ---------- UI refs ---------- */
-const loginBadge = document.getElementById('loginBadge');
+/* ---------- Elements ---------- */
+const authBadge = document.getElementById('authBadge');
 const toastEl = document.getElementById('toast');
-const imageUrl = document.getElementById('imageUrl');
-const titleEl  = document.getElementById('title');
-const artistEl = document.getElementById('artist');
-const agree    = document.getElementById('agree');
-const btn      = document.getElementById('btnSubmit');
-const statusEl = document.getElementById('status');
-const fileInput = document.getElementById('fileInput');
-const filePreview = document.getElementById('filePreview');
-const previewImg = document.getElementById('previewImg');
-const fileInfo = document.getElementById('fileInfo');
-const dropzone = document.getElementById('dropzone');
-const progress = document.getElementById('progress');
-const progressBar = document.getElementById('progressBar');
-const viewQueueBtn = document.getElementById('viewQueueBtn');
-const queueModal   = document.getElementById('queueModal');
-const queueClose   = document.getElementById('queueClose');
-const queueGrid    = document.getElementById('queueGrid');
 
-/* ---------- helpers ---------- */
-function toast(msg, ms=1800){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
-async function getUid(){ const { data:{ session } } = await supabase.auth.getSession(); return session?.user?.id || null; }
-function paintLoginBadge(uid){
-  if (uid) { loginBadge.textContent = 'logged in'; loginBadge.style.borderColor = '#153b16'; loginBadge.style.color = 'var(--green)'; }
-  else { loginBadge.textContent = 'login required'; loginBadge.style.borderColor = 'red'; loginBadge.style.color = 'red'; }
-}
+const btnPick = document.getElementById('btnPick');
+const fileInput = document.getElementById('fileInput');
+const urlInput = document.getElementById('urlInput');
+const fileName = document.getElementById('fileName');
+const previewHint = document.getElementById('previewHint');
+
+const consent = document.getElementById('consent');
+const btnSubmit = document.getElementById('btnSubmit');
+const submitMsg = document.getElementById('submitMsg');
+
+const queueGrid = document.getElementById('queue');
+const queueEmpty = document.getElementById('queueEmpty');
+
+const clockEl = document.getElementById('clock');
+const stageEl = document.getElementById('stage');
+
+/* ---------- Utils ---------- */
+const iso = (d)=> new Date(d).toISOString().replace(/\.\d{3}Z$/,'Z');
+function toast(msg, ms=1600){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
 function bytesToMB(n){ return (n/(1024*1024)).toFixed(2); }
 
-/* ---------- file selection & preview ---------- */
-function setFile(f){
-  if (!f){ fileInput.value=''; filePreview.style.display='none'; return; }
-  if (!f.type.startsWith('image/')){ toast('File must be an image'); return; }
-  if (f.size > 10 * 1024 * 1024){ toast('Max 10MB'); return; }
-
-  const dt = new DataTransfer();
-  dt.items.add(f);
-  fileInput.files = dt.files;
-
-  const url = URL.createObjectURL(f);
-  previewImg.src = url;
-  fileInfo.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  filePreview.style.display='flex';
+/* ---------- Auth badge ---------- */
+async function uid(){
+  const { data:{session} } = await supabase.auth.getSession();
+  return session?.user?.id || null;
 }
-fileInput.addEventListener('change', ()=> setFile(fileInput.files?.[0]||null));
+function paintAuth(id){
+  if (id){ authBadge.textContent='logged in'; authBadge.style.color=varGreen(); }
+  else   { authBadge.textContent='not logged in'; authBadge.style.color='#ff6b6b'; authBadge.style.borderColor='#3b1616'; }
+}
+const varGreen = ()=> getComputedStyle(document.documentElement).getPropertyValue('--green') || '#39ff14';
 
-/* ---------- drag & drop ---------- */
-;['dragenter','dragover'].forEach(ev=>dropzone.addEventListener(ev, e=>{
-  e.preventDefault(); e.stopPropagation(); dropzone.classList.add('dragover');
-}));
-;['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev, e=>{
-  e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('dragover');
-}));
-dropzone.addEventListener('drop', e=>{
-  const f = e.dataTransfer?.files?.[0];
-  if (f) setFile(f);
+/* ---------- Pick flow (file or URL) ---------- */
+let picked = { file:null, url:'' };
+
+btnPick.addEventListener('click', ()=>{
+  // simple chooser: if file already chosen, let them paste URL; else prompt file first
+  if (!picked.file && !picked.url){
+    fileInput.click();
+  } else {
+    urlInput.classList.toggle('hidden');
+    if (!urlInput.classList.contains('hidden')) urlInput.focus();
+  }
 });
-dropzone.addEventListener('click', ()=> fileInput.click());
 
-/* ---------- init ---------- */
-(async()=>{
-  paintLoginBadge(await getUid());
-  supabase.auth.onAuthStateChange((_evt, session)=> paintLoginBadge(session?.user?.id || null));
-})();
+fileInput.addEventListener('change', ()=>{
+  const f = fileInput.files?.[0];
+  if (!f) return;
+  if (!f.type.startsWith('image/')){ toast('File must be an image'); fileInput.value=''; return; }
+  if (f.size > 10*1024*1024){ toast('Max 10MB'); fileInput.value=''; return; }
+  picked.file = f; picked.url = '';
+  urlInput.value = ''; urlInput.classList.add('hidden');
+  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
+  previewHint.textContent = 'Ready to upload';
+});
 
-/* ---------- storage upload helper (with indeterminate progress bar) ---------- */
-function showProgressIndeterminate(){
-  progress.style.display='block';
-  progress.classList.add('indeterminate');
-  progressBar.style.width='30%';
-}
-function snapProgress100(){
-  progress.classList.remove('indeterminate');
-  progressBar.style.width='100%';
-  setTimeout(()=>{ progress.style.display='none'; progressBar.style.width='0%'; }, 700);
-}
+urlInput.addEventListener('input', ()=>{
+  picked.url = urlInput.value.trim();
+  if (picked.url) { picked.file = null; fileInput.value=''; fileName.textContent = 'Using pasted URL'; previewHint.textContent = picked.url; }
+  else { previewHint.textContent=''; }
+});
+
+/* ---------- Upload helper ---------- */
 async function uploadToStorage(uid, file){
   const today = new Date();
   const yyyy = today.getUTCFullYear();
   const mm = String(today.getUTCMonth()+1).padStart(2,'0');
   const dd = String(today.getUTCDate()).padStart(2,'0');
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
-  const path = `${uid}/${yyyy}/${mm}/${dd}/${crypto.randomUUID()}-${safeName}`;
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  const path = `${uid}/${yyyy}/${mm}/${dd}/${crypto.randomUUID()}-${safe}`;
 
-  showProgressIndeterminate();
-
-  const { error:upErr } = await supabase.storage.from('art-uploads').upload(path, file, {
-    contentType: file.type || 'application/octet-stream',
-    cacheControl: '3600',
-    upsert: false
+  const { error:upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+    contentType: file.type || 'application/octet-stream', cacheControl: '3600', upsert: false
   });
-  if (upErr) { progress.style.display='none'; throw upErr; }
+  if (upErr) throw upErr;
 
-  const { data } = supabase.storage.from('art-uploads').getPublicUrl(path);
-  if (!data?.publicUrl) { progress.style.display='none'; throw new Error('No public URL returned'); }
-
-  snapProgress100();
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  if (!data?.publicUrl) throw new Error('No public URL returned');
   return data.publicUrl;
 }
 
-/* ---------- submit ---------- */
-btn.addEventListener('click', async ()=>{
-  statusEl.textContent = '';
+/* ---------- Submit ---------- */
+btnSubmit.addEventListener('click', async ()=>{
+  submitMsg.textContent='';
+  const id = await uid();
+  if (!id) return toast('Log in to submit');
 
-  const uid = await getUid();
-  if (!uid){
-    toast('You must be logged in to submit art');
-    statusEl.textContent = 'Login required.';
-    return;
-  }
-  if (!agree.checked){ return toast('Please confirm rights & rules'); }
+  if (!consent.checked) return toast('Please consent to the rules');
 
-  let finalUrl = (imageUrl.value||'').trim();
-  const file = fileInput.files?.[0];
-
+  let finalUrl = picked.url;
   try{
-    if (file){
-      if (!file.type.startsWith('image/')){ return toast('File must be an image'); }
-      if (file.size > 10*1024*1024){ return toast('Max 10MB'); }
-      toast('Uploading image…');
-      finalUrl = await uploadToStorage(uid, file);
+    if (picked.file){
+      toast('Uploading…');
+      finalUrl = await uploadToStorage(id, picked.file);
     }
+    if (!finalUrl) return toast('Pick a file or paste a URL');
 
-    if (!finalUrl){ return toast('Select a file or paste an image URL'); }
-    if (!/^https?:\/\//i.test(finalUrl)){ return toast('URL must start with http(s)://'); }
-
-    const title = (titleEl.value||'').trim();
-    const artist = (artistEl.value||'').trim();
-
-    /* user_id removed — DB trigger stamps auth.uid() */
     const { error } = await supabase.from('art_queue').insert({
-      image_url: finalUrl,
-      title,
-      artist,
-      status: 'pending'
+      image_url: finalUrl, status: 'pending'
     });
     if (error) throw error;
 
-    imageUrl.value=''; titleEl.value=''; artistEl.value=''; agree.checked=false;
-    if (fileInput.value) fileInput.value='';
-    filePreview.style.display='none';
+    picked = {file:null, url:''};
+    fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+    fileName.textContent = 'jpg / png / webp — 10MB max';
+    previewHint.textContent = '';
+    consent.checked = false;
 
-    toast('Your art is added to the queue ✅');
-    statusEl.textContent = 'Submitted!';
+    toast('✅ Art queued for next round');
+    submitMsg.textContent = 'Art queued for next round.';
   }catch(e){
-    console.error('Submit error:', e);
-    const msg = e?.message || e?.error_description || 'Submit failed';
-    toast(msg);
-    statusEl.textContent = msg;
+    console.error(e);
+    toast(e?.message || 'Submit failed');
+    submitMsg.textContent = 'Submit failed.';
   }
 });
 
-/* =========================
-   📜 View Queue (Storage)
-   ========================= */
-const BUCKET = 'art-uploads';
+/* ---------- Queue render ---------- */
+async function renderQueue(){
+  try{
+    const { data, error } = await supabase
+      .from('art_queue')
+      .select('id,image_url,created_at')
+      .eq('status','pending')
+      .order('created_at', { ascending: true });
+    if (error) throw error;
 
-// Get a URL for a file (public if possible, otherwise signed)
-async function fileUrl(path){
-  // Try public URL
-  const pub = supabase.storage.from(BUCKET).getPublicUrl(path);
-  if (pub?.data?.publicUrl) return pub.data.publicUrl;
-
-  // Fallback: signed URL for 1 hour
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
-  if (error) throw error;
-  return data.signedUrl;
-}
-
-// List files at a prefix, sorted by updated_at asc
-async function listAt(prefix=""){
-  const { data, error } = await supabase
-    .storage
-    .from(BUCKET)
-    .list(prefix, {
-      limit: 1000,
-      sortBy: { column: 'updated_at', order: 'asc' }
-    });
-  if (error) throw error;
-  return (data || []).filter(item => !item.metadata?.isDirectory && item.name);
-}
-
-// Load from root and optional "queue/" folder, merge & sort by updated_at
-async function loadQueueFiles(){
-  const [root, queue] = await Promise.allSettled([listAt(""), listAt("queue")]);
-  const files = []
-    .concat(root.status === 'fulfilled' ? root.value : [])
-    .concat(queue.status === 'fulfilled' ? queue.value : []);
-
-  // Deduplicate by (prefix + name) if possible
-  const seen = new Set();
-  const deduped = [];
-  for (const f of files){
-    const key = f.id || f.name;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(f);
-  }
-
-  // Build display objects; try both root and queue/ as candidates
-  const out = [];
-  for (const f of deduped){
-    const candidates = [f.name, `queue/${f.name}`];
-    let url = null, used = null;
-    for (const p of candidates){
-      try { url = await fileUrl(p); used = p; break; } catch(_) {}
-    }
-    if (!url) continue;
-    out.push({
-      path: used,
-      name: f.name,
-      updated_at: f.updated_at || '',
-      url
-    });
-  }
-
-  out.sort((a,b)=> new Date(a.updated_at||0) - new Date(b.updated_at||0));
-  return out;
-}
-
-viewQueueBtn.addEventListener('click', async ()=>{
-  queueModal.style.display = 'flex';
-  queueModal.setAttribute('aria-hidden','false');
-  queueGrid.innerHTML = '<div class="note" style="grid-column:1/-1;text-align:center;">Loading…</div>';
-
-  try {
-    const items = await loadQueueFiles();
-    if (!items.length){
-      queueGrid.innerHTML = '<div class="note" style="grid-column:1/-1;text-align:center;">No images in queue.</div>';
+    if (!data || !data.length){
+      queueGrid.innerHTML = '';
+      queueEmpty.style.display = 'block';
       return;
     }
-    queueGrid.innerHTML = items.map((img, i)=>`
-      <div class="queue-item" title="${img.path}">
-        <img src="${img.url}" alt="${img.name}"/>
-        <span>#${i+1} — ${img.name}</span>
+    queueEmpty.style.display = 'none';
+    queueGrid.innerHTML = data.map((r,i)=>`
+      <div class="thumb" title="${r.image_url}">
+        <span class="idx">#${i+1}</span>
+        <img src="${r.image_url}" alt="queued art ${i+1}"/>
       </div>
     `).join('');
-  } catch (e) {
+  }catch(e){
     console.error(e);
-    queueGrid.innerHTML = '<div class="note" style="grid-column:1/-1;text-align:center;">Failed to load queue.</div>';
+    queueGrid.innerHTML = '<div class="small">Failed to load queue.</div>';
   }
-});
+}
 
-queueClose.addEventListener('click', ()=>{
-  queueModal.style.display = 'none';
-  queueModal.setAttribute('aria-hidden','true');
-});
-</script>
+// realtime updates
+supabase.channel('queue-live')
+  .on('postgres_changes', { event:'*', schema:'public', table:'art_queue' }, renderQueue)
+  .subscribe();
 
-<!--
-Storage bucket must exist: art-uploads (public read or signed URLs).
-DB must have: trigger that sets user_id := auth.uid() on art_queue inserts,
-and the authenticated INSERT policy with a non-null WITH CHECK expression.
--->
-<style>
-  .rs-debug {
-    position: fixed; right: 10px; bottom: 10px; z-index: 99999;
-    background: rgba(0,0,0,.85); border: 1px solid #153b16; border-radius: 12px;
-    padding: 10px 12px; color: #39ff14; font: 12px/1.2 system-ui, Arial, sans-serif;
-    box-shadow: 0 0 16px rgba(57,255,20,.15);
+/* ---------- Tournament clock + stage ---------- */
+// same source as matchup: call edge function to get {phase_end_at, remaining_sec, period_sec, paused}
+async function callEdge(){
+  const res = await fetch(EDGE_URL, {
+    method:'GET',
+    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`, 'apikey':SUPABASE_ANON_KEY }
+  });
+  const raw = await res.text();
+  let j=null; try{ j=JSON.parse(raw); }catch{}
+  if (!res.ok) throw new Error((j&&j.error)||raw||'edge error');
+  return j?.state || j || {};
+}
+const normalize = (s)=>({phase_end_at:s.phase_end_at??null, period_sec:s.period_sec??20, paused:!!s.paused, remaining_sec:(typeof s.remaining_sec==='number')?s.remaining_sec:null});
+
+let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
+let currentPhaseKey=null, prevPhaseKey=null, currentStage='r32';
+
+function baseAtOffset(n){
+  if (!currentPhaseKey) return null;
+  const t = Date.parse(currentPhaseKey) - Math.max(0,n)*periodSec*1000;
+  return iso(t);
+}
+function stageLevel(st){ return st==='r32'?1 : st==='r16'?2 : st==='qf'?3 : st==='sf'?4 : 5; }
+
+/* stage detection (mirrors matchup’s winners checks) */
+async function detectStage(){
+  if (!currentPhaseKey || !prevPhaseKey) return {stage:'r32'};
+
+  const prev = prevPhaseKey;
+  const keys = {
+    r32: Array.from({length:16},(_,i)=>`${prev}::r32_${i+1}`),
+    r16: Array.from({length:8}, (_,i)=>`${prev}::r16_${i+1}`),
+    qf : [`${prev}::qf1`,`${prev}::qf2`,`${prev}::qf3`,`${prev}::qf4`],
+    sf : [`${prev}::sf1`,`${prev}::sf2`],
+    final: [`${prev}::final`]
+  };
+
+  const { data: r32W } = await supabase.from('winners').select('phase_key').in('phase_key', keys.r32);
+  if ((r32W||[]).length<16) return {stage:'r32'};
+
+  const { data: r16W } = await supabase.from('winners').select('phase_key').in('phase_key', keys.r16);
+  if ((r16W||[]).length<8)  return {stage:'r16'};
+
+  const { data: qfW } = await supabase.from('winners').select('phase_key').in('phase_key', keys.qf);
+  if ((qfW||[]).length<4)   return {stage:'qf'};
+
+  const { data: sfW } = await supabase.from('winners').select('phase_key').in('phase_key', keys.sf);
+  if ((sfW||[]).length<2)   return {stage:'sf'};
+
+  return {stage:'final'};
+}
+
+async function syncState(){
+  const s = normalize(await callEdge());
+  serverPhaseEndISO = s.phase_end_at;
+  paused = s.paused;
+  remainingSec = s.remaining_sec;
+  periodSec = s.period_sec ?? 20;
+  lastSyncAt = Date.now();
+
+  currentPhaseKey = serverPhaseEndISO ? iso(serverPhaseEndISO) : null;
+  prevPhaseKey = currentPhaseKey && periodSec ? iso(Date.parse(currentPhaseKey) - periodSec*1000) : null;
+
+  const { stage } = await detectStage();
+  currentStage = stage;
+  stageEl.textContent = stage.toUpperCase();
+}
+
+let raf=null;
+function loop(){
+  if (paused){
+    const sec = (typeof remainingSec==='number') ? Math.max(0, Math.ceil(remainingSec)) : 0;
+    clockEl.textContent = String(sec);
+    if (Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
+  } else {
+    const rem = serverPhaseEndISO ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
+    clockEl.textContent = String(Math.ceil(rem/1000));
+    if (rem<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
   }
-  .rs-debug b { color: #b3ffb3 }
-  .rs-debug button {
-    margin-top: 6px; width: 100%; border: 1px solid #39ff14; background: transparent;
-    color: #39ff14; border-radius: 10px; padding: 6px 8px; cursor: pointer;
-  }
-</style>
+  raf = requestAnimationFrame(loop);
+}
 
-<div class="rs-debug">
-  <div>BASE: <b id="rsBaseKey">…</b></div>
-  <div>STAGE: <b id="rsStage">…</b></div>
-  <button id="rsForce">Force Inject R32</button>
-  <div id="rsMsg" style="margin-top:6px;opacity:.9"></div>
-</div>
-
-<script>
-(function(){
-  const msg = (t)=>{ document.getElementById('rsMsg').textContent = t; };
-
-  function showKeys(){
-    try {
-      document.getElementById('rsBaseKey').textContent = window.currentPhaseKey || '(unknown)';
-      document.getElementById('rsStage').textContent   = window.currentStage || '(unknown)';
-    } catch(e){ console.warn(e); }
-  }
-
-  // Safety: warm injections & repaint if we’re already in R32 when the page loads
-  async function warmIfR32(){
-    try{
-      if (typeof currentStage !== 'undefined' &&
-          currentStage === 'r32' &&
-          typeof currentPhaseKey !== 'undefined' &&
-          typeof ensureR32InjectionsFor === 'function') {
-        await ensureR32InjectionsFor(currentPhaseKey);
-        if (typeof paintImagesForActive === 'function') await paintImagesForActive();
-        if (typeof renderBracket === 'function') await renderBracket();
-      }
-    }catch(e){ console.error('warmIfR32 failed', e); }
-  }
-
-  // Force-inject handler (skips claim; just assigns now)
-  async function forceInject(){
-    try{
-      if (typeof currentPhaseKey === 'undefined') return msg('No base key yet.');
-      // If your integrator functions exist, use them
-      if (typeof assignQueuedToR32 === 'function') {
-        msg('Assigning from queue…');
-        await assignQueuedToR32(currentPhaseKey);
-        await ensureR32InjectionsFor(currentPhaseKey);
-        if (typeof paintImagesForActive === 'function') await paintImagesForActive();
-        if (typeof renderBracket === 'function') await renderBracket();
-        msg('Done. Check R32.');
-        return;
-      }
-      // Fallback: do a minimal inline assignment (oldest pending -> r32_1)
-      if (typeof supabase === 'undefined') return msg('Supabase not ready.');
-      msg('Assigning (fallback)…');
-      const { data: q } = await supabase.from('art_queue')
-        .select('id,image_url').eq('status','pending').order('created_at',{ascending:true}).limit(1);
-      if (!q || !q.length) return msg('Queue empty.');
-      const row = q[0];
-      await supabase.from('art_injections').upsert({
-        base_iso: currentPhaseKey, slot: 'r32_1',
-        submission_id: row.id, image_url: row.image_url
-      });
-      await supabase.from('art_queue').update({ status:'used', used_at: new Date().toISOString() }).eq('id', row.id);
-      if (typeof paintImagesForActive === 'function') await paintImagesForActive();
-      if (typeof renderBracket === 'function') await renderBracket();
-      msg('Injected into r32_1.');
-    }catch(e){
-      console.error(e);
-      msg(e?.message || 'Failed.');
-    }
-  }
-
-  document.getElementById('rsForce').addEventListener('click', forceInject);
-  showKeys();
-  warmIfR32();
-
-  // If your app updates stage/base later, keep badge fresh
-  setInterval(showKeys, 1500);
+/* ---------- Boot ---------- */
+(async()=>{
+  paintAuth(await uid());
+  supabase.auth.onAuthStateChange((_e, session)=> paintAuth(session?.user?.id || null));
+  await Promise.all([renderQueue(), syncState()]);
+  loop();
 })();
 </script>
 </body>
