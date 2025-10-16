@@ -143,5 +143,77 @@
       This app requires JavaScript.
     </div>
   </noscript>
+  <script>
+// ========== 🔧 Simple Mobile Debugger ==========
+(function () {
+  const dbg = document.createElement('div');
+  dbg.id = 'debugPanel';
+  dbg.style.cssText = `
+    position: fixed; bottom: 0; right: 0;
+    background: rgba(0,0,0,0.9); color: #0f0; font-family: monospace;
+    font-size: 11px; line-height: 1.3em; max-height: 40%; width: 100%;
+    overflow-y: auto; z-index: 99999; padding: 4px; display: none;
+  `;
+
+  const toggle = document.createElement('button');
+  toggle.textContent = '🐛 Debug';
+  toggle.style.cssText = `
+    position: fixed; bottom: 5px; right: 5px;
+    z-index: 100000; font-size: 12px; background:#000; color:#0f0;
+    border: 1px solid #0f0; padding: 3px 6px; border-radius: 4px;
+  `;
+  toggle.onclick = () => dbg.style.display = dbg.style.display === 'none' ? 'block' : 'none';
+
+  const controls = document.createElement('div');
+  controls.innerHTML = `
+    <button id="dbgCopy">Copy</button>
+    <button id="dbgClear">Clear</button>
+  `;
+  controls.style.cssText = 'position: sticky; top: 0; background: #111; padding: 2px;';
+  controls.querySelectorAll('button').forEach(b => {
+    b.style.cssText = 'background:#000; color:#0f0; border:1px solid #0f0; margin-right:4px;';
+  });
+
+  const logContainer = document.createElement('div');
+  dbg.appendChild(controls);
+  dbg.appendChild(logContainer);
+  document.body.appendChild(dbg);
+  document.body.appendChild(toggle);
+
+  function addLine(type, msg) {
+    const line = document.createElement('div');
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${type}: ${msg}`;
+    logContainer.appendChild(line);
+    dbg.scrollTop = dbg.scrollHeight;
+  }
+
+  // Hook into console
+  const origLog = console.log;
+  const origErr = console.error;
+  console.log = (...args) => { origLog(...args); addLine('LOG', args.join(' ')); };
+  console.error = (...args) => { origErr(...args); addLine('ERR', args.join(' ')); };
+
+  // Hook into window errors
+  window.addEventListener('error', (e) => {
+    addLine('ERR', e.message + (e.filename ? ` @ ${e.filename}:${e.lineno}` : ''));
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    addLine('PROMISE', (e.reason && e.reason.message) || JSON.stringify(e.reason));
+  });
+
+  document.getElementById('dbgCopy').onclick = () => {
+    navigator.clipboard.writeText(logContainer.innerText).then(() => {
+      addLine('INFO', 'Copied debug log');
+    });
+  };
+  document.getElementById('dbgClear').onclick = () => {
+    logContainer.innerHTML = '';
+    addLine('INFO', 'Cleared');
+  };
+
+  // Expose a manual logger
+  window.debugLog = (msg) => addLine('MANUAL', msg);
+})();
+</script>
 </body>
 </html>
