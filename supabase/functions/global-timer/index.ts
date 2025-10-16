@@ -1,190 +1,299 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// supabase/functions/global-timer/index.ts
+// Deno deploy function — global timer + phase rollover + winners upsert.
+
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-/* ---------------- CORS ---------------- */
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Content-Type": "application/json",
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+const supa = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+  auth: { persistSession: false },
+});
+
+// ---------- Types the frontend expects ----------
+type TimerState = {
+  phase_end_at: string;       // ISO string, Z, no ms
+  period_sec: number;         // default 20
+  paused: boolean;
+  remaining_sec: number | null;
 };
 
-/* ---------------- Tuning ---------------- */
-const DEFAULT_PERIOD_SEC = 30;
-const GRACE_MS = 1200;
-
-const nowIso = () => new Date().toISOString();
-const canonicalISO = (iso: string) => new Date(iso).toISOString();
-function secondsUntil(iso: string | null): number {
-  if (!iso) return 0;
-  const ms = new Date(iso).getTime() - Date.now();
-  return Math.max(0, Math.ceil(ms / 1000));
+// ---------- Helpers ----------
+function isoZ(d: Date | number | string) {
+  const s = new Date(d).toISOString();
+  // strip ms to match UI
+  return s.replace(/\.\d{3}Z$/, "Z");
 }
 
-/* ---------------- Types ---------------- */
-type Row = {
-  id: number;
-  phase_end_at: string | null;
-  period_sec: number;
-  paused: boolean;
-  paused_remaining_sec: number | null;
-  updated_at: string | null;
-};
-type State = {
-  phase_end_at: string;
-  period_sec: number;
-  paused: boolean;
-  remaining_sec: number;
-};
-
-/* ---------------- Serve ---------------- */
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const serviceRole = Deno.env.get("SERVICE_ROLE_KEY")!;
-  const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const admin = createClient(url, serviceRole);
-
-  // Parse JSON body (if any) and query params (always)
-  let body: any = {};
-  try { body = await req.json(); } catch { body = {}; }
-  const urlObj = new URL(req.url);
-  const intent = {
-    action: (body?.action || urlObj.searchParams.get("action") || "").toLowerCase(), // "pause"|"resume"|""
-    force: body?.force === true || urlObj.searchParams.get("force") === "true",
+function cors() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "*",
   };
+}
 
-  function replyOK(state: State) {
-    return new Response(JSON.stringify({ state }), { headers: corsHeaders });
+function ok(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json", ...cors() },
+  });
+}
+
+function bad(status: number, message: string) {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "content-type": "application/json", ...cors() },
+  });
+}
+
+// ---------- DB helpers ----------
+async function getTimer(): Promise<TimerState> {
+  // We use a single-row table `timer_state` with id=1
+  const { data, error } = await supa
+    .from("timer_state")
+    .select("*")
+    .eq("id", 1)
+    .single();
+
+  if (error || !data) throw new Error(error?.message || "timer_state missing");
+
+  const phase_end_at = isoZ(data.phase_end_at);
+  const period_sec = Number(data.period_sec ?? 20);
+  const paused = !!data.paused;
+
+  const rem =
+    paused
+      ? Number.isFinite(data.remaining_sec) ? Number(data.remaining_sec) : null
+      : Math.max(0, Math.ceil((Date.parse(phase_end_at) - Date.now()) / 1000));
+
+  return { phase_end_at, period_sec, paused, remaining_sec: rem };
+}
+
+async function setPause(paused: boolean) {
+  const { error } = await supa
+    .from("timer_state")
+    .update({ paused, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) throw error;
+}
+
+async function setNextPhaseEnd(nextEnd: string) {
+  const { error } = await supa
+    .from("timer_state")
+    .update({ phase_end_at: nextEnd, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) throw error;
+}
+
+function r32Slots() {
+  return Array.from({ length: 16 }, (_, i) => `r32_${i + 1}`);
+}
+function r16Slots() {
+  return Array.from({ length: 8 }, (_, i) => `r16_${i + 1}`);
+}
+function qfSlots() {
+  return Array.from({ length: 4 }, (_, i) => `qf${i + 1}`);
+}
+function sfSlots() {
+  return ["sf1", "sf2"];
+}
+
+// Count votes for a phase_key (red/blue)
+async function countRB(pk: string): Promise<{ r: number; b: number }> {
+  const { data, error } = await supa
+    .from("phase_votes")
+    .select("vote", { count: "exact", head: false })
+    .eq("phase_key", pk);
+
+  if (error) throw error;
+  let r = 0, b = 0;
+  for (const row of data ?? []) {
+    if ((row as any).vote === "red") r++;
+    else if ((row as any).vote === "blue") b++;
   }
-  function replyErr(status: number, message: string) {
-    return new Response(JSON.stringify({ error: message }), { status, headers: corsHeaders });
+  return { r, b };
+}
+
+async function upsertWinner(pk: string, color: "red" | "blue") {
+  const { error } = await supa
+    .from("winners")
+    .upsert({ phase_key: pk, color }, { onConflict: "phase_key" });
+  if (error) throw error;
+}
+
+// Decide winners for all possible slots at a base (idempotent)
+async function decideAllForBase(baseISO: string) {
+  const tasks: Promise<unknown>[] = [];
+
+  // R32 (16)
+  for (const s of r32Slots()) {
+    const pk = `${baseISO}::${s}`;
+    tasks.push(
+      (async () => {
+        const { data: exists } = await supa
+          .from("winners")
+          .select("phase_key")
+          .eq("phase_key", pk)
+          .maybeSingle();
+        if (exists) return;
+
+        const { r, b } = await countRB(pk);
+        // tie-break: red
+        const color = r > b ? "red" : b > r ? "blue" as const : "red";
+        await upsertWinner(pk, color);
+      })()
+    );
   }
 
-  async function winnerExists(phaseKey: string) {
-    const { data, error } = await admin.from("winners").select("id").eq("phase_key", phaseKey).limit(1);
-    if (error) console.error("winnerExists error:", error.message);
-    return (data?.length ?? 0) > 0;
+  // R16 (8)
+  for (const s of r16Slots()) {
+    const pk = `${baseISO}::${s}`;
+    tasks.push(
+      (async () => {
+        const { data: exists } = await supa
+          .from("winners")
+          .select("phase_key")
+          .eq("phase_key", pk)
+          .maybeSingle();
+        if (exists) return;
+
+        const { r, b } = await countRB(pk);
+        const color = r > b ? "red" : b > r ? "blue" as const : "red";
+        await upsertWinner(pk, color);
+      })()
+    );
   }
-  async function decideInDB(phaseKeyRaw: string) {
-    const phaseKey = canonicalISO(phaseKeyRaw);
-    if (await winnerExists(phaseKey)) return;
-    const res = await fetch(`${url}/rest/v1/rpc/decide_winner`, {
-      method: "POST",
-      headers: { apikey: anon, Authorization: `Bearer ${anon}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ phase_key: phaseKey }),
-    });
-    if (!res.ok && res.status !== 409) {
-      const t = await res.text().catch(() => "");
-      console.error("decide_winner RPC failed", res.status, t);
-    }
+
+  // QF (4)
+  for (const s of qfSlots()) {
+    const pk = `${baseISO}::${s}`;
+    tasks.push(
+      (async () => {
+        const { data: exists } = await supa
+          .from("winners")
+          .select("phase_key")
+          .eq("phase_key", pk)
+          .maybeSingle();
+        if (exists) return;
+
+        const { r, b } = await countRB(pk);
+        const color = r > b ? "red" : b > r ? "blue" as const : "red";
+        await upsertWinner(pk, color);
+      })()
+    );
   }
 
-  async function loadOrBootstrap(): Promise<Row> {
-    const { data, error } = await admin
-      .from("tournament_state")
-      .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
-      .eq("id", 1)
-      .single();
+  // SF (2)
+  for (const s of sfSlots()) {
+    const pk = `${baseISO}::${s}`;
+    tasks.push(
+      (async () => {
+        const { data: exists } = await supa
+          .from("winners")
+          .select("phase_key")
+          .eq("phase_key", pk)
+          .maybeSingle();
+        if (exists) return;
 
-    if (!error && data) return data as Row;
+        const { r, b } = await countRB(pk);
+        const color = r > b ? "red" : b > r ? "blue" as const : "red";
+        await upsertWinner(pk, color);
+      })()
+    );
+  }
 
-    const period = DEFAULT_PERIOD_SEC;
-    const end = new Date(Date.now() + period * 1000).toISOString();
-    const { data: upserted, error: ue } = await admin
-      .from("tournament_state")
-      .upsert({
-        id: 1,
-        phase_end_at: end,
-        period_sec: period,
-        paused: false,
-        paused_remaining_sec: null,
-        updated_at: nowIso(),
-      })
-      .select("id, phase_end_at, period_sec, paused, paused_remaining_sec, updated_at")
-      .single();
+  // Final (1)
+  {
+    const pk = `${baseISO}::final`;
+    tasks.push(
+      (async () => {
+        const { data: exists } = await supa
+          .from("winners")
+          .select("phase_key")
+          .eq("phase_key", pk)
+          .maybeSingle();
+        if (exists) return;
 
-    if (ue) throw new Error(ue.message);
-    return upserted as Row;
+        const { r, b } = await countRB(pk);
+        const color = r > b ? "red" : b > r ? "blue" as const : "red";
+        await upsertWinner(pk, color);
+      })()
+    );
+  }
+
+  await Promise.all(tasks);
+}
+
+// Advance the timer if due; returns the *updated* state
+async function maybeAdvance(): Promise<TimerState> {
+  // load current
+  const cur = await getTimer();
+
+  if (cur.paused) return cur;
+
+  const now = Date.now();
+  const end = Date.parse(cur.phase_end_at);
+
+  if (now < end) return { ...cur, remaining_sec: Math.ceil((end - now) / 1000) };
+
+  // Phase has ended → decide winners for the just-ended base
+  const endedBaseISO = isoZ(cur.phase_end_at);
+
+  try {
+    await decideAllForBase(endedBaseISO);
+  } catch (e) {
+    // Don’t explode the function; return state anyway. UI will retry.
+    console.error("decideAllForBase failed:", e);
+  }
+
+  // Set next phase end
+  const nextEnd = isoZ(new Date(end + cur.period_sec * 1000));
+  await setNextPhaseEnd(nextEnd);
+
+  // Return fresh state
+  return await getTimer();
+}
+
+// ---------- HTTP handler ----------
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: cors() });
+  }
+
+  // Accept action in GET ?action= or POST {action}
+  let action: "pause" | "resume" | undefined;
+  try {
+    const u = new URL(req.url);
+    const q = (u.searchParams.get("action") || "").toLowerCase();
+    if (q === "pause" || q === "resume") action = q;
+  } catch {}
+
+  if (!action && req.method === "POST") {
+    try {
+      const j = await req.json();
+      const a = String(j?.action || "").toLowerCase();
+      if (a === "pause" || a === "resume") action = a;
+    } catch {/* ignore */}
   }
 
   try {
-    let s = await loadOrBootstrap();
-
-    // Pause/Resume/Force regardless of method (supports GET ?action=… and POST)
-    if (intent.force) {
-      const finishedPhase = canonicalISO(s.phase_end_at ?? nowIso());
-      await new Promise((r) => setTimeout(r, GRACE_MS));
-      await decideInDB(finishedPhase);
-      const newEnd = new Date(Date.parse(finishedPhase) + s.period_sec * 1000).toISOString();
-      const { data: upd, error: ue } = await admin
-        .from("tournament_state")
-        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
-        .eq("id", 1)
-        .select("*")
-        .single();
-      if (ue) throw new Error(ue.message);
-      s = upd as Row;
+    if (action === "pause") {
+      await setPause(true);
+      const state = await getTimer();
+      return ok({ ok: true, state });
+    }
+    if (action === "resume") {
+      await setPause(false);
+      const state = await getTimer();
+      return ok({ ok: true, state });
     }
 
-    if (intent.action === "pause" && !s.paused) {
-      const remainingNow = secondsUntil(s.phase_end_at);
-      const { data: upd, error: ue } = await admin
-        .from("tournament_state")
-        .update({ paused: true, paused_remaining_sec: remainingNow, updated_at: nowIso() })
-        .eq("id", 1)
-        .select("*")
-        .single();
-      if (ue) throw new Error(ue.message);
-      s = upd as Row;
-    }
-
-    if (intent.action === "resume" && s.paused) {
-      const remaining = s.paused_remaining_sec ?? secondsUntil(s.phase_end_at);
-      const newEnd = new Date(Date.now() + remaining * 1000).toISOString();
-      const { data: upd, error: ue } = await admin
-        .from("tournament_state")
-        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
-        .eq("id", 1)
-        .select("*")
-        .single();
-      if (ue) throw new Error(ue.message);
-      s = upd as Row;
-    }
-
-    // Catch-up loop (when not paused)
-    if (!s.paused) {
-      while (secondsUntil(s.phase_end_at) <= 0) {
-        const finishedPhase = canonicalISO(s.phase_end_at ?? nowIso());
-        await new Promise((r) => setTimeout(r, GRACE_MS));
-        await decideInDB(finishedPhase);
-        const nextEnd = new Date(Date.parse(finishedPhase) + s.period_sec * 1000).toISOString();
-        const { data: upd, error: ue } = await admin
-          .from("tournament_state")
-          .update({ phase_end_at: nextEnd, updated_at: nowIso() })
-          .eq("id", 1)
-          .select("*")
-          .single();
-        if (ue) throw new Error(ue.message);
-        s = upd as Row;
-      }
-    }
-
-    const remaining = s.paused
-      ? (s.paused_remaining_sec ?? secondsUntil(s.phase_end_at))
-      : secondsUntil(s.phase_end_at);
-
-    const state: State = {
-      phase_end_at: s.phase_end_at ?? nowIso(),
-      period_sec: s.period_sec,
-      paused: s.paused,
-      remaining_sec: Math.max(0, Math.ceil(Number(remaining ?? 0))),
-    };
-
-    return replyOK(state);
-  } catch (e: any) {
-    console.error("global-timer error:", e?.message || e);
-    return replyErr(500, e?.message || "Unexpected error");
+    // No action → regular poll: maybe advance, then return state
+    const state = await maybeAdvance();
+    return ok({ state });
+  } catch (e) {
+    console.error("global-timer error:", e);
+    return bad(500, e?.message || "server error");
   }
 });
