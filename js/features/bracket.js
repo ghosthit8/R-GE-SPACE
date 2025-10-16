@@ -1,26 +1,17 @@
 // js/features/bracket.js
 // Bracket UI: labels, thumbnails, scores, and row click wiring.
-// Emits a CustomEvent instead of mutating state directly; main.js handles it.
-// Behavior mirrors your inline implementation. 1
+// Safe against Supabase errors so the bracket always renders.
 
 import {
-  // DOM
   brows,
-  // shared helpers/state
   imgCache,
-  // stage math
   baseForSlot,
-  // UI helpers
   rowId,
-  // state readers
   currentPhaseKey,
-  currentStage,
-  // vote count timestamp setter (optional)
-  setLastCountsAt,
+  seedUrlFromKey,
 } from "../core.js";
 
 import {
-  // data + entrants
   countVotesFor,
   getR16EntrantSourcesFromR32Winners,
   getQFEntrantSourcesFromR16Winners,
@@ -29,7 +20,7 @@ import {
   finalKeyFor,
 } from "../services.js";
 
-/* ---------------- Label helpers (copy of your mapping) ---------------- */
+/* ---------------- Label helpers ---------------- */
 
 export function labelFor(slot) {
   if (slot.startsWith("r32")) {
@@ -59,7 +50,12 @@ export function slotKeyFor(slot, baseISO) {
   return slot === "final" ? finalKeyFor(baseISO) : `${baseISO}::${slot}`;
 }
 
-/* ---------------- Thumbnails (reconstruct real A/B) ---------------- */
+/* ---------------- Thumbnails (robust) ---------------- */
+
+async function safeGet(fn) {
+  try { return await fn(); }
+  catch (e) { console.warn("[bracket] thumb builder failed:", e); return null; }
+}
 
 async function thumbsFor(slot) {
   const base = baseForSlot(slot);
@@ -68,38 +64,43 @@ async function thumbsFor(slot) {
   const key = slotKeyFor(slot, base);
   if (imgCache.has(key)) return imgCache.get(key);
 
-  // Rebuild based on stage
+  // R32 thumbs are always seedable locally — no DB required.
+  if (slot.startsWith("r32")) {
+    const idx = Number(slot.split("_")[1]); // 1..16
+    const pack = { A: seedUrlFromKey(base, `A${idx}`), B: seedUrlFromKey(base, `B${idx}`) };
+    imgCache.set(key, pack);
+    return pack;
+  }
+
+  // Later rounds: attempt to rebuild from winners; if anything fails, return blanks.
   if (slot.startsWith("r16")) {
-    const pack = await getR16EntrantSourcesFromR32Winners(slot);
+    const pack = await safeGet(() => getR16EntrantSourcesFromR32Winners(slot));
     if (pack) { imgCache.set(key, pack); return pack; }
     return { A: "", B: "" };
   }
   if (slot.startsWith("qf")) {
-    const pack = await getQFEntrantSourcesFromR16Winners(slot);
+    const pack = await safeGet(() => getQFEntrantSourcesFromR16Winners(slot));
     if (pack) { imgCache.set(key, pack); return pack; }
     return { A: "", B: "" };
   }
   if (slot === "sf1" || slot === "sf2") {
-    const pack = await getSemiEntrantSourcesFromQFWinners(slot);
+    const pack = await safeGet(() => getSemiEntrantSourcesFromQFWinners(slot));
     if (pack) { imgCache.set(key, pack); return pack; }
     return { A: "", B: "" };
   }
   if (slot === "final") {
-    const finals = await getFinalEntrantSourcesFromWinners();
+    const finals = await safeGet(() => getFinalEntrantSourcesFromWinners());
     if (finals) { imgCache.set(key, finals); return finals; }
     return { A: "", B: "" };
   }
 
-  // R32 is seeded by the current base (already deterministic in painter),
-  // but thumbs list relies on painter cache; if not present, leave blank.
-  // (Painter will seed when user clicks into R32 rows.)
-  return imgCache.get(key) || { A: "", B: "" };
+  // Fallback
+  return { A: "", B: "" };
 }
 
 /* ---------------- Score updater ---------------- */
 
 export async function updateBracketScores(rowsOrder) {
-  // rowsOrder passed in so caller controls which slots exist
   for (const slot of rowsOrder) {
     const base = baseForSlot(slot);
     if (!base) continue;
@@ -109,19 +110,10 @@ export async function updateBracketScores(rowsOrder) {
     try {
       const { r, b } = await countVotesFor(key);
       sEl.textContent = `${r} - ${b}`;
-      setLastCountsAt?.(Date.now());
     } catch {
       sEl.textContent = `0 - 0`;
     }
   }
-}
-
-/* ---------------- Title for Final row ---------------- */
-
-export async function finalSeedsTitle() {
-  // Matches your inline logic: only show "Finalists decided" when SF winners exist
-  // at the appropriate previous base. For simplicity, we keep "TBD vs TBD" here.
-  return "TBD vs TBD";
 }
 
 /* ---------------- Render ---------------- */
@@ -137,16 +129,16 @@ export async function renderBracket({ activeSlot, isSlotFinished, isSlotLive }) 
     "qf1","qf2","qf3","qf4","sf1","sf2","final"
   ];
 
-  const finalTitle = await finalSeedsTitle();
-
-  const parts = await Promise.all(rowsOrder.map(async (slot) => {
-    const { round, title } = slot === "final" ? { round: "Final", title: finalTitle } : labelFor(slot);
-    const thumbs = await thumbsFor(slot);
+  const parts = [];
+  for (const slot of rowsOrder) {
+    const { round, title } = labelFor(slot);
+    let thumbs = { A: "", B: "" };
+    try { thumbs = await thumbsFor(slot); } catch { /* keep blanks */ }
 
     const decided = isSlotFinished(slot);
     const pillText = decided ? "round decided" : (isSlotLive(slot) ? "" : "locked");
 
-    return `
+    parts.push(`
       <div class="brow ${decided ? "decided" : ""} ${slot === activeSlot ? "active" : ""}"
            id="${rowId(slot)}" data-slot="${slot}">
         <div class="bbadge">${round}</div>
@@ -160,8 +152,8 @@ export async function renderBracket({ activeSlot, isSlotFinished, isSlotLive }) 
         </div>
         <div class="bscore">0 - 0</div>
       </div>
-    `;
-  }));
+    `);
+  }
 
   brows.innerHTML = parts.join("");
 
@@ -174,10 +166,10 @@ export async function renderBracket({ activeSlot, isSlotFinished, isSlotLive }) 
   });
 
   // After render, populate scores
-  await updateBracketScores(rowsOrder);
+  try { await updateBracketScores(rowsOrder); } catch { /* best-effort */ }
 }
 
-/* ---------------- Small helpers for main.js ---------------- */
+/* ---------------- Highlight ---------------- */
 
 export function highlightActiveRow(activeSlot) {
   document.querySelectorAll(".brow").forEach((el) => el.classList.remove("active"));
