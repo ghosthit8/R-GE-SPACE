@@ -1,18 +1,24 @@
 // js/main.js
 import {
+  // DOM
   clockEl, pauseBtn, voteA, voteB, submitBtn,
   countA, countB, labelA, labelB,
+  // state (read)
   paused, serverPhaseEndISO, periodSec,
   currentPhaseKey, prevPhaseKey, remainingSec, lastSyncAt, lastCountsAt,
   currentUid, chosen, activeSlot, currentStage, overlayGateBase,
   imgCache, lastPaintedBattleKey,
+  // helpers
   setBoot, startBootTick, endBoot, iso, toast,
-  getUidOrNull, paintLoginBadge, callEdge,
+  getUidOrNull, paintLoginBadge, callEdge, toggleTimer,
   normalize, seedUrlFromKey, baseForSlot,
   setStateUI, slotFinished, votingLockedFor, applyVotingLockUI,
+  // setters
   setPaused, setPeriodSec, setServerPhaseEndISO,
   setCurrentPhaseKey, setPrevPhaseKey, setRemainingSec,
   setLastSyncAt, setLastCountsAt, setCurrentUid, setChosen,
+  // NEW setters (avoid assigning to imported bindings)
+  setActiveSlot, setCurrentStage, setOverlayGateBase, setLastPaintedBattleKey,
 } from "./core.js";
 
 import {
@@ -95,7 +101,7 @@ async function paintImagesForActive(){
   }
 
   paintLabelsFor(slot);
-  lastPaintedBattleKey = battleKey;
+  setLastPaintedBattleKey(battleKey);
 
   await renderBracket({
     activeSlot,
@@ -147,18 +153,18 @@ async function fetchState(){
         if (pack) imgCache.set(fKey, pack);
       }
       if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
-      overlayGateBase = null;
-      activeSlot = "r32_1";
-      imgCache.clear(); lastPaintedBattleKey = null;
+      setOverlayGateBase(null);
+      setActiveSlot("r32_1");
+      imgCache.clear(); setLastPaintedBattleKey(null);
 
     } else if (prevStageSnapshot === "sf"){
       const { sf1, sf2 } = semiKeysFor(justEndedBase);
       await Promise.all([ decideAndPersistWinner(sf1), decideAndPersistWinner(sf2) ]);
-      overlayGateBase = currentPhaseKey;
-      activeSlot = "final";
+      setOverlayGateBase(currentPhaseKey);
+      setActiveSlot("final");
       const pack = await getFinalEntrantSourcesFromWinners();
       if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
-      lastPaintedBattleKey = null;
+      setLastPaintedBattleKey(null);
 
     } else if (prevStageSnapshot === "qf"){
       const { qf1, qf2, qf3, qf4 } = qfKeysFor(justEndedBase);
@@ -168,17 +174,17 @@ async function fetchState(){
         decideAndPersistWinner(qf3),
         decideAndPersistWinner(qf4),
       ]);
-      activeSlot = "sf1";
+      setActiveSlot("sf1");
       const p1 = await getSemiEntrantSourcesFromQFWinners("sf1");
       const p2 = await getSemiEntrantSourcesFromQFWinners("sf2");
       if (p1) imgCache.set(`${currentPhaseKey}::sf1`, p1);
       if (p2) imgCache.set(`${currentPhaseKey}::sf2`, p2);
-      lastPaintedBattleKey = null;
+      setLastPaintedBattleKey(null);
 
     } else if (prevStageSnapshot === "r16"){
       const r16 = Array.from({length:8},(_,i)=>`${justEndedBase}::r16_${i+1}`);
       await Promise.all(r16.map(k=>decideAndPersistWinner(k)));
-      activeSlot = "qf1";
+      setActiveSlot("qf1");
       const qp1 = await getQFEntrantSourcesFromR16Winners("qf1");
       const qp2 = await getQFEntrantSourcesFromR16Winners("qf2");
       const qp3 = await getQFEntrantSourcesFromR16Winners("qf3");
@@ -187,23 +193,23 @@ async function fetchState(){
       if (qp2) imgCache.set(`${currentPhaseKey}::qf2`, qp2);
       if (qp3) imgCache.set(`${currentPhaseKey}::qf3`, qp3);
       if (qp4) imgCache.set(`${currentPhaseKey}::qf4`, qp4);
-      lastPaintedBattleKey = null;
+      setLastPaintedBattleKey(null);
 
     } else {
       const r32 = r32KeysFor(justEndedBase);
       await Promise.all(Object.values(r32).map(k=>decideAndPersistWinner(k)));
-      activeSlot = "r16_1";
+      setActiveSlot("r16_1");
       for (let i=1;i<=8;i++){
         const slot = `r16_${i}`;
         const pack = await getR16EntrantSourcesFromR32Winners(slot);
         if (pack) imgCache.set(`${currentPhaseKey}::${slot}`, pack);
       }
-      lastPaintedBattleKey = null;
+      setLastPaintedBattleKey(null);
     }
   }
 
   const { stage } = await detectStage();
-  currentStage = stage;
+  setCurrentStage(stage);
 
   await paintImagesForActive();
   await refreshVoteCounts();
@@ -246,7 +252,7 @@ function initRealtime(){
       .channel("winners-final-overlay")
       .on("postgres_changes", { event:"INSERT", schema:"public", table:"winners" }, (payload)=>{
         const key = payload?.new?.phase_key || "";
-        const color = (payload?.new?.color || "").toLowerCase(); // <-- fixed
+        const color = (payload?.new?.color || "").toLowerCase();
         if (!key.endsWith("::final")) return;
         const base = key.split("::")[0];
         if (!overlayGateBase || base !== overlayGateBase) return;
@@ -276,14 +282,14 @@ function initRealtime(){
 /* ------------ controls ------------ */
 function initControls(){
   pauseBtn.onclick = async () => {
-  try {
-    await toggleTimer(paused ? "resume" : "pause");
-    await fetchState();
-    toast("OK");
-  } catch (e) {
-    toast("Pause/resume failed");
-  }
-};
+    try {
+      await toggleTimer(paused ? "resume" : "pause");
+      await fetchState();
+      toast("OK");
+    } catch (e) {
+      toast("Pause/resume failed");
+    }
+  };
 
   function clearSelection(){
     voteA.classList.remove("selected");
@@ -325,9 +331,9 @@ function initControls(){
   window.addEventListener("rs:switch-slot", async (ev)=>{
     const { slot } = ev.detail || {};
     if (!slot) return;
-    activeSlot = slot;
+    setActiveSlot(slot);
     clearSelection();
-    lastPaintedBattleKey = null;
+    setLastPaintedBattleKey(null);
     await paintImagesForActive();
     await refreshVoteCounts();
     highlightActiveRow(activeSlot);
