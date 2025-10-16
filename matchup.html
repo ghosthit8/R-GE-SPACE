@@ -157,26 +157,36 @@
     }
   </script>
 
-<!-- ================== RAGE DEBUGGER v2 ================== -->
+<!-- ================== RAGE DEBUGGER v2.1 (floating button) ================== -->
 <script>
 (function () {
-  // ---------- config ----------
-  const MAX_LINES = 2000;                 // ring buffer size
+  const MAX_LINES = 2000;
   const EDGE_MATCH = /\/functions\/v1\/global-timer/;
 
-  // ---------- ui ----------
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
+  // --- Floating toggle button (always visible) ---
+  const toggleBtn = document.createElement('button');
+  toggleBtn.id = 'rageDbgToggle';
+  toggleBtn.textContent = '🐛 Debug';
+  toggleBtn.style.cssText = `
+    position: fixed; right: 8px; bottom: 8px; z-index: 2147483647;
+    background:#000; color:#0f0; border:1px solid #0f0; border-radius:6px;
+    padding:6px 8px; font: 12px/1 monospace;
+  `;
+  document.body.appendChild(toggleBtn);
+
+  // --- Panel (starts hidden) ---
+  const panel = document.createElement('div');
+  panel.id = 'rageDbg';
+  panel.style.cssText = `
+    position: fixed; right: 0; left: 0; bottom: 0; max-height: 48vh;
     background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483647; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
+    z-index: 2147483646; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
   `;
 
+  // Header bar
   const bar = document.createElement('div');
   bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
   bar.innerHTML = `
-    <button id="dbgToggle" style="position:fixed; right:8px; bottom:8px; z-index:2147483646; background:#000; color:#0f0; border:1px solid #0f0; border-radius:6px; padding:6px 8px;">🐛 Debug</button>
     <span style="color:#6f6">Rage Debug</span>
     <label>Filter:
       <select id="dbgFilter">
@@ -190,18 +200,20 @@
     <button id="dbgCopy">Copy</button>
     <button id="dbgDownload">Download</button>
     <button id="dbgClear">Clear</button>
+    <span id="dbgStats" style="margin-left:auto; color:#8f8"></span>
   `;
-
   const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
+  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(48vh - 42px);';
+  panel.appendChild(bar); panel.appendChild(list);
+  document.body.appendChild(panel);
 
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-  const btn = bar.querySelector('#dbgToggle');
-  btn.onclick = () => wrap.style.display = (wrap.style.display === 'none' ? 'block' : 'none');
+  // Toggle behavior
+  toggleBtn.onclick = () => { panel.style.display = (panel.style.display === 'none' ? 'block' : 'none'); };
 
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
+  const filterSel = bar.querySelector('#dbgFilter');
+  const recordChk = bar.querySelector('#dbgRecord');
+  const statEl    = bar.querySelector('#dbgStats');
+
   bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
   bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
   bar.querySelector('#dbgDownload').onclick = () => {
@@ -210,158 +222,132 @@
     a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
   };
 
-  // ---------- ring buffer ----------
+  // --- Ring buffer + rendering ---
   let buffer = [];
-  function push(kind, msg, extra) {
+  function colorFor(kind){
+    if (kind==='ERR') return '#f88';
+    if (kind==='WARN') return '#ff8';
+    if (kind==='EDGE') return '#8ff';
+    if (kind==='NET') return '#8cf';
+    if (kind==='TIMER' || kind==='CLOCK') return '#6f6';
+    return '#9f9';
+  }
+  function push(kind, msg){
     if (!recordChk.checked) return;
     const ts = new Date().toLocaleTimeString();
     const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
+    buffer.push({kind, line});
     if (buffer.length > MAX_LINES) buffer.shift();
     const f = filterSel.value;
     if (!f || f === kind) {
-      const div = document.createElement('div');
-      div.textContent = line;
-      if (kind === 'ERR') div.style.color = '#f88';
-      else if (kind === 'WARN') div.style.color = '#ff8';
-      else if (kind === 'EDGE') div.style.color = '#8ff';
-      else if (kind === 'NET') div.style.color = '#8cf';
-      else if (kind === 'TIMER' || kind === 'CLOCK') div.style.color = '#6f6';
-      list.appendChild(div);
+      const d = document.createElement('div');
+      d.textContent = line;
+      d.style.color = colorFor(kind);
+      list.appendChild(d);
       list.scrollTop = list.scrollHeight;
     }
+    statEl.textContent = `${buffer.length} lines`;
   }
-  function render() {
+  function render(){
     list.innerHTML = '';
     const f = filterSel.value;
     for (const r of buffer) {
       if (f && f !== r.kind) continue;
-      const div = document.createElement('div');
-      div.textContent = r.line;
-      if (r.kind === 'ERR') div.style.color = '#f88';
-      else if (r.kind === 'WARN') div.style.color = '#ff8';
-      else if (r.kind === 'EDGE') div.style.color = '#8ff';
-      else if (r.kind === 'NET') div.style.color = '#8cf';
-      else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-      list.appendChild(div);
+      const d = document.createElement('div');
+      d.textContent = r.line;
+      d.style.color = colorFor(r.kind);
+      list.appendChild(d);
     }
     list.scrollTop = list.scrollHeight;
+    statEl.textContent = `${buffer.length} lines`;
   }
   filterSel.onchange = render;
 
-  // ---------- console hooks ----------
+  // --- Console + global error hooks ---
   const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-
+  console.log = (...a)=>{ try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
+  console.warn= (...a)=>{ try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a); };
+  console.error=(...a)=>{ try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a); };
   window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
   window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
 
-  // ---------- visibility (can affect clock) ----------
-  document.addEventListener('visibilitychange', () => {
-    push('OBS', `visibility: ${document.visibilityState}`);
-  });
+  // --- Visibility (affects clocks/timers) ---
+  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
 
-  // ---------- observe key UI fields (stage/phase/clock) ----------
-  const q = (id) => document.getElementById(id);
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
-
-  // Special handling for the clock: also compute drift vs real time
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
+  // --- Observe key text fields (stage/phase/state/clock) ---
+  function obsText(id, kind){
+    const el = document.getElementById(id); if (!el) return;
     let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
+    const mo = new MutationObserver(()=> {
+      if (el.textContent !== last){
+        const now = performance.now();
         const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
+        push(kind, `${id} ${last} → ${el.textContent}${kind==='CLOCK'?` (Δdom ${dt}s)`:''}`);
         last = el.textContent; lastAt = now;
       }
     });
     mo.observe(el, {childList:true, characterData:true, subtree:true});
-  })();
+  }
+  obsText('phaseKey','STAGE'); obsText('state','STAGE'); obsText('clock','CLOCK');
 
-  // ---------- fetch tracer (network + edge) ----------
+  // --- Fetch tracer (shows edge polls & network timings) ---
   const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
+  window.fetch = async function(url, opts = {}){
     const start = performance.now();
-    let method = (opts && opts.method) || 'GET';
-    let tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
+    const method = (opts && opts.method) || 'GET';
+    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
     push(tag, `${method} ${url}`);
     try {
       const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
+      push(tag, `${method} ${url} → ${res.status} (${(performance.now()-start).toFixed(0)}ms)`);
       return res;
     } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
+      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${(performance.now()-start).toFixed(0)}ms)`);
       throw e;
     }
   };
 
-  // ---------- timer / rAF tracing ----------
-  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-
-  const timers = new Map();
+  // --- Timer/rAF tracing (shows throttling) ---
+  const _si = setInterval, _ci = clearInterval, _st = setTimeout, _ct = clearTimeout;
+  const _raf = requestAnimationFrame, _caf = cancelAnimationFrame;
   window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick in ${(performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
+    const id = _si(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${(performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
   };
-  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-  window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run in ${(performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
+  window.clearInterval = function(id){ push('TIMER', `interval ${id} cleared`); return _ci(id); };
+  window.setTimeout = function(fn, ms, ...rest){
+    const id = _st(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${(performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
   };
-  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-  window.requestAnimationFrame = function(fn){
-    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
-  };
-  window.cancelAnimationFrame = function(id){ _caf(id); };
+  window.clearTimeout = function(id){ push('TIMER', `timeout ${id} cleared`); return _ct(id); };
+  window.requestAnimationFrame = (fn)=> _raf((t)=>{ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
+  window.cancelAnimationFrame = (id)=> _caf(id);
 
-  // ---------- image load tracing ----------
+  // --- Image load/error tracing (tiles + bracket) ---
   function hookImg(img){
     if (!img || img.__dbgHooked) return;
     img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
+    img.addEventListener('load', ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
+    img.addEventListener('error',()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
   }
   Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
+  new MutationObserver((ms)=>{
+    for (const m of ms){ m.addedNodes && m.addedNodes.forEach(n=>{
+      if (n.tagName==='IMG') hookImg(n);
       else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
+    });}
+  }).observe(document.documentElement, {childList:true, subtree:true});
 
-  // ---------- bracket observer ----------
+  // --- Bracket DOM observer ---
   const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
+  if (brows){
+    new MutationObserver((ms)=>{
+      let adds=0,rems=0; for (const m of ms){adds+=m.addedNodes.length; rems+=m.removedNodes.length;}
       push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
+    }).observe(brows, {childList:true, subtree:false});
   }
 
-  // ---------- public helpers you can call manually ----------
+  // --- Public hooks you can call from app code if desired ---
   window.RageDebug = {
     log: (k, m) => push(k||'LOG', m||''),
     markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
@@ -369,10 +355,9 @@
     markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
   };
 
-  // small banner on load
-  push('LOG', 'Debugger ready');
+  push('LOG', 'Debugger ready (v2.1)');
 })();
 </script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
+<!-- ================== /RAGE DEBUGGER v2.1 ================== -->
 </body>
 </html>
