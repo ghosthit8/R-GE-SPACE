@@ -1,4 +1,5 @@
-// js/main.js
+// js/main.js — uses fixed R32 images for the live match; other rounds unchanged
+
 import {
   // DOM
   clockEl, pauseBtn, voteA, voteB, submitBtn,
@@ -10,15 +11,15 @@ import {
   imgCache, lastPaintedBattleKey,
   // helpers
   setBoot, startBootTick, endBoot, iso, toast,
-  getUidOrNull, paintLoginBadge, callEdge, toggleTimer,
-  normalize, seedUrlFromKey, baseForSlot,
-  setStateUI, slotFinished, votingLockedFor, applyVotingLockUI,
+  getUidOrNull, toggleTimer,
+  seedUrlFromKey, baseForSlot, setStateUI,
+  slotFinished, votingLockedFor, applyVotingLockUI,
   // setters
   setPaused, setPeriodSec, setServerPhaseEndISO,
   setCurrentPhaseKey, setPrevPhaseKey, setRemainingSec,
   setLastSyncAt, setLastCountsAt, setCurrentUid, setChosen,
-  // NEW setters (avoid assigning to imported bindings)
   setActiveSlot, setCurrentStage, setOverlayGateBase, setLastPaintedBattleKey,
+  fixedSeedPair,
 } from "./core.js";
 
 import {
@@ -35,13 +36,15 @@ import { initFullscreenControls, setCurrentMatchImages } from "./ui.js";
 import { renderBracket, highlightActiveRow } from "./features/bracket.js";
 import { initOverlay, showChampion } from "./features/overlay.js";
 
-/* ------------ helpers ------------ */
+/* helpers */
 function fmtVotes(n){ return `${n} ${n===1?'vote':'votes'}`; }
 function currentBattleKey(){
   const base = baseForSlot(activeSlot);
   if (!base) return null;
   return activeSlot === "final" ? finalKeyFor(base) : `${base}::${activeSlot}`;
 }
+
+/* labels */
 function paintLabelsFor(slot){
   if (slot.startsWith("r32")){
     const n = slot.split("_")[1];
@@ -65,10 +68,10 @@ function paintLabelsFor(slot){
   }
 }
 
-/* ------------ paint current match ------------ */
+/* paint current match */
 async function paintImagesForActive(){
   const slot = activeSlot;
-  const base = baseForSlot(slot);
+  const base = baseForSlot(slot) || new Date().toISOString();
   if (!base) return;
 
   const battleKey = (slot === "final") ? finalKeyFor(base) : `${base}::${slot}`;
@@ -77,8 +80,8 @@ async function paintImagesForActive(){
     setCurrentMatchImages(imgCache.get(battleKey));
   } else {
     if (slot.startsWith("r32")){
-      const idx = Number(slot.split("_")[1]);
-      const pack = { A: seedUrlFromKey(base, `A${idx}`), B: seedUrlFromKey(base, `B${idx}`) };
+      // ← fixed images for R32, no randomness or network dependency
+      const pack = fixedSeedPair(slot);
       imgCache.set(battleKey, pack);
       setCurrentMatchImages(pack);
     } else if (slot.startsWith("r16")){
@@ -112,7 +115,7 @@ async function paintImagesForActive(){
   applyVotingLockUI();
 }
 
-/* ------------ vote counts ------------ */
+/* vote counts */
 async function refreshVoteCounts(){
   try{
     const key = currentBattleKey();
@@ -124,7 +127,7 @@ async function refreshVoteCounts(){
   }catch{}
 }
 
-/* ------------ state sync ------------ */
+/* fetch state from Edge */
 async function fetchState(){
   const prevEnd = serverPhaseEndISO;
   const prevStageSnapshot = currentStage;
@@ -221,7 +224,7 @@ async function fetchState(){
   applyVotingLockUI();
 }
 
-/* ------------ main loop ------------ */
+/* main loop */
 let rafId = null;
 function stop(){ if (rafId) cancelAnimationFrame(rafId); rafId = null; }
 async function start(){
@@ -245,7 +248,7 @@ async function start(){
   rafId = requestAnimationFrame(loop);
 }
 
-/* ------------ realtime ------------ */
+/* realtime */
 function initRealtime(){
   import("./core.js").then(({ supabase }) => {
     supabase
@@ -279,58 +282,42 @@ function initRealtime(){
   });
 }
 
-/* ------------ controls ------------ */
+/* controls */
 function initControls(){
-  pauseBtn.onclick = async () => {
-    try {
+  pauseBtn.onclick = async ()=>{
+    try{
       await toggleTimer(paused ? "resume" : "pause");
       await fetchState();
       toast("OK");
-    } catch (e) {
-      toast("Pause/resume failed");
-    }
+    }catch(e){ toast("Pause/resume failed"); }
   };
 
   function clearSelection(){
-    voteA.classList.remove("selected");
-    voteB.classList.remove("selected");
-    setChosen(null);
-    submitBtn.textContent = "✅ Submit Vote";
-    submitBtn.disabled = !currentUid;
+    voteA.classList.remove("selected"); voteB.classList.remove("selected");
+    setChosen(null); submitBtn.textContent = "✅ Submit Vote"; submitBtn.disabled = !currentUid;
   }
 
   voteA.onclick = ()=>{
     if (votingLockedFor(activeSlot)) return toast(slotFinished(activeSlot) ? "Voting closed" : "Not started");
-    setChosen("red");
-    voteA.classList.add("selected");
-    voteB.classList.remove("selected");
-    submitBtn.disabled = !currentUid;
+    setChosen("red"); voteA.classList.add("selected"); voteB.classList.remove("selected"); submitBtn.disabled = !currentUid;
   };
   voteB.onclick = ()=>{
     if (votingLockedFor(activeSlot)) return toast(slotFinished(activeSlot) ? "Voting closed" : "Not started");
-    setChosen("blue");
-    voteA.classList.remove("selected");
-    voteB.classList.add("selected");
-    submitBtn.disabled = !currentUid;
+    setChosen("blue"); voteA.classList.remove("selected"); voteB.classList.add("selected"); submitBtn.disabled = !currentUid;
   };
 
   submitBtn.onclick = async ()=>{
     if (votingLockedFor(activeSlot)) return toast(slotFinished(activeSlot) ? "Voting closed" : "Not started");
-    const key = currentBattleKey();
-    if (!chosen || !key) return;
+    const key = currentBattleKey(); if (!chosen || !key) return;
     if (!currentUid){ toast("Log in to vote"); return; }
     try{
       await upsertVote({ phase_key:key, vote:chosen, user_id: currentUid });
-      toast("✔ Vote submitted");
-      submitBtn.textContent = "✔ Voted";
-      submitBtn.disabled = true;
-      refreshVoteCounts();
+      toast("✔ Vote submitted"); submitBtn.textContent = "✔ Voted"; submitBtn.disabled = true; refreshVoteCounts();
     }catch{ toast("Vote failed"); }
   };
 
   window.addEventListener("rs:switch-slot", async (ev)=>{
-    const { slot } = ev.detail || {};
-    if (!slot) return;
+    const { slot } = ev.detail || {}; if (!slot) return;
     setActiveSlot(slot);
     clearSelection();
     setLastPaintedBattleKey(null);
@@ -341,28 +328,22 @@ function initControls(){
   });
 }
 
-/* ------------ boot ------------ */
+/* boot */
 (async function boot(){
-  // show any unhandled errors as a toast and always end loader
-  window.addEventListener("error", e => { try{ toast(String(e.message||e)); }catch{} });
-
   startBootTick(); setBoot(5, "wiring auth");
 
   try {
     setCurrentUid(await getUidOrNull());
-    paintLoginBadge();
     import("./core.js").then(({ supabase })=>{
       supabase.auth.onAuthStateChange((_evt, session)=>{
         setCurrentUid(session?.user?.id ?? null);
-        paintLoginBadge();
         submitBtn.disabled = !chosen || !currentUid;
       });
     });
 
     setBoot(35, "fetching state");
     try { await fetchState(); }
-    catch (e) {
-      console.error("[boot] fetchState failed:", e);
+    catch {
       toast("Couldn’t reach timer. Offline mode.");
       setPaused(true); setRemainingSec(null);
       if (!currentPhaseKey) {
@@ -373,20 +354,15 @@ function initControls(){
     }
 
     setBoot(58, "seeding images");
-    try { await paintImagesForActive(); } catch (e){ console.error("[boot] paintImagesForActive", e); }
+    try { await paintImagesForActive(); } catch {}
 
     setBoot(74, "loading vote counts");
-    try { await refreshVoteCounts(); } catch (e){ console.error("[boot] refreshVoteCounts", e); }
+    try { await refreshVoteCounts(); } catch {}
 
     setBoot(86, "initializing UI");
-    initFullscreenControls();
-    initOverlay();
-    initControls();
-    try { initRealtime(); } catch (e){ console.error("[boot] initRealtime", e); }
+    initFullscreenControls(); initOverlay(); initControls(); try { initRealtime(); } catch {}
 
-    setBoot(92, "starting engine");
-    await start();
-
+    setBoot(92, "starting engine"); await start();
     setBoot(100, "ready");
   } finally {
     endBoot();
