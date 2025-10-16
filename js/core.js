@@ -1,5 +1,4 @@
-// js/core.js
-// Core primitives shared by all features.
+// js/core.js — core state, helpers, fixed R32 seeding, and edge helpers
 
 export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 export const SUPABASE_ANON_KEY =
@@ -42,7 +41,7 @@ export const confettiCanvas = document.getElementById("confetti");
 export const brows = document.getElementById("brows");
 export const showDone = document.getElementById("showDone");
 
-/* ---------- Global State ---------- */
+/* ---------- Global State (mutable here) ---------- */
 export let paused = false;
 export let serverPhaseEndISO = null;
 export let currentPhaseKey = null;
@@ -55,16 +54,14 @@ export let lastCountsAt = 0;
 export let currentUid = null;
 export let chosen = null;
 
-// Tournament progression pointers (32-entrant flow)
 export let activeSlot = "r32_1";
 export let currentStage = "r32";
 export let overlayGateBase = null;
 
-// Cache battle images (per baseISO::slot)
 export const imgCache = new Map();
 export let lastPaintedBattleKey = null;
 
-/* ---------- Boot Loader ---------- */
+/* ---------- Boot Loader UI ---------- */
 const _bootFill = () => document.getElementById("bootFill");
 const _bootMsg  = () => document.getElementById("bootMsg");
 const _bootWrap = () => document.getElementById("bootLoader");
@@ -90,7 +87,7 @@ export function endBoot() {
   setTimeout(() => _bootWrap().classList.add("hidden"), 280);
 }
 
-/* ---------- Small Utils ---------- */
+/* ---------- Utils ---------- */
 export const iso = (d) => new Date(d).toISOString().replace(/\.\d{3}Z$/, "Z");
 
 export function toast(msg, ms = 1400) {
@@ -151,11 +148,10 @@ export async function callEdge(method = "GET", body = null, { timeoutMs = 10000 
   return j?.state || j || {};
 }
 
-/* Fallback: try POST first, then GET ?action=…  */
+/* Try POST first, then GET ?action=… as a fallback */
 export async function toggleTimer(action /* "pause"|"resume" */) {
-  try {
-    return await callEdge("POST", { action });
-  } catch (e) {
+  try { return await callEdge("POST", { action }); }
+  catch (e) {
     const u = new URL(EDGE_URL);
     u.searchParams.set("action", action);
     const res = await fetch(u.toString(), { method: "GET" });
@@ -173,22 +169,30 @@ export const normalize = (s) => ({
   remaining_sec: typeof s.remaining_sec === "number" ? s.remaining_sec : null,
 });
 
-/* ---------- Seeding & Stage Math ---------- */
-export function seedUrlFromKey(baseISO, suffix) {
-  const s = encodeURIComponent(`${baseISO}-${suffix}`);
-  return `https://picsum.photos/seed/${s}/1600/1200`;
+/* ---------- Fixed 32-image pool for R32 ---------- */
+export const SEED32 = [
+  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+  26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
+];
+export function picsum1600x1200(id) { return `https://picsum.photos/id/${id}/1600/1200`; }
+/** For r32_1..r32_16 return the same A/B pair every time */
+export function fixedSeedPair(slot) {
+  const n = Number(String(slot).split("_")[1]); // 1..16
+  if (!n || n < 1 || n > 16) return { A: "", B: "" };
+  const aIdx = n - 1;          // 0..15
+  const bIdx = 16 + (n - 1);   // 16..31
+  return { A: picsum1600x1200(SEED32[aIdx]), B: picsum1600x1200(SEED32[bIdx]) };
 }
 
-export const stageOfSlot = (slot) => {
-  if (slot.startsWith("r32")) return "r32";
-  if (slot.startsWith("r16")) return "r16";
-  if (slot.startsWith("qf"))  return "qf";
-  if (slot.startsWith("sf"))  return "sf";
-  return "final";
-};
-export const stageLevel = (st) =>
-  st === "r32" ? 1 : st === "r16" ? 2 : st === "qf" ? 3 : st === "sf" ? 4 : 5;
-export const slotLevel  = (slot) => stageLevel(stageOfSlot(slot));
+/* ---------- Stage math ---------- */
+export const stageOfSlot = (slot) =>
+  slot.startsWith("r32") ? "r32" :
+  slot.startsWith("r16") ? "r16" :
+  slot.startsWith("qf")  ? "qf"  :
+  slot.startsWith("sf")  ? "sf"  : "final";
+
+export const stageLevel = (st) => st==="r32"?1 : st==="r16"?2 : st==="qf"?3 : st==="sf"?4 : 5;
+export const slotLevel  = (slot)=> stageLevel(stageOfSlot(slot));
 
 export function baseAtOffset(n) {
   if (!currentPhaseKey) return null;
@@ -198,7 +202,7 @@ export function baseAtOffset(n) {
 export function baseForSlot(slot) {
   const curLv = stageLevel(currentStage || "r32");
   const needLv = slotLevel(slot);
-  const delta = curLv - needLv; // 0=this phase, 1..4 previous phases
+  const delta = curLv - needLv;
   if (delta <= 0) return currentPhaseKey;
   return baseAtOffset(delta);
 }
@@ -216,9 +220,9 @@ export function setStateUI() {
   pauseBtn.textContent = paused ? "▶️ Resume" : "⏸️ Pause";
   phaseBadge.textContent = "phase: " + (currentPhaseKey || "—");
 }
-export function slotFinished(slot) { return slotLevel(slot) < stageLevel(currentStage || "r32"); }
-export function votingLockedFor(slot) { return slotLevel(slot) !== stageLevel(currentStage || "r32"); }
-export function applyVotingLockUI() {
+export function slotFinished(slot){ return slotLevel(slot) < stageLevel(currentStage || "r32"); }
+export function votingLockedFor(slot){ return slotLevel(slot) !== stageLevel(currentStage || "r32"); }
+export function applyVotingLockUI(){
   const locked = votingLockedFor(activeSlot);
   [voteA, voteB, submitBtn].forEach((b) => (b.disabled = locked || !currentUid));
   const finished = slotFinished(activeSlot);
@@ -227,23 +231,22 @@ export function applyVotingLockUI() {
   submitBtn.textContent = locked ? (finished ? "Voting closed" : "Not started") : "✅ Submit Vote";
 }
 
-/* ---------- setters ---------- */
-export function setPaused(v) { paused = v; setStateUI(); }
-export function setPeriodSec(v) { periodSec = v; }
-export function setServerPhaseEndISO(v) { serverPhaseEndISO = v; }
-export function setCurrentPhaseKey(v) { currentPhaseKey = v; }
-export function setPrevPhaseKey(v) { prevPhaseKey = v; }
-export function setRemainingSec(v) { remainingSec = v; }
-export function setLastSyncAt(ts) { lastSyncAt = ts; }
-export function setLastCountsAt(ts) { lastCountsAt = ts; }
-export function setCurrentUid(uid) { currentUid = uid; paintLoginBadge(); }
-export function setChosen(v) { chosen = v; }
+/* ---------- setters (use these; don’t assign imports) ---------- */
+export function setPaused(v){ paused=v; setStateUI(); }
+export function setPeriodSec(v){ periodSec=v; }
+export function setServerPhaseEndISO(v){ serverPhaseEndISO=v; }
+export function setCurrentPhaseKey(v){ currentPhaseKey=v; }
+export function setPrevPhaseKey(v){ prevPhaseKey=v; }
+export function setRemainingSec(v){ remainingSec=v; }
+export function setLastSyncAt(ts){ lastSyncAt=ts; }
+export function setLastCountsAt(ts){ lastCountsAt=ts; }
+export function setCurrentUid(uid){ currentUid=uid; paintLoginBadge(); }
+export function setChosen(v){ chosen=v; }
 
-/* NEW setters to avoid assigning to imported bindings */
-export function setActiveSlot(v) { activeSlot = v; }
-export function setCurrentStage(v) { currentStage = v; }
-export function setOverlayGateBase(v) { overlayGateBase = v; }
-export function setLastPaintedBattleKey(v) { lastPaintedBattleKey = v; }
+export function setActiveSlot(v){ activeSlot=v; }
+export function setCurrentStage(v){ currentStage=v; }
+export function setOverlayGateBase(v){ overlayGateBase=v; }
+export function setLastPaintedBattleKey(v){ lastPaintedBattleKey=v; }
 
 /* ---------- Convenience ---------- */
 export const rowId = (slot) => `row-${slot}`;
