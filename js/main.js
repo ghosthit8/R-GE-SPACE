@@ -275,14 +275,15 @@ function initRealtime(){
 
 /* ------------ controls ------------ */
 function initControls(){
-  pauseBtn.onclick = async ()=>{
-    try{
-      if (paused) await callEdge("POST", { action:"resume" });
-      else        await callEdge("POST", { action:"pause" });
-      await fetchState();
-      toast("OK");
-    }catch{ toast("Pause/resume failed"); }
-  };
+  pauseBtn.onclick = async () => {
+  try {
+    await toggleTimer(paused ? "resume" : "pause");
+    await fetchState();
+    toast("OK");
+  } catch (e) {
+    toast("Pause/resume failed");
+  }
+};
 
   function clearSelection(){
     voteA.classList.remove("selected");
