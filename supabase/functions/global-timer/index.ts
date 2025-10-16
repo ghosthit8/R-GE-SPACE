@@ -39,37 +39,40 @@ type State = {
 
 /* ---------------- Serve ---------------- */
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const serviceRole = Deno.env.get("SERVICE_ROLE_KEY")!;
   const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
   const admin = createClient(url, serviceRole);
 
-  /* ----- helpers ----- */
+  // Parse JSON body (if any) and query params (always)
+  let body: any = {};
+  try { body = await req.json(); } catch { body = {}; }
+  const urlObj = new URL(req.url);
+  const intent = {
+    action: (body?.action || urlObj.searchParams.get("action") || "").toLowerCase(), // "pause"|"resume"|""
+    force: body?.force === true || urlObj.searchParams.get("force") === "true",
+  };
+
+  function replyOK(state: State) {
+    return new Response(JSON.stringify({ state }), { headers: corsHeaders });
+  }
+  function replyErr(status: number, message: string) {
+    return new Response(JSON.stringify({ error: message }), { status, headers: corsHeaders });
+  }
 
   async function winnerExists(phaseKey: string) {
-    const { data, error } = await admin
-      .from("winners")
-      .select("id")
-      .eq("phase_key", phaseKey)
-      .limit(1);
+    const { data, error } = await admin.from("winners").select("id").eq("phase_key", phaseKey).limit(1);
     if (error) console.error("winnerExists error:", error.message);
     return (data?.length ?? 0) > 0;
   }
-
   async function decideInDB(phaseKeyRaw: string) {
     const phaseKey = canonicalISO(phaseKeyRaw);
     if (await winnerExists(phaseKey)) return;
     const res = await fetch(`${url}/rest/v1/rpc/decide_winner`, {
       method: "POST",
-      headers: {
-        apikey: anon,
-        Authorization: `Bearer ${anon}`,
-        "Content-Type": "application/json",
-      },
+      headers: { apikey: anon, Authorization: `Bearer ${anon}`, "Content-Type": "application/json" },
       body: JSON.stringify({ phase_key: phaseKey }),
     });
     if (!res.ok && res.status !== 409) {
@@ -106,95 +109,56 @@ Deno.serve(async (req) => {
     return upserted as Row;
   }
 
-  function replyOK(state: State) {
-    return new Response(JSON.stringify({ state }), { headers: corsHeaders });
-  }
-  function replyErr(status: number, message: string) {
-    return new Response(JSON.stringify({ error: message }), {
-      status,
-      headers: corsHeaders,
-    });
-  }
-
-  /* ----- main handler ----- */
   try {
     let s = await loadOrBootstrap();
 
-    if (req.method === "POST") {
-      // Parse body safely (don’t fail the whole request on bad JSON)
-      let body: any = {};
-      try {
-        body = await req.json();
-      } catch {
-        body = {};
-      }
-
-      // Force: decide now (after GRACE), then roll one period
-      if (body?.force === true) {
-        const finishedPhase = canonicalISO(s.phase_end_at ?? nowIso());
-        await new Promise((r) => setTimeout(r, GRACE_MS));
-        await decideInDB(finishedPhase);
-
-        const newEnd = new Date(Date.parse(finishedPhase) + s.period_sec * 1000).toISOString();
-        const { data: upd, error: ue } = await admin
-          .from("tournament_state")
-          .update({
-            phase_end_at: newEnd,
-            paused: false,
-            paused_remaining_sec: null,
-            updated_at: nowIso(),
-          })
-          .eq("id", 1)
-          .select("*")
-          .single();
-        if (ue) throw new Error(ue.message);
-        s = upd as Row;
-      }
-
-      // Pause
-      if (body?.action === "pause" && !s.paused) {
-        const remainingNow = secondsUntil(s.phase_end_at);
-        const { data: upd, error: ue } = await admin
-          .from("tournament_state")
-          .update({
-            paused: true,
-            paused_remaining_sec: remainingNow,
-            updated_at: nowIso(),
-          })
-          .eq("id", 1)
-          .select("*")
-          .single();
-        if (ue) throw new Error(ue.message);
-        s = upd as Row;
-      }
-
-      // Resume
-      if (body?.action === "resume" && s.paused) {
-        const remaining = s.paused_remaining_sec ?? secondsUntil(s.phase_end_at);
-        const newEnd = new Date(Date.now() + remaining * 1000).toISOString();
-        const { data: upd, error: ue } = await admin
-          .from("tournament_state")
-          .update({
-            phase_end_at: newEnd,
-            paused: false,
-            paused_remaining_sec: null,
-            updated_at: nowIso(),
-          })
-          .eq("id", 1)
-          .select("*")
-          .single();
-        if (ue) throw new Error(ue.message);
-        s = upd as Row;
-      }
+    // Pause/Resume/Force regardless of method (supports GET ?action=… and POST)
+    if (intent.force) {
+      const finishedPhase = canonicalISO(s.phase_end_at ?? nowIso());
+      await new Promise((r) => setTimeout(r, GRACE_MS));
+      await decideInDB(finishedPhase);
+      const newEnd = new Date(Date.parse(finishedPhase) + s.period_sec * 1000).toISOString();
+      const { data: upd, error: ue } = await admin
+        .from("tournament_state")
+        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
+        .eq("id", 1)
+        .select("*")
+        .single();
+      if (ue) throw new Error(ue.message);
+      s = upd as Row;
     }
 
-    // Decide-at-zero catch-up (only when not paused)
+    if (intent.action === "pause" && !s.paused) {
+      const remainingNow = secondsUntil(s.phase_end_at);
+      const { data: upd, error: ue } = await admin
+        .from("tournament_state")
+        .update({ paused: true, paused_remaining_sec: remainingNow, updated_at: nowIso() })
+        .eq("id", 1)
+        .select("*")
+        .single();
+      if (ue) throw new Error(ue.message);
+      s = upd as Row;
+    }
+
+    if (intent.action === "resume" && s.paused) {
+      const remaining = s.paused_remaining_sec ?? secondsUntil(s.phase_end_at);
+      const newEnd = new Date(Date.now() + remaining * 1000).toISOString();
+      const { data: upd, error: ue } = await admin
+        .from("tournament_state")
+        .update({ phase_end_at: newEnd, paused: false, paused_remaining_sec: null, updated_at: nowIso() })
+        .eq("id", 1)
+        .select("*")
+        .single();
+      if (ue) throw new Error(ue.message);
+      s = upd as Row;
+    }
+
+    // Catch-up loop (when not paused)
     if (!s.paused) {
       while (secondsUntil(s.phase_end_at) <= 0) {
         const finishedPhase = canonicalISO(s.phase_end_at ?? nowIso());
         await new Promise((r) => setTimeout(r, GRACE_MS));
         await decideInDB(finishedPhase);
-
         const nextEnd = new Date(Date.parse(finishedPhase) + s.period_sec * 1000).toISOString();
         const { data: upd, error: ue } = await admin
           .from("tournament_state")
@@ -207,7 +171,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Build public state (safe for anyone)
     const remaining = s.paused
       ? (s.paused_remaining_sec ?? secondsUntil(s.phase_end_at))
       : secondsUntil(s.phase_end_at);
