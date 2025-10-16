@@ -90,6 +90,12 @@ export function endBoot() {
 /* ---------- Utils ---------- */
 export const iso = (d) => new Date(d).toISOString().replace(/\.\d{3}Z$/, "Z");
 
+// ✅ Restored — required by services.js
+export function seedUrlFromKey(baseISO, suffix) {
+  const s = encodeURIComponent(`${baseISO}-${suffix}`);
+  return `https://picsum.photos/seed/${s}/1600/1200`;
+}
+
 export function toast(msg, ms = 1400) {
   toastEl.textContent = msg;
   toastEl.classList.add("show");
@@ -175,12 +181,11 @@ export const SEED32 = [
   26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
 ];
 export function picsum1600x1200(id) { return `https://picsum.photos/id/${id}/1600/1200`; }
-/** For r32_1..r32_16 return the same A/B pair every time */
 export function fixedSeedPair(slot) {
-  const n = Number(String(slot).split("_")[1]); // 1..16
+  const n = Number(String(slot).split("_")[1]);
   if (!n || n < 1 || n > 16) return { A: "", B: "" };
-  const aIdx = n - 1;          // 0..15
-  const bIdx = 16 + (n - 1);   // 16..31
+  const aIdx = n - 1;
+  const bIdx = 16 + (n - 1);
   return { A: picsum1600x1200(SEED32[aIdx]), B: picsum1600x1200(SEED32[bIdx]) };
 }
 
@@ -231,7 +236,7 @@ export function applyVotingLockUI(){
   submitBtn.textContent = locked ? (finished ? "Voting closed" : "Not started") : "✅ Submit Vote";
 }
 
-/* ---------- setters (use these; don’t assign imports) ---------- */
+/* ---------- setters ---------- */
 export function setPaused(v){ paused=v; setStateUI(); }
 export function setPeriodSec(v){ periodSec=v; }
 export function setServerPhaseEndISO(v){ serverPhaseEndISO=v; }
