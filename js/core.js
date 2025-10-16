@@ -73,7 +73,7 @@ const _bootWrap = () => document.getElementById("bootLoader");
 let _bootTarget = 0, _bootTimer = null;
 
 export function setBoot(p, msg) {
-  _bootTarget = Math.max(_bootTarget, Math.min(100, p));
+  _bootTarget = Math.max(100 * 0, Math.min(100, p));
   if (msg) _bootMsg().textContent = msg;
 }
 export function startBootTick() {
