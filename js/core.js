@@ -1,9 +1,7 @@
 // js/core.js
 // Core primitives shared by all features.
-// Mirrors your original constants, state, DOM refs, and helpers. 1
+// Mirrors your original constants, state, DOM refs, and helpers.
 
-/* ---------- Config & Clients ---------- */
-// Keep these identical to your current file so the same project/edge function is used. 2
 export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 export const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
@@ -46,8 +44,6 @@ export const brows = document.getElementById("brows");
 export const showDone = document.getElementById("showDone");
 
 /* ---------- Global State (live bindings) ---------- */
-// Live exports so other modules can read/update.
-// Matches your original names/semantics. 3
 export let paused = false;
 export let serverPhaseEndISO = null;
 export let currentPhaseKey = null;
@@ -60,12 +56,12 @@ export let lastCountsAt = 0;
 export let currentUid = null;
 export let chosen = null;
 
-// Tournament progression pointers (32-entrant flow) 4
+// Tournament progression pointers (32-entrant flow)
 export let activeSlot = "r32_1";  // r32_1..r32_16 | r16_1..r16_8 | qf1..qf4 | sf1/sf2 | final
 export let currentStage = "r32";  // 'r32'|'r16'|'qf'|'sf'|'final'
 export let overlayGateBase = null;
 
-// Cache battle images (per baseISO::slot) so thumbs & current match stay stable. 5
+// Cache battle images (per baseISO::slot)
 export const imgCache = new Map();
 export let lastPaintedBattleKey = null;
 
@@ -79,18 +75,15 @@ export function setBoot(p, msg) {
   _bootTarget = Math.max(_bootTarget, Math.min(100, p));
   if (msg) _bootMsg().textContent = msg;
 }
-
 export function startBootTick() {
   if (_bootTimer) return;
   _bootTimer = setInterval(() => {
     const el = _bootFill();
     const cur = parseFloat(el.style.width || "0");
-    const toward =
-      _bootTarget > cur ? cur + Math.max(1, (_bootTarget - cur) * 0.12) : cur + 0.18;
+    const toward = _bootTarget > cur ? cur + Math.max(1, (_bootTarget - cur) * 0.12) : cur + 0.18;
     el.style.width = Math.min(99, toward).toFixed(2) + "%";
   }, 60);
 }
-
 export function endBoot() {
   clearInterval(_bootTimer);
   _bootTimer = null;
@@ -99,8 +92,7 @@ export function endBoot() {
 }
 
 /* ---------- Small Utils ---------- */
-export const iso = (d) =>
-  new Date(d).toISOString().replace(/\.\d{3}Z$/, "Z");
+export const iso = (d) => new Date(d).toISOString().replace(/\.\d{3}Z$/, "Z");
 
 export function toast(msg, ms = 1400) {
   toastEl.textContent = msg;
@@ -125,21 +117,39 @@ export function paintLoginBadge() {
   }
 }
 
-// Edge function call + normalization (same semantics as your inline version). 6
-export async function callEdge(method = "GET", body = null) {
-  const res = await fetch(EDGE_URL, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      apikey: SUPABASE_ANON_KEY,
-    },
-    body: body ? JSON.stringify(body) : null,
-  });
-  const raw = await res.text();
-  let j = null;
-  try { j = JSON.parse(raw); } catch {}
-  if (!res.ok) throw new Error((j && j.error) || raw || "edge error");
+/* ---------- Edge: resilient call with timeout ---------- */
+export async function callEdge(method = "GET", body = null, { timeoutMs = 10000 } = {}) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  let res, raw, j;
+  try {
+    res = await fetch(EDGE_URL, {
+      method,
+      signal: ctrl.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: body ? JSON.stringify(body) : null,
+    });
+    raw = await res.text();
+    try { j = JSON.parse(raw); } catch { /* keep raw */ }
+  } catch (e) {
+    clearTimeout(t);
+    console.error("[edge] network error:", e);
+    throw new Error(e.name === "AbortError" ? "Edge request timed out" : "Edge fetch failed");
+  } finally {
+    clearTimeout(t);
+  }
+
+  if (!res.ok) {
+    const msg = (j && (j.error || j.message)) || raw || `HTTP ${res.status}`;
+    console.error("[edge] bad response:", msg);
+    throw new Error(msg);
+  }
+
   return j?.state || j || {};
 }
 
@@ -147,12 +157,10 @@ export const normalize = (s) => ({
   phase_end_at: s.phase_end_at ?? null,
   period_sec: s.period_sec ?? 20,
   paused: !!s.paused,
-  remaining_sec:
-    typeof s.remaining_sec === "number" ? s.remaining_sec : null,
+  remaining_sec: typeof s.remaining_sec === "number" ? s.remaining_sec : null,
 });
 
 /* ---------- Seeding & Stage Math ---------- */
-// Same seed function your file uses for Picsum placeholder seeding. 7
 export function seedUrlFromKey(baseISO, suffix) {
   const s = encodeURIComponent(`${baseISO}-${suffix}`);
   return `https://picsum.photos/seed/${s}/1600/1200`;
@@ -174,7 +182,6 @@ export function baseAtOffset(n) {
   const t = Date.parse(currentPhaseKey) - Math.max(0, n) * periodSec * 1000;
   return iso(t);
 }
-
 export function baseForSlot(slot) {
   const curLv = stageLevel(currentStage || "r32");
   const needLv = slotLevel(slot);
@@ -182,7 +189,6 @@ export function baseForSlot(slot) {
   if (delta <= 0) return currentPhaseKey;
   return baseAtOffset(delta);
 }
-
 export function baseForCompletedStage(stage) {
   const curLv = stageLevel(currentStage || "r32");
   const needLv = stageLevel(stage);
@@ -197,7 +203,6 @@ export function setStateUI() {
   pauseBtn.textContent = paused ? "▶️ Resume" : "⏸️ Pause";
   phaseBadge.textContent = "phase: " + (currentPhaseKey || "—");
 }
-
 export function slotFinished(slot) {
   return slotLevel(slot) < stageLevel(currentStage || "r32");
 }
