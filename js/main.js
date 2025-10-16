@@ -268,7 +268,7 @@ function initRealtime(){
       .channel("winners-final-overlay")
       .on("postgres_changes", { event:"INSERT", schema:"public", table:"winners" }, (payload)=>{
         const key = payload?.new?.phase_key || "";
-        const color = (payload?.new?.color || "").toLowerCase();
+        aconst color = (payload?.new?.color || "").toLowerCase();
         if (!key.endsWith("::final")) return;
         const base = key.split("::")[0];
         if (!overlayGateBase || base !== overlayGateBase) return;
@@ -380,14 +380,28 @@ function initControls(){
     toast("Couldn’t reach timer. Loading offline mode.");
     setPaused(true);
     setRemainingSec(null);
-    // continue boot so UI loads
+
+    // Minimal local bases so R32 seeding still works offline
+    if (!currentPhaseKey) {
+      const now = Date.now();
+      setCurrentPhaseKey(new Date(now).toISOString());
+      setPrevPhaseKey(new Date(now - (periodSec || 20) * 1000).toISOString());
+    }
   }
 
   setBoot(58, "seeding images");
-  await paintImagesForActive();
+  try {
+    await paintImagesForActive();
+  } catch (e) {
+    console.error("[boot] paintImagesForActive failed:", e);
+  }
 
   setBoot(74, "loading vote counts");
-  await refreshVoteCounts();
+  try {
+    await refreshVoteCounts();
+  } catch (e) {
+    console.error("[boot] refreshVoteCounts failed:", e);
+  }
 
   setBoot(86, "initializing UI");
   initFullscreenControls();
