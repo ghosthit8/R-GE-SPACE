@@ -5,17 +5,27 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Rage Space — Matchup</title>
 
-  <!-- Preconnect + Supabase client (same as your current setup) -->
+  <!-- no-cache hints for GH Pages -->
+  <meta http-equiv="Cache-Control" content="no-store, max-age=0, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
+  <!-- Preconnect + Supabase client -->
   <link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
-  <!-- Main stylesheet (we'll create css/matchup.css next) -->
+  <!-- Main stylesheet -->
   <link rel="stylesheet" href="./css/matchup.css"/>
 
   <!-- Minimal safe fallback to avoid a flash while CSS loads -->
   <style>
     body{background:#000;color:#39ff14;margin:0;font-family:system-ui,Arial,Helvetica,sans-serif}
     .wrap{max-width:980px;margin:16px auto 64px;padding:0 16px}
+    #bootLoader{position:fixed;inset:0;display:grid;place-items:center;background:#000}
+    .boot-bar{width:76vw;max-width:640px;height:8px;background:#111;border:1px solid #0a0;box-shadow:0 0 10px #0a0 inset}
+    .boot-fill{height:100%;width:0;background:#0f0;transition:width .1s linear}
+    .boot-title{color:#0f0;margin-bottom:8px}
+    .boot-sub{color:#8f8;margin-top:8px}
   </style>
 </head>
 <body>
@@ -118,31 +128,36 @@
     <img id="fsImage" alt="Fullscreen Art"/>
   </div>
 
-  <!-- Main app config first (same URL/key/timer endpoint you use) -->
+  <!-- Main app config first (matches your project) -->
   <script type="module">
     export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
-    // (Pulled from your current file so behavior matches exactly. 1)
   </script>
 
-  <!-- App entrypoint (we'll create these next): -->
-  <!-- Order matters: core → services → ui → features → start -->
-  <script type="module" src="./js/core.js"></script>
-  <script type="module" src="./js/services.js"></script>
-  <script type="module" src="./js/ui.js"></script>
-  <script type="module" src="./js/features/bracket.js"></script>
-  <script type="module" src="./js/features/overlay.js"></script>
-  <script type="module" src="./js/main.js"></script>
+  <!-- Version tag to bust module caches -->
+  <script>
+    window.__APP_VER__ = "2025-10-16-04";
+  </script>
 
-  <!-- Robust show/hide finished rounds (kept as its own drop-in init) -->
-  <script type="module" src="./js/extras/show-finished-toggle.js"></script>
+  <!-- App entrypoint (order matters). Add ?v=VER for cache-bust -->
+  <script type="module" src="./js/core.js?v=2025-10-16-04"></script>
+  <script type="module" src="./js/services.js?v=2025-10-16-04"></script>
+  <script type="module" src="./js/ui.js?v=2025-10-16-04"></script>
+  <script type="module" src="./js/features/bracket.js?v=2025-10-16-04"></script>
+  <script type="module" src="./js/features/overlay.js?v=2025-10-16-04"></script>
+  <script type="module" src="./js/main.js?v=2025-10-16-04"></script>
 
-  <noscript>
-    <div style="padding:12px;color:#e33;border:1px solid #e33;margin:16px">
-      This app requires JavaScript.
-    </div>
-  </noscript>
+  <!-- Optional: unregister any old service workers (harmless if none) -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations?.().then((regs) => {
+        for (const r of regs) r.unregister();
+      }).catch(() => {});
+    }
+  </script>
+
+  <!-- Mobile Debugger (inline) -->
   <script>
 // ========== 🔧 Simple Mobile Debugger ==========
 (function () {
@@ -165,10 +180,7 @@
   toggle.onclick = () => dbg.style.display = dbg.style.display === 'none' ? 'block' : 'none';
 
   const controls = document.createElement('div');
-  controls.innerHTML = `
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgClear">Clear</button>
-  `;
+  controls.innerHTML = `<button id="dbgCopy">Copy</button><button id="dbgClear">Clear</button>`;
   controls.style.cssText = 'position: sticky; top: 0; background: #111; padding: 2px;';
   controls.querySelectorAll('button').forEach(b => {
     b.style.cssText = 'background:#000; color:#0f0; border:1px solid #0f0; margin-right:4px;';
@@ -187,13 +199,11 @@
     dbg.scrollTop = dbg.scrollHeight;
   }
 
-  // Hook into console
   const origLog = console.log;
   const origErr = console.error;
   console.log = (...args) => { origLog(...args); addLine('LOG', args.join(' ')); };
   console.error = (...args) => { origErr(...args); addLine('ERR', args.join(' ')); };
 
-  // Hook into window errors
   window.addEventListener('error', (e) => {
     addLine('ERR', e.message + (e.filename ? ` @ ${e.filename}:${e.lineno}` : ''));
   });
@@ -211,9 +221,8 @@
     addLine('INFO', 'Cleared');
   };
 
-  // Expose a manual logger
   window.debugLog = (msg) => addLine('MANUAL', msg);
 })();
-</script>
+  </script>
 </body>
 </html>
