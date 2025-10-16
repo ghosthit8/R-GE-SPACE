@@ -1,9 +1,14 @@
-// js/core.js — core state, helpers, fixed R32 seeding, and edge helpers
+// js/core.js — core state, helpers, fixed R32 seeding, edge helpers, and cache-busting
 
 export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 export const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
+
+// --- cache/version ---
+export const VER = "2025-10-16-04";                // bump on each deploy
+export const qv = () => `v=${VER}`;
+export const withBust = (url) => url + (url.includes("?") ? "&" : "?") + qv();
 
 // Supabase client (UMD from matchup.html)
 export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -90,10 +95,10 @@ export function endBoot() {
 /* ---------- Utils ---------- */
 export const iso = (d) => new Date(d).toISOString().replace(/\.\d{3}Z$/, "Z");
 
-// ✅ Restored — required by services.js
+// Deterministic image URL from a base ISO + suffix (used by services.js)
 export function seedUrlFromKey(baseISO, suffix) {
   const s = encodeURIComponent(`${baseISO}-${suffix}`);
-  return `https://picsum.photos/seed/${s}/1600/1200`;
+  return withBust(`https://picsum.photos/seed/${s}/1600/1200`);
 }
 
 export function toast(msg, ms = 1400) {
@@ -126,9 +131,11 @@ export async function callEdge(method = "GET", body = null, { timeoutMs = 10000 
 
   let res, raw, j;
   try {
-    res = await fetch(EDGE_URL, {
+    const url = EDGE_URL + (method === "GET" ? `?${qv()}` : "");
+    res = await fetch(url, {
       method,
       signal: ctrl.signal,
+      cache: "no-store",                 // ← avoid stale state on mobile
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
@@ -160,7 +167,8 @@ export async function toggleTimer(action /* "pause"|"resume" */) {
   catch (e) {
     const u = new URL(EDGE_URL);
     u.searchParams.set("action", action);
-    const res = await fetch(u.toString(), { method: "GET" });
+    u.searchParams.set("v", VER);         // ← version bust
+    const res = await fetch(u.toString(), { method: "GET", cache: "no-store" });
     const raw = await res.text();
     let j; try { j = JSON.parse(raw); } catch {}
     if (!res.ok) throw new Error((j && (j.error || j.message)) || raw || `HTTP ${res.status}`);
@@ -180,7 +188,7 @@ export const SEED32 = [
   10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
   26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
 ];
-export function picsum1600x1200(id) { return `https://picsum.photos/id/${id}/1600/1200`; }
+export function picsum1600x1200(id) { return withBust(`https://picsum.photos/id/${id}/1600/1200`); }
 export function fixedSeedPair(slot) {
   const n = Number(String(slot).split("_")[1]);
   if (!n || n < 1 || n > 16) return { A: "", B: "" };
