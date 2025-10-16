@@ -157,26 +157,36 @@
     }
   </script>
 
-<!-- ================== RAGE DEBUGGER v2 ================== -->
+<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
 <script>
 (function () {
-  // ---------- config ----------
-  const MAX_LINES = 2000;                 // ring buffer size
+  const MAX_LINES = 2000;
   const EDGE_MATCH = /\/functions\/v1\/global-timer/;
 
-  // ---------- ui ----------
+  // --- create floating button OUTSIDE the hidden panel ---
+  const floatBtn = document.createElement('button');
+  floatBtn.id = 'dbgFloatingBtn';
+  floatBtn.textContent = '🐛 Debug';
+  floatBtn.style.cssText = `
+    position: fixed; right: 8px; bottom: 8px;
+    z-index: 2147483647; background:#000; color:#0f0;
+    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
+    font: 12px/1.1 monospace; cursor:pointer;
+  `;
+  document.body.appendChild(floatBtn);
+
+  // --- panel wrapper (starts hidden) ---
   const wrap = document.createElement('div');
   wrap.id = 'dbg';
   wrap.style.cssText = `
     position: fixed; right: 0; bottom: 0; left: 0;
     background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483647; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
+    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
   `;
 
   const bar = document.createElement('div');
   bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
   bar.innerHTML = `
-    <button id="dbgToggle" style="position:fixed; right:8px; bottom:8px; z-index:2147483646; background:#000; color:#0f0; border:1px solid #0f0; border-radius:6px; padding:6px 8px;">🐛 Debug</button>
     <span style="color:#6f6">Rage Debug</span>
     <label>Filter:
       <select id="dbgFilter">
@@ -190,6 +200,8 @@
     <button id="dbgCopy">Copy</button>
     <button id="dbgDownload">Download</button>
     <button id="dbgClear">Clear</button>
+    <span style="margin-left:auto"></span>
+    <button id="dbgClose">✕</button>
   `;
 
   const list = document.createElement('div');
@@ -197,9 +209,13 @@
 
   wrap.appendChild(bar); wrap.appendChild(list);
   document.body.appendChild(wrap);
-  const btn = bar.querySelector('#dbgToggle');
-  btn.onclick = () => wrap.style.display = (wrap.style.display === 'none' ? 'block' : 'none');
 
+  // button wiring
+  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
+  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
+  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
+
+  // controls
   const filterSel  = bar.querySelector('#dbgFilter');
   const recordChk  = bar.querySelector('#dbgRecord');
   bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
@@ -210,7 +226,7 @@
     a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
   };
 
-  // ---------- ring buffer ----------
+  // ring buffer + rendering
   let buffer = [];
   function push(kind, msg, extra) {
     if (!recordChk.checked) return;
@@ -219,37 +235,26 @@
     buffer.push({kind, line, extra});
     if (buffer.length > MAX_LINES) buffer.shift();
     const f = filterSel.value;
-    if (!f || f === kind) {
-      const div = document.createElement('div');
-      div.textContent = line;
-      if (kind === 'ERR') div.style.color = '#f88';
-      else if (kind === 'WARN') div.style.color = '#ff8';
-      else if (kind === 'EDGE') div.style.color = '#8ff';
-      else if (kind === 'NET') div.style.color = '#8cf';
-      else if (kind === 'TIMER' || kind === 'CLOCK') div.style.color = '#6f6';
-      list.appendChild(div);
-      list.scrollTop = list.scrollHeight;
-    }
+    if (!f || f === kind) addLine({kind, line});
   }
-  function render() {
+  function addLine(r){
+    const div = document.createElement('div');
+    div.textContent = r.line;
+    if (r.kind === 'ERR') div.style.color = '#f88';
+    else if (r.kind === 'WARN') div.style.color = '#ff8';
+    else if (r.kind === 'EDGE') div.style.color = '#8ff';
+    else if (r.kind === 'NET')  div.style.color = '#8cf';
+    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
+    list.appendChild(div); list.scrollTop = list.scrollHeight;
+  }
+  function render(){
     list.innerHTML = '';
     const f = filterSel.value;
-    for (const r of buffer) {
-      if (f && f !== r.kind) continue;
-      const div = document.createElement('div');
-      div.textContent = r.line;
-      if (r.kind === 'ERR') div.style.color = '#f88';
-      else if (r.kind === 'WARN') div.style.color = '#ff8';
-      else if (r.kind === 'EDGE') div.style.color = '#8ff';
-      else if (r.kind === 'NET') div.style.color = '#8cf';
-      else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-      list.appendChild(div);
-    }
-    list.scrollTop = list.scrollHeight;
+    for (const r of buffer) if (!f || f === r.kind) addLine(r);
   }
   filterSel.onchange = render;
 
-  // ---------- console hooks ----------
+  // console hooks
   const _log = console.log, _warn = console.warn, _err = console.error;
   console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
   console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
@@ -258,13 +263,10 @@
   window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
   window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
 
-  // ---------- visibility (can affect clock) ----------
-  document.addEventListener('visibilitychange', () => {
-    push('OBS', `visibility: ${document.visibilityState}`);
-  });
-
-  // ---------- observe key UI fields (stage/phase/clock) ----------
+  // visibility & UI observers
+  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
   const q = (id) => document.getElementById(id);
+
   function observeText(id, kind) {
     const el = q(id); if (!el) return;
     let last = el.textContent;
@@ -279,7 +281,6 @@
   observeText('phaseKey', 'STAGE');
   observeText('state', 'STAGE');
 
-  // Special handling for the clock: also compute drift vs real time
   (function watchClock(){
     const el = q('clock'); if (!el) return;
     let last = el.textContent, lastAt = performance.now();
@@ -294,12 +295,12 @@
     mo.observe(el, {childList:true, characterData:true, subtree:true});
   })();
 
-  // ---------- fetch tracer (network + edge) ----------
+  // fetch tracer
   const _fetch = window.fetch.bind(window);
   window.fetch = async function(url, opts = {}) {
     const start = performance.now();
-    let method = (opts && opts.method) || 'GET';
-    let tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
+    const method = (opts && opts.method) || 'GET';
+    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
     push(tag, `${method} ${url}`);
     try {
       const res = await _fetch(url, opts);
@@ -313,19 +314,19 @@
     }
   };
 
-  // ---------- timer / rAF tracing ----------
+  // timers & rAF
   const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
   const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
   const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
 
   const timers = new Map();
   window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick in ${(performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
     timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
   };
   window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
   window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run in ${(performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
     timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
   };
   window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
@@ -334,7 +335,7 @@
   };
   window.cancelAnimationFrame = function(id){ _caf(id); };
 
-  // ---------- image load tracing ----------
+  // image load tracing
   function hookImg(img){
     if (!img || img.__dbgHooked) return;
     img.__dbgHooked = true;
@@ -350,7 +351,7 @@
   });
   imgObs.observe(document.documentElement, {childList:true, subtree:true});
 
-  // ---------- bracket observer ----------
+  // bracket observer
   const brows = document.getElementById('brows');
   if (brows) {
     const mo = new MutationObserver((ms)=>{
@@ -361,7 +362,7 @@
     mo.observe(brows, {childList:true, subtree:false});
   }
 
-  // ---------- public helpers you can call manually ----------
+  // public helpers
   window.RageDebug = {
     log: (k, m) => push(k||'LOG', m||''),
     markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
@@ -369,8 +370,8 @@
     markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
   };
 
-  // small banner on load
-  push('LOG', 'Debugger ready');
+  // small banner
+  (console.log||(()=>{}))('Debugger ready');
 })();
 </script>
 <!-- ================== /RAGE DEBUGGER v2 ================== -->
