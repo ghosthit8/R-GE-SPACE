@@ -1,6 +1,5 @@
 // js/main.js
 // App orchestrator: state sync loop, painting, voting, realtime, and UI init.
-// Mirrors the control flow from your original matchup file. 1
 
 import {
   // DOM
@@ -113,7 +112,7 @@ async function paintImagesForActive(){
   await renderBracket({
     activeSlot,
     isSlotFinished: (s)=> slotFinished(s),
-    isSlotLive:     (s)=> (s && s !== "final" ? ( /* live == same stage level */ true ) : true) && !slotFinished(s),
+    isSlotLive:     (s)=> (s && s !== "final" ? true : true) && !slotFinished(s),
   });
 
   applyVotingLockUI();
@@ -139,7 +138,7 @@ async function fetchState(){
   const prevStageSnapshot = currentStage;
 
   // Pull from edge
-  const s = await fetchTimerState();                        // normalized via services
+  const s = await fetchTimerState(); // normalized via services
   setServerPhaseEndISO(s.phase_end_at);
   setPaused(!!s.paused);
   setRemainingSec(s.remaining_sec);
@@ -153,12 +152,11 @@ async function fetchState(){
   setPrevPhaseKey(prevKey);
   setStateUI();
 
-  // Handle phase flip transitions (matches your inline flow). 2
+  // Handle phase flip transitions
   if (prevEnd && serverPhaseEndISO && prevEnd !== serverPhaseEndISO){
     const justEndedBase = iso(prevEnd);
 
     if (prevStageSnapshot === "final"){
-      // Final just ended: persist final winner and loop back to R32
       const fKey = finalKeyFor(justEndedBase);
       const color = await decideAndPersistWinner(fKey);
       if (!imgCache.has(fKey)){
@@ -166,25 +164,20 @@ async function fetchState(){
         if (pack) imgCache.set(fKey, pack);
       }
       if (overlayGateBase === justEndedBase) showChampion(color, justEndedBase);
-
-      // Reset for next tournament
       overlayGateBase = null;
       activeSlot = "r32_1";
       imgCache.clear(); lastPaintedBattleKey = null;
 
     } else if (prevStageSnapshot === "sf"){
-      // SF ended → persist sf1/sf2 and move to Final
       const { sf1, sf2 } = semiKeysFor(justEndedBase);
       await Promise.all([ decideAndPersistWinner(sf1), decideAndPersistWinner(sf2) ]);
-
-      overlayGateBase = currentPhaseKey;  // gate champion to the final that just started
+      overlayGateBase = currentPhaseKey;
       activeSlot = "final";
       const pack = await getFinalEntrantSourcesFromWinners();
       if (pack) imgCache.set(finalKeyFor(currentPhaseKey), pack);
       lastPaintedBattleKey = null;
 
     } else if (prevStageSnapshot === "qf"){
-      // QF ended → persist all 4, move to SF
       const { qf1, qf2, qf3, qf4 } = qfKeysFor(justEndedBase);
       await Promise.all([
         decideAndPersistWinner(qf1),
@@ -192,7 +185,6 @@ async function fetchState(){
         decideAndPersistWinner(qf3),
         decideAndPersistWinner(qf4),
       ]);
-
       activeSlot = "sf1";
       const p1 = await getSemiEntrantSourcesFromQFWinners("sf1");
       const p2 = await getSemiEntrantSourcesFromQFWinners("sf2");
@@ -201,10 +193,8 @@ async function fetchState(){
       lastPaintedBattleKey = null;
 
     } else if (prevStageSnapshot === "r16"){
-      // R16 ended → persist all 8, move to QF
       const r16 = Array.from({length:8},(_,i)=>`${justEndedBase}::r16_${i+1}`);
       await Promise.all(r16.map(k=>decideAndPersistWinner(k)));
-
       activeSlot = "qf1";
       const qp1 = await getQFEntrantSourcesFromR16Winners("qf1");
       const qp2 = await getQFEntrantSourcesFromR16Winners("qf2");
@@ -217,12 +207,9 @@ async function fetchState(){
       lastPaintedBattleKey = null;
 
     } else {
-      // R32 ended → persist all 16, move to R16
       const r32 = r32KeysFor(justEndedBase);
       await Promise.all(Object.values(r32).map(k=>decideAndPersistWinner(k)));
-
       activeSlot = "r16_1";
-      // seed R16 cache
       for (let i=1;i<=8;i++){
         const slot = `r16_${i}`;
         const pack = await getR16EntrantSourcesFromR32Winners(slot);
@@ -275,12 +262,7 @@ async function start(){
 /* ---------------- Realtime ---------------- */
 
 function initRealtime(){
-  // Final overlay trigger: on INSERT into winners for ::final of the gated base. 3
-  window.supabase
-    .createClient // not needed; reuse the client from core.js via channels on supabase there
-  ; // placeholder comment to clarify we use the existing client channels below.
-
-  // Use the client from core.js (already created). Access via import { supabase } if needed.
+  // Winners + votes realtime
   import("./core.js").then(({ supabase }) => {
     supabase
       .channel("winners-final-overlay")
@@ -306,8 +288,6 @@ function initRealtime(){
       .on("postgres_changes", { event:"*", schema:"public", table:"phase_votes" }, async (payload)=>{
         const pk = payload?.new?.phase_key || payload?.old?.phase_key;
         if (!pk) return;
-        // Update scores list-wide
-        // (renderBracket() calls updateBracketScores internally on render; here we just refresh counts for current match)
         const want = currentBattleKey();
         if (pk && want && pk === want) await refreshVoteCounts();
       })
@@ -364,12 +344,9 @@ function initControls(){
     }catch{ toast("Vote failed"); }
   };
 
-  // Switch-slot event from bracket rows
   window.addEventListener("rs:switch-slot", async (ev)=>{
     const { slot } = ev.detail || {};
     if (!slot) return;
-    // Update active slot + repaint
-    // (these are exported vars in core.js; we just reassign)
     activeSlot = slot;
     clearSelection();
     lastPaintedBattleKey = null;
@@ -383,13 +360,10 @@ function initControls(){
 /* ---------------- Boot / Startup ---------------- */
 
 (async function boot(){
-  // Boot meter
-  startBootTick();           setBoot(5,  "wiring auth");
+  startBootTick(); setBoot(5, "wiring auth");
 
-  // Auth + badge
   setCurrentUid(await getUidOrNull());
   paintLoginBadge();
-  // react to auth changes
   import("./core.js").then(({ supabase })=>{
     supabase.auth.onAuthStateChange((_evt, session)=>{
       setCurrentUid(session?.user?.id ?? null);
@@ -398,18 +372,23 @@ function initControls(){
     });
   });
 
-  // Initial state
   setBoot(35, "fetching state");
-  await fetchState();
+  try {
+    await fetchState();
+  } catch (e) {
+    console.error("[boot] fetchState failed:", e);
+    toast("Couldn’t reach timer. Loading offline mode.");
+    setPaused(true);
+    setRemainingSec(null);
+    // continue boot so UI loads
+  }
 
-  // First paint
   setBoot(58, "seeding images");
   await paintImagesForActive();
 
   setBoot(74, "loading vote counts");
   await refreshVoteCounts();
 
-  // Init UI modules
   setBoot(86, "initializing UI");
   initFullscreenControls();
   initOverlay();
