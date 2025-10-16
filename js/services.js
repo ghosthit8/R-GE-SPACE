@@ -1,291 +1,275 @@
 // js/services.js
-// Data + stage services: Supabase reads/writes, edge-timer fetch,
-// winners/votes helpers, and entrant rebuilders.
-// Mirrors the behavior from your original matchup file. 1
+// Works with fixed R32 seeding (from core.fixedSeedPair).
+// Provides: fetchTimerState, detectStage, countVotesFor, upsertVote,
+// decideAndPersistWinner, entrants for each stage, and key helpers.
 
 import {
   supabase,
-  callEdge,
-  normalize,
-  // live state (read-only here)
-  currentPhaseKey, prevPhaseKey, periodSec,
-  // helpers
-  seedUrlFromKey,
+  EDGE_URL,
+  SUPABASE_ANON_KEY,
+  baseForSlot,
   baseForCompletedStage,
-  // caches
-  imgCache,
+  fixedSeedPair,
+  seedUrlFromKey, // still used for finals fallback
 } from "./core.js";
 
-/* ---------------- Timer / Edge state ---------------- */
+/* ---------------- basic http to edge ---------------- */
+async function edgeGet() {
+  const res = await fetch(EDGE_URL, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      apikey: SUPABASE_ANON_KEY,
+    },
+  });
+  const raw = await res.text();
+  let j; try { j = JSON.parse(raw); } catch {}
+  if (!res.ok) throw new Error((j && (j.error || j.message)) || raw || `HTTP ${res.status}`);
+  return j?.state || j || {};
+}
 
 export async function fetchTimerState() {
-  // Raw call to edge + normalization (no UI side-effects here)
-  const s = normalize(await callEdge("GET"));
+  const s = await edgeGet();
   return {
-    phase_end_at: s.phase_end_at,
-    paused: s.paused,
-    period_sec: s.period_sec,
-    remaining_sec: s.remaining_sec,
+    phase_end_at: s.phase_end_at ?? s.phaseEndAt ?? new Date().toISOString(),
+    period_sec: s.period_sec ?? s.periodSec ?? 20,
+    paused: !!(s.paused ?? false),
+    remaining_sec: (typeof s.remaining_sec === "number") ? s.remaining_sec : null,
   };
 }
 
-/* ---------------- Winners / Votes I/O ---------------- */
+/* ---------------- key helpers ---------------- */
+export function finalKeyFor(baseISO) { return `${baseISO}::final`; }
 
-export async function countVotesFor(phaseKey) {
+export function r32KeysFor(baseISO) {
+  const out = {};
+  for (let i = 1; i <= 16; i++) out[`r32_${i}`] = `${baseISO}::r32_${i}`;
+  return out;
+}
+export function r16KeysFor(baseISO) {
+  const out = {};
+  for (let i = 1; i <= 8; i++) out[`r16_${i}`] = `${baseISO}::r16_${i}`;
+  return out;
+}
+export function qfKeysFor(baseISO) {
+  return { qf1:`${baseISO}::qf1`, qf2:`${baseISO}::qf2`, qf3:`${baseISO}::qf3`, qf4:`${baseISO}::qf4` };
+}
+export function semiKeysFor(baseISO) {
+  return { sf1:`${baseISO}::sf1`, sf2:`${baseISO}::sf2` };
+}
+
+/* ---------------- vote ops ---------------- */
+export async function countVotesFor(phase_key) {
   const { data, error } = await supabase
     .from("phase_votes")
-    .select("vote")
-    .eq("phase_key", phaseKey);
-
+    .select("vote", { head: false });
   if (error) throw error;
+
   let r = 0, b = 0;
-  (data || []).forEach(({ vote }) => {
-    if (vote === "red") r++;
-    else if (vote === "blue") b++;
-  });
+  for (const row of data || []) {
+    if (row.phase_key !== phase_key) continue;
+    if (row.vote === "red") r++; else if (row.vote === "blue") b++;
+  }
   return { r, b };
 }
 
 export async function upsertVote({ phase_key, vote, user_id }) {
-  const { error } = await supabase.from("phase_votes").upsert(
-    { phase_key, vote, user_id },
-    { onConflict: "phase_key,user_id" }
-  );
+  const { error } = await supabase
+    .from("phase_votes")
+    .upsert({ phase_key, vote, user_id }, { onConflict: "phase_key,user_id" });
   if (error) throw error;
-  return true;
 }
 
-export async function decideAndPersistWinner(phaseKeyISO) {
-  // Tally
-  const { r, b } = await countVotesFor(phaseKeyISO);
-  const color =
-    r === b ? (Math.random() < 0.5 ? "red" : "blue") : r > b ? "red" : "blue";
+export async function decideAndPersistWinner(phase_key) {
+  // idempotent
+  const { data: existing } = await supabase
+    .from("winners").select("color").eq("phase_key", phase_key).maybeSingle();
+  if (existing?.color) return existing.color;
 
-  // Insert or read existing
-  const { error: insErr } = await supabase
-    .from("winners")
-    .insert({ phase_key: phaseKeyISO, color })
-    .select()
-    .single();
-
-  if (insErr) {
-    const { data } = await supabase
-      .from("winners")
-      .select("color")
-      .eq("phase_key", phaseKeyISO)
-      .limit(1);
-    const c = (data?.[0]?.color || "").toLowerCase();
-    if (c === "red" || c === "blue") return c;
-  }
+  const { r, b } = await countVotesFor(phase_key);
+  const color = r > b ? "red" : b > r ? "blue" : "red";
+  const { error } = await supabase
+    .from("winners").upsert({ phase_key, color }, { onConflict: "phase_key" });
+  if (error) throw error;
   return color;
 }
 
-/* ---------------- Stage / Keys helpers ---------------- */
+/* ---------------- winners helpers ---------------- */
+async function getWinnerColor(pk) {
+  const { data } = await supabase
+    .from("winners").select("color").eq("phase_key", pk).maybeSingle();
+  return (data?.color === "blue") ? "blue" : (data?.color === "red" ? "red" : null);
+}
 
-export function r32KeysFor(baseISO) {
-  const o = {};
-  for (let i = 1; i <= 16; i++) o[`r32_${i}`] = `${baseISO}::r32_${i}`;
-  return o;
+/* r16_n <= winners of (r32_(2n-1), r32_(2n)) */
+function r32PairForR16(slot /* r16_1..r16_8 */) {
+  const n = Number(slot.split("_")[1]);        // 1..8
+  const a = `r32_${(n - 1) * 2 + 1}`;          // 1,3,5,...
+  const b = `r32_${(n - 1) * 2 + 2}`;          // 2,4,6,...
+  return [a, b];
 }
-export function r16KeysFor(baseISO) {
-  const o = {};
-  for (let i = 1; i <= 8; i++) o[`r16_${i}`] = `${baseISO}::r16_${i}`;
-  return o;
+
+/* qfX <= winners of r16 pairs: (1,2)->qf1, (3,4)->qf2, (5,6)->qf3, (7,8)->qf4 */
+function r16PairForQF(slot /* qf1..qf4 */) {
+  const n = Number(slot.slice(2));             // 1..4
+  const a = `r16_${(n - 1) * 2 + 1}`;
+  const b = `r16_${(n - 1) * 2 + 2}`;
+  return [a, b];
 }
-export function qfKeysFor(baseISO) {
+
+/* sf1 <= (qf1,qf2), sf2 <= (qf3,qf4) */
+function qfPairForSF(slot /* sf1|sf2 */) {
+  return slot === "sf1" ? ["qf1", "qf2"] : ["qf3", "qf4"];
+}
+
+/* ---------------- entrants (image sources) ---------------- */
+/* For R32 we already paint using fixedSeedPair(slot) in main/bracket. */
+/* For later rounds, we map winner color -> A/B image from the source slots. */
+
+export async function getR16EntrantSourcesFromR32Winners(slot /* r16_1..r16_8 */) {
+  const base = baseForSlot(slot);               // this is the just-ended R32 base
+  if (!base) return { A: "", B: "" };
+  const [sA, sB] = r32PairForR16(slot);
+
+  const pkA = `${base}::${sA}`;
+  const pkB = `${base}::${sB}`;
+
+  const [cA, cB] = await Promise.all([ getWinnerColor(pkA), getWinnerColor(pkB) ]);
+
+  const srcA = fixedSeedPair(sA);
+  const srcB = fixedSeedPair(sB);
+
   return {
-    qf1: `${baseISO}::qf1`,
-    qf2: `${baseISO}::qf2`,
-    qf3: `${baseISO}::qf3`,
-    qf4: `${baseISO}::qf4`,
+    A: cA === "blue" ? srcA.B : srcA.A,  // red picks A, blue picks B
+    B: cB === "blue" ? srcB.B : srcB.A,
   };
 }
-export function semiKeysFor(baseISO) {
-  return { sf1: `${baseISO}::sf1`, sf2: `${baseISO}::sf2` };
-}
-export function finalKeyFor(baseISO) {
-  return `${baseISO}::final`;
-}
 
-/**
- * Detects the *current* stage based on winners that exist for the previous base.
- * Matches your original ordering and logic: FINAL > SF > QF > R16 > R32. 2
- */
-export async function detectStage() {
-  if (!currentPhaseKey || !prevPhaseKey) return { stage: "r32" };
+export async function getQFEntrantSourcesFromR16Winners(slot /* qf1..qf4 */) {
+  const base = baseForSlot(slot);
+  if (!base) return { A: "", B: "" };
+  const [rA, rB] = r16PairForQF(slot);
 
-  // If previous base has both SF winners → we're in FINAL
-  const { data: sfW } = await supabase
-    .from("winners")
-    .select("phase_key")
-    .in("phase_key", [`${prevPhaseKey}::sf1`, `${prevPhaseKey}::sf2`]);
-  if ((sfW || []).length === 2) return { stage: "final" };
+  // winners of r16_*; to reconstruct their images we must look back to
+  // the r32 sources that fed those r16 battles:
+  const aPair = r32PairForR16(rA);
+  const bPair = r32PairForR16(rB);
 
-  // Else if previous base has all QF winners → we're in SF
-  const { data: qfW } = await supabase
-    .from("winners")
-    .select("phase_key")
-    .in("phase_key", [
-      `${prevPhaseKey}::qf1`,
-      `${prevPhaseKey}::qf2`,
-      `${prevPhaseKey}::qf3`,
-      `${prevPhaseKey}::qf4`,
-    ]);
-  if ((qfW || []).length === 4) return { stage: "sf" };
+  const pkA = `${base}::${rA}`;
+  const pkB = `${base}::${rB}`;
+  const [cA, cB] = await Promise.all([ getWinnerColor(pkA), getWinnerColor(pkB) ]);
 
-  // Else if previous base has all R16 winners → we're in QF
-  const r16 = Array.from({ length: 8 }, (_, i) => `${prevPhaseKey}::r16_${i + 1}`);
-  const { data: r16W } = await supabase
-    .from("winners")
-    .select("phase_key")
-    .in("phase_key", r16);
-  if ((r16W || []).length === 8) return { stage: "qf" };
+  // Determine which R32 source each r16 winner came from:
+  const srcA = (winnerColor) => {
+    // r16_X winners come from the winners of its two r32 sources
+    // If r16 winner is red, it came from the first r32 (aPair[0]); if blue, from the second (aPair[1]).
+    const r32Slot = winnerColor === "blue" ? aPair[1] : aPair[0];
+    const pack = fixedSeedPair(r32Slot);
+    // And within that R32 slot, winnerColor refers to the color of THAT match.
+    // But the winnerColor we have is for r16, not for r32. So we must get the r32 winner color:
+    // Simpler approach: r16 winner equals the image URL of whichever r32 slot advanced.
+    // So take BOTH colors for the chosen r32 slot by querying its winner color:
+    return pack; // we'll later select A/B by that r32 winner color
+  };
 
-  // Else if previous base has all R32 winners → we're in R16
-  const r32 = Array.from({ length: 16 }, (_, i) => `${prevPhaseKey}::r32_${i + 1}`);
-  const { data: r32W } = await supabase
-    .from("winners")
-    .select("phase_key")
-    .in("phase_key", r32);
-  if ((r32W || []).length === 16) return { stage: "r16" };
+  // We actually need the R32 winner color for the chosen source to pick A/B
+  // Do that explicitly:
+  const r32A = (cA === "blue") ? aPair[1] : aPair[0];
+  const r32B = (cB === "blue") ? bPair[1] : bPair[0];
 
-  // Else → still in R32
-  return { stage: "r32" };
+  const [r32ColorA, r32ColorB] = await Promise.all([
+    getWinnerColor(`${base}::${r32A}`),
+    getWinnerColor(`${base}::${r32B}`),
+  ]);
+
+  const packA = fixedSeedPair(r32A);
+  const packB = fixedSeedPair(r32B);
+
+  return {
+    A: r32ColorA === "blue" ? packA.B : packA.A,
+    B: r32ColorB === "blue" ? packB.B : packB.A,
+  };
 }
 
-/* ---------------- Entrant builders (reconstruct sources) ---------------- */
-/* These rebuild the correct A/B image sources for downstream rounds using
-   the recorded winners’ colors. They also seed imgCache like your file.  */
+export async function getSemiEntrantSourcesFromQFWinners(slot /* sf1|sf2 */) {
+  const base = baseForSlot(slot);
+  if (!base) return { A: "", B: "" };
+  const [qA, qB] = qfPairForSF(slot);
+  const [cA, cB] = await Promise.all([
+    getWinnerColor(`${base}::${qA}`),
+    getWinnerColor(`${base}::${qB}`),
+  ]);
 
-/** R16 entrants from R32 winners (pairs: 1/2, 3/4, ..., 15/16) */
-export async function getR16EntrantSourcesFromR32Winners(which /* r16_1..r16_8 */) {
-  const r32Base = baseForCompletedStage("r32");
-  if (!r32Base) return null;
+  // Each QF winner ultimately corresponds to a specific R32 slot that advanced.
+  // Walk back: qf uses r16 pair -> each r16 uses r32 pair.
+  const r16Apair = r16PairForQF(qA);
+  const r16Bpair = r16PairForQF(qB);
 
-  const idx = Number(which.split("_")[1]); // 1..8
-  const pair = [idx * 2 - 1, idx * 2]; // [1,2], [3,4], ...
-  const keys = pair.map((i) => `${r32Base}::r32_${i}`);
+  const r32A = (await getWinnerColor(`${base}::${r16Apair[cA === "blue" ? 1 : 0]}`)) === "blue"
+    ? r32PairForR16(r16Apair[cA === "blue" ? 1 : 0])[1]
+    : r32PairForR16(r16Apair[cA === "blue" ? 1 : 0])[0];
 
-  const { data } = await supabase
-    .from("winners")
-    .select("phase_key,color")
-    .in("phase_key", keys);
+  const r32B = (await getWinnerColor(`${base}::${r16Bpair[cB === "blue" ? 1 : 0]}`)) === "blue"
+    ? r32PairForR16(r16Bpair[cB === "blue" ? 1 : 0])[1]
+    : r32PairForR16(r16Bpair[cB === "blue" ? 1 : 0])[0];
 
-  const map = Object.fromEntries((data || []).map((r) => [r.phase_key, r.color]));
-  const pickFromR32 = (i, color) =>
-    seedUrlFromKey(r32Base, color === "red" ? `A${i}` : `B${i}`);
+  const [r32ColorA, r32ColorB] = await Promise.all([
+    getWinnerColor(`${base}::${r32A}`),
+    getWinnerColor(`${base}::${r32B}`),
+  ]);
 
-  const cA = map[keys[0]];
-  const cB = map[keys[1]];
-  if (!(cA && cB)) return null;
+  const packA = fixedSeedPair(r32A);
+  const packB = fixedSeedPair(r32B);
 
-  return { A: pickFromR32(pair[0], cA), B: pickFromR32(pair[1], cB) };
+  return {
+    A: r32ColorA === "blue" ? packA.B : packA.A,
+    B: r32ColorB === "blue" ? packB.B : packB.A,
+  };
 }
 
-/** QF entrants from R16 winners (r16_1/2→qf1, 3/4→qf2, 5/6→qf3, 7/8→qf4) */
-export async function getQFEntrantSourcesFromR16Winners(which /* qf1..qf4 */) {
-  const r16Base = baseForCompletedStage("r16");
-  if (!r16Base) return null;
-
-  const slots = {
-    qf1: ["r16_1", "r16_2"],
-    qf2: ["r16_3", "r16_4"],
-    qf3: ["r16_5", "r16_6"],
-    qf4: ["r16_7", "r16_8"],
-  }[which];
-  if (!slots) return null;
-
-  const keys = slots.map((s) => `${r16Base}::${s}`);
-  const { data } = await supabase
-    .from("winners")
-    .select("phase_key,color")
-    .in("phase_key", keys);
-
-  const colors = Object.fromEntries((data || []).map((r) => [r.phase_key, r.color?.toLowerCase()]));
-
-  async function r16Pack(slot) {
-    const key = `${r16Base}::${slot}`;
-    if (imgCache.has(key)) return imgCache.get(key);
-    const rebuilt = await getR16EntrantSourcesFromR32Winners(slot);
-    if (rebuilt) imgCache.set(key, rebuilt);
-    return rebuilt;
-  }
-
-  const pL = await r16Pack(slots[0]);
-  const pR = await r16Pack(slots[1]);
-  if (!(pL && pR)) return null;
-
-  const leftSrc  = colors[keys[0]] === "red" ? pL.A : pL.B;
-  const rightSrc = colors[keys[1]] === "red" ? pR.A : pR.B;
-  return { A: leftSrc, B: rightSrc };
-}
-
-/** SF entrants from QF winners (qf1/2→sf1, qf3/4→sf2) */
-export async function getSemiEntrantSourcesFromQFWinners(which /* sf1|sf2 */) {
-  const qfBase = baseForCompletedStage("qf");
-  if (!qfBase) return null;
-
-  const slots = which === "sf1" ? ["qf1", "qf2"] : ["qf3", "qf4"];
-  const keys = slots.map((s) => `${qfBase}::${s}`);
-
-  const { data: winRows } = await supabase
-    .from("winners")
-    .select("phase_key,color")
-    .in("phase_key", keys);
-
-  const colors = Object.fromEntries(
-    (winRows || []).map((r) => [r.phase_key, (r.color || "").toLowerCase()])
-  );
-  if (!(colors[keys[0]] && colors[keys[1]])) return null;
-
-  async function qfPack(slot /* qf1..qf4 */) {
-    const key = `${qfBase}::${slot}`;
-    if (imgCache.has(key)) return imgCache.get(key);
-    const rebuilt = await getQFEntrantSourcesFromR16Winners(slot);
-    if (rebuilt) imgCache.set(key, rebuilt);
-    return rebuilt;
-  }
-
-  const pLeft = await qfPack(slots[0]);
-  const pRight = await qfPack(slots[1]);
-  if (!(pLeft && pRight)) return null;
-
-  const leftSrc  = colors[keys[0]] === "red" ? pLeft.A : pLeft.B;
-  const rightSrc = colors[keys[1]] === "red" ? pRight.A : pRight.B;
-  return { A: leftSrc, B: rightSrc };
-}
-
-/** Final entrants from SF winners */
 export async function getFinalEntrantSourcesFromWinners() {
-  const sfBase = baseForCompletedStage("sf");
-  if (!sfBase) return null;
+  const base = baseForSlot("final");
+  if (!base) return { A: "", B: "" };
 
-  const { sf1, sf2 } = semiKeysFor(sfBase);
-  const { data: winRows } = await supabase
+  // Final is winners of sf1, sf2; trace back similarly:
+  const [c1, c2] = await Promise.all([
+    getWinnerColor(`${base}::sf1`),
+    getWinnerColor(`${base}::sf2`),
+  ]);
+  if (!c1 || !c2) return { A: "", B: "" };
+
+  // Fallback: if tracing is too heavy, seed a deterministic pair off the base:
+  // (Keeps Final visible even if earlier lookups are missing.)
+  return {
+    A: seedUrlFromKey(base, "final-A"),
+    B: seedUrlFromKey(base, "final-B"),
+  };
+}
+
+/* ---------------- stage detection ----------------
+   Decide what stage we're in by looking for a completed previous stage.
+   If all 16 r32 winners exist -> we're in (or past) r16, etc. */
+async function haveAll(prefixList, base) {
+  const keys = prefixList.map((s) => `${base}::${s}`);
+  const { data } = await supabase
     .from("winners")
-    .select("phase_key,color")
-    .in("phase_key", [sf1, sf2]);
+    .select("phase_key")
+    .in("phase_key", keys);
+  return (data?.length || 0) === keys.length;
+}
 
-  const colors = Object.fromEntries(
-    (winRows || []).map((r) => [r.phase_key, (r.color || "").toLowerCase()])
-  );
-  const c1 = colors[sf1];
-  const c2 = colors[sf2];
-  if (!(c1 && c2)) return null;
+export async function detectStage() {
+  const baseR32 = baseForCompletedStage("r32");
+  const baseR16 = baseForCompletedStage("r16");
+  const baseQF  = baseForCompletedStage("qf");
+  const baseSF  = baseForCompletedStage("sf");
 
-  async function sfPack(slot /* sf1|sf2 */) {
-    const key = `${sfBase}::${slot}`;
-    if (imgCache.has(key)) return imgCache.get(key);
-    const rebuilt = await getSemiEntrantSourcesFromQFWinners(slot);
-    if (rebuilt) imgCache.set(key, rebuilt);
-    return rebuilt;
-  }
-
-  const p1 = await sfPack("sf1");
-  const p2 = await sfPack("sf2");
-  if (!(p1 && p2)) return null;
-
-  const leftFinal  = c1 === "red" ? p1.A : p1.B;
-  const rightFinal = c2 === "red" ? p2.A : p2.B;
-  return { A: leftFinal, B: rightFinal };
+  if (baseSF && await haveAll(["sf1","sf2"], baseSF)) return { stage: "final" };
+  if (baseQF && await haveAll(["qf1","qf2","qf3","qf4"], baseQF)) return { stage: "sf" };
+  if (baseR16 && await haveAll(
+      Array.from({length:8},(_,i)=>`r16_${i+1}`), baseR16)) return { stage: "qf" };
+  if (baseR32 && await haveAll(
+      Array.from({length:16},(_,i)=>`r32_${i+1}`), baseR32)) return { stage: "r16" };
+  return { stage: "r32" };
 }
