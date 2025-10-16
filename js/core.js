@@ -1,13 +1,12 @@
 // js/core.js
 // Core primitives shared by all features.
-// Mirrors your original constants, state, DOM refs, and helpers.
 
 export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 export const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 
-// Supabase client (uses the global UMD loaded in matchup.html)
+// Supabase client (UMD from matchup.html)
 export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ---------- DOM Refs ---------- */
@@ -43,7 +42,7 @@ export const confettiCanvas = document.getElementById("confetti");
 export const brows = document.getElementById("brows");
 export const showDone = document.getElementById("showDone");
 
-/* ---------- Global State (live bindings) ---------- */
+/* ---------- Global State ---------- */
 export let paused = false;
 export let serverPhaseEndISO = null;
 export let currentPhaseKey = null;
@@ -57,8 +56,8 @@ export let currentUid = null;
 export let chosen = null;
 
 // Tournament progression pointers (32-entrant flow)
-export let activeSlot = "r32_1";  // r32_1..r32_16 | r16_1..r16_8 | qf1..qf4 | sf1/sf2 | final
-export let currentStage = "r32";  // 'r32'|'r16'|'qf'|'sf'|'final'
+export let activeSlot = "r32_1";
+export let currentStage = "r32";
 export let overlayGateBase = null;
 
 // Cache battle images (per baseISO::slot)
@@ -117,7 +116,7 @@ export function paintLoginBadge() {
   }
 }
 
-/* ---------- Edge: resilient call with timeout ---------- */
+/* ---------- Edge calls ---------- */
 export async function callEdge(method = "GET", body = null, { timeoutMs = 10000 } = {}) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -135,7 +134,7 @@ export async function callEdge(method = "GET", body = null, { timeoutMs = 10000 
       body: body ? JSON.stringify(body) : null,
     });
     raw = await res.text();
-    try { j = JSON.parse(raw); } catch { /* keep raw */ }
+    try { j = JSON.parse(raw); } catch {}
   } catch (e) {
     clearTimeout(t);
     console.error("[edge] network error:", e);
@@ -149,8 +148,22 @@ export async function callEdge(method = "GET", body = null, { timeoutMs = 10000 
     console.error("[edge] bad response:", msg);
     throw new Error(msg);
   }
-
   return j?.state || j || {};
+}
+
+/* Fallback: try POST first, then GET ?action=…  */
+export async function toggleTimer(action /* "pause"|"resume" */) {
+  try {
+    return await callEdge("POST", { action });
+  } catch (e) {
+    const u = new URL(EDGE_URL);
+    u.searchParams.set("action", action);
+    const res = await fetch(u.toString(), { method: "GET" });
+    const raw = await res.text();
+    let j; try { j = JSON.parse(raw); } catch {}
+    if (!res.ok) throw new Error((j && (j.error || j.message)) || raw || `HTTP ${res.status}`);
+    return j?.state || j || {};
+  }
 }
 
 export const normalize = (s) => ({
@@ -197,29 +210,24 @@ export function baseForCompletedStage(stage) {
   return baseAtOffset(delta);
 }
 
-/* ---------- UI State Helpers ---------- */
+/* ---------- UI Helpers ---------- */
 export function setStateUI() {
   stateEl.textContent = paused ? "PAUSED" : "LIVE";
   pauseBtn.textContent = paused ? "▶️ Resume" : "⏸️ Pause";
   phaseBadge.textContent = "phase: " + (currentPhaseKey || "—");
 }
-export function slotFinished(slot) {
-  return slotLevel(slot) < stageLevel(currentStage || "r32");
-}
-export function votingLockedFor(slot) {
-  return slotLevel(slot) !== stageLevel(currentStage || "r32");
-}
+export function slotFinished(slot) { return slotLevel(slot) < stageLevel(currentStage || "r32"); }
+export function votingLockedFor(slot) { return slotLevel(slot) !== stageLevel(currentStage || "r32"); }
 export function applyVotingLockUI() {
   const locked = votingLockedFor(activeSlot);
   [voteA, voteB, submitBtn].forEach((b) => (b.disabled = locked || !currentUid));
-
   const finished = slotFinished(activeSlot);
   document.getElementById("tileA").classList.toggle("decided", finished);
   document.getElementById("tileB").classList.toggle("decided", finished);
   submitBtn.textContent = locked ? (finished ? "Voting closed" : "Not started") : "✅ Submit Vote";
 }
 
-/* ---------- Simple setters used by other modules ---------- */
+/* ---------- setters ---------- */
 export function setPaused(v) { paused = v; setStateUI(); }
 export function setPeriodSec(v) { periodSec = v; }
 export function setServerPhaseEndISO(v) { serverPhaseEndISO = v; }
@@ -231,5 +239,5 @@ export function setLastCountsAt(ts) { lastCountsAt = ts; }
 export function setCurrentUid(uid) { currentUid = uid; paintLoginBadge(); }
 export function setChosen(v) { chosen = v; }
 
-/* ---------- Convenience: row id helper for bracket ---------- */
+/* ---------- Convenience ---------- */
 export const rowId = (slot) => `row-${slot}`;
