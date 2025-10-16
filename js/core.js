@@ -239,5 +239,11 @@ export function setLastCountsAt(ts) { lastCountsAt = ts; }
 export function setCurrentUid(uid) { currentUid = uid; paintLoginBadge(); }
 export function setChosen(v) { chosen = v; }
 
+/* NEW setters to avoid assigning to imported bindings */
+export function setActiveSlot(v) { activeSlot = v; }
+export function setCurrentStage(v) { currentStage = v; }
+export function setOverlayGateBase(v) { overlayGateBase = v; }
+export function setLastPaintedBattleKey(v) { lastPaintedBattleKey = v; }
+
 /* ---------- Convenience ---------- */
 export const rowId = (slot) => `row-${slot}`;
