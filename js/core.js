@@ -11,15 +11,14 @@ export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 export const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTg3MTUyOTgsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
-// ---- auth helpers (NEW) ----
+
+// ---- auth helpers (keep only this copy) ----
 export function uidCached() {
   return currentUid || null;
 }
-
 export async function getUidOrNull() {
   try {
     if (currentUid) return currentUid;
-    // ask Supabase once, cache it
     const { data, error } = await supabase.auth.getUser();
     if (error) return null;
     const id = data?.user?.id || null;
@@ -31,7 +30,6 @@ export async function getUidOrNull() {
 }
 
 // ---- Supabase client (singleton) ----
-// Prevents "Multiple GoTrueClient instances detected..." warnings.
 export const supabase = (() => {
   if (window.__RAGE_SPACE_SB__) return window.__RAGE_SPACE_SB__;
   const c = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -208,7 +206,7 @@ class Poller {
     this._stop = null;
 
     this._votesBackoff = 0;
-    this._edgeBackoff = 0;
+       this._edgeBackoff = 0;
 
     this._onCounts = onCounts;
     this._onWinners = onWinners;
@@ -655,7 +653,7 @@ export function overlayArtImg(imgOrSrc) {
 }
 export function overlayClose() { return fsClose(); }
 
-// ---- overlay text helpers (already used by features/overlay.js) ----
+// ---- overlay text helpers ----
 function ensureOverlayTextEl(tag, dataAttr, baseStyles = {}) {
   const o = overlay();
   let el = o.querySelector(`[${dataAttr}]`);
@@ -760,10 +758,9 @@ export function applyVotingLockUI(locked = false, untilText = "") {
 }
 
 /* =========================
-   Boot helpers (NEW)
+   Boot helpers
 ========================= */
 
-// Update boot/status text if present.
 export function setBootStatus(text) {
   const el =
     document.getElementById('bootStatus') ||
@@ -773,12 +770,9 @@ export function setBootStatus(text) {
   return !!el;
 }
 
-// Hide boot UI and mark ready; safe to call multiple times.
 export function endBoot({ message = 'ready' } = {}) {
   try {
     setBootStatus(message);
-
-    // common boot elements we may want to hide
     const selectors = [
       '#boot', '[data-role="boot"]', '.boot',
       '#bootBar', '.boot-bar', '[data-role="bootBar"]',
@@ -789,10 +783,7 @@ export function endBoot({ message = 'ready' } = {}) {
         el.style.display = 'none';
       });
     });
-
-    // mark body complete for any CSS that keys off it
     document.body.classList.add('boot-complete');
-
     if (DEBUG) console.log('[BOOT] endBoot() → UI ready');
     return true;
   } catch (e) {
@@ -800,15 +791,14 @@ export function endBoot({ message = 'ready' } = {}) {
     return false;
   }
 }
+
 /* =========================
    Basic utilities requested by main.js
 ========================= */
 
-// ISO helper used by main.js to normalize timestamps
 export function iso(t) {
   try {
     const d = t instanceof Date ? t : new Date(t);
-    // Keep full ISO (main.js expects to compare exact instants)
     return d.toISOString();
   } catch {
     return new Date().toISOString();
@@ -819,7 +809,6 @@ export function iso(t) {
    Boot progress helpers
 ========================= */
 
-// Create/update a simple boot progress bar + status text
 export function setBoot(pct = 0, message = "") {
   try {
     const bar =
@@ -837,14 +826,12 @@ export function setBoot(pct = 0, message = "") {
 }
 
 let __bootTickRaf = 0;
-// (No-op-ish) Allows main.js to start a boot ticker; harmless if no boot UI
 export function startBootTick() {
   cancelAnimationFrame(__bootTickRaf || 0);
   const bar =
     document.getElementById("bootBar") ||
     document.querySelector("[data-role='bootBar']") ||
     document.querySelector(".boot-bar");
-
   if (!bar) return;
 
   let v = 0;
@@ -896,7 +883,6 @@ export function toast(msg = "", opts = {}) {
 ========================= */
 
 export async function toggleTimer(action = "pause") {
-  // expected: "pause" | "resume"
   const body = { action: String(action) };
   const res = await fetch(EDGE_URL, {
     method: "POST",
@@ -904,7 +890,6 @@ export async function toggleTimer(action = "pause") {
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`toggleTimer ${res.status}`);
-  // allow either JSON or empty response
   try { return await res.json(); } catch { return null; }
 }
 
@@ -912,7 +897,6 @@ export async function toggleTimer(action = "pause") {
    UI/state wiring requested by main.js
 ========================= */
 
-// Update a few bits of UI based on current state; safe no-op if elements absent
 export function setStateUI() {
   try {
     const btn = pauseBtn();
@@ -922,25 +906,6 @@ export function setStateUI() {
   } catch {}
 }
 
-// Voting lock checks used by main.js.
-// For now, keep them permissive so testing is easy; adjust when you wire real locks.
+// For now these are permissive; adjust when real locks are wired.
 export function slotFinished(_slot) { return false; }
 export function votingLockedFor(_slot) { return false; }
-
-/* =========================
-   Auth helpers (already added earlier, repeat here if missing)
-========================= */
-
-// If you don't already have these above in your file, keep them here.
-// (If you do have them, remove this duplicate block.)
-export function uidCached() { return currentUid || null; }
-export async function getUidOrNull() {
-  try {
-    if (currentUid) return currentUid;
-    const { data, error } = await supabase.auth.getUser();
-    if (error) return null;
-    const id = data?.user?.id || null;
-    if (id) setCurrentUid(id);
-    return id;
-  } catch { return null; }
-}
