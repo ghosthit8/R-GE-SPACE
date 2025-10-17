@@ -717,3 +717,60 @@ export function imgA(selector) {
     null
   );
 }
+// ===== ui + helpers shims (append-only) =====
+
+/** Convenience getter for the "B" image element in the viewer. */
+export function imgB(selector) {
+  if (selector && typeof selector === 'string') {
+    const el = document.querySelector(selector);
+    if (el) return el;
+  }
+  return (
+    document.querySelector('#imgB') ||
+    document.querySelector('#B') ||
+    document.querySelector('img[data-role="B"]') ||
+    document.querySelector('.imgB') ||
+    null
+  );
+}
+
+/**
+ * Tiny DOM utilities bundle expected by some feature modules.
+ * `brows.qs(sel,root)`, `brows.qsa(sel,root)`, `brows.on(el,evt,fn)`, `brows.css(el,styles)`
+ */
+export const brows = {
+  qs: (sel, root = document) => root.querySelector(sel),
+  qsa: (sel, root = document) => Array.from(root.querySelectorAll(sel)),
+  on: (el, evt, fn, opts) => { if (el) el.addEventListener(evt, fn, opts); return el; },
+  css: (el, styles = {}) => { if (el && styles) Object.assign(el.style, styles); return el; },
+};
+
+/**
+ * Fullscreen overlay canvas used for confetti/FX.
+ * Creates once, resizes on window resize, and returns the <canvas>.
+ */
+export function confettiCanvas() {
+  let c = document.getElementById('confetti-canvas');
+  if (!c) {
+    c = document.createElement('canvas');
+    c.id = 'confetti-canvas';
+    c.style.position = 'fixed';
+    c.style.inset = '0';
+    c.style.pointerEvents = 'none';
+    c.style.zIndex = '999990';
+    document.body.appendChild(c);
+
+    const fit = () => {
+      const dpr = window.devicePixelRatio || 1;
+      c.width = Math.floor(window.innerWidth * dpr);
+      c.height = Math.floor(window.innerHeight * dpr);
+      c.style.width = '100vw';
+      c.style.height = '100vh';
+      const ctx = c.getContext('2d');
+      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    fit();
+    window.addEventListener('resize', fit, { passive: true });
+  }
+  return c;
+}
