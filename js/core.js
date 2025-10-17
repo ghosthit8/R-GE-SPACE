@@ -3,29 +3,35 @@
 // Consolidates all polling into a single guarded loop with backoff,
 // restores a resilient Debug button, and prevents duplicate work.
 
-//////////////////////////////
-// Config & Clients
-//////////////////////////////
+/* =========================
+   Config & Clients
+========================= */
 
 export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 export const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTg3MTUyOTgsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 
-// Supabase client (UMD from HTML)
-export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ---- Supabase client (singleton) ----
+// Prevents "Multiple GoTrueClient instances detected..." warnings.
+export const supabase = (() => {
+  if (window.__RAGE_SPACE_SB__) return window.__RAGE_SPACE_SB__;
+  const c = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { autoRefreshToken: true, persistSession: true },
+  });
+  window.__RAGE_SPACE_SB__ = c;
+  return c;
+})();
 
-//////////////////////////////
-// DOM Refs (exports)
-//////////////////////////////
+/* =========================
+   DOM Refs (exports)
+========================= */
 
-// Prefer ID, then data-role, then class fallback
 const by = (id, role, cls) =>
   document.getElementById(id) ||
   document.querySelector(`[data-role="${role}"]`) ||
   (cls ? document.querySelector(`.${cls}`) : null);
 
-// Exported accessors used by main.js and features/*
 export function clockEl()      { return by('clock',      'clock'); }
 export function pauseBtn()     { return by('pauseBtn',   'pause'); }
 export function voteA()        { return by('voteA',      'voteA'); }
@@ -35,19 +41,17 @@ export function countA()       { return by('countA',     'countA'); }
 export function countB()       { return by('countB',     'countB'); }
 export function labelA()       { return by('labelA',     'labelA'); }
 export function labelB()       { return by('labelB',     'labelB'); }
-
-// Keep login badge helper exported too (some UIs use it)
 export function loginBadgeEl() { return by('loginBadge', 'loginBadge'); }
 
-//////////////////////////////
-// Global State
-//////////////////////////////
+/* =========================
+   Global State
+========================= */
 
 export let paused = false;
 
 export let periodSec = 5;
 export let serverPhaseEndISO = null;
-export let currentPhaseKey = null;  // exported at declaration
+export let currentPhaseKey = null;
 export let prevPhaseKey = null;
 
 export let remainingSec = 0;
@@ -57,17 +61,16 @@ export let lastCountsAt = 0;
 export let currentUid = null;
 export let chosen = null;
 
-// shared UI state used by other modules
 export let currentStage = null;
 export let overlayGateBase = null;
 export let lastPaintedBattleKey = null;
-// Debug state
+
 const DEBUG_KEY = "core_debug";
 let DEBUG = false;
 
-//////////////////////////////
-// Small Utilities
-//////////////////////////////
+/* =========================
+   Small Utilities
+========================= */
 
 const now = () => Date.now();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -110,11 +113,11 @@ function startClock() {
   return () => cancelAnimationFrame(rafId);
 }
 
-//////////////////////////////
-// Image Preloader (deduped)
-//////////////////////////////
+/* =========================
+   Image Preloader (dedup)
+========================= */
 
-export const imgCache = new Set(); // exported at declaration
+export const imgCache = new Set();
 export async function preloadImage(url) {
   if (!url || imgCache.has(url)) return;
   imgCache.add(url);
@@ -125,9 +128,9 @@ export async function preloadImage(url) {
   });
 }
 
-//////////////////////////////
-// Debug Button (resilient)
-//////////////////////////////
+/* =========================
+   Debug Button
+========================= */
 
 function readDebugPref() {
   const qp = new URLSearchParams(location.search);
@@ -169,9 +172,9 @@ function ensureDebugButton() {
   };
 }
 
-//////////////////////////////
-// Network: Consolidated Poller
-//////////////////////////////
+/* =========================
+   Network Poller
+========================= */
 
 class Poller {
   constructor({
@@ -209,7 +212,7 @@ class Poller {
   }
 
   stop() {
-    this._running = false; // <-- fixed stray parenthesis here
+    this._running = false;
     document.removeEventListener("visibilitychange", this._handleVis);
     if (this._stop) this._stop();
   }
@@ -319,6 +322,7 @@ class Poller {
     const { phase, serverNow, period } = normalizeEdgePayload(payload);
 
     if (period && Number.isFinite(period)) {
+      // clamp to 2..30 while testing
       periodSec = Math.max(2, Math.min(30, period));
     }
 
@@ -350,9 +354,9 @@ function normalizeEdgePayload(p) {
   }
 }
 
-//////////////////////////////
-// Public API
-//////////////////////////////
+/* =========================
+   Public API
+========================= */
 
 let singletonPoller = null;
 
@@ -387,52 +391,22 @@ export function setPaused(v) {
   if (DEBUG) console.log("[CORE] paused=", paused);
 }
 
-export function setPeriodSec(v) {
-  if (Number.isFinite(v)) periodSec = v;
-}
-export function setServerPhaseEndISO(v) {
-  serverPhaseEndISO = v;
-}
-export function setCurrentPhaseKey(v) {
-  currentPhaseKey = v;
-}
-export function setPrevPhaseKey(v) {
-  prevPhaseKey = v;
-}
-export function setRemainingSec(v) {
-  if (Number.isFinite(v)) remainingSec = v;
-}
-export function setLastSyncAt(ts) {
-  lastSyncAt = ts;
-}
-export function setLastCountsAt(ts) {
-  lastCountsAt = ts;
-}
-export function setCurrentUid(uid) {
-  currentUid = uid;
-  paintLoginBadge();
-}
-export function setChosen(v) {
-  chosen = v;
-}
-export function setCurrentStage(v) {
-  currentStage = v;
-  return currentStage;
-}
+export function setPeriodSec(v)            { if (Number.isFinite(v)) periodSec = v; }
+export function setServerPhaseEndISO(v)    { serverPhaseEndISO = v; }
+export function setCurrentPhaseKey(v)      { currentPhaseKey = v; }
+export function setPrevPhaseKey(v)         { prevPhaseKey = v; }
+export function setRemainingSec(v)         { if (Number.isFinite(v)) remainingSec = v; }
+export function setLastSyncAt(ts)          { lastSyncAt = ts; }
+export function setLastCountsAt(ts)        { lastCountsAt = ts; }
+export function setCurrentUid(uid)         { currentUid = uid; paintLoginBadge(); }
+export function setChosen(v)               { chosen = v; }
+export function setCurrentStage(v)         { currentStage = v; return currentStage; }
+export function setOverlayGateBase(v)      { overlayGateBase = v; return overlayGateBase; }
+export function setLastPaintedBattleKey(v) { lastPaintedBattleKey = v; return lastPaintedBattleKey; }
 
-export function setOverlayGateBase(v) {
-  overlayGateBase = v;
-  return overlayGateBase;
-}
-
-export function setLastPaintedBattleKey(v) {
-  lastPaintedBattleKey = v;
-  return lastPaintedBattleKey;
-}
-
-//////////////////////////////
-// UI helpers
-//////////////////////////////
+/* =========================
+   UI helpers
+========================= */
 
 function paintLoginBadge() {
   const el = loginBadgeEl();
@@ -440,9 +414,9 @@ function paintLoginBadge() {
   el.textContent = currentUid ? `Signed in: ${currentUid}` : "Not signed in";
 }
 
-//////////////////////////////
-// Optional helpers your other code can reuse
-//////////////////////////////
+/* =========================
+   Optional helpers
+========================= */
 
 export function tallyVotes(rows) {
   const out = new Map();
@@ -455,14 +429,12 @@ export function tallyVotes(rows) {
 
 export const rowId = (slot) => `row-${slot}`;
 
-//////////////////////////////
-// ===== compat + UI shims ===
-// (append-only; safe to remove later by updating callers)
-//////////////////////////////
+/* =========================
+   ===== compat + UI shims
+========================= */
 
 export const DEFAULT_PUBLIC_BUCKET = "art-uploads";
 
-/** stageKey → base ISO (fallback to top-of-hour) */
 export function baseForCompletedStage(stageKey, state) {
   try {
     if (state?.bases?.[stageKey]) return state.bases[stageKey];
@@ -471,7 +443,6 @@ export function baseForCompletedStage(stageKey, state) {
   } catch { return new Date().toISOString(); }
 }
 
-/** close overlay + exit native fullscreen if any */
 export function fsClose() {
   try {
     const overlay = document.querySelector('[data-fullscreen-overlay]');
@@ -483,7 +454,6 @@ export function fsClose() {
   return true;
 }
 
-/** slot/phase (e.g., r32_1) → base ISO */
 export function baseForSlot(slotOrPhase, state) {
   try {
     const stage = String(slotOrPhase || '').split('_')[0];
@@ -493,7 +463,6 @@ export function baseForSlot(slotOrPhase, state) {
   } catch { return new Date().toISOString(); }
 }
 
-/** overlay an image URL or <img> */
 export function fsImage(target) {
   try {
     if (target instanceof Element && target.requestFullscreen) return target.requestFullscreen();
@@ -521,7 +490,6 @@ export function fsImage(target) {
   } catch { return false; }
 }
 
-/** deterministic pairing numbers for bracket slots */
 export function fixedSeedPair(slotOrPhase) {
   const stage = String(slotOrPhase || '').split('_')[0];
   const m = String(slotOrPhase || '').match(/(\d+)/);
@@ -530,7 +498,6 @@ export function fixedSeedPair(slotOrPhase) {
   switch (stage) { case 'r32': case 'r16': case 'qf': case 'sf': return [a,b]; default: return [1,2]; }
 }
 
-/** general purpose overlay container for arbitrary content */
 export function fsOverlay(content) {
   try {
     let overlay = document.querySelector('[data-fullscreen-overlay]');
@@ -547,7 +514,6 @@ export function fsOverlay(content) {
       overlay.addEventListener('click',(e)=>{ if (e.target===overlay) fsClose(); });
       document.body.appendChild(overlay);
     }
-    // clear previous content
     overlay.innerHTML = '';
     const frame = document.createElement('div');
     frame.style.maxWidth='95vw';
@@ -568,7 +534,6 @@ export function fsOverlay(content) {
   } catch { return false; }
 }
 
-/** build storage URL for a base + key (e.g., 'A1') */
 export function seedUrlFromKey(baseIsoOrLabel, key, opts = {}) {
   if (!key) return '';
   if (/^https?:\/\//i.test(key)) return key;
@@ -580,7 +545,6 @@ export function seedUrlFromKey(baseIsoOrLabel, key, opts = {}) {
   return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${encodeURIComponent(base)}/${encodeURIComponent(key)}${ext}`;
 }
 
-/** convenience accessors for main image elements */
 export function imgA(selector) {
   if (selector && typeof selector === 'string') { const el = document.querySelector(selector); if (el) return el; }
   return document.querySelector('#imgA') || document.querySelector('#A') ||
@@ -592,15 +556,13 @@ export function imgB(selector) {
          document.querySelector('img[data-role="B"]') || document.querySelector('.imgB') || null;
 }
 
-/** small DOM helper bundle some features import */
 export const brows = {
   qs: (sel, root=document) => root.querySelector(sel),
   qsa: (sel, root=document) => Array.from(root.querySelectorAll(sel)),
-  on: (el, evt, fn, opts) => { if (el) el.addEventListener(evt, fn, opts); return el; },
+  on:  (el, evt, fn, opts) => { if (el) el.addEventListener(evt, fn, opts); return el; },
   css: (el, styles={}) => { if (el && styles) Object.assign(el.style, styles); return el; },
 };
 
-/** fullscreen canvas for confetti and FX */
 export function confettiCanvas() {
   let c = document.getElementById('confetti-canvas');
   if (!c) {
@@ -625,9 +587,7 @@ export function confettiCanvas() {
   return c;
 }
 
-// NOTE: No re-export block at the bottom —
-// `currentPhaseKey` and `imgCache` are already exported at declaration.
-// ===== overlay accessor shim (append-only) =====
+// ===== overlay accessors (append-only) =====
 export function overlay() {
   let o = document.querySelector('[data-fullscreen-overlay]');
   if (!o) {
@@ -646,15 +606,9 @@ export function overlay() {
   }
   return o;
 }
-// ===== overlay image helper (append-only) =====
 export function overlayArtImg(imgOrSrc) {
-  // ensure we have the overlay container
   const o = overlay();
-
-  // clear previous content
   o.innerHTML = '';
-
-  // create a frame to keep sizing nice
   const frame = document.createElement('div');
   frame.style.maxWidth = '95vw';
   frame.style.maxHeight = '95vh';
@@ -662,44 +616,30 @@ export function overlayArtImg(imgOrSrc) {
   frame.style.background = 'transparent';
   o.appendChild(frame);
 
-  // resolve <img>
   let img;
   if (imgOrSrc instanceof HTMLImageElement) {
     img = imgOrSrc.cloneNode(true);
   } else {
     img = document.createElement('img');
-    if (imgOrSrc && typeof imgOrSrc === 'object' && 'src' in imgOrSrc) {
-      img.src = imgOrSrc.src;
-    } else if (typeof imgOrSrc === 'string') {
-      img.src = imgOrSrc;
-    }
+    if (imgOrSrc && typeof imgOrSrc === 'object' && 'src' in imgOrSrc) img.src = imgOrSrc.src;
+    else if (typeof imgOrSrc === 'string') img.src = imgOrSrc;
   }
-
-  // style it like a viewer
   img.style.maxWidth = '95vw';
   img.style.maxHeight = '95vh';
   img.style.objectFit = 'contain';
   img.setAttribute('data-role', 'art');
   frame.appendChild(img);
 
-  // show overlay and try fullscreen
   o.classList.remove('hidden');
   o.setAttribute('data-open', '1');
-  if (!document.fullscreenElement && o.requestFullscreen) {
-    o.requestFullscreen().catch(() => {});
-  }
+  if (!document.fullscreenElement && o.requestFullscreen) o.requestFullscreen().catch(() => {});
   return img;
 }
-// ===== overlay close helper (append-only) =====
-export function overlayClose() {
-  // Reuse the existing close logic.
-  // If you ever add extra teardown (timers, listeners),
-  // put it here before calling fsClose().
-  return fsClose();
-}
-// ===== overlay text helpers (append-only) =====
+export function overlayClose() { return fsClose(); }
+
+// ---- overlay text helpers (already used by features/overlay.js) ----
 function ensureOverlayTextEl(tag, dataAttr, baseStyles = {}) {
-  const o = overlay();                  // uses the overlay() helper you added
+  const o = overlay();
   let el = o.querySelector(`[${dataAttr}]`);
   if (!el) {
     el = document.createElement(tag);
@@ -708,15 +648,11 @@ function ensureOverlayTextEl(tag, dataAttr, baseStyles = {}) {
     el.style.textAlign = "center";
     el.style.color = "#9FFFA0";
     Object.assign(el.style, baseStyles);
-    // place text elements above the image frame if present
     o.insertBefore(el, o.firstChild);
   }
-  // make sure overlay is shown
   o.classList.remove("hidden");
   o.setAttribute("data-open", "1");
-  if (!document.fullscreenElement && o.requestFullscreen) {
-    o.requestFullscreen().catch(() => {});
-  }
+  if (!document.fullscreenElement && o.requestFullscreen) o.requestFullscreen().catch(() => {});
   return el;
 }
 
@@ -729,7 +665,6 @@ export function overlayTitle(text) {
   if (text != null) el.textContent = String(text);
   return el;
 }
-
 export function overlaySubtitle(text) {
   const el = ensureOverlayTextEl("h2", "data-ov-subtitle", {
     fontSize: "clamp(16px, 3vw, 24px)",
@@ -739,7 +674,6 @@ export function overlaySubtitle(text) {
   if (text != null) el.textContent = String(text);
   return el;
 }
-
 export function overlayMotto(text) {
   const el = ensureOverlayTextEl("p", "data-ov-motto", {
     fontSize: "clamp(14px, 2.5vw, 18px)",
@@ -750,14 +684,14 @@ export function overlayMotto(text) {
   if (text != null) el.textContent = String(text);
   return el;
 }
-// ===== activeSlot shim (append-only) =====
-// currently-selected bracket slot (e.g., "r32_1"); kept in core for sharing
+
+// ---- active slot state ----
 export let activeSlot = null;
 export function setActiveSlot(v) { activeSlot = v; return activeSlot; }
 export function getActiveSlot() { return activeSlot; }
-// ===== voting lock UI helper (append-only) =====
+
+// ---- voting lock banner ----
 export function applyVotingLockUI(locked = false, untilText = "") {
-  // Try common selectors; if your IDs/classes are different, this still no-ops.
   const a = document.querySelector('#voteA, [data-role="voteA"]');
   const b = document.querySelector('#voteB, [data-role="voteB"]');
   const submit = document.querySelector('#submitBtn, [data-role="submit"]');
@@ -804,5 +738,47 @@ export function applyVotingLockUI(locked = false, untilText = "") {
     banner.style.display = 'block';
   } else {
     banner.style.display = 'none';
+  }
+}
+
+/* =========================
+   Boot helpers (NEW)
+========================= */
+
+// Update boot/status text if present.
+export function setBootStatus(text) {
+  const el =
+    document.getElementById('bootStatus') ||
+    document.querySelector('[data-role="bootStatus"]') ||
+    document.querySelector('.boot-status');
+  if (el && text != null) el.textContent = String(text);
+  return !!el;
+}
+
+// Hide boot UI and mark ready; safe to call multiple times.
+export function endBoot({ message = 'ready' } = {}) {
+  try {
+    setBootStatus(message);
+
+    // common boot elements we may want to hide
+    const selectors = [
+      '#boot', '[data-role="boot"]', '.boot',
+      '#bootBar', '.boot-bar', '[data-role="bootBar"]',
+      '#bootStatus', '.boot-status', '[data-role="bootStatus"]'
+    ];
+    selectors.forEach((sel) => {
+      document.querySelectorAll(sel).forEach((el) => {
+        el.style.display = 'none';
+      });
+    });
+
+    // mark body complete for any CSS that keys off it
+    document.body.classList.add('boot-complete');
+
+    if (DEBUG) console.log('[BOOT] endBoot() → UI ready');
+    return true;
+  } catch (e) {
+    console.warn('[BOOT] endBoot error', e);
+    return false;
   }
 }
