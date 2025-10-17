@@ -664,3 +664,56 @@ export function fsOverlay(content) {
     return false;
   }
 }
+// ===== extra compat shims (append-only) =====
+
+// Public bucket your app uses for uploads.
+// Adjust if your bucket name is different.
+export const DEFAULT_PUBLIC_BUCKET = 'art-uploads';
+
+/**
+ * Build an image URL for a given base (ISO or label) + slot key (e.g., "A1","B12").
+ * - If `key` is already a full URL, return it unchanged.
+ * - Otherwise, point at the public Supabase bucket path:
+ *     /storage/v1/object/public/<bucket>/<base>/<key>.<ext>
+ * - Extension default is .jpg; callers can override via opts.
+ *
+ * This is intentionally simple so services.js can keep moving even if
+ * your storage layout is still in flux.
+ */
+export function seedUrlFromKey(baseIsoOrLabel, key, opts = {}) {
+  if (!key) return '';
+  if (/^https?:\/\//i.test(key)) return key;
+
+  const bucket = opts.bucket || DEFAULT_PUBLIC_BUCKET;
+  const ext = (opts.ext || '.jpg').replace(/^\./, '.');
+
+  // Normalize base: use date part if ISO, else keep label (e.g., "r32")
+  let base = String(baseIsoOrLabel || '').trim();
+  if (base.includes('T')) base = base.split('T')[0]; // YYYY-MM-DD
+
+  // Fallback if base is empty
+  if (!base) base = 'seed';
+
+  // Supabase public object URL pattern
+  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${encodeURIComponent(base)}/${encodeURIComponent(key)}${ext}`;
+}
+
+/**
+ * Convenience getter for the primary "A" image element in the viewer.
+ * Flexible selector so older markup keeps working.
+ */
+export function imgA(selector) {
+  // Allow an explicit selector override
+  if (selector && typeof selector === 'string') {
+    const el = document.querySelector(selector);
+    if (el) return el;
+  }
+  // Common fallbacks
+  return (
+    document.querySelector('#imgA') ||
+    document.querySelector('#A') ||
+    document.querySelector('img[data-role="A"]') ||
+    document.querySelector('.imgA') ||
+    null
+  );
+}
