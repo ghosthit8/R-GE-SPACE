@@ -11,6 +11,24 @@ export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 export const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTg3MTUyOTgsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
+// ---- auth helpers (NEW) ----
+export function uidCached() {
+  return currentUid || null;
+}
+
+export async function getUidOrNull() {
+  try {
+    if (currentUid) return currentUid;
+    // ask Supabase once, cache it
+    const { data, error } = await supabase.auth.getUser();
+    if (error) return null;
+    const id = data?.user?.id || null;
+    if (id) setCurrentUid(id);
+    return id;
+  } catch {
+    return null;
+  }
+}
 
 // ---- Supabase client (singleton) ----
 // Prevents "Multiple GoTrueClient instances detected..." warnings.
