@@ -126,6 +126,33 @@ function startClock() {
 }
 
 /* =========================
+   Supabase header helper + resilient fetch
+========================= */
+
+function supaHeaders(kind = "both") {
+  // kind: "both" | "authOnly" | "apikeyOnly"
+  const base = {};
+  if (kind === "both" || kind === "apikeyOnly") base.apikey = SUPABASE_ANON_KEY;
+  if (kind === "both" || kind === "authOnly")  base.Authorization = `Bearer ${SUPABASE_ANON_KEY}`;
+  return base;
+}
+
+// Try with both headers; if 401, retry apikey-only; if still 401, retry auth-only.
+async function fetchSupa(url, init = {}, { timeout = 8000 } = {}) {
+  const tryOnce = async (kind) =>
+    fetchWithTimeout(url, {
+      ...init,
+      headers: { ...(init.headers || {}), ...supaHeaders(kind) },
+      timeout,
+    });
+
+  let res = await tryOnce("both");
+  if (res.status === 401) res = await tryOnce("apikeyOnly");
+  if (res.status === 401) res = await tryOnce("authOnly");
+  return res;
+}
+
+/* =========================
    Image Preloader (dedup)
 ========================= */
 
@@ -288,12 +315,7 @@ class Poller {
     if (wait) await sleep(wait);
 
     const url = `${SUPABASE_URL}/rest/v1/phase_votes?select=vote`;
-    const res = await fetchWithTimeout(url, {
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-    });
+    const res = await fetchSupa(url);
     if (!res.ok) throw new Error(`votes ${res.status}`);
     const data = await res.json();
 
@@ -305,14 +327,9 @@ class Poller {
   }
 
   async _pollWinners(phaseKeys) {
-    const headers = {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    };
     const fetches = phaseKeys.map((pk) =>
-      fetchWithTimeout(
-        `${SUPABASE_URL}/rest/v1/winners?select=color&phase_key=eq.${encodeURIComponent(pk)}`,
-        { headers }
+      fetchSupa(
+        `${SUPABASE_URL}/rest/v1/winners?select=color&phase_key=eq.${encodeURIComponent(pk)}`
       ).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`winners ${r.status}`))))
     );
 
@@ -332,13 +349,7 @@ class Poller {
     const wait = this._edgeBackoff || 0;
     if (wait) await sleep(wait);
 
-    const res = await fetchWithTimeout(EDGE_URL, {
-      timeout: 6000,
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-    });
+    const res = await fetchSupa(EDGE_URL, {}, { timeout: 6000 });
     if (!res.ok) throw new Error(`edge ${res.status}`);
     const payload = await res.json();
 
@@ -560,6 +571,7 @@ export function fsOverlay(content) {
 }
 // compatibility shim: ignore mistaken uses like fsOverlay.addEventListener(...)
 try { (fsOverlay).addEventListener = () => {}; } catch {}
+
 export function seedUrlFromKey(baseIsoOrLabel, key, opts = {}) {
   if (!key) return '';
   if (/^https?:\/\//i.test(key)) return key;
@@ -896,16 +908,15 @@ export function toast(msg = "", opts = {}) {
 ========================= */
 
 export async function toggleTimer(action = "pause") {
-  const body = { action: String(action) };
-  const res = await fetch(EDGE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+  const res = await fetchSupa(
+    EDGE_URL,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: String(action) }),
     },
-    body: JSON.stringify(body),
-  });
+    { timeout: 6000 }
+  );
   if (!res.ok) throw new Error(`toggleTimer ${res.status}`);
   try { return await res.json(); } catch { return null; }
 }
