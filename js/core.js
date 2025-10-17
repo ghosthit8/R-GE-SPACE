@@ -800,3 +800,147 @@ export function endBoot({ message = 'ready' } = {}) {
     return false;
   }
 }
+/* =========================
+   Basic utilities requested by main.js
+========================= */
+
+// ISO helper used by main.js to normalize timestamps
+export function iso(t) {
+  try {
+    const d = t instanceof Date ? t : new Date(t);
+    // Keep full ISO (main.js expects to compare exact instants)
+    return d.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
+/* =========================
+   Boot progress helpers
+========================= */
+
+// Create/update a simple boot progress bar + status text
+export function setBoot(pct = 0, message = "") {
+  try {
+    const bar =
+      document.getElementById("bootBar") ||
+      document.querySelector("[data-role='bootBar']") ||
+      document.querySelector(".boot-bar");
+
+    if (bar) {
+      const v = Math.max(0, Math.min(100, Number(pct) || 0));
+      bar.style.width = v + "%";
+      bar.setAttribute?.("aria-valuenow", String(v));
+    }
+    if (message) setBootStatus(message);
+  } catch {}
+}
+
+let __bootTickRaf = 0;
+// (No-op-ish) Allows main.js to start a boot ticker; harmless if no boot UI
+export function startBootTick() {
+  cancelAnimationFrame(__bootTickRaf || 0);
+  const bar =
+    document.getElementById("bootBar") ||
+    document.querySelector("[data-role='bootBar']") ||
+    document.querySelector(".boot-bar");
+
+  if (!bar) return;
+
+  let v = 0;
+  const tick = () => {
+    v = (v + 0.6) % 100;
+    bar.style.width = v + "%";
+    __bootTickRaf = requestAnimationFrame(tick);
+  };
+  __bootTickRaf = requestAnimationFrame(tick);
+}
+
+/* =========================
+   Toast (lightweight)
+========================= */
+
+export function toast(msg = "", opts = {}) {
+  try {
+    const div = document.createElement("div");
+    div.textContent = String(msg || "");
+    Object.assign(div.style, {
+      position: "fixed",
+      right: "12px",
+      bottom: "12px",
+      maxWidth: "70vw",
+      background: "rgba(0,0,0,0.85)",
+      color: "#c4ffc4",
+      padding: "10px 12px",
+      border: "1px solid #3cff3c",
+      borderRadius: "10px",
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "12px",
+      zIndex: 999999,
+      opacity: "0",
+      transition: "opacity .18s ease",
+      pointerEvents: "none",
+    });
+    document.body.appendChild(div);
+    requestAnimationFrame(() => (div.style.opacity = "1"));
+    const ms = Number(opts.duration) || 1600;
+    setTimeout(() => {
+      div.style.opacity = "0";
+      setTimeout(() => div.remove(), 220);
+    }, ms);
+  } catch {}
+}
+
+/* =========================
+   Timer toggle → Edge function
+========================= */
+
+export async function toggleTimer(action = "pause") {
+  // expected: "pause" | "resume"
+  const body = { action: String(action) };
+  const res = await fetch(EDGE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`toggleTimer ${res.status}`);
+  // allow either JSON or empty response
+  try { return await res.json(); } catch { return null; }
+}
+
+/* =========================
+   UI/state wiring requested by main.js
+========================= */
+
+// Update a few bits of UI based on current state; safe no-op if elements absent
+export function setStateUI() {
+  try {
+    const btn = pauseBtn();
+    if (btn) btn.textContent = paused ? "Resume" : "Pause";
+    const sb = submitBtn?.();
+    if (sb) sb.disabled = !currentUid || !chosen;
+  } catch {}
+}
+
+// Voting lock checks used by main.js.
+// For now, keep them permissive so testing is easy; adjust when you wire real locks.
+export function slotFinished(_slot) { return false; }
+export function votingLockedFor(_slot) { return false; }
+
+/* =========================
+   Auth helpers (already added earlier, repeat here if missing)
+========================= */
+
+// If you don't already have these above in your file, keep them here.
+// (If you do have them, remove this duplicate block.)
+export function uidCached() { return currentUid || null; }
+export async function getUidOrNull() {
+  try {
+    if (currentUid) return currentUid;
+    const { data, error } = await supabase.auth.getUser();
+    if (error) return null;
+    const id = data?.user?.id || null;
+    if (id) setCurrentUid(id);
+    return id;
+  } catch { return null; }
+}
