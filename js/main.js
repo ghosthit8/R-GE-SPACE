@@ -20,7 +20,7 @@ import {
   setLastSyncAt, setLastCountsAt, setCurrentUid, setChosen,
   setActiveSlot, setCurrentStage, setOverlayGateBase, setLastPaintedBattleKey,
   fixedSeedPair,
-} from "./core.js";
+} from "./core.js?v=26";
 
 import {
   fetchTimerState, detectStage,
