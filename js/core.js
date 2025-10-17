@@ -558,7 +558,8 @@ export function fsOverlay(content) {
     return true;
   } catch { return false; }
 }
-
+// compatibility shim: ignore mistaken uses like fsOverlay.addEventListener(...)
+try { (fsOverlay).addEventListener = () => {}; } catch {}
 export function seedUrlFromKey(baseIsoOrLabel, key, opts = {}) {
   if (!key) return '';
   if (/^https?:\/\//i.test(key)) return key;
