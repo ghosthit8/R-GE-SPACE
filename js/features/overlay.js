@@ -6,7 +6,7 @@ import {
   overlay, overlayArtImg, overlayClose,
   overlayTitle, overlaySubtitle, overlayMotto,
   confettiCanvas, imgCache, fsOverlay, fsClose
-} from "../core.js?v=29";
+} from "../core.js?v=30";
 
 import {
   countVotesFor,
