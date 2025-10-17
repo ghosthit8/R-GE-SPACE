@@ -32,7 +32,7 @@ let paused = false;
 
 let periodSec = 5;
 let serverPhaseEndISO = null;
-export let currentPhaseKey = null; // <-- exported at declaration
+export let currentPhaseKey = null; // exported at declaration
 let prevPhaseKey = null;
 
 let remainingSec = 0;
@@ -95,7 +95,7 @@ function startClock() {
 // Image Preloader (deduped)
 //////////////////////////////
 
-export const imgCache = new Set(); // <-- exported at declaration
+export const imgCache = new Set(); // exported at declaration
 export async function preloadImage(url) {
   if (!url || imgCache.has(url)) return;
   imgCache.add(url);
@@ -427,10 +427,8 @@ export const rowId = (slot) => `row-${slot}`;
 // (append-only; safe to remove later by updating callers)
 //////////////////////////////
 
-// public bucket default
 export const DEFAULT_PUBLIC_BUCKET = "art-uploads";
 
-/** map stageKey → base ISO (fallback to top-of-hour) */
 export function baseForCompletedStage(stageKey, state) {
   try {
     if (state?.bases?.[stageKey]) return state.bases[stageKey];
@@ -439,7 +437,6 @@ export function baseForCompletedStage(stageKey, state) {
   } catch { return new Date().toISOString(); }
 }
 
-/** close overlay + exit native fullscreen if any */
 export function fsClose() {
   try {
     const overlay = document.querySelector('[data-fullscreen-overlay]');
@@ -451,7 +448,6 @@ export function fsClose() {
   return true;
 }
 
-/** map slot/phase (e.g., r32_1) → base ISO */
 export function baseForSlot(slotOrPhase, state) {
   try {
     const stage = String(slotOrPhase || '').split('_')[0];
@@ -461,7 +457,6 @@ export function baseForSlot(slotOrPhase, state) {
   } catch { return new Date().toISOString(); }
 }
 
-/** overlay an image URL or <img> */
 export function fsImage(target) {
   try {
     if (target instanceof Element && target.requestFullscreen) return target.requestFullscreen();
@@ -489,7 +484,6 @@ export function fsImage(target) {
   } catch { return false; }
 }
 
-/** deterministic pairing numbers for bracket slots */
 export function fixedSeedPair(slotOrPhase) {
   const stage = String(slotOrPhase || '').split('_')[0];
   const m = String(slotOrPhase || '').match(/(\d+)/);
@@ -498,84 +492,9 @@ export function fixedSeedPair(slotOrPhase) {
   switch (stage) { case 'r32': case 'r16': case 'qf': case 'sf': return [a,b]; default: return [1,2]; }
 }
 
-/** general purpose overlay container for arbitrary content */
 export function fsOverlay(content) {
   try {
     let overlay = document.querySelector('[data-fullscreen-overlay]');
     if (!overlay) {
       overlay = document.createElement('div');
-      overlay.setAttribute('data-fullscreen-overlay','');
-      overlay.style.position='fixed'; overlay.style.inset='0';
-      overlay.style.background='rgba(0,0,0,0.92)';
-      overlay.style.display='flex'; overlay.style.alignItems='center'; overlay.style.justifyContent='center';
-      overlay.style.zIndex='999999'; overlay.classList.add('hidden');
-      overlay.addEventListener('click',(e)=>{ if (e.target===overlay) fsClose(); });
-      document.body.appendChild(overlay);
-    }
-    overlay.innerHTML = '';
-    const frame = document.createElement('div');
-    frame.style.maxWidth='95vw'; frame.style.maxHeight='95vh'; frame.style.overflow='auto';
-    overlay.appendChild(frame);
-    if (content instanceof Element) frame.appendChild(content);
-    else if (typeof content === 'string') frame.innerHTML = content;
-    overlay.classList.remove('hidden'); overlay.setAttribute('data-open','1');
-    if (!document.fullscreenElement && overlay.requestFullscreen) overlay.requestFullscreen().catch(()=>{});
-    return true;
-  } catch { return false; }
-}
-
-/** build storage URL for a base + key (e.g., 'A1') */
-export function seedUrlFromKey(baseIsoOrLabel, key, opts = {}) {
-  if (!key) return '';
-  if (/^https?:\/\//i.test(key)) return key;
-  const bucket = opts.bucket || DEFAULT_PUBLIC_BUCKET;
-  const ext = (opts.ext || '.jpg').replace(/^\./,'.');
-  let base = String(baseIsoOrLabel || '').trim();
-  if (base.includes('T')) base = base.split('T')[0];
-  if (!base) base = 'seed';
-  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${encodeURIComponent(base)}/${encodeURIComponent(key)}${ext}`;
-}
-
-/** convenience accessors for main image elements */
-export function imgA(selector) {
-  if (selector && typeof selector === 'string') { const el = document.querySelector(selector); if (el) return el; }
-  return document.querySelector('#imgA') || document.querySelector('#A') ||
-         document.querySelector('img[data-role="A"]') || document.querySelector('.imgA') || null;
-}
-export function imgB(selector) {
-  if (selector && typeof selector === 'string') { const el = document.querySelector(selector); if (el) return el; }
-  return document.querySelector('#imgB') || document.querySelector('#B') ||
-         document.querySelector('img[data-role="B"]') || document.querySelector('.imgB') || null;
-}
-
-/** small DOM helper bundle some features import */
-export const brows = {
-  qs: (sel, root=document) => root.querySelector(sel),
-  qsa: (sel, root=document) => Array.from(root.querySelectorAll(sel)),
-  on: (el, evt, fn, opts) => { if (el) el.addEventListener(evt, fn, opts); return el; },
-  css: (el, styles={}) => { if (el && styles) Object.assign(el.style, styles); return el; },
-};
-
-/** fullscreen canvas for confetti and FX */
-export function confettiCanvas() {
-  let c = document.getElementById('confetti-canvas');
-  if (!c) {
-    c = document.createElement('canvas');
-    c.id = 'confetti-canvas';
-    c.style.position='fixed'; c.style.inset='0';
-    c.style.pointerEvents='none'; c.style.zIndex='999990';
-    document.body.appendChild(c);
-    const fit = () => {
-      const dpr = window.devicePixelRatio || 1;
-      c.width = Math.floor(window.innerWidth * dpr);
-      c.height = Math.floor(window.innerHeight * dpr);
-      c.style.width = '100vw'; c.style.height = '100vh';
-      const ctx = c.getContext('2d'); if (ctx) ctx.setTransform(dpr,0,0,dpr,0,0);
-    };
-    fit();
-    window.addEventListener('resize', fit, { passive: true });
-  }
-  return c;
-}
-// ===== named re-exports (append-only) =====
-export { currentPhaseKey, imgCache };
+      overlay.setAttribute('data-fullscreen-overlay
