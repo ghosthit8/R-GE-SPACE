@@ -613,3 +613,47 @@ export function overlay() {
   }
   return o;
 }
+// ===== overlay image helper (append-only) =====
+export function overlayArtImg(imgOrSrc) {
+  // ensure we have the overlay container
+  const o = overlay();
+
+  // clear previous content
+  o.innerHTML = '';
+
+  // create a frame to keep sizing nice
+  const frame = document.createElement('div');
+  frame.style.maxWidth = '95vw';
+  frame.style.maxHeight = '95vh';
+  frame.style.overflow = 'auto';
+  frame.style.background = 'transparent';
+  o.appendChild(frame);
+
+  // resolve <img>
+  let img;
+  if (imgOrSrc instanceof HTMLImageElement) {
+    img = imgOrSrc.cloneNode(true);
+  } else {
+    img = document.createElement('img');
+    if (imgOrSrc && typeof imgOrSrc === 'object' && 'src' in imgOrSrc) {
+      img.src = imgOrSrc.src;
+    } else if (typeof imgOrSrc === 'string') {
+      img.src = imgOrSrc;
+    }
+  }
+
+  // style it like a viewer
+  img.style.maxWidth = '95vw';
+  img.style.maxHeight = '95vh';
+  img.style.objectFit = 'contain';
+  img.setAttribute('data-role', 'art');
+  frame.appendChild(img);
+
+  // show overlay and try fullscreen
+  o.classList.remove('hidden');
+  o.setAttribute('data-open', '1');
+  if (!document.fullscreenElement && o.requestFullscreen) {
+    o.requestFullscreen().catch(() => {});
+  }
+  return img;
+}
