@@ -590,3 +590,77 @@ export function fsImage(target) {
     return false;
   }
 }
+// ===== final compat shims (append-only) =====
+
+/**
+ * Deterministic bracket pairing for a given slot/phase.
+ * Maps r32_1 → [1,2], r32_2 → [3,4], …; same pattern for r16/qf/sf.
+ * Falls back to [1,2] for 'final' or unnumbered keys.
+ */
+export function fixedSeedPair(slotOrPhase) {
+  const stage = String(slotOrPhase || '').split('_')[0];   // r32, r16, qf, sf, final
+  const m = String(slotOrPhase || '').match(/(\d+)/);
+  const i = m ? Math.max(1, parseInt(m[1], 10)) : 1;
+  const a = (i - 1) * 2 + 1;
+  const b = a + 1;
+  switch (stage) {
+    case 'r32':
+    case 'r16':
+    case 'qf':
+    case 'sf':
+      return [a, b];
+    default:
+      return [1, 2]; // final or unknown stage → just return the first pair
+  }
+}
+
+/**
+ * Show arbitrary content in a fullscreen-style overlay.
+ * Accepts a DOM node or HTML string. Click the backdrop to close (fsClose()).
+ */
+export function fsOverlay(content) {
+  try {
+    let overlay = document.querySelector('[data-fullscreen-overlay]');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.setAttribute('data-fullscreen-overlay', '');
+      overlay.style.position = 'fixed';
+      overlay.style.inset = '0';
+      overlay.style.background = 'rgba(0,0,0,0.92)';
+      overlay.style.display = 'flex';
+      overlay.style.alignItems = 'center';
+      overlay.style.justifyContent = 'center';
+      overlay.style.zIndex = '999999';
+      overlay.classList.add('hidden');
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) fsClose();
+      });
+      document.body.appendChild(overlay);
+    }
+
+    // clear previous content
+    overlay.innerHTML = '';
+    const frame = document.createElement('div');
+    frame.style.maxWidth = '95vw';
+    frame.style.maxHeight = '95vh';
+    frame.style.overflow = 'auto';
+    frame.style.background = 'transparent'; // keep your aesthetic
+    overlay.appendChild(frame);
+
+    if (content instanceof Element) {
+      frame.appendChild(content);
+    } else if (typeof content === 'string') {
+      frame.innerHTML = content;
+    }
+
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('data-open', '1');
+
+    if (!document.fullscreenElement && overlay.requestFullscreen) {
+      overlay.requestFullscreen().catch(() => {});
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
