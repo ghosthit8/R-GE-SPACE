@@ -400,6 +400,20 @@ export function setCurrentUid(uid) {
 export function setChosen(v) {
   chosen = v;
 }
+export function setCurrentStage(v) {
+  currentStage = v;
+  return currentStage;
+}
+
+export function setOverlayGateBase(v) {
+  overlayGateBase = v;
+  return overlayGateBase;
+}
+
+export function setLastPaintedBattleKey(v) {
+  lastPaintedBattleKey = v;
+  return lastPaintedBattleKey;
+}
 
 //////////////////////////////
 // UI helpers
