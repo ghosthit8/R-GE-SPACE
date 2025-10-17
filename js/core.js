@@ -476,3 +476,87 @@ export function fsClose() {
   }
   return true;
 }
+// ===== additional compat shims (append-only) =====
+
+/**
+ * Normalize a slot/phase key (e.g., 'r32_1','r16_3','qf2','sf1','final')
+ * into a stable base ISO for fetching completed data.
+ * Prefers explicit state.bases[stage] → state.base_iso → top-of-hour fallback.
+ */
+export function baseForSlot(slotOrPhase, state) {
+  try {
+    const stage = String(slotOrPhase || '').split('_')[0]; // r32, r16, qf, sf, final, etc.
+    if (state?.bases?.[stage]) return state.bases[stage];
+    if (state?.base_iso) return state.base_iso;
+
+    const d = new Date();
+    d.setMinutes(0, 0, 0); // align to :00 to avoid flapping
+    return d.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
+/**
+ * Open an image (URL or <img> element) in fullscreen/overlay.
+ * Click outside the image (overlay background) or call fsClose() to exit.
+ */
+export function fsImage(target) {
+  try {
+    // If it's a DOM element with native fullscreen support, use it.
+    if (target instanceof Element && target.requestFullscreen) {
+      return target.requestFullscreen();
+    }
+
+    // Otherwise resolve a URL for an overlay viewer.
+    const url =
+      typeof target === 'string'
+        ? target
+        : (target && typeof target === 'object' && 'src' in target ? target.src : null);
+
+    if (!url) return false;
+
+    // Reuse/create overlay container
+    let overlay = document.querySelector('[data-fullscreen-overlay]');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.setAttribute('data-fullscreen-overlay', '');
+      overlay.style.position = 'fixed';
+      overlay.style.inset = '0';
+      overlay.style.background = 'rgba(0,0,0,0.92)';
+      overlay.style.display = 'flex';
+      overlay.style.alignItems = 'center';
+      overlay.style.justifyContent = 'center';
+      overlay.style.zIndex = '999999';
+      overlay.classList.add('hidden');
+      // click background to close
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) fsClose();
+      });
+      document.body.appendChild(overlay);
+    }
+
+    // Reuse/create image node
+    let img = overlay.querySelector('img');
+    if (!img) {
+      img = document.createElement('img');
+      img.style.maxWidth = '95vw';
+      img.style.maxHeight = '95vh';
+      img.style.objectFit = 'contain';
+      overlay.appendChild(img);
+    }
+    img.src = url;
+
+    // Show overlay
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('data-open', '1');
+
+    // Try native fullscreen as an enhancement
+    if (!document.fullscreenElement && overlay.requestFullscreen) {
+      overlay.requestFullscreen().catch(() => {});
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
