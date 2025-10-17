@@ -32,7 +32,7 @@ let paused = false;
 
 let periodSec = 5;
 let serverPhaseEndISO = null;
-let currentPhaseKey = null;
+export let currentPhaseKey = null; // <-- exported at declaration
 let prevPhaseKey = null;
 
 let remainingSec = 0;
@@ -95,7 +95,7 @@ function startClock() {
 // Image Preloader (deduped)
 //////////////////////////////
 
-const imgCache = new Set();
+export const imgCache = new Set(); // <-- exported at declaration
 export async function preloadImage(url) {
   if (!url || imgCache.has(url)) return;
   imgCache.add(url);
