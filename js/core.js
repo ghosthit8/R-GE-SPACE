@@ -657,3 +657,10 @@ export function overlayArtImg(imgOrSrc) {
   }
   return img;
 }
+// ===== overlay close helper (append-only) =====
+export function overlayClose() {
+  // Reuse the existing close logic.
+  // If you ever add extra teardown (timers, listeners),
+  // put it here before calling fsClose().
+  return fsClose();
+}
