@@ -722,3 +722,54 @@ export function overlayMotto(text) {
 export let activeSlot = null;
 export function setActiveSlot(v) { activeSlot = v; return activeSlot; }
 export function getActiveSlot() { return activeSlot; }
+// ===== voting lock UI helper (append-only) =====
+export function applyVotingLockUI(locked = false, untilText = "") {
+  // Try common selectors; if your IDs/classes are different, this still no-ops.
+  const a = document.querySelector('#voteA, [data-role="voteA"]');
+  const b = document.querySelector('#voteB, [data-role="voteB"]');
+  const submit = document.querySelector('#submitBtn, [data-role="submit"]');
+  const banner =
+    document.querySelector('[data-vote-lock-banner]') ||
+    (() => {
+      const el = document.createElement('div');
+      el.setAttribute('data-vote-lock-banner', '');
+      el.style.position = 'fixed';
+      el.style.left = '50%';
+      el.style.transform = 'translateX(-50%)';
+      el.style.bottom = '12px';
+      el.style.padding = '6px 10px';
+      el.style.border = '1px solid #3cff3c';
+      el.style.background = 'rgba(0,0,0,0.8)';
+      el.style.color = '#9fff9f';
+      el.style.borderRadius = '10px';
+      el.style.fontFamily = 'system-ui,sans-serif';
+      el.style.fontSize = '12px';
+      el.style.zIndex = '999999';
+      el.style.display = 'none';
+      document.body.appendChild(el);
+      return el;
+    })();
+
+  const setDisabled = (el, v) => {
+    if (!el) return;
+    el.toggleAttribute?.('disabled', !!v);
+    if (v) {
+      el.style.opacity = '0.5';
+      el.style.pointerEvents = 'none';
+    } else {
+      el.style.opacity = '';
+      el.style.pointerEvents = '';
+    }
+  };
+
+  setDisabled(a, locked);
+  setDisabled(b, locked);
+  setDisabled(submit, locked);
+
+  if (locked) {
+    banner.textContent = untilText ? `Voting locked ${untilText}` : 'Voting is temporarily locked';
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+}
