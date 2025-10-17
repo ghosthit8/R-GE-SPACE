@@ -9,10 +9,10 @@
 
 export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 export const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs...CI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTg3MTUyOTgsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 
-// Supabase client (expecting UMD from your HTML)
+// Supabase client (UMD from HTML)
 export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 //////////////////////////////
@@ -20,20 +20,7 @@ export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON
 //////////////////////////////
 
 const $ = (id) => document.getElementById(id);
-const refs = new Proxy(
-  {},
-  {
-    get: (_, k) => {
-      const el = $(`${k}`);
-      return el || null;
-    },
-  }
-);
-
-// If your HTML uses these IDs, they’ll resolve; if not, null is okay
-// (we guard reads).
-// Example expected ids from your UI: "clock", "loginBadge", etc.
-// Add more as needed:
+const refs = new Proxy({}, { get: (_, k) => $(`${k}`) || null });
 const clockEl = () => refs["clock"];
 const loginBadgeEl = () => refs["loginBadge"];
 
@@ -43,7 +30,7 @@ const loginBadgeEl = () => refs["loginBadge"];
 
 let paused = false;
 
-let periodSec = 5; // base cadence for phase vote polling (can be tuned)
+let periodSec = 5;
 let serverPhaseEndISO = null;
 let currentPhaseKey = null;
 let prevPhaseKey = null;
@@ -64,10 +51,8 @@ let DEBUG = false;
 //////////////////////////////
 
 const now = () => Date.now();
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Abort + timeout for fetch
 async function fetchWithTimeout(resource, options = {}) {
   const { timeout = 8000, ...rest } = options;
   const controller = new AbortController();
@@ -80,13 +65,11 @@ async function fetchWithTimeout(resource, options = {}) {
   }
 }
 
-// Jitter around a base interval so clients don’t sync-storm
 const jitter = (baseMs, spreadRatio = 0.25) => {
   const spread = baseMs * spreadRatio;
   return baseMs + (Math.random() * 2 - 1) * spread;
 };
 
-// A simple once-only guard
 function once(fn) {
   let done = false;
   return (...args) => {
@@ -96,15 +79,12 @@ function once(fn) {
   };
 }
 
-// Cheap RAF ticker for the clock
 function startClock() {
   let rafId = 0;
   const tick = () => {
     if (paused) return;
     const el = clockEl();
-    if (el && remainingSec != null) {
-      el.textContent = String(remainingSec);
-    }
+    if (el && remainingSec != null) el.textContent = String(remainingSec);
     rafId = requestAnimationFrame(tick);
   };
   rafId = requestAnimationFrame(tick);
@@ -136,11 +116,9 @@ function readDebugPref() {
   const stored = localStorage.getItem(DEBUG_KEY);
   return stored === "1";
 }
-
 function writeDebugPref(v) {
   localStorage.setItem(DEBUG_KEY, v ? "1" : "0");
 }
-
 function ensureDebugButton() {
   let btn = document.getElementById("debug-btn");
   if (!btn) {
@@ -152,12 +130,14 @@ function ensureDebugButton() {
     btn.style.zIndex = "99999";
     btn.style.padding = "8px 10px";
     btn.style.borderRadius = "10px";
-    btn.style.border = "1px solid #ccc";
-    btn.style.background = "#fff";
-    btn.style.boxShadow = "0 2px 8px rgba(0,0,0,0.15)";
+    btn.style.border = "1px solid #0f0";
+    btn.style.background = "black";
+    btn.style.color = "#4cff4c";
+    btn.style.boxShadow = "0 2px 8px rgba(0,0,0,0.35)";
     btn.style.fontFamily = "system-ui, sans-serif";
     btn.style.fontSize = "12px";
     btn.title = "Toggle debug overlay";
+    btn.textContent = "Debug: OFF";
     document.body.appendChild(btn);
   }
   const label = (on) => (on ? "Debug: ON" : "Debug: OFF");
@@ -187,29 +167,24 @@ class Poller {
     this._running = false;
     this._stop = null;
 
-    // Backoff state
-    this._votesBackoff = 0; // ms
+    this._votesBackoff = 0;
     this._edgeBackoff = 0;
 
-    // Hooks
     this._onCounts = onCounts;
     this._onWinners = onWinners;
     this._winnersKeys = winnersPhaseKeysProvider;
     this._onPhaseChange = onPhaseChange;
 
-    // Dedup guards
     this._votesInflight = false;
     this._winnersInflight = false;
     this._edgeInflight = false;
 
-    // Visibility handling
     this._handleVis = this._handleVis.bind(this);
   }
 
   start() {
     if (this._running) return;
     this._running = true;
-
     document.addEventListener("visibilitychange", this._handleVis, { passive: true });
     this._loop();
   }
@@ -225,7 +200,6 @@ class Poller {
       if (DEBUG) console.log("[POLL] hidden → pausing intensive polling");
     } else {
       if (DEBUG) console.log("[POLL] visible → bump an immediate pass");
-      // Kick a pass without waiting for the next timer
       this._tick(true);
     }
   }
@@ -236,7 +210,6 @@ class Poller {
 
     while (this._running) {
       await this._tick(false);
-      // Slow down when hidden
       const base = document.hidden ? Math.max(this.cfg.votesEveryMs, 10000) : this.cfg.votesEveryMs;
       await sleep(jitter(base));
     }
@@ -245,7 +218,6 @@ class Poller {
   async _tick(force) {
     if (paused) return;
 
-    // Phase votes counts
     if (!this._votesInflight) {
       this._votesInflight = true;
       this._pollVotes()
@@ -253,12 +225,9 @@ class Poller {
           if (DEBUG) console.warn("[POLL] votes error", e);
           this._votesBackoff = Math.min(30000, this._votesBackoff ? this._votesBackoff * 2 : 2000);
         })
-        .finally(() => {
-          this._votesInflight = false;
-        });
+        .finally(() => (this._votesInflight = false));
     }
 
-    // Winners for visible bracket nodes (batch)
     if (!this._winnersInflight) {
       const keys = this._winnersKeys();
       if (keys && keys.length) {
@@ -267,13 +236,10 @@ class Poller {
           .catch((e) => {
             if (DEBUG) console.warn("[POLL] winners error", e);
           })
-          .finally(() => {
-            this._winnersInflight = false;
-          });
+          .finally(() => (this._winnersInflight = false));
       }
     }
 
-    // Edge timer ping (phase roll/clock sync)
     if (!this._edgeInflight && (force || !document.hidden)) {
       this._edgeInflight = true;
       this._pollEdge()
@@ -281,9 +247,7 @@ class Poller {
           if (DEBUG) console.warn("[POLL] edge error", e);
           this._edgeBackoff = Math.min(30000, this._edgeBackoff ? this._edgeBackoff * 2 : 2000);
         })
-        .finally(() => {
-          this._edgeInflight = false;
-        });
+        .finally(() => (this._edgeInflight = false));
     }
   }
 
@@ -296,17 +260,15 @@ class Poller {
     if (!res.ok) throw new Error(`votes ${res.status}`);
     const data = await res.json();
 
-    // Your UI logic can count tallies here or in onCounts:
-    // e.g., const counts = tallyVotes(data);
     lastCountsAt = now();
     this._votesBackoff = 0;
 
     this._onCounts(data);
-    if (DEBUG) console.log(`[NET] votes (${data.length}) @ ${new Date(lastCountsAt).toLocaleTimeString()}`);
+    if (DEBUG)
+      console.log(`[NET] votes (${data.length}) @ ${new Date(lastCountsAt).toLocaleTimeString()}`);
   }
 
   async _pollWinners(phaseKeys) {
-    // Batch by firing all, then mapping results back
     const headers = { apikey: SUPABASE_ANON_KEY };
     const fetches = phaseKeys.map((pk) =>
       fetchWithTimeout(
@@ -319,11 +281,8 @@ class Poller {
     const map = new Map();
     results.forEach((r, i) => {
       const key = phaseKeys[i];
-      if (r.status === "fulfilled") {
-        map.set(key, r.value);
-      } else if (DEBUG) {
-        console.warn("[NET] winners fail for", key, r.reason);
-      }
+      if (r.status === "fulfilled") map.set(key, r.value);
+      else if (DEBUG) console.warn("[NET] winners fail for", key, r.reason);
     });
 
     this._onWinners(map);
@@ -338,12 +297,10 @@ class Poller {
     if (!res.ok) throw new Error(`edge ${res.status}`);
     const payload = await res.json();
 
-    // Expecting shape like: { phase: "...ISO...", serverNow: "...ISO...", periodSec: n }
     const { phase, serverNow, period } = normalizeEdgePayload(payload);
-    const prev = currentPhaseKey;
 
     if (period && Number.isFinite(period)) {
-      periodSec = Math.max(2, Math.min(30, period)); // clamp
+      periodSec = Math.max(2, Math.min(30, period));
     }
 
     if (phase && phase !== currentPhaseKey) {
@@ -353,7 +310,6 @@ class Poller {
       if (DEBUG) console.log("[STAGE] phaseKey →", currentPhaseKey);
     }
 
-    // update clock-ish
     const serverT = serverNow ? Date.parse(serverNow) : now();
     const endGuess = serverT + periodSec * 1000;
     serverPhaseEndISO = new Date(endGuess).toISOString();
@@ -366,7 +322,6 @@ class Poller {
 
 function normalizeEdgePayload(p) {
   try {
-    // Accept both your current format and a safe fallback
     const phase = p?.phase ?? p?.phaseKey ?? null;
     const serverNow = p?.serverNow ?? p?.now ?? new Date().toISOString();
     const period = Number.isFinite(p?.periodSec) ? p.periodSec : Number(p?.period) || null;
@@ -382,18 +337,7 @@ function normalizeEdgePayload(p) {
 
 let singletonPoller = null;
 
-/**
- * Initialize the core and start polling once.
- * @param {object} opts
- * @param {number} opts.votesEveryMs - cadence for phase_votes polling
- * @param {number} opts.edgeEveryMs - cadence for edge heartbeat (handled in loop; we use same tick)
- * @param {() => string[]} opts.winnersPhaseKeysProvider - return list of phase_keys we should ask winners for
- * @param {(counts:Array) => void} opts.onCounts
- * @param {(winnerMap: Map<string,Array>) => void} opts.onWinners
- * @param {(info:{prev:string|null,next:string|null}) => void} opts.onPhaseChange
- */
 export function initCore(opts = {}) {
-  // Restore / ensure debug button
   DEBUG = readDebugPref();
   ensureDebugButton();
 
@@ -407,12 +351,11 @@ export function initCore(opts = {}) {
       onPhaseChange: opts.onPhaseChange || (() => {}),
     });
     singletonPoller.start();
-  } else {
-    if (DEBUG) console.log("[CORE] initCore() called again — poller already active");
+  } else if (DEBUG) {
+    console.log("[CORE] initCore() called again — poller already active");
   }
 }
 
-/** Stop all core activity (mainly useful in teardown/tests). */
 export function shutdownCore() {
   if (singletonPoller) {
     singletonPoller.stop();
@@ -420,13 +363,11 @@ export function shutdownCore() {
   }
 }
 
-/** Pause background activity (UI can call this when dialogs/etc open). */
 export function setPaused(v) {
   paused = !!v;
   if (DEBUG) console.log("[CORE] paused=", paused);
 }
 
-/** State setters so other modules don’t reach into internals */
 export function setPeriodSec(v) {
   if (Number.isFinite(v)) periodSec = v;
 }
@@ -470,7 +411,6 @@ function paintLoginBadge() {
 // Optional helpers your other code can reuse
 //////////////////////////////
 
-/** Tally votes by color (or whatever structure your rows have). */
 export function tallyVotes(rows) {
   const out = new Map();
   for (const r of rows || []) {
@@ -480,294 +420,157 @@ export function tallyVotes(rows) {
   return out;
 }
 
-/** Row id helper if you’re mapping bracket rows to DOM */
 export const rowId = (slot) => `row-${slot}`;
 
+//////////////////////////////
+// ===== compat + UI shims ===
+// (append-only; safe to remove later by updating callers)
+//////////////////////////////
 
-// ===== compat shims (append-only) =====
+// public bucket default
+export const DEFAULT_PUBLIC_BUCKET = "art-uploads";
 
-/**
- * Returns a base ISO string to anchor a completed stage.
- * Keeps older callers happy even if state is thin on first load.
- */
+/** map stageKey → base ISO (fallback to top-of-hour) */
 export function baseForCompletedStage(stageKey, state) {
   try {
     if (state?.bases?.[stageKey]) return state.bases[stageKey];
     if (state?.base_iso) return state.base_iso;
-    const d = new Date(); d.setMinutes(0, 0, 0); return d.toISOString();
-  } catch {
-    return new Date().toISOString();
-  }
+    const d = new Date(); d.setMinutes(0,0,0); return d.toISOString();
+  } catch { return new Date().toISOString(); }
 }
 
-/** Close any fullscreen/overlay UI opened by the viewer. */
+/** close overlay + exit native fullscreen if any */
 export function fsClose() {
   try {
     const overlay = document.querySelector('[data-fullscreen-overlay]');
-    if (overlay) {
-      overlay.classList.add('hidden');
-      overlay.removeAttribute('data-open');
-    }
+    if (overlay) { overlay.classList.add('hidden'); overlay.removeAttribute('data-open'); }
     if (document.fullscreenElement && document.exitFullscreen) {
       document.exitFullscreen().catch(() => {});
     }
-  } catch {
-    // no-op
-  }
+  } catch {}
   return true;
 }
 
-// ===== additional compat shims (append-only) =====
-
-/**
- * Map a slot/phase key (e.g., 'r32_1','r16_3','qf2','sf1','final')
- * to a stable base ISO. Mirrors baseForCompletedStage but keyed by slot.
- */
+/** map slot/phase (e.g., r32_1) → base ISO */
 export function baseForSlot(slotOrPhase, state) {
   try {
     const stage = String(slotOrPhase || '').split('_')[0];
     if (state?.bases?.[stage]) return state.bases[stage];
     if (state?.base_iso) return state.base_iso;
-    const d = new Date(); d.setMinutes(0, 0, 0); return d.toISOString();
-  } catch {
-    return new Date().toISOString();
-  }
+    const d = new Date(); d.setMinutes(0,0,0); return d.toISOString();
+  } catch { return new Date().toISOString(); }
 }
 
-/** Open an image (URL or <img>) in a fullscreen-style overlay. */
+/** overlay an image URL or <img> */
 export function fsImage(target) {
   try {
-    // If an element supports native fullscreen, use it
-    if (target instanceof Element && target.requestFullscreen) {
-      return target.requestFullscreen();
-    }
-
-    // Otherwise resolve URL and show overlay
-    const url =
-      typeof target === 'string'
-        ? target
-        : (target && typeof target === 'object' && 'src' in target ? target.src : null);
-
+    if (target instanceof Element && target.requestFullscreen) return target.requestFullscreen();
+    const url = typeof target === 'string' ? target :
+      (target && typeof target === 'object' && 'src' in target ? target.src : null);
     if (!url) return false;
 
     let overlay = document.querySelector('[data-fullscreen-overlay]');
     if (!overlay) {
       overlay = document.createElement('div');
-      overlay.setAttribute('data-fullscreen-overlay', '');
-      overlay.style.position = 'fixed';
-      overlay.style.inset = '0';
-      overlay.style.background = 'rgba(0,0,0,0.92)';
-      overlay.style.display = 'flex';
-      overlay.style.alignItems = 'center';
-      overlay.style.justifyContent = 'center';
-      overlay.style.zIndex = '999999';
-      overlay.classList.add('hidden');
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) fsClose();
-      });
+      overlay.setAttribute('data-fullscreen-overlay','');
+      overlay.style.position='fixed'; overlay.style.inset='0';
+      overlay.style.background='rgba(0,0,0,0.92)';
+      overlay.style.display='flex'; overlay.style.alignItems='center'; overlay.style.justifyContent='center';
+      overlay.style.zIndex='999999'; overlay.classList.add('hidden');
+      overlay.addEventListener('click', (e)=>{ if (e.target===overlay) fsClose(); });
       document.body.appendChild(overlay);
     }
-
     let img = overlay.querySelector('img');
-    if (!img) {
-      img = document.createElement('img');
-      img.style.maxWidth = '95vw';
-      img.style.maxHeight = '95vh';
-      img.style.objectFit = 'contain';
-      overlay.appendChild(img);
-    }
+    if (!img) { img = document.createElement('img'); img.style.maxWidth='95vw'; img.style.maxHeight='95vh'; img.style.objectFit='contain'; overlay.appendChild(img); }
     img.src = url;
-
-    overlay.classList.remove('hidden');
-    overlay.setAttribute('data-open', '1');
-
-    // Try native fullscreen as a progressive enhancement
-    if (!document.fullscreenElement && overlay.requestFullscreen) {
-      overlay.requestFullscreen().catch(() => {});
-    }
+    overlay.classList.remove('hidden'); overlay.setAttribute('data-open','1');
+    if (!document.fullscreenElement && overlay.requestFullscreen) overlay.requestFullscreen().catch(()=>{});
     return true;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
-// ===== final compat shims (append-only) =====
 
-/**
- * Deterministic bracket pairing for a given slot/phase.
- * Maps r32_1 → [1,2], r32_2 → [3,4], …; same pattern for r16/qf/sf.
- * Falls back to [1,2] for 'final' or unnumbered keys.
- */
+/** deterministic pairing numbers for bracket slots */
 export function fixedSeedPair(slotOrPhase) {
-  const stage = String(slotOrPhase || '').split('_')[0];   // r32, r16, qf, sf, final
+  const stage = String(slotOrPhase || '').split('_')[0];
   const m = String(slotOrPhase || '').match(/(\d+)/);
   const i = m ? Math.max(1, parseInt(m[1], 10)) : 1;
-  const a = (i - 1) * 2 + 1;
-  const b = a + 1;
-  switch (stage) {
-    case 'r32':
-    case 'r16':
-    case 'qf':
-    case 'sf':
-      return [a, b];
-    default:
-      return [1, 2]; // final or unknown stage → just return the first pair
-  }
+  const a = (i - 1) * 2 + 1, b = a + 1;
+  switch (stage) { case 'r32': case 'r16': case 'qf': case 'sf': return [a,b]; default: return [1,2]; }
 }
 
-/**
- * Show arbitrary content in a fullscreen-style overlay.
- * Accepts a DOM node or HTML string. Click the backdrop to close (fsClose()).
- */
+/** general purpose overlay container for arbitrary content */
 export function fsOverlay(content) {
   try {
     let overlay = document.querySelector('[data-fullscreen-overlay]');
     if (!overlay) {
       overlay = document.createElement('div');
-      overlay.setAttribute('data-fullscreen-overlay', '');
-      overlay.style.position = 'fixed';
-      overlay.style.inset = '0';
-      overlay.style.background = 'rgba(0,0,0,0.92)';
-      overlay.style.display = 'flex';
-      overlay.style.alignItems = 'center';
-      overlay.style.justifyContent = 'center';
-      overlay.style.zIndex = '999999';
-      overlay.classList.add('hidden');
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) fsClose();
-      });
+      overlay.setAttribute('data-fullscreen-overlay','');
+      overlay.style.position='fixed'; overlay.style.inset='0';
+      overlay.style.background='rgba(0,0,0,0.92)';
+      overlay.style.display='flex'; overlay.style.alignItems='center'; overlay.style.justifyContent='center';
+      overlay.style.zIndex='999999'; overlay.classList.add('hidden');
+      overlay.addEventListener('click',(e)=>{ if (e.target===overlay) fsClose(); });
       document.body.appendChild(overlay);
     }
-
-    // clear previous content
     overlay.innerHTML = '';
     const frame = document.createElement('div');
-    frame.style.maxWidth = '95vw';
-    frame.style.maxHeight = '95vh';
-    frame.style.overflow = 'auto';
-    frame.style.background = 'transparent'; // keep your aesthetic
+    frame.style.maxWidth='95vw'; frame.style.maxHeight='95vh'; frame.style.overflow='auto';
     overlay.appendChild(frame);
-
-    if (content instanceof Element) {
-      frame.appendChild(content);
-    } else if (typeof content === 'string') {
-      frame.innerHTML = content;
-    }
-
-    overlay.classList.remove('hidden');
-    overlay.setAttribute('data-open', '1');
-
-    if (!document.fullscreenElement && overlay.requestFullscreen) {
-      overlay.requestFullscreen().catch(() => {});
-    }
+    if (content instanceof Element) frame.appendChild(content);
+    else if (typeof content === 'string') frame.innerHTML = content;
+    overlay.classList.remove('hidden'); overlay.setAttribute('data-open','1');
+    if (!document.fullscreenElement && overlay.requestFullscreen) overlay.requestFullscreen().catch(()=>{});
     return true;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
-// ===== extra compat shims (append-only) =====
 
-// Public bucket your app uses for uploads.
-// Adjust if your bucket name is different.
-export const DEFAULT_PUBLIC_BUCKET = 'art-uploads';
-
-/**
- * Build an image URL for a given base (ISO or label) + slot key (e.g., "A1","B12").
- * - If `key` is already a full URL, return it unchanged.
- * - Otherwise, point at the public Supabase bucket path:
- *     /storage/v1/object/public/<bucket>/<base>/<key>.<ext>
- * - Extension default is .jpg; callers can override via opts.
- *
- * This is intentionally simple so services.js can keep moving even if
- * your storage layout is still in flux.
- */
+/** build storage URL for a base + key (e.g., 'A1') */
 export function seedUrlFromKey(baseIsoOrLabel, key, opts = {}) {
   if (!key) return '';
   if (/^https?:\/\//i.test(key)) return key;
-
   const bucket = opts.bucket || DEFAULT_PUBLIC_BUCKET;
-  const ext = (opts.ext || '.jpg').replace(/^\./, '.');
-
-  // Normalize base: use date part if ISO, else keep label (e.g., "r32")
+  const ext = (opts.ext || '.jpg').replace(/^\./,'.');
   let base = String(baseIsoOrLabel || '').trim();
-  if (base.includes('T')) base = base.split('T')[0]; // YYYY-MM-DD
-
-  // Fallback if base is empty
+  if (base.includes('T')) base = base.split('T')[0];
   if (!base) base = 'seed';
-
-  // Supabase public object URL pattern
   return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${encodeURIComponent(base)}/${encodeURIComponent(key)}${ext}`;
 }
 
-/**
- * Convenience getter for the primary "A" image element in the viewer.
- * Flexible selector so older markup keeps working.
- */
+/** convenience accessors for main image elements */
 export function imgA(selector) {
-  // Allow an explicit selector override
-  if (selector && typeof selector === 'string') {
-    const el = document.querySelector(selector);
-    if (el) return el;
-  }
-  // Common fallbacks
-  return (
-    document.querySelector('#imgA') ||
-    document.querySelector('#A') ||
-    document.querySelector('img[data-role="A"]') ||
-    document.querySelector('.imgA') ||
-    null
-  );
+  if (selector && typeof selector === 'string') { const el = document.querySelector(selector); if (el) return el; }
+  return document.querySelector('#imgA') || document.querySelector('#A') ||
+         document.querySelector('img[data-role="A"]') || document.querySelector('.imgA') || null;
 }
-// ===== ui + helpers shims (append-only) =====
-
-/** Convenience getter for the "B" image element in the viewer. */
 export function imgB(selector) {
-  if (selector && typeof selector === 'string') {
-    const el = document.querySelector(selector);
-    if (el) return el;
-  }
-  return (
-    document.querySelector('#imgB') ||
-    document.querySelector('#B') ||
-    document.querySelector('img[data-role="B"]') ||
-    document.querySelector('.imgB') ||
-    null
-  );
+  if (selector && typeof selector === 'string') { const el = document.querySelector(selector); if (el) return el; }
+  return document.querySelector('#imgB') || document.querySelector('#B') ||
+         document.querySelector('img[data-role="B"]') || document.querySelector('.imgB') || null;
 }
 
-/**
- * Tiny DOM utilities bundle expected by some feature modules.
- * `brows.qs(sel,root)`, `brows.qsa(sel,root)`, `brows.on(el,evt,fn)`, `brows.css(el,styles)`
- */
+/** small DOM helper bundle some features import */
 export const brows = {
-  qs: (sel, root = document) => root.querySelector(sel),
-  qsa: (sel, root = document) => Array.from(root.querySelectorAll(sel)),
+  qs: (sel, root=document) => root.querySelector(sel),
+  qsa: (sel, root=document) => Array.from(root.querySelectorAll(sel)),
   on: (el, evt, fn, opts) => { if (el) el.addEventListener(evt, fn, opts); return el; },
-  css: (el, styles = {}) => { if (el && styles) Object.assign(el.style, styles); return el; },
+  css: (el, styles={}) => { if (el && styles) Object.assign(el.style, styles); return el; },
 };
 
-/**
- * Fullscreen overlay canvas used for confetti/FX.
- * Creates once, resizes on window resize, and returns the <canvas>.
- */
+/** fullscreen canvas for confetti and FX */
 export function confettiCanvas() {
   let c = document.getElementById('confetti-canvas');
   if (!c) {
     c = document.createElement('canvas');
     c.id = 'confetti-canvas';
-    c.style.position = 'fixed';
-    c.style.inset = '0';
-    c.style.pointerEvents = 'none';
-    c.style.zIndex = '999990';
+    c.style.position='fixed'; c.style.inset='0';
+    c.style.pointerEvents='none'; c.style.zIndex='999990';
     document.body.appendChild(c);
-
     const fit = () => {
       const dpr = window.devicePixelRatio || 1;
       c.width = Math.floor(window.innerWidth * dpr);
       c.height = Math.floor(window.innerHeight * dpr);
-      c.style.width = '100vw';
-      c.style.height = '100vh';
-      const ctx = c.getContext('2d');
-      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.style.width = '100vw'; c.style.height = '100vh';
+      const ctx = c.getContext('2d'); if (ctx) ctx.setTransform(dpr,0,0,dpr,0,0);
     };
     fit();
     window.addEventListener('resize', fit, { passive: true });
