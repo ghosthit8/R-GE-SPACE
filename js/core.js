@@ -16,13 +16,28 @@ export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 //////////////////////////////
-// DOM Refs (lazily resolved)
+// DOM Refs (exports)
 //////////////////////////////
 
-const $ = (id) => document.getElementById(id);
-const refs = new Proxy({}, { get: (_, k) => $(`${k}`) || null });
-const clockEl = () => refs["clock"];
-const loginBadgeEl = () => refs["loginBadge"];
+// Prefer ID, then data-role, then class fallback
+const by = (id, role, cls) =>
+  document.getElementById(id) ||
+  document.querySelector(`[data-role="${role}"]`) ||
+  (cls ? document.querySelector(`.${cls}`) : null);
+
+// Exported accessors used by main.js and features/*
+export function clockEl()      { return by('clock',      'clock'); }
+export function pauseBtn()     { return by('pauseBtn',   'pause'); }
+export function voteA()        { return by('voteA',      'voteA'); }
+export function voteB()        { return by('voteB',      'voteB'); }
+export function submitBtn()    { return by('submitBtn',  'submit'); }
+export function countA()       { return by('countA',     'countA'); }
+export function countB()       { return by('countB',     'countB'); }
+export function labelA()       { return by('labelA',     'labelA'); }
+export function labelB()       { return by('labelB',     'labelB'); }
+
+// Keep login badge helper exported too (some UIs use it)
+export function loginBadgeEl() { return by('loginBadge', 'loginBadge'); }
 
 //////////////////////////////
 // Global State
