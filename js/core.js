@@ -28,20 +28,24 @@ const loginBadgeEl = () => refs["loginBadge"];
 // Global State
 //////////////////////////////
 
-let paused = false;
+export let paused = false;
 
-let periodSec = 5;
-let serverPhaseEndISO = null;
-export let currentPhaseKey = null; // exported at declaration
-let prevPhaseKey = null;
+export let periodSec = 5;
+export let serverPhaseEndISO = null;
+export let currentPhaseKey = null;  // exported at declaration
+export let prevPhaseKey = null;
 
-let remainingSec = 0;
-let lastSyncAt = 0;
-let lastCountsAt = 0;
+export let remainingSec = 0;
+export let lastSyncAt = 0;
+export let lastCountsAt = 0;
 
-let currentUid = null;
-let chosen = null;
+export let currentUid = null;
+export let chosen = null;
 
+// shared UI state used by other modules
+export let currentStage = null;
+export let overlayGateBase = null;
+export let lastPaintedBattleKey = null;
 // Debug state
 const DEBUG_KEY = "core_debug";
 let DEBUG = false;
