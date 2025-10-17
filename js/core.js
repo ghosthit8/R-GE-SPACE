@@ -594,3 +594,22 @@ export function confettiCanvas() {
 
 // NOTE: No re-export block at the bottom —
 // `currentPhaseKey` and `imgCache` are already exported at declaration.
+// ===== overlay accessor shim (append-only) =====
+export function overlay() {
+  let o = document.querySelector('[data-fullscreen-overlay]');
+  if (!o) {
+    o = document.createElement('div');
+    o.setAttribute('data-fullscreen-overlay','');
+    o.style.position = 'fixed';
+    o.style.inset = '0';
+    o.style.background = 'rgba(0,0,0,0.92)';
+    o.style.display = 'flex';
+    o.style.alignItems = 'center';
+    o.style.justifyContent = 'center';
+    o.style.zIndex = '999999';
+    o.classList.add('hidden');
+    o.addEventListener('click', (e) => { if (e.target === o) fsClose(); });
+    document.body.appendChild(o);
+  }
+  return o;
+}
