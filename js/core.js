@@ -664,3 +664,56 @@ export function overlayClose() {
   // put it here before calling fsClose().
   return fsClose();
 }
+// ===== overlay text helpers (append-only) =====
+function ensureOverlayTextEl(tag, dataAttr, baseStyles = {}) {
+  const o = overlay();                  // uses the overlay() helper you added
+  let el = o.querySelector(`[${dataAttr}]`);
+  if (!el) {
+    el = document.createElement(tag);
+    el.setAttribute(dataAttr, "");
+    el.style.margin = "0.5rem 0";
+    el.style.textAlign = "center";
+    el.style.color = "#9FFFA0";
+    Object.assign(el.style, baseStyles);
+    // place text elements above the image frame if present
+    o.insertBefore(el, o.firstChild);
+  }
+  // make sure overlay is shown
+  o.classList.remove("hidden");
+  o.setAttribute("data-open", "1");
+  if (!document.fullscreenElement && o.requestFullscreen) {
+    o.requestFullscreen().catch(() => {});
+  }
+  return el;
+}
+
+export function overlayTitle(text) {
+  const el = ensureOverlayTextEl("h1", "data-ov-title", {
+    fontSize: "clamp(20px, 4vw, 36px)",
+    fontWeight: "800",
+    letterSpacing: "0.04em",
+  });
+  if (text != null) el.textContent = String(text);
+  return el;
+}
+
+export function overlaySubtitle(text) {
+  const el = ensureOverlayTextEl("h2", "data-ov-subtitle", {
+    fontSize: "clamp(16px, 3vw, 24px)",
+    fontWeight: "600",
+    color: "#B9FFBD",
+  });
+  if (text != null) el.textContent = String(text);
+  return el;
+}
+
+export function overlayMotto(text) {
+  const el = ensureOverlayTextEl("p", "data-ov-motto", {
+    fontSize: "clamp(14px, 2.5vw, 18px)",
+    fontWeight: "500",
+    color: "#D6FFD9",
+    opacity: "0.9",
+  });
+  if (text != null) el.textContent = String(text);
+  return el;
+}
