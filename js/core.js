@@ -9,7 +9,7 @@
 
 export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 export const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs...CI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTg3MTUyOTgsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 
 // Supabase client (expecting UMD from your HTML)
@@ -30,10 +30,6 @@ const refs = new Proxy(
   }
 );
 
-// If your HTML uses these IDs, they’ll resolve; if not, null is okay
-// (we guard reads).
-// Example expected ids from your UI: "clock", "loginBadge", etc.
-// Add more as needed:
 const clockEl = () => refs["clock"];
 const loginBadgeEl = () => refs["loginBadge"];
 
@@ -67,7 +63,6 @@ const now = () => Date.now();
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Abort + timeout for fetch
 async function fetchWithTimeout(resource, options = {}) {
   const { timeout = 8000, ...rest } = options;
   const controller = new AbortController();
@@ -80,13 +75,11 @@ async function fetchWithTimeout(resource, options = {}) {
   }
 }
 
-// Jitter around a base interval so clients don’t sync-storm
 const jitter = (baseMs, spreadRatio = 0.25) => {
   const spread = baseMs * spreadRatio;
   return baseMs + (Math.random() * 2 - 1) * spread;
 };
 
-// A simple once-only guard
 function once(fn) {
   let done = false;
   return (...args) => {
@@ -96,7 +89,6 @@ function once(fn) {
   };
 }
 
-// Cheap RAF ticker for the clock
 function startClock() {
   let rafId = 0;
   const tick = () => {
@@ -112,7 +104,7 @@ function startClock() {
 }
 
 //////////////////////////////
-// Image Preloader (deduped)
+// Image Preloader
 //////////////////////////////
 
 const imgCache = new Set();
@@ -127,7 +119,7 @@ export async function preloadImage(url) {
 }
 
 //////////////////////////////
-// Debug Button (resilient)
+// Debug Button
 //////////////////////////////
 
 function readDebugPref() {
@@ -171,7 +163,7 @@ function ensureDebugButton() {
 }
 
 //////////////////////////////
-// Network: Consolidated Poller
+// Network Poller
 //////////////////////////////
 
 class Poller {
@@ -187,22 +179,18 @@ class Poller {
     this._running = false;
     this._stop = null;
 
-    // Backoff state
-    this._votesBackoff = 0; // ms
+    this._votesBackoff = 0;
     this._edgeBackoff = 0;
 
-    // Hooks
     this._onCounts = onCounts;
     this._onWinners = onWinners;
     this._winnersKeys = winnersPhaseKeysProvider;
     this._onPhaseChange = onPhaseChange;
 
-    // Dedup guards
     this._votesInflight = false;
     this._winnersInflight = false;
     this._edgeInflight = false;
 
-    // Visibility handling
     this._handleVis = this._handleVis.bind(this);
   }
 
@@ -225,7 +213,6 @@ class Poller {
       if (DEBUG) console.log("[POLL] hidden → pausing intensive polling");
     } else {
       if (DEBUG) console.log("[POLL] visible → bump an immediate pass");
-      // Kick a pass without waiting for the next timer
       this._tick(true);
     }
   }
@@ -236,7 +223,6 @@ class Poller {
 
     while (this._running) {
       await this._tick(false);
-      // Slow down when hidden
       const base = document.hidden ? Math.max(this.cfg.votesEveryMs, 10000) : this.cfg.votesEveryMs;
       await sleep(jitter(base));
     }
@@ -245,7 +231,6 @@ class Poller {
   async _tick(force) {
     if (paused) return;
 
-    // Phase votes counts
     if (!this._votesInflight) {
       this._votesInflight = true;
       this._pollVotes()
@@ -258,7 +243,6 @@ class Poller {
         });
     }
 
-    // Winners for visible bracket nodes (batch)
     if (!this._winnersInflight) {
       const keys = this._winnersKeys();
       if (keys && keys.length) {
@@ -273,7 +257,6 @@ class Poller {
       }
     }
 
-    // Edge timer ping (phase roll/clock sync)
     if (!this._edgeInflight && (force || !document.hidden)) {
       this._edgeInflight = true;
       this._pollEdge()
@@ -296,8 +279,6 @@ class Poller {
     if (!res.ok) throw new Error(`votes ${res.status}`);
     const data = await res.json();
 
-    // Your UI logic can count tallies here or in onCounts:
-    // e.g., const counts = tallyVotes(data);
     lastCountsAt = now();
     this._votesBackoff = 0;
 
@@ -306,7 +287,6 @@ class Poller {
   }
 
   async _pollWinners(phaseKeys) {
-    // Batch by firing all, then mapping results back
     const headers = { apikey: SUPABASE_ANON_KEY };
     const fetches = phaseKeys.map((pk) =>
       fetchWithTimeout(
@@ -338,12 +318,11 @@ class Poller {
     if (!res.ok) throw new Error(`edge ${res.status}`);
     const payload = await res.json();
 
-    // Expecting shape like: { phase: "...ISO...", serverNow: "...ISO...", periodSec: n }
     const { phase, serverNow, period } = normalizeEdgePayload(payload);
     const prev = currentPhaseKey;
 
     if (period && Number.isFinite(period)) {
-      periodSec = Math.max(2, Math.min(30, period)); // clamp
+      periodSec = Math.max(2, Math.min(30, period));
     }
 
     if (phase && phase !== currentPhaseKey) {
@@ -353,7 +332,6 @@ class Poller {
       if (DEBUG) console.log("[STAGE] phaseKey →", currentPhaseKey);
     }
 
-    // update clock-ish
     const serverT = serverNow ? Date.parse(serverNow) : now();
     const endGuess = serverT + periodSec * 1000;
     serverPhaseEndISO = new Date(endGuess).toISOString();
@@ -366,7 +344,6 @@ class Poller {
 
 function normalizeEdgePayload(p) {
   try {
-    // Accept both your current format and a safe fallback
     const phase = p?.phase ?? p?.phaseKey ?? null;
     const serverNow = p?.serverNow ?? p?.now ?? new Date().toISOString();
     const period = Number.isFinite(p?.periodSec) ? p.periodSec : Number(p?.period) || null;
@@ -382,18 +359,7 @@ function normalizeEdgePayload(p) {
 
 let singletonPoller = null;
 
-/**
- * Initialize the core and start polling once.
- * @param {object} opts
- * @param {number} opts.votesEveryMs - cadence for phase_votes polling
- * @param {number} opts.edgeEveryMs - cadence for edge heartbeat (handled in loop; we use same tick)
- * @param {() => string[]} opts.winnersPhaseKeysProvider - return list of phase_keys we should ask winners for
- * @param {(counts:Array) => void} opts.onCounts
- * @param {(winnerMap: Map<string,Array>) => void} opts.onWinners
- * @param {(info:{prev:string|null,next:string|null}) => void} opts.onPhaseChange
- */
 export function initCore(opts = {}) {
-  // Restore / ensure debug button
   DEBUG = readDebugPref();
   ensureDebugButton();
 
@@ -412,7 +378,6 @@ export function initCore(opts = {}) {
   }
 }
 
-/** Stop all core activity (mainly useful in teardown/tests). */
 export function shutdownCore() {
   if (singletonPoller) {
     singletonPoller.stop();
@@ -420,13 +385,11 @@ export function shutdownCore() {
   }
 }
 
-/** Pause background activity (UI can call this when dialogs/etc open). */
 export function setPaused(v) {
   paused = !!v;
   if (DEBUG) console.log("[CORE] paused=", paused);
 }
 
-/** State setters so other modules don’t reach into internals */
 export function setPeriodSec(v) {
   if (Number.isFinite(v)) periodSec = v;
 }
@@ -467,10 +430,9 @@ function paintLoginBadge() {
 }
 
 //////////////////////////////
-// Optional helpers your other code can reuse
+// Optional helpers
 //////////////////////////////
 
-/** Tally votes by color (or whatever structure your rows have). */
 export function tallyVotes(rows) {
   const out = new Map();
   for (const r of rows || []) {
@@ -480,5 +442,37 @@ export function tallyVotes(rows) {
   return out;
 }
 
-/** Row id helper if you’re mapping bracket rows to DOM */
 export const rowId = (slot) => `row-${slot}`;
+
+// ===== compat shims (added) =====
+
+export function baseForCompletedStage(stageKey, state) {
+  try {
+    if (state && state.bases && state.bases[stageKey]) {
+      return state.bases[stageKey];
+    }
+    if (state && state.base_iso) return state.base_iso;
+
+    const d = new Date();
+    d.setMinutes(0, 0, 0);
+    return d.toISOString();
+  } catch (e) {
+    return new Date().toISOString();
+  }
+}
+
+export function fsClose() {
+  try {
+    const overlay = document.querySelector('[data-fullscreen-overlay]');
+    if (overlay) {
+      overlay.classList.add('hidden');
+      overlay.removeAttribute('data-open');
+    }
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+  } catch (_) {
+    // ignore
+  }
+  return true;
+}
