@@ -1,12 +1,12 @@
 // js/features/overlay.js
 // Champion overlay: confetti burst (auto-stops after 5s) + typewriter text.
-// Provides showChampion(color, finalBaseISO) used by main.js and realtime. 1
+// Provides showChampion(color, finalBaseISO) used by main.js and realtime.
 
 import {
   overlay, overlayArtImg, overlayClose,
   overlayTitle, overlaySubtitle, overlayMotto,
   confettiCanvas, imgCache, fsOverlay, fsClose
-} from "../core.js?v=32";
+} from "../core.v.js";
 
 import {
   countVotesFor,
@@ -100,7 +100,7 @@ let _openChampionBase = null;
 /**
  * Show the champion overlay for the given final base ISO and winner color.
  * - Uses cached final A/B if available, otherwise rebuilds from winners.
- * - Plays one confetti burst; subtitle + motto typewriter. 2
+ * - Plays one confetti burst; subtitle + motto typewriter.
  */
 export async function showChampion(color, finalBaseISO) {
   if (_openChampionBase === finalBaseISO && overlay.classList.contains("show")) return;
