@@ -577,3 +577,5 @@ export function confettiCanvas() {
   }
   return c;
 }
+// ===== named re-exports (append-only) =====
+export { currentPhaseKey, imgCache };
