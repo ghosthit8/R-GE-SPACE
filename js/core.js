@@ -1,265 +1,484 @@
-// js/core.js — core state, helpers, fixed R32 seeding, edge helpers, and cache-busting
+// js/core.js
+// Core primitives, network polling, and utilities.
+// Consolidates all polling into a single guarded loop with backoff,
+// restores a resilient Debug button, and prevents duplicate work.
+
+//////////////////////////////
+// Config & Clients
+//////////////////////////////
 
 export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 export const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs...CI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 
-// --- cache/version ---
-export const VER = "2025-10-16-04";                // bump on each deploy
-export const qv = () => `v=${VER}`;
-export const withBust = (url) => url + (url.includes("?") ? "&" : "?") + qv();
-
-// Supabase client (UMD from matchup.html)
+// Supabase client (expecting UMD from your HTML)
 export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ---------- DOM Refs ---------- */
-export const clockEl = document.getElementById("clock");
-export const stateEl = document.getElementById("state");
-export const phaseBadge = document.getElementById("phaseKey");
-export const loginBadge = document.getElementById("loginBadge");
-export const pauseBtn = document.getElementById("btnPause");
-export const toastEl = document.getElementById("toast");
+//////////////////////////////
+// DOM Refs (lazily resolved)
+//////////////////////////////
 
-export const imgA = document.getElementById("imgA");
-export const imgB = document.getElementById("imgB");
-export const labelA = document.getElementById("labelA");
-export const labelB = document.getElementById("labelB");
-export const countA = document.getElementById("countA");
-export const countB = document.getElementById("countB");
-export const voteA = document.getElementById("voteA");
-export const voteB = document.getElementById("voteB");
-export const submitBtn = document.getElementById("submitBtn");
-
-export const fsOverlay = document.getElementById("fsOverlay");
-export const fsImage   = document.getElementById("fsImage");
-export const fsClose   = document.getElementById("fsClose");
-
-export const overlay = document.getElementById("overlay");
-export const overlayArtImg = document.getElementById("overlayArtImg");
-export const overlayTitle = document.getElementById("overlayTitle");
-export const overlaySubtitle = document.getElementById("overlaySubtitle");
-export const overlayMotto = document.getElementById("overlayMotto");
-export const overlayClose = document.getElementById("overlayClose");
-export const confettiCanvas = document.getElementById("confetti");
-
-export const brows = document.getElementById("brows");
-export const showDone = document.getElementById("showDone");
-
-/* ---------- Global State (mutable here) ---------- */
-export let paused = false;
-export let serverPhaseEndISO = null;
-export let currentPhaseKey = null;
-export let prevPhaseKey = null;
-export let periodSec = 20;
-export let remainingSec = null;
-export let lastSyncAt = 0;
-export let lastCountsAt = 0;
-
-export let currentUid = null;
-export let chosen = null;
-
-export let activeSlot = "r32_1";
-export let currentStage = "r32";
-export let overlayGateBase = null;
-
-export const imgCache = new Map();
-export let lastPaintedBattleKey = null;
-
-/* ---------- Boot Loader UI ---------- */
-const _bootFill = () => document.getElementById("bootFill");
-const _bootMsg  = () => document.getElementById("bootMsg");
-const _bootWrap = () => document.getElementById("bootLoader");
-let _bootTarget = 0, _bootTimer = null;
-
-export function setBoot(p, msg) {
-  _bootTarget = Math.max(100 * 0, Math.min(100, p));
-  if (msg) _bootMsg().textContent = msg;
-}
-export function startBootTick() {
-  if (_bootTimer) return;
-  _bootTimer = setInterval(() => {
-    const el = _bootFill();
-    const cur = parseFloat(el.style.width || "0");
-    const toward = _bootTarget > cur ? cur + Math.max(1, (_bootTarget - cur) * 0.12) : cur + 0.18;
-    el.style.width = Math.min(99, toward).toFixed(2) + "%";
-  }, 60);
-}
-export function endBoot() {
-  clearInterval(_bootTimer);
-  _bootTimer = null;
-  _bootFill().style.width = "100%";
-  setTimeout(() => _bootWrap().classList.add("hidden"), 280);
-}
-
-/* ---------- Utils ---------- */
-export const iso = (d) => new Date(d).toISOString().replace(/\.\d{3}Z$/, "Z");
-
-// Deterministic image URL from a base ISO + suffix (used by services.js)
-export function seedUrlFromKey(baseISO, suffix) {
-  const s = encodeURIComponent(`${baseISO}-${suffix}`);
-  return withBust(`https://picsum.photos/seed/${s}/1600/1200`);
-}
-
-export function toast(msg, ms = 1400) {
-  toastEl.textContent = msg;
-  toastEl.classList.add("show");
-  setTimeout(() => toastEl.classList.remove("show"), ms);
-}
-
-export async function getUidOrNull() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user?.id ?? null;
-}
-
-export function paintLoginBadge() {
-  if (currentUid) {
-    loginBadge.textContent = "logged in";
-    loginBadge.classList.add("ok");
-    loginBadge.classList.remove("warn");
-  } else {
-    loginBadge.textContent = "not logged in";
-    loginBadge.classList.add("warn");
-    loginBadge.classList.remove("ok");
+const $ = (id) => document.getElementById(id);
+const refs = new Proxy(
+  {},
+  {
+    get: (_, k) => {
+      const el = $(`${k}`);
+      return el || null;
+    },
   }
-}
+);
 
-/* ---------- Edge calls ---------- */
-export async function callEdge(method = "GET", body = null, { timeoutMs = 10000 } = {}) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+// If your HTML uses these IDs, they’ll resolve; if not, null is okay
+// (we guard reads).
+// Example expected ids from your UI: "clock", "loginBadge", etc.
+// Add more as needed:
+const clockEl = () => refs["clock"];
+const loginBadgeEl = () => refs["loginBadge"];
 
-  let res, raw, j;
+//////////////////////////////
+// Global State
+//////////////////////////////
+
+let paused = false;
+
+let periodSec = 5; // base cadence for phase vote polling (can be tuned)
+let serverPhaseEndISO = null;
+let currentPhaseKey = null;
+let prevPhaseKey = null;
+
+let remainingSec = 0;
+let lastSyncAt = 0;
+let lastCountsAt = 0;
+
+let currentUid = null;
+let chosen = null;
+
+// Debug state
+const DEBUG_KEY = "core_debug";
+let DEBUG = false;
+
+//////////////////////////////
+// Small Utilities
+//////////////////////////////
+
+const now = () => Date.now();
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Abort + timeout for fetch
+async function fetchWithTimeout(resource, options = {}) {
+  const { timeout = 8000, ...rest } = options;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
   try {
-    const url = EDGE_URL + (method === "GET" ? `?${qv()}` : "");
-    res = await fetch(url, {
-      method,
-      signal: ctrl.signal,
-      cache: "no-store",                 // ← avoid stale state on mobile
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        apikey: SUPABASE_ANON_KEY,
-      },
-      body: body ? JSON.stringify(body) : null,
-    });
-    raw = await res.text();
-    try { j = JSON.parse(raw); } catch {}
-  } catch (e) {
-    clearTimeout(t);
-    console.error("[edge] network error:", e);
-    throw new Error(e.name === "AbortError" ? "Edge request timed out" : "Edge fetch failed");
+    const res = await fetch(resource, { ...rest, signal: controller.signal });
+    return res;
   } finally {
-    clearTimeout(t);
-  }
-
-  if (!res.ok) {
-    const msg = (j && (j.error || j.message)) || raw || `HTTP ${res.status}`;
-    console.error("[edge] bad response:", msg);
-    throw new Error(msg);
-  }
-  return j?.state || j || {};
-}
-
-/* Try POST first, then GET ?action=… as a fallback */
-export async function toggleTimer(action /* "pause"|"resume" */) {
-  try { return await callEdge("POST", { action }); }
-  catch (e) {
-    const u = new URL(EDGE_URL);
-    u.searchParams.set("action", action);
-    u.searchParams.set("v", VER);         // ← version bust
-    const res = await fetch(u.toString(), { method: "GET", cache: "no-store" });
-    const raw = await res.text();
-    let j; try { j = JSON.parse(raw); } catch {}
-    if (!res.ok) throw new Error((j && (j.error || j.message)) || raw || `HTTP ${res.status}`);
-    return j?.state || j || {};
+    clearTimeout(id);
   }
 }
 
-export const normalize = (s) => ({
-  phase_end_at: s.phase_end_at ?? null,
-  period_sec: s.period_sec ?? 20,
-  paused: !!s.paused,
-  remaining_sec: typeof s.remaining_sec === "number" ? s.remaining_sec : null,
-});
+// Jitter around a base interval so clients don’t sync-storm
+const jitter = (baseMs, spreadRatio = 0.25) => {
+  const spread = baseMs * spreadRatio;
+  return baseMs + (Math.random() * 2 - 1) * spread;
+};
 
-/* ---------- Fixed 32-image pool for R32 ---------- */
-export const SEED32 = [
-  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
-  26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
-];
-export function picsum1600x1200(id) { return withBust(`https://picsum.photos/id/${id}/1600/1200`); }
-export function fixedSeedPair(slot) {
-  const n = Number(String(slot).split("_")[1]);
-  if (!n || n < 1 || n > 16) return { A: "", B: "" };
-  const aIdx = n - 1;
-  const bIdx = 16 + (n - 1);
-  return { A: picsum1600x1200(SEED32[aIdx]), B: picsum1600x1200(SEED32[bIdx]) };
+// A simple once-only guard
+function once(fn) {
+  let done = false;
+  return (...args) => {
+    if (done) return;
+    done = true;
+    return fn(...args);
+  };
 }
 
-/* ---------- Stage math ---------- */
-export const stageOfSlot = (slot) =>
-  slot.startsWith("r32") ? "r32" :
-  slot.startsWith("r16") ? "r16" :
-  slot.startsWith("qf")  ? "qf"  :
-  slot.startsWith("sf")  ? "sf"  : "final";
-
-export const stageLevel = (st) => st==="r32"?1 : st==="r16"?2 : st==="qf"?3 : st==="sf"?4 : 5;
-export const slotLevel  = (slot)=> stageLevel(stageOfSlot(slot));
-
-export function baseAtOffset(n) {
-  if (!currentPhaseKey) return null;
-  const t = Date.parse(currentPhaseKey) - Math.max(0, n) * periodSec * 1000;
-  return iso(t);
-}
-export function baseForSlot(slot) {
-  const curLv = stageLevel(currentStage || "r32");
-  const needLv = slotLevel(slot);
-  const delta = curLv - needLv;
-  if (delta <= 0) return currentPhaseKey;
-  return baseAtOffset(delta);
-}
-export function baseForCompletedStage(stage) {
-  const curLv = stageLevel(currentStage || "r32");
-  const needLv = stageLevel(stage);
-  const delta = curLv - needLv;
-  if (delta <= 0) return null;
-  return baseAtOffset(delta);
+// Cheap RAF ticker for the clock
+function startClock() {
+  let rafId = 0;
+  const tick = () => {
+    if (paused) return;
+    const el = clockEl();
+    if (el && remainingSec != null) {
+      el.textContent = String(remainingSec);
+    }
+    rafId = requestAnimationFrame(tick);
+  };
+  rafId = requestAnimationFrame(tick);
+  return () => cancelAnimationFrame(rafId);
 }
 
-/* ---------- UI Helpers ---------- */
-export function setStateUI() {
-  stateEl.textContent = paused ? "PAUSED" : "LIVE";
-  pauseBtn.textContent = paused ? "▶️ Resume" : "⏸️ Pause";
-  phaseBadge.textContent = "phase: " + (currentPhaseKey || "—");
-}
-export function slotFinished(slot){ return slotLevel(slot) < stageLevel(currentStage || "r32"); }
-export function votingLockedFor(slot){ return slotLevel(slot) !== stageLevel(currentStage || "r32"); }
-export function applyVotingLockUI(){
-  const locked = votingLockedFor(activeSlot);
-  [voteA, voteB, submitBtn].forEach((b) => (b.disabled = locked || !currentUid));
-  const finished = slotFinished(activeSlot);
-  document.getElementById("tileA").classList.toggle("decided", finished);
-  document.getElementById("tileB").classList.toggle("decided", finished);
-  submitBtn.textContent = locked ? (finished ? "Voting closed" : "Not started") : "✅ Submit Vote";
+//////////////////////////////
+// Image Preloader (deduped)
+//////////////////////////////
+
+const imgCache = new Set();
+export async function preloadImage(url) {
+  if (!url || imgCache.has(url)) return;
+  imgCache.add(url);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = img.onerror = () => resolve();
+    img.src = url;
+  });
 }
 
-/* ---------- setters ---------- */
-export function setPaused(v){ paused=v; setStateUI(); }
-export function setPeriodSec(v){ periodSec=v; }
-export function setServerPhaseEndISO(v){ serverPhaseEndISO=v; }
-export function setCurrentPhaseKey(v){ currentPhaseKey=v; }
-export function setPrevPhaseKey(v){ prevPhaseKey=v; }
-export function setRemainingSec(v){ remainingSec=v; }
-export function setLastSyncAt(ts){ lastSyncAt=ts; }
-export function setLastCountsAt(ts){ lastCountsAt=ts; }
-export function setCurrentUid(uid){ currentUid=uid; paintLoginBadge(); }
-export function setChosen(v){ chosen=v; }
+//////////////////////////////
+// Debug Button (resilient)
+//////////////////////////////
 
-export function setActiveSlot(v){ activeSlot=v; }
-export function setCurrentStage(v){ currentStage=v; }
-export function setOverlayGateBase(v){ overlayGateBase=v; }
-export function setLastPaintedBattleKey(v){ lastPaintedBattleKey=v; }
+function readDebugPref() {
+  const qp = new URLSearchParams(location.search);
+  if (qp.get("debug") === "1") return true;
+  const stored = localStorage.getItem(DEBUG_KEY);
+  return stored === "1";
+}
 
-/* ---------- Convenience ---------- */
+function writeDebugPref(v) {
+  localStorage.setItem(DEBUG_KEY, v ? "1" : "0");
+}
+
+function ensureDebugButton() {
+  let btn = document.getElementById("debug-btn");
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.id = "debug-btn";
+    btn.style.position = "fixed";
+    btn.style.right = "12px";
+    btn.style.bottom = "12px";
+    btn.style.zIndex = "99999";
+    btn.style.padding = "8px 10px";
+    btn.style.borderRadius = "10px";
+    btn.style.border = "1px solid #ccc";
+    btn.style.background = "#fff";
+    btn.style.boxShadow = "0 2px 8px rgba(0,0,0,0.15)";
+    btn.style.fontFamily = "system-ui, sans-serif";
+    btn.style.fontSize = "12px";
+    btn.title = "Toggle debug overlay";
+    document.body.appendChild(btn);
+  }
+  const label = (on) => (on ? "Debug: ON" : "Debug: OFF");
+  btn.textContent = label(DEBUG);
+  btn.onclick = () => {
+    DEBUG = !DEBUG;
+    writeDebugPref(DEBUG);
+    btn.textContent = label(DEBUG);
+    if (DEBUG) console.log("[DEBUG] enabled");
+  };
+}
+
+//////////////////////////////
+// Network: Consolidated Poller
+//////////////////////////////
+
+class Poller {
+  constructor({
+    votesEveryMs = 5000,
+    edgeEveryMs = 5000,
+    onCounts = () => {},
+    winnersPhaseKeysProvider = () => [],
+    onWinners = () => {},
+    onPhaseChange = () => {},
+  } = {}) {
+    this.cfg = { votesEveryMs, edgeEveryMs };
+    this._running = false;
+    this._stop = null;
+
+    // Backoff state
+    this._votesBackoff = 0; // ms
+    this._edgeBackoff = 0;
+
+    // Hooks
+    this._onCounts = onCounts;
+    this._onWinners = onWinners;
+    this._winnersKeys = winnersPhaseKeysProvider;
+    this._onPhaseChange = onPhaseChange;
+
+    // Dedup guards
+    this._votesInflight = false;
+    this._winnersInflight = false;
+    this._edgeInflight = false;
+
+    // Visibility handling
+    this._handleVis = this._handleVis.bind(this);
+  }
+
+  start() {
+    if (this._running) return;
+    this._running = true;
+
+    document.addEventListener("visibilitychange", this._handleVis, { passive: true });
+    this._loop();
+  }
+
+  stop() {
+    this._running = false;
+    document.removeEventListener("visibilitychange", this._handleVis);
+    if (this._stop) this._stop();
+  }
+
+  _handleVis() {
+    if (document.hidden) {
+      if (DEBUG) console.log("[POLL] hidden → pausing intensive polling");
+    } else {
+      if (DEBUG) console.log("[POLL] visible → bump an immediate pass");
+      // Kick a pass without waiting for the next timer
+      this._tick(true);
+    }
+  }
+
+  async _loop() {
+    const cancelClock = startClock();
+    this._stop = once(() => cancelClock());
+
+    while (this._running) {
+      await this._tick(false);
+      // Slow down when hidden
+      const base = document.hidden ? Math.max(this.cfg.votesEveryMs, 10000) : this.cfg.votesEveryMs;
+      await sleep(jitter(base));
+    }
+  }
+
+  async _tick(force) {
+    if (paused) return;
+
+    // Phase votes counts
+    if (!this._votesInflight) {
+      this._votesInflight = true;
+      this._pollVotes()
+        .catch((e) => {
+          if (DEBUG) console.warn("[POLL] votes error", e);
+          this._votesBackoff = Math.min(30000, this._votesBackoff ? this._votesBackoff * 2 : 2000);
+        })
+        .finally(() => {
+          this._votesInflight = false;
+        });
+    }
+
+    // Winners for visible bracket nodes (batch)
+    if (!this._winnersInflight) {
+      const keys = this._winnersKeys();
+      if (keys && keys.length) {
+        this._winnersInflight = true;
+        this._pollWinners(keys)
+          .catch((e) => {
+            if (DEBUG) console.warn("[POLL] winners error", e);
+          })
+          .finally(() => {
+            this._winnersInflight = false;
+          });
+      }
+    }
+
+    // Edge timer ping (phase roll/clock sync)
+    if (!this._edgeInflight && (force || !document.hidden)) {
+      this._edgeInflight = true;
+      this._pollEdge()
+        .catch((e) => {
+          if (DEBUG) console.warn("[POLL] edge error", e);
+          this._edgeBackoff = Math.min(30000, this._edgeBackoff ? this._edgeBackoff * 2 : 2000);
+        })
+        .finally(() => {
+          this._edgeInflight = false;
+        });
+    }
+  }
+
+  async _pollVotes() {
+    const wait = this._votesBackoff || 0;
+    if (wait) await sleep(wait);
+
+    const url = `${SUPABASE_URL}/rest/v1/phase_votes?select=vote`;
+    const res = await fetchWithTimeout(url, { headers: { apikey: SUPABASE_ANON_KEY } });
+    if (!res.ok) throw new Error(`votes ${res.status}`);
+    const data = await res.json();
+
+    // Your UI logic can count tallies here or in onCounts:
+    // e.g., const counts = tallyVotes(data);
+    lastCountsAt = now();
+    this._votesBackoff = 0;
+
+    this._onCounts(data);
+    if (DEBUG) console.log(`[NET] votes (${data.length}) @ ${new Date(lastCountsAt).toLocaleTimeString()}`);
+  }
+
+  async _pollWinners(phaseKeys) {
+    // Batch by firing all, then mapping results back
+    const headers = { apikey: SUPABASE_ANON_KEY };
+    const fetches = phaseKeys.map((pk) =>
+      fetchWithTimeout(
+        `${SUPABASE_URL}/rest/v1/winners?select=color&phase_key=eq.${encodeURIComponent(pk)}`,
+        { headers }
+      ).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`winners ${r.status}`))))
+    );
+
+    const results = await Promise.allSettled(fetches);
+    const map = new Map();
+    results.forEach((r, i) => {
+      const key = phaseKeys[i];
+      if (r.status === "fulfilled") {
+        map.set(key, r.value);
+      } else if (DEBUG) {
+        console.warn("[NET] winners fail for", key, r.reason);
+      }
+    });
+
+    this._onWinners(map);
+    if (DEBUG) console.log(`[NET] winners (${map.size}/${phaseKeys.length})`);
+  }
+
+  async _pollEdge() {
+    const wait = this._edgeBackoff || 0;
+    if (wait) await sleep(wait);
+
+    const res = await fetchWithTimeout(EDGE_URL, { timeout: 6000 });
+    if (!res.ok) throw new Error(`edge ${res.status}`);
+    const payload = await res.json();
+
+    // Expecting shape like: { phase: "...ISO...", serverNow: "...ISO...", periodSec: n }
+    const { phase, serverNow, period } = normalizeEdgePayload(payload);
+    const prev = currentPhaseKey;
+
+    if (period && Number.isFinite(period)) {
+      periodSec = Math.max(2, Math.min(30, period)); // clamp
+    }
+
+    if (phase && phase !== currentPhaseKey) {
+      prevPhaseKey = currentPhaseKey;
+      currentPhaseKey = phase;
+      this._onPhaseChange({ prev: prevPhaseKey, next: currentPhaseKey });
+      if (DEBUG) console.log("[STAGE] phaseKey →", currentPhaseKey);
+    }
+
+    // update clock-ish
+    const serverT = serverNow ? Date.parse(serverNow) : now();
+    const endGuess = serverT + periodSec * 1000;
+    serverPhaseEndISO = new Date(endGuess).toISOString();
+    remainingSec = Math.max(0, Math.round((endGuess - now()) / 1000));
+
+    lastSyncAt = now();
+    this._edgeBackoff = 0;
+  }
+}
+
+function normalizeEdgePayload(p) {
+  try {
+    // Accept both your current format and a safe fallback
+    const phase = p?.phase ?? p?.phaseKey ?? null;
+    const serverNow = p?.serverNow ?? p?.now ?? new Date().toISOString();
+    const period = Number.isFinite(p?.periodSec) ? p.periodSec : Number(p?.period) || null;
+    return { phase, serverNow, period };
+  } catch {
+    return { phase: null, serverNow: new Date().toISOString(), period: null };
+  }
+}
+
+//////////////////////////////
+// Public API
+//////////////////////////////
+
+let singletonPoller = null;
+
+/**
+ * Initialize the core and start polling once.
+ * @param {object} opts
+ * @param {number} opts.votesEveryMs - cadence for phase_votes polling
+ * @param {number} opts.edgeEveryMs - cadence for edge heartbeat (handled in loop; we use same tick)
+ * @param {() => string[]} opts.winnersPhaseKeysProvider - return list of phase_keys we should ask winners for
+ * @param {(counts:Array) => void} opts.onCounts
+ * @param {(winnerMap: Map<string,Array>) => void} opts.onWinners
+ * @param {(info:{prev:string|null,next:string|null}) => void} opts.onPhaseChange
+ */
+export function initCore(opts = {}) {
+  // Restore / ensure debug button
+  DEBUG = readDebugPref();
+  ensureDebugButton();
+
+  if (!singletonPoller) {
+    singletonPoller = new Poller({
+      votesEveryMs: Number.isFinite(opts.votesEveryMs) ? opts.votesEveryMs : 5000,
+      edgeEveryMs: Number.isFinite(opts.edgeEveryMs) ? opts.edgeEveryMs : 5000,
+      onCounts: opts.onCounts || (() => {}),
+      winnersPhaseKeysProvider: opts.winnersPhaseKeysProvider || (() => []),
+      onWinners: opts.onWinners || (() => {}),
+      onPhaseChange: opts.onPhaseChange || (() => {}),
+    });
+    singletonPoller.start();
+  } else {
+    if (DEBUG) console.log("[CORE] initCore() called again — poller already active");
+  }
+}
+
+/** Stop all core activity (mainly useful in teardown/tests). */
+export function shutdownCore() {
+  if (singletonPoller) {
+    singletonPoller.stop();
+    singletonPoller = null;
+  }
+}
+
+/** Pause background activity (UI can call this when dialogs/etc open). */
+export function setPaused(v) {
+  paused = !!v;
+  if (DEBUG) console.log("[CORE] paused=", paused);
+}
+
+/** State setters so other modules don’t reach into internals */
+export function setPeriodSec(v) {
+  if (Number.isFinite(v)) periodSec = v;
+}
+export function setServerPhaseEndISO(v) {
+  serverPhaseEndISO = v;
+}
+export function setCurrentPhaseKey(v) {
+  currentPhaseKey = v;
+}
+export function setPrevPhaseKey(v) {
+  prevPhaseKey = v;
+}
+export function setRemainingSec(v) {
+  if (Number.isFinite(v)) remainingSec = v;
+}
+export function setLastSyncAt(ts) {
+  lastSyncAt = ts;
+}
+export function setLastCountsAt(ts) {
+  lastCountsAt = ts;
+}
+export function setCurrentUid(uid) {
+  currentUid = uid;
+  paintLoginBadge();
+}
+export function setChosen(v) {
+  chosen = v;
+}
+
+//////////////////////////////
+// UI helpers
+//////////////////////////////
+
+function paintLoginBadge() {
+  const el = loginBadgeEl();
+  if (!el) return;
+  el.textContent = currentUid ? `Signed in: ${currentUid}` : "Not signed in";
+}
+
+//////////////////////////////
+// Optional helpers your other code can reuse
+//////////////////////////////
+
+/** Tally votes by color (or whatever structure your rows have). */
+export function tallyVotes(rows) {
+  const out = new Map();
+  for (const r of rows || []) {
+    const k = r?.vote ?? r?.color ?? "unknown";
+    out.set(k, (out.get(k) || 0) + 1);
+  }
+  return out;
+}
+
+/** Row id helper if you’re mapping bracket rows to DOM */
 export const rowId = (slot) => `row-${slot}`;
