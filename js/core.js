@@ -717,3 +717,8 @@ export function overlayMotto(text) {
   if (text != null) el.textContent = String(text);
   return el;
 }
+// ===== activeSlot shim (append-only) =====
+// currently-selected bracket slot (e.g., "r32_1"); kept in core for sharing
+export let activeSlot = null;
+export function setActiveSlot(v) { activeSlot = v; return activeSlot; }
+export function getActiveSlot() { return activeSlot; }
