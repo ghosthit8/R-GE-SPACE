@@ -20,7 +20,7 @@ import {
   setLastSyncAt, setLastCountsAt, setCurrentUid, setChosen,
   setActiveSlot, setCurrentStage, setOverlayGateBase, setLastPaintedBattleKey,
   fixedSeedPair,
-} from "./core.js?v=32";
+} from "./core.v.js";
 
 import {
   fetchTimerState, detectStage,
@@ -250,7 +250,7 @@ async function start(){
 
 /* realtime */
 function initRealtime(){
-  import("./core.js").then(({ supabase }) => {
+  import("./core.v.js").then(({ supabase }) => {
     supabase
       .channel("winners-final-overlay")
       .on("postgres_changes", { event:"INSERT", schema:"public", table:"winners" }, (payload)=>{
@@ -334,7 +334,7 @@ function initControls(){
 
   try {
     setCurrentUid(await getUidOrNull());
-    import("./core.js").then(({ supabase })=>{
+    import("./core.v.js").then(({ supabase })=>{
       supabase.auth.onAuthStateChange((_evt, session)=>{
         setCurrentUid(session?.user?.id ?? null);
         submitBtn.disabled = !chosen || !currentUid;
