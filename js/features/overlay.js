@@ -2,13 +2,19 @@
 // Champion overlay: confetti burst (auto-stops after 5s) + typewriter text.
 // Provides showChampion(color, finalBaseISO) used by main.js and realtime. 1
 
-import {
-  // DOM
-  overlay, overlayArtImg, overlayTitle, overlaySubtitle, overlayMotto,
-  overlayClose, confettiCanvas,
-  // shared state/cache
+// js/features/overlay.js
+import { 
+  overlay,
+  overlayArtImg,
+  overlayTitle,
+  overlaySubtitle,
+  overlayMotto,
+  overlayClose,
+  confettiCanvas,
   imgCache,
-} from "../core.js";
+  fsOverlay,
+  fsClose
+} from "../core.js?v=24";
 
 import {
   countVotesFor,
