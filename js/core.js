@@ -13,9 +13,7 @@ export const SUPABASE_ANON_KEY =
 export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 
 // ---- auth helpers (keep only this copy) ----
-export function uidCached() {
-  return currentUid || null;
-}
+export function uidCached() { return currentUid || null; }
 export async function getUidOrNull() {
   try {
     if (currentUid) return currentUid;
@@ -24,9 +22,7 @@ export async function getUidOrNull() {
     const id = data?.user?.id || null;
     if (id) setCurrentUid(id);
     return id;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 // ---- Supabase client (singleton) ----
@@ -48,16 +44,16 @@ const by = (id, role, cls) =>
   document.querySelector(`[data-role="${role}"]`) ||
   (cls ? document.querySelector(`.${cls}`) : null);
 
-export function clockEl()      { return by('clock',      'clock'); }
-export function pauseBtn()     { return by('pauseBtn',   'pause'); }
-export function voteA()        { return by('voteA',      'voteA'); }
-export function voteB()        { return by('voteB',      'voteB'); }
-export function submitBtn()    { return by('submitBtn',  'submit'); }
-export function countA()       { return by('countA',     'countA'); }
-export function countB()       { return by('countB',     'countB'); }
-export function labelA()       { return by('labelA',     'labelA'); }
-export function labelB()       { return by('labelB',     'labelB'); }
-export function loginBadgeEl() { return by('loginBadge', 'loginBadge'); }
+export function clockEl()      { return by('clock','clock'); }
+export function pauseBtn()     { return by('pauseBtn','pause'); }
+export function voteA()        { return by('voteA','voteA'); }
+export function voteB()        { return by('voteB','voteB'); }
+export function submitBtn()    { return by('submitBtn','submit'); }
+export function countA()       { return by('countA','countA'); }
+export function countB()       { return by('countB','countB'); }
+export function labelA()       { return by('labelA','labelA'); }
+export function labelB()       { return by('labelB','labelB'); }
+export function loginBadgeEl() { return by('loginBadge','loginBadge'); }
 
 /* =========================
    Global State
@@ -206,7 +202,7 @@ class Poller {
     this._stop = null;
 
     this._votesBackoff = 0;
-       this._edgeBackoff = 0;
+    this._edgeBackoff = 0;
 
     this._onCounts = onCounts;
     this._onWinners = onWinners;
@@ -271,9 +267,7 @@ class Poller {
       if (keys && keys.length) {
         this._winnersInflight = true;
         this._pollWinners(keys)
-          .catch((e) => {
-            if (DEBUG) console.warn("[POLL] winners error", e);
-          })
+          .catch((e) => { if (DEBUG) console.warn("[POLL] winners error", e); })
           .finally(() => (this._winnersInflight = false));
       }
     }
@@ -294,7 +288,12 @@ class Poller {
     if (wait) await sleep(wait);
 
     const url = `${SUPABASE_URL}/rest/v1/phase_votes?select=vote`;
-    const res = await fetchWithTimeout(url, { headers: { apikey: SUPABASE_ANON_KEY } });
+    const res = await fetchWithTimeout(url, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
     if (!res.ok) throw new Error(`votes ${res.status}`);
     const data = await res.json();
 
@@ -302,12 +301,14 @@ class Poller {
     this._votesBackoff = 0;
 
     this._onCounts(data);
-    if (DEBUG)
-      console.log(`[NET] votes (${data.length}) @ ${new Date(lastCountsAt).toLocaleTimeString()}`);
+    if (DEBUG) console.log(`[NET] votes (${data.length}) @ ${new Date(lastCountsAt).toLocaleTimeString()}`);
   }
 
   async _pollWinners(phaseKeys) {
-    const headers = { apikey: SUPABASE_ANON_KEY };
+    const headers = {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    };
     const fetches = phaseKeys.map((pk) =>
       fetchWithTimeout(
         `${SUPABASE_URL}/rest/v1/winners?select=color&phase_key=eq.${encodeURIComponent(pk)}`,
@@ -331,7 +332,13 @@ class Poller {
     const wait = this._edgeBackoff || 0;
     if (wait) await sleep(wait);
 
-    const res = await fetchWithTimeout(EDGE_URL, { timeout: 6000 });
+    const res = await fetchWithTimeout(EDGE_URL, {
+      timeout: 6000,
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
     if (!res.ok) throw new Error(`edge ${res.status}`);
     const payload = await res.json();
 
@@ -469,6 +476,8 @@ export function fsClose() {
   } catch {}
   return true;
 }
+// compatibility shim: ignore mistaken uses like fsClose.addEventListener(...)
+try { (fsClose).addEventListener = () => {}; } catch {}
 
 export function baseForSlot(slotOrPhase, state) {
   try {
@@ -653,7 +662,7 @@ export function overlayArtImg(imgOrSrc) {
 }
 export function overlayClose() { return fsClose(); }
 
-// ---- overlay text helpers ----
+// ---- overlay text helpers (already used by features/overlay.js) ----
 function ensureOverlayTextEl(tag, dataAttr, baseStyles = {}) {
   const o = overlay();
   let el = o.querySelector(`[${dataAttr}]`);
@@ -758,9 +767,10 @@ export function applyVotingLockUI(locked = false, untilText = "") {
 }
 
 /* =========================
-   Boot helpers
+   Boot helpers (NEW)
 ========================= */
 
+// Update boot/status text if present.
 export function setBootStatus(text) {
   const el =
     document.getElementById('bootStatus') ||
@@ -770,6 +780,7 @@ export function setBootStatus(text) {
   return !!el;
 }
 
+// Hide boot UI and mark ready; safe to call multiple times.
 export function endBoot({ message = 'ready' } = {}) {
   try {
     setBootStatus(message);
@@ -832,6 +843,7 @@ export function startBootTick() {
     document.getElementById("bootBar") ||
     document.querySelector("[data-role='bootBar']") ||
     document.querySelector(".boot-bar");
+
   if (!bar) return;
 
   let v = 0;
@@ -886,7 +898,11 @@ export async function toggleTimer(action = "pause") {
   const body = { action: String(action) };
   const res = await fetch(EDGE_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`toggleTimer ${res.status}`);
