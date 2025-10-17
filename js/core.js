@@ -190,7 +190,7 @@ class Poller {
   }
 
   stop() {
-    this._running) = false;
+    this._running = false; // <-- fixed stray parenthesis here
     document.removeEventListener("visibilitychange", this._handleVis);
     if (this._stop) this._stop();
   }
@@ -592,5 +592,5 @@ export function confettiCanvas() {
   return c;
 }
 
-// NOTE: No re-export at the bottom —
+// NOTE: No re-export block at the bottom —
 // `currentPhaseKey` and `imgCache` are already exported at declaration.
