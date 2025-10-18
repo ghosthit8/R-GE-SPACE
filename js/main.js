@@ -335,6 +335,9 @@ function initControls(){
   try {
     setCurrentUid(await getUidOrNull());
     import("./core.v.js").then(({ supabase })=>{
+
+console.log("[main] using core via proxy: core.v.js");
+
       supabase.auth.onAuthStateChange((_evt, session)=>{
         setCurrentUid(session?.user?.id ?? null);
         submitBtn.disabled = !chosen || !currentUid;
