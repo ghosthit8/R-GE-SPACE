@@ -1,4 +1,4 @@
-/* main.js — resilient boot that doesn’t block on edge timer */
+/* main.js — resilient boot + Supabase auth headers */
 (() => {
   const log = (...a) => console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
   const $ = (q) => document.querySelector(q);
@@ -22,30 +22,34 @@
 
   // --- config ---------------------------------------------------------------
   const SUPA_URL = 'https://tuqvpcevrhciursxrgav.supabase.co';
+  const SUPA_ANON = '<YOUR_SUPABASE_ANON_KEY>'; // <-- paste your anon public key
+  const BASE_HEADERS = {
+    apikey: SUPA_ANON,
+    Authorization: `Bearer ${SUPA_ANON}`,
+  };
+
   const WINNERS = (keys) =>
     `${SUPA_URL}/rest/v1/winners?select=phase_key&phase_key=in.%28${keys.map(encodeURIComponent).join('%2C')}%29`;
   const VOTES = `${SUPA_URL}/rest/v1/phase_votes?select=vote`;
   const EDGE_TIMER = `${SUPA_URL}/functions/v1/global-timer`;
 
   // --- small utils ----------------------------------------------------------
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const withTimeout = (p, ms, onTimeout) =>
     new Promise((resolve, reject) => {
       const t = setTimeout(() => {
         onTimeout?.();
         resolve({ __timeout: true });
       }, ms);
-      p.then((v) => {
-        clearTimeout(t);
-        resolve(v);
-      }).catch((e) => {
-        clearTimeout(t);
-        reject(e);
-      });
+      p.then((v) => { clearTimeout(t); resolve(v); })
+       .catch((e) => { clearTimeout(t); reject(e); });
     });
 
   async function getJSON(url) {
-    const r = await fetch(url, { credentials: 'omit' });
+    const r = await fetch(url, {
+      credentials: 'omit',
+      mode: 'cors',
+      headers: BASE_HEADERS,
+    });
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
   }
@@ -60,10 +64,18 @@
 
   // --- non-blocking timer probe --------------------------------------------
   async function probeEdgeTimer() {
-    const res = await withTimeout(getJSON(EDGE_TIMER), 1500, () => {
-      state.timer.offline = true;
-      ui.toast("Couldn't reach timer. Offline mode.");
-    });
+    const res = await withTimeout(
+      fetch(EDGE_TIMER, {
+        credentials: 'omit',
+        mode: 'cors',
+        headers: BASE_HEADERS,
+      }).then((r) => (r.ok ? r.json() : null)),
+      1500,
+      () => {
+        state.timer.offline = true;
+        ui.toast("Couldn't reach timer. Offline mode.");
+      }
+    );
     if (!res || res.__timeout) return;
     state.timer.ok = true;
     state.timer.lastEdgeIso = res?.now || null;
@@ -93,16 +105,13 @@
     );
     state.votesTotal = Array.isArray(votes) ? votes.length : 0;
 
-    timerP.catch(() => {
-      state.timer.offline = true;
-    });
+    timerP.catch(() => { state.timer.offline = true; });
   }
 
   // --- boot sequence with watchdog -----------------------------------------
   async function boot() {
     ui.setStatus('initializing');
 
-    // Watchdog: if boot hasn’t completed in 2.5s, force proceed
     let forced = false;
     const watchdog = setTimeout(() => {
       if (state.booted) return;
@@ -114,9 +123,9 @@
     try {
       ui.setStatus('syncing…');
       await fetchState(); // winners + votes are the only blockers now
-      if (!forced) proceed(); // otherwise watchdog already called proceed()
+      if (!forced) proceed();
     } catch (e) {
-      console.error(e);
+      console.error('ERR:', e);
       ui.toast("You're offline. Showing cached/empty view.");
       proceed(true);
     } finally {
