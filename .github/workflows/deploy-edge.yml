@@ -12,11 +12,11 @@ jobs:
         run: |
           for i in {1..6}; do
             curl -sS -X GET \
-              -H "Authorization: Bearer $ANON_KEY" \
-              -H "apikey: $ANON_KEY" \
+              -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+              -H "apikey: $SUPABASE_ANON_KEY" \
               "$SUPABASE_URL/functions/v1/global-timer" || true
             sleep 10
           done
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          ANON_KEY: ${{ secrets.ANON_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
