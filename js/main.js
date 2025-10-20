@@ -3,6 +3,8 @@
    - Delay timer toast to avoid false alarms
 */
 (() => {
+  'use strict';
+
   const stamp = () => `[${new Date().toLocaleTimeString()}]`;
   const log  = (...a) => console.log(stamp(), ...a);
   const warn = (...a) => console.warn(stamp(), 'WARN:', ...a);
@@ -27,7 +29,7 @@
   const FALLBACK_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
   const FALLBACK_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
 
-  // Capture whether the page already had these (so we only warn if truly missing)
+  // Track if these existed before we touch them (so we only warn if truly missing)
   const hadMetaUrl  = hasMeta('supabase-url');
   const hadMetaAnon = hasMeta('supabase-anon-key');
 
@@ -48,15 +50,15 @@
     (window.SUPABASE_ANON_KEY && String(window.SUPABASE_ANON_KEY)) ||
     meta('supabase-anon-key') || FALLBACK_ANON;
 
-  // Warn only when we ended up on fallbacks AND user did not provide globals or pre-existing meta
+  // Only warn if we’re truly using fallbacks the user didn’t provide
   const usingFallbacks = (SUPA_URL === FALLBACK_URL) || (SUPA_ANON === FALLBACK_ANON);
   const userProvidedGlobals = !!(window.SUPABASE_URL || window.SUPABASE_ANON_KEY);
-  const userProvidedMeta    = hadMetaUrl || hadMetaAnon; // pre-existing before our injection
-  if (usingFallbacks && !userProvidedGlobals && !userProvidedMeta && !injectedUrl && !injectedAnon) {
-    // This essentially never runs because we inject above.
-    warn('Supabase anon key not found via meta/global; using fallback constant.');
+  const userProvidedMeta    = hadMetaUrl || hadMetaAnon; // present before our injection
+  if (usingFallbacks && !userProvidedGlobals && !userProvidedMeta) {
+    // We injected fallbacks intentionally—no need to warn loudly.
+    // If you want a hard warning instead, uncomment next line:
+    // warn('Supabase anon key not found via meta/global; using fallback constant.');
   }
-  // If we injected, that’s intentional—no warning.
 
   // ---------------------------------------------------------------
   // 📡 Endpoints + headers
@@ -151,7 +153,7 @@
       getJSON(WINNERS(r32)),
     ]);
     const votesP = getJSON(VOTES);
-    const timerP = probeEdgeTimer(); // do not await yet
+    const timerP = probeEdgeTimer(); // don’t await; let it resolve in background
 
     const [w1, w2, w3, w4] = await winnersP;
     const votes = await votesP;
@@ -161,7 +163,6 @@
     );
     state.votesTotal = Array.isArray(votes) ? votes.length : 0;
 
-    // If timer probe throws, mark offline (no toast here)
     timerP.catch(() => { state.timer.offline = true; });
   }
 
@@ -230,5 +231,4 @@
   // ---------------------------------------------------------------
   log('Debugger ready');
   boot();
-})();
-```0
+})(); // EOF
