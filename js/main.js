@@ -1,15 +1,34 @@
-/* main.js — resilient boot with Supabase auth headers + meta/global support */
+/* main.js — resilient boot with Supabase meta/global auto-inject + Edge support */
 (() => {
   const log = (...a) => console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
   const $ = (q) => document.querySelector(q);
 
-  // Read <meta name="..."> helpers
+  // ---------------------------------------------------------------
+  // 🧩 Meta helpers and auto-injection if tags are missing
+  // ---------------------------------------------------------------
+  const ensureMeta = (name, value) => {
+    if (!document.querySelector(`meta[name="${name}"]`)) {
+      const m = document.createElement('meta');
+      m.name = name;
+      m.content = value;
+      document.head.appendChild(m);
+      log(`Injected <meta name="${name}">`);
+    }
+  };
+
+  const FALLBACK_URL =
+    'https://tuqvpcevrhciursxrgav.supabase.co';
+  const FALLBACK_ANON =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
+
+  ensureMeta('supabase-url', FALLBACK_URL);
+  ensureMeta('supabase-anon-key', FALLBACK_ANON);
+
   const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content?.trim();
 
-  // --- config resolution ----------------------------------------------------
-  const FALLBACK_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
-  const FALLBACK_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
-
+  // ---------------------------------------------------------------
+  // 🔑 Resolve config
+  // ---------------------------------------------------------------
   const SUPA_URL =
     (window.SUPABASE_URL && String(window.SUPABASE_URL)) ||
     meta('supabase-url') || FALLBACK_URL;
@@ -22,19 +41,19 @@
     console.warn('Supabase anon key not found via meta/global; using fallback constant.');
   }
 
-  // Endpoints derived from resolved URL
   const WINNERS = (keys) =>
     `${SUPA_URL}/rest/v1/winners?select=phase_key&phase_key=in.%28${keys.map(encodeURIComponent).join('%2C')}%29`;
   const VOTES      = `${SUPA_URL}/rest/v1/phase_votes?select=vote`;
   const EDGE_TIMER = `${SUPA_URL}/functions/v1/global-timer`;
 
-  // shared headers for Supabase REST + Edge Functions
   const SB_HEADERS = {
     apikey: SUPA_ANON,
     Authorization: `Bearer ${SUPA_ANON}`,
   };
 
-  // --- UI helpers -----------------------------------------------------------
+  // ---------------------------------------------------------------
+  // 💻 UI helpers
+  // ---------------------------------------------------------------
   const ui = {
     statusEl: $('#boot-status') || { textContent: '' },
     toastBox: $('#toast') || null,
@@ -51,7 +70,6 @@
     },
   };
 
-  // --- small utils ----------------------------------------------------------
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const withTimeout = (p, ms, onTimeout) =>
     new Promise((resolve, reject) => {
@@ -63,7 +81,7 @@
        .catch((e) => { clearTimeout(t); reject(e); });
     });
 
-  async function getJSON(url, opts={}) {
+  async function getJSON(url, opts = {}) {
     const r = await fetch(url, {
       method: 'GET',
       credentials: 'omit',
@@ -76,7 +94,9 @@
     return r.json();
   }
 
-  // --- app state ------------------------------------------------------------
+  // ---------------------------------------------------------------
+  // 🕹 State + fetchers
+  // ---------------------------------------------------------------
   const state = {
     timer: { ok: false, lastEdgeIso: null, offline: false },
     winners: new Set(),
@@ -84,7 +104,6 @@
     booted: false,
   };
 
-  // --- non-blocking timer probe --------------------------------------------
   async function probeEdgeTimer() {
     const res = await withTimeout(
       getJSON(EDGE_TIMER),
@@ -99,7 +118,6 @@
     state.timer.lastEdgeIso = res?.now || null;
   }
 
-  // --- fetch game state -----------------------------------------------------
   async function fetchState() {
     const sf  = ['sf1', 'sf2'];
     const qf  = ['qf1', 'qf2', 'qf3', 'qf4'];
@@ -113,7 +131,7 @@
       getJSON(WINNERS(r32)),
     ]);
     const votesP = getJSON(VOTES);
-    const timerP = probeEdgeTimer(); // doesn’t gate boot
+    const timerP = probeEdgeTimer();
 
     const [w1, w2, w3, w4] = await winnersP;
     const votes = await votesP;
@@ -126,10 +144,11 @@
     timerP.catch(() => { state.timer.offline = true; });
   }
 
-  // --- boot sequence with watchdog -----------------------------------------
+  // ---------------------------------------------------------------
+  // 🚀 Boot sequence
+  // ---------------------------------------------------------------
   async function boot() {
     ui.setStatus('initializing');
-
     let forced = false;
     const watchdog = setTimeout(() => {
       if (state.booted) return;
@@ -161,17 +180,16 @@
     }
   }
 
-  // --- render loop ----------------------------------------------------------
+  // ---------------------------------------------------------------
+  // ⏱ Render loop + debug hook
+  // ---------------------------------------------------------------
   let raf = 0;
   function startLoop() {
     cancelAnimationFrame(raf);
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
-    };
+    const tick = () => { raf = requestAnimationFrame(tick); };
     raf = requestAnimationFrame(tick);
   }
 
-  // --- debug hook -----------------------------------------------------------
   window.appDebug = {
     state,
     refresh: async () => {
@@ -181,7 +199,9 @@
     },
   };
 
-  // kick it
+  // ---------------------------------------------------------------
+  // 🟢 Start
+  // ---------------------------------------------------------------
   log('Debugger ready');
   boot();
 })();
