@@ -1,13 +1,5 @@
 // supabase/functions/global-timer/index.ts
 // Deno deploy function — global timer + phase rollover + winners upsert.
-//
-// IMPORTANT: make this function callable from the browser without a JWT.
-// In your supabase/config.toml add:
-//
-// [functions."global-timer"]
-// verify_jwt = false
-//
-// (If verify_jwt stays true, your frontend must send an Authorization: Bearer <anon-key> header.)
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -22,7 +14,7 @@ const supa = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 // ---------- Types the frontend expects ----------
 type TimerState = {
   phase_end_at: string;       // ISO string, Z, no ms
-  period_sec: number;         // default 20
+  period_sec: number;         // now defaults to 30 if null
   paused: boolean;
   remaining_sec: number | null;
 };
@@ -67,7 +59,7 @@ async function getTimer(): Promise<TimerState> {
   if (error || !data) throw new Error(error?.message || "timer_state missing");
 
   const phase_end_at = isoZ(data.phase_end_at);
-  const period_sec = Number(data.period_sec ?? 20);
+  const period_sec = Number(data.period_sec ?? 30); // default 30s now
   const paused = !!data.paused;
 
   const rem =
@@ -147,8 +139,7 @@ async function decideAllForBase(baseISO: string) {
         if (exists) return;
 
         const { r, b } = await countRB(pk);
-        // tie-break: red
-        const color = r > b ? "red" : b > r ? "blue" as const : "red";
+        const color = r > b ? "red" : b > r ? "blue" as const : "red"; // tie → red
         await upsertWinner(pk, color);
       })()
     );
@@ -282,7 +273,7 @@ serve(async (req) => {
       const j = await req.json();
       const a = String(j?.action || "").toLowerCase();
       if (a === "pause" || a === "resume") action = a;
-    } catch {/* ignore */}
+    } catch { /* ignore */ }
   }
 
   try {
@@ -302,6 +293,6 @@ serve(async (req) => {
     return ok({ state });
   } catch (e) {
     console.error("global-timer error:", e);
-    return bad(500, e?.message || "server error");
+    return bad(500, (e as any)?.message || "server error");
   }
 });
