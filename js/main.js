@@ -1,4 +1,4 @@
-/* main.js — resilient boot that doesn’t block on edge timer, with auth headers */
+/* main.js — resilient boot, sends auth headers to Supabase REST + Edge */
 (() => {
   const log = (...a) => console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
   const $ = (q) => document.querySelector(q);
@@ -20,27 +20,29 @@
     },
   };
 
-  // --- config ---------------------------------------------------------------
-  const SUPA_URL = 'https://tuqvpcevrhciursxrgav.supabase.co';
-  const SUPA_KEY =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
+  // --- config (reads from <meta> first, falls back to window.* if set) ------
+  const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content || '';
+  const SUPA_URL = meta('supabase-url') || window.SUPABASE_URL || 'https://tuqvpcevrhciursxrgav.supabase.co';
+  const SUPA_KEY = meta('supabase-anon-key') || window.SUPABASE_ANON_KEY || '';
 
-  const AUTH_HEADERS = {
-    'apikey': SUPA_KEY,
-    'Authorization': `Bearer ${SUPA_KEY}`,
-  };
+  // IMPORTANT: don't hardcode the key here; prefer putting it in a <meta> tag
+  // in index.html (see file below). If you *must* hardcode for local testing,
+  // you can temporarily assign SUPA_KEY above.
+
+  const AUTH_HEADERS = SUPA_KEY
+    ? {
+        apikey: SUPA_KEY,
+        Authorization: `Bearer ${SUPA_KEY}`,
+      }
+    : {};
 
   const WINNERS = (keys) =>
-    `${SUPA_URL}/rest/v1/winners?select=phase_key&phase_key=in.(${keys
-      .map(encodeURIComponent)
-      .join(',')})`;
-
+    `${SUPA_URL}/rest/v1/winners?select=phase_key&phase_key=in.(${keys.join(',')})`;
   const VOTES = `${SUPA_URL}/rest/v1/phase_votes?select=vote`;
   const EDGE_TIMER = `${SUPA_URL}/functions/v1/global-timer`;
 
   // --- small utils ----------------------------------------------------------
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
   const withTimeout = (p, ms, onTimeout) =>
     new Promise((resolve, reject) => {
       const t = setTimeout(() => {
@@ -56,8 +58,16 @@
       });
     });
 
-  async function getJSON(url) {
-    const r = await fetch(url, { headers: AUTH_HEADERS, credentials: 'omit' });
+  async function getJSON(url, { signal } = {}) {
+    const r = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...AUTH_HEADERS,
+        'Content-Type': 'application/json',
+      },
+      credentials: 'omit',
+      signal,
+    });
     if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return r.json();
   }
@@ -70,12 +80,10 @@
     booted: false,
   };
 
-  // --- non-blocking timer probe --------------------------------------------
+  // --- non-blocking timer probe (now with auth headers) ---------------------
   async function probeEdgeTimer() {
     const res = await withTimeout(
-      fetch(EDGE_TIMER, { headers: AUTH_HEADERS }).then((r) =>
-        r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))
-      ),
+      getJSON(EDGE_TIMER),
       1500,
       () => {
         state.timer.offline = true;
@@ -101,7 +109,7 @@
       getJSON(WINNERS(r32)),
     ]);
     const votesP = getJSON(VOTES);
-    const timerP = probeEdgeTimer(); // non-blocking
+    const timerP = probeEdgeTimer(); // don’t block boot on timer
 
     const [w1, w2, w3, w4] = await winnersP;
     const votes = await votesP;
@@ -120,7 +128,7 @@
   async function boot() {
     ui.setStatus('initializing');
 
-    // Watchdog: if boot hasn’t completed in 2.5s, force proceed
+    // If boot hasn't completed in 2.5s, force proceed.
     let forced = false;
     const watchdog = setTimeout(() => {
       if (state.booted) return;
@@ -131,10 +139,10 @@
 
     try {
       ui.setStatus('syncing…');
-      await fetchState(); // winners + votes are the only blockers now
-      if (!forced) proceed(); // otherwise watchdog already called proceed()
+      await fetchState(); // winners + votes must succeed
+      if (!forced) proceed();
     } catch (e) {
-      console.error(e);
+      console.error('ERR:', e);
       ui.toast("You're offline. Showing cached/empty view.");
       proceed(true);
     } finally {
@@ -157,7 +165,7 @@
   function startLoop() {
     cancelAnimationFrame(raf);
     const tick = () => {
-      // update time-based UI if you add any
+      // update anything time-based here (use Date.now() if timer missing)
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
