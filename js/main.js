@@ -1,6 +1,7 @@
-/* main.js — resilient boot with Supabase meta/global auto-inject + Edge support (quieter timer) */
+/* main.js — resilient boot with Supabase meta/global auto-inject + Edge support (quieter timer, clear fallback warn) */
 (() => {
   const log = (...a) => console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
+  const warn = (...a) => console.warn(`[${new Date().toLocaleTimeString()}] WARN:`, ...a);
   const $ = (q) => document.querySelector(q);
 
   // ---------------------------------------------------------------
@@ -13,7 +14,9 @@
       m.content = value;
       document.head.appendChild(m);
       log(`Injected <meta name="${name}">`);
+      return true; // injected
     }
+    return false; // already present
   };
 
   const FALLBACK_URL =
@@ -22,13 +25,13 @@
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
 
   // If you prefer to control these in index.html, add the meta tags there and remove these two lines:
-  ensureMeta('supabase-url', FALLBACK_URL);
-  ensureMeta('supabase-anon-key', FALLBACK_ANON);
+  const injectedUrl  = ensureMeta('supabase-url', FALLBACK_URL);
+  const injectedAnon = ensureMeta('supabase-anon-key', FALLBACK_ANON);
 
   const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content?.trim();
 
   // ---------------------------------------------------------------
-  // 🔑 Resolve config
+  // 🔑 Resolve config (window globals win > meta > fallback)
   // ---------------------------------------------------------------
   const SUPA_URL =
     (window.SUPABASE_URL && String(window.SUPABASE_URL)) ||
@@ -38,6 +41,14 @@
     (window.SUPABASE_ANON_KEY && String(window.SUPABASE_ANON_KEY)) ||
     meta('supabase-anon-key') || FALLBACK_ANON;
 
+  // One-time, clear notice if we’re using fallbacks
+  if ((injectedUrl && SUPA_URL === FALLBACK_URL) || (injectedAnon && SUPA_ANON === FALLBACK_ANON)) {
+    warn('Supabase anon key not found via meta/global; using fallback constant.');
+  }
+
+  // ---------------------------------------------------------------
+  // 📡 Endpoints + headers
+  // ---------------------------------------------------------------
   const WINNERS = (keys) =>
     `${SUPA_URL}/rest/v1/winners?select=phase_key&phase_key=in.%28${keys.map(encodeURIComponent).join('%2C')}%29`;
   const VOTES      = `${SUPA_URL}/rest/v1/phase_votes?select=vote`;
@@ -67,6 +78,9 @@
     },
   };
 
+  // ---------------------------------------------------------------
+  // 🔧 Small utils
+  // ---------------------------------------------------------------
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const withTimeout = (p, ms, onTimeout) =>
     new Promise((resolve, reject) => {
@@ -101,7 +115,7 @@
     booted: false,
   };
 
-  // Note: bump timeout from 1500 → 3000 and don't toast here
+  // Note: timeout 3000 and no toast here — only set flags
   async function probeEdgeTimer() {
     const res = await withTimeout(
       getJSON(EDGE_TIMER),
@@ -174,8 +188,8 @@
     ui.setStatus('ready');
     startLoop();
 
-    // Only toast about timer if we truly don't have it
-    if (!state.timer.ok) {
+    // Toast only when we truly don’t have the timer (or forced offline)
+    if (offlined || !state.timer.ok) {
       ui.toast("Couldn't reach timer. Offline mode.");
     }
   }
