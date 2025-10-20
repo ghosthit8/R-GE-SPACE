@@ -1,5 +1,13 @@
 // supabase/functions/global-timer/index.ts
 // Deno deploy function — global timer + phase rollover + winners upsert.
+//
+// IMPORTANT: make this function callable from the browser without a JWT.
+// In your supabase/config.toml add:
+//
+// [functions."global-timer"]
+// verify_jwt = false
+//
+// (If verify_jwt stays true, your frontend must send an Authorization: Bearer <anon-key> header.)
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
