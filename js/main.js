@@ -1,4 +1,4 @@
-/* main.js — resilient boot with Supabase meta/global auto-inject + Edge support */
+/* main.js — resilient boot with Supabase meta/global auto-inject + Edge support (quieter timer) */
 (() => {
   const log = (...a) => console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
   const $ = (q) => document.querySelector(q);
@@ -21,6 +21,7 @@
   const FALLBACK_ANON =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
 
+  // If you prefer to control these in index.html, add the meta tags there and remove these two lines:
   ensureMeta('supabase-url', FALLBACK_URL);
   ensureMeta('supabase-anon-key', FALLBACK_ANON);
 
@@ -36,10 +37,6 @@
   const SUPA_ANON =
     (window.SUPABASE_ANON_KEY && String(window.SUPABASE_ANON_KEY)) ||
     meta('supabase-anon-key') || FALLBACK_ANON;
-
-  if (!window.SUPABASE_ANON_KEY && !meta('supabase-anon-key')) {
-    console.warn('Supabase anon key not found via meta/global; using fallback constant.');
-  }
 
   const WINNERS = (keys) =>
     `${SUPA_URL}/rest/v1/winners?select=phase_key&phase_key=in.%28${keys.map(encodeURIComponent).join('%2C')}%29`;
@@ -104,17 +101,18 @@
     booted: false,
   };
 
+  // Note: bump timeout from 1500 → 3000 and don't toast here
   async function probeEdgeTimer() {
     const res = await withTimeout(
       getJSON(EDGE_TIMER),
-      1500,
+      3000,
       () => {
-        state.timer.offline = true;
-        ui.toast("Couldn't reach timer. Offline mode.");
+        state.timer.offline = true; // mark, but don't toast yet
       }
     );
     if (!res || res.__timeout) return;
     state.timer.ok = true;
+    state.timer.offline = false;
     state.timer.lastEdgeIso = res?.now || null;
   }
 
@@ -175,7 +173,9 @@
     state.booted = true;
     ui.setStatus('ready');
     startLoop();
-    if (offlined || state.timer.offline) {
+
+    // Only toast about timer if we truly don't have it
+    if (!state.timer.ok) {
       ui.toast("Couldn't reach timer. Offline mode.");
     }
   }
