@@ -1,9 +1,37 @@
-/* main.js — resilient boot, sends auth headers to Supabase REST + Edge */
+/* main.js — resilient boot with Supabase auth headers */
 (() => {
+  // ---------- tiny logger ----------
   const log = (...a) => console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
-  const $ = (q) => document.querySelector(q);
+  const $   = (q) => document.querySelector(q);
 
-  // --- UI helpers -----------------------------------------------------------
+  // ---------- read config (URL + anon key) ----------
+  // Prefer <meta> tags, then fall back to window globals if you set them in a script tag
+  // <meta name="supabase-url" content="https://YOUR-REF.supabase.co">
+  // <meta name="supabase-anon-key" content="eyJhbGciOi...">
+  const META = {
+    url : document.querySelector('meta[name="supabase-url"]')?.content?.trim(),
+    key : document.querySelector('meta[name="supabase-anon-key"]')?.content?.trim(),
+  };
+
+  // If you didn’t add meta tags, you can define these before loading main.js:
+  //   <script>
+  //     window.SUPABASE_URL = 'https://tuqvpcevrhciursxrgav.supabase.co';
+  //     window.SUPABASE_ANON_KEY = 'eyJhbGciOiJI...';
+  //   </script>
+  const SUPA_URL = META.url || window.SUPABASE_URL || 'https://tuqvpcevrhciursxrgav.supabase.co';
+  const SUPA_KEY = META.key || window.SUPABASE_ANON_KEY || '';
+
+  if (!SUPA_KEY) {
+    console.warn('Supabase anon key not found. Add a <meta name="supabase-anon-key"> or set window.SUPABASE_ANON_KEY before main.js.');
+  }
+
+  // ---------- endpoints ----------
+  const WINNERS = (keys) =>
+    `${SUPA_URL}/rest/v1/winners?select=phase_key&phase_key=in.(${keys.map(encodeURIComponent).join(',')})`;
+  const VOTES      = `${SUPA_URL}/rest/v1/phase_votes?select=vote`;
+  const EDGE_TIMER = `${SUPA_URL}/functions/v1/global-timer`;
+
+  // ---------- UI helpers ----------
   const ui = {
     statusEl: $('#boot-status') || { textContent: '' },
     toastBox: $('#toast') || null,
@@ -20,29 +48,9 @@
     },
   };
 
-  // --- config (reads from <meta> first, falls back to window.* if set) ------
-  const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content || '';
-  const SUPA_URL = meta('supabase-url') || window.SUPABASE_URL || 'https://tuqvpcevrhciursxrgav.supabase.co';
-  const SUPA_KEY = meta('supabase-anon-key') || window.SUPABASE_ANON_KEY || '';
-
-  // IMPORTANT: don't hardcode the key here; prefer putting it in a <meta> tag
-  // in index.html (see file below). If you *must* hardcode for local testing,
-  // you can temporarily assign SUPA_KEY above.
-
-  const AUTH_HEADERS = SUPA_KEY
-    ? {
-        apikey: SUPA_KEY,
-        Authorization: `Bearer ${SUPA_KEY}`,
-      }
-    : {};
-
-  const WINNERS = (keys) =>
-    `${SUPA_URL}/rest/v1/winners?select=phase_key&phase_key=in.(${keys.join(',')})`;
-  const VOTES = `${SUPA_URL}/rest/v1/phase_votes?select=vote`;
-  const EDGE_TIMER = `${SUPA_URL}/functions/v1/global-timer`;
-
-  // --- small utils ----------------------------------------------------------
+  // ---------- utils ----------
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   const withTimeout = (p, ms, onTimeout) =>
     new Promise((resolve, reject) => {
       const t = setTimeout(() => {
@@ -58,21 +66,37 @@
       });
     });
 
-  async function getJSON(url, { signal } = {}) {
+  // Unified fetch with auth headers for Supabase (REST & Functions)
+  async function getJSON(url, { auth = true, method = 'GET', body = null } = {}) {
+    const headers = {
+      Accept: 'application/json',
+    };
+    if (auth && SUPA_KEY) {
+      headers['apikey'] = SUPA_KEY;
+      headers['Authorization'] = `Bearer ${SUPA_KEY}`;
+    }
+    if (body != null) {
+      headers['Content-Type'] = 'application/json';
+    }
     const r = await fetch(url, {
-      method: 'GET',
-      headers: {
-        ...AUTH_HEADERS,
-        'Content-Type': 'application/json',
-      },
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : null,
       credentials: 'omit',
-      signal,
+      mode: 'cors',
     });
-    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    if (!r.ok) {
+      // Bubble the status so your logger shows 401/403 etc.
+      const text = await r.text().catch(() => '');
+      throw new Error(`${r.status} ${r.statusText}${text ? ` - ${text}` : ''}`);
+    }
+    // Some functions might return empty
+    const ct = r.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) return {};
     return r.json();
   }
 
-  // --- app state ------------------------------------------------------------
+  // ---------- app state ----------
   const state = {
     timer: { ok: false, lastEdgeIso: null, offline: false },
     winners: new Set(),
@@ -80,10 +104,11 @@
     booted: false,
   };
 
-  // --- non-blocking timer probe (now with auth headers) ---------------------
+  // ---------- non-blocking timer probe (Edge Function) ----------
   async function probeEdgeTimer() {
     const res = await withTimeout(
-      getJSON(EDGE_TIMER),
+      // Edge Functions usually require the same Bearer token
+      getJSON(EDGE_TIMER, { auth: true }),
       1500,
       () => {
         state.timer.offline = true;
@@ -95,21 +120,22 @@
     state.timer.lastEdgeIso = res?.now || null;
   }
 
-  // --- fetch game state -----------------------------------------------------
+  // ---------- fetch game state ----------
   async function fetchState() {
-    const sf = ['sf1', 'sf2'];
-    const qf = ['qf1', 'qf2', 'qf3', 'qf4'];
-    const r16 = Array.from({ length: 8 }, (_, i) => `r16_${i + 1}`);
+    const sf  = ['sf1', 'sf2'];
+    const qf  = ['qf1', 'qf2', 'qf3', 'qf4'];
+    const r16 = Array.from({ length: 8 },  (_, i) => `r16_${i + 1}`);
     const r32 = Array.from({ length: 16 }, (_, i) => `r32_${i + 1}`);
 
+    // Kick off everything at once (all with auth headers)
     const winnersP = Promise.all([
       getJSON(WINNERS(sf)),
       getJSON(WINNERS(qf)),
       getJSON(WINNERS(r16)),
       getJSON(WINNERS(r32)),
     ]);
-    const votesP = getJSON(VOTES);
-    const timerP = probeEdgeTimer(); // don’t block boot on timer
+    const votesP  = getJSON(VOTES);           // REST
+    const timerP  = probeEdgeTimer();         // Edge Function, runs in background
 
     const [w1, w2, w3, w4] = await winnersP;
     const votes = await votesP;
@@ -124,11 +150,11 @@
     });
   }
 
-  // --- boot sequence with watchdog -----------------------------------------
+  // ---------- boot with watchdog ----------
   async function boot() {
+    log('Debugger ready');
     ui.setStatus('initializing');
 
-    // If boot hasn't completed in 2.5s, force proceed.
     let forced = false;
     const watchdog = setTimeout(() => {
       if (state.booted) return;
@@ -139,11 +165,11 @@
 
     try {
       ui.setStatus('syncing…');
-      await fetchState(); // winners + votes must succeed
+      await fetchState();
       if (!forced) proceed();
     } catch (e) {
       console.error('ERR:', e);
-      ui.toast("You're offline. Showing cached/empty view.");
+      ui.toast("You're offline or unauthorized. Showing cached/empty view.");
       proceed(true);
     } finally {
       clearTimeout(watchdog);
@@ -160,18 +186,18 @@
     }
   }
 
-  // --- render loop ----------------------------------------------------------
+  // ---------- render loop ----------
   let raf = 0;
   function startLoop() {
     cancelAnimationFrame(raf);
     const tick = () => {
-      // update anything time-based here (use Date.now() if timer missing)
+      // time-based updates here if needed
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
   }
 
-  // --- debug hook -----------------------------------------------------------
+  // ---------- debug hook ----------
   window.appDebug = {
     state,
     refresh: async () => {
@@ -181,7 +207,6 @@
     },
   };
 
-  // kick it
-  log('Debugger ready');
+  // go
   boot();
 })();
