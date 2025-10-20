@@ -1,0 +1,14 @@
+# supabase/config.toml
+# Main Supabase configuration file
+
+[project]
+id = "tuqvpcevrhciursxrgav"
+
+# ---- Function config ----
+[functions]
+# You can define global defaults here if you want:
+# verify_jwt = false
+
+# ---- Per-function overrides ----
+[functions."global-timer"]
+verify_jwt = false
