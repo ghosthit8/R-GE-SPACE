@@ -1,28 +1,35 @@
-/* main.js — resilient boot with Supabase meta/global auto-inject + Edge support (quieter timer, clear fallback warn) */
+/* main.js — resilient boot with Supabase meta/global auto-inject + Edge support
+   - Suppress fallback warning if we injected meta ourselves
+   - Delay timer toast to avoid false alarms
+*/
 (() => {
-  const log = (...a) => console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
-  const warn = (...a) => console.warn(`[${new Date().toLocaleTimeString()}] WARN:`, ...a);
+  const stamp = () => `[${new Date().toLocaleTimeString()}]`;
+  const log  = (...a) => console.log(stamp(), ...a);
+  const warn = (...a) => console.warn(stamp(), 'WARN:', ...a);
   const $ = (q) => document.querySelector(q);
 
   // ---------------------------------------------------------------
   // 🧩 Meta helpers and auto-injection if tags are missing
   // ---------------------------------------------------------------
+  const hasMeta = (name) => !!document.querySelector(`meta[name="${name}"]`);
   const ensureMeta = (name, value) => {
-    if (!document.querySelector(`meta[name="${name}"]`)) {
+    if (!hasMeta(name)) {
       const m = document.createElement('meta');
       m.name = name;
       m.content = value;
       document.head.appendChild(m);
       log(`Injected <meta name="${name}">`);
-      return true; // injected
+      return true; // we injected
     }
     return false; // already present
   };
 
-  const FALLBACK_URL =
-    'https://tuqvpcevrhciursxrgav.supabase.co';
-  const FALLBACK_ANON =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
+  const FALLBACK_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
+  const FALLBACK_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
+
+  // Capture whether the page already had these (so we only warn if truly missing)
+  const hadMetaUrl  = hasMeta('supabase-url');
+  const hadMetaAnon = hasMeta('supabase-anon-key');
 
   // If you prefer to control these in index.html, add the meta tags there and remove these two lines:
   const injectedUrl  = ensureMeta('supabase-url', FALLBACK_URL);
@@ -31,7 +38,7 @@
   const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content?.trim();
 
   // ---------------------------------------------------------------
-  // 🔑 Resolve config (window globals win > meta > fallback)
+  // 🔑 Resolve config (window globals > meta > fallback)
   // ---------------------------------------------------------------
   const SUPA_URL =
     (window.SUPABASE_URL && String(window.SUPABASE_URL)) ||
@@ -41,10 +48,15 @@
     (window.SUPABASE_ANON_KEY && String(window.SUPABASE_ANON_KEY)) ||
     meta('supabase-anon-key') || FALLBACK_ANON;
 
-  // One-time, clear notice if we’re using fallbacks
-  if ((injectedUrl && SUPA_URL === FALLBACK_URL) || (injectedAnon && SUPA_ANON === FALLBACK_ANON)) {
+  // Warn only when we ended up on fallbacks AND user did not provide globals or pre-existing meta
+  const usingFallbacks = (SUPA_URL === FALLBACK_URL) || (SUPA_ANON === FALLBACK_ANON);
+  const userProvidedGlobals = !!(window.SUPABASE_URL || window.SUPABASE_ANON_KEY);
+  const userProvidedMeta    = hadMetaUrl || hadMetaAnon; // pre-existing before our injection
+  if (usingFallbacks && !userProvidedGlobals && !userProvidedMeta && !injectedUrl && !injectedAnon) {
+    // This essentially never runs because we inject above.
     warn('Supabase anon key not found via meta/global; using fallback constant.');
   }
+  // If we injected, that’s intentional—no warning.
 
   // ---------------------------------------------------------------
   // 📡 Endpoints + headers
@@ -81,7 +93,6 @@
   // ---------------------------------------------------------------
   // 🔧 Small utils
   // ---------------------------------------------------------------
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const withTimeout = (p, ms, onTimeout) =>
     new Promise((resolve, reject) => {
       const t = setTimeout(() => {
@@ -115,14 +126,11 @@
     booted: false,
   };
 
-  // Note: timeout 3000 and no toast here — only set flags
   async function probeEdgeTimer() {
     const res = await withTimeout(
       getJSON(EDGE_TIMER),
       3000,
-      () => {
-        state.timer.offline = true; // mark, but don't toast yet
-      }
+      () => { state.timer.offline = true; }
     );
     if (!res || res.__timeout) return;
     state.timer.ok = true;
@@ -143,7 +151,7 @@
       getJSON(WINNERS(r32)),
     ]);
     const votesP = getJSON(VOTES);
-    const timerP = probeEdgeTimer();
+    const timerP = probeEdgeTimer(); // do not await yet
 
     const [w1, w2, w3, w4] = await winnersP;
     const votes = await votesP;
@@ -153,6 +161,7 @@
     );
     state.votesTotal = Array.isArray(votes) ? votes.length : 0;
 
+    // If timer probe throws, mark offline (no toast here)
     timerP.catch(() => { state.timer.offline = true; });
   }
 
@@ -162,6 +171,8 @@
   async function boot() {
     ui.setStatus('initializing');
     let forced = false;
+
+    // If network slow, proceed without waiting for timer
     const watchdog = setTimeout(() => {
       if (state.booted) return;
       forced = true;
@@ -188,10 +199,11 @@
     ui.setStatus('ready');
     startLoop();
 
-    // Toast only when we truly don’t have the timer (or forced offline)
-    if (offlined || !state.timer.ok) {
-      ui.toast("Couldn't reach timer. Offline mode.");
-    }
+    // Delay the timer toast slightly; skip if timer becomes OK shortly
+    setTimeout(() => {
+      if (offlined) return ui.toast("Couldn't reach timer. Offline mode.");
+      if (!state.timer.ok) ui.toast("Couldn't reach timer. Offline mode.");
+    }, 900);
   }
 
   // ---------------------------------------------------------------
@@ -219,3 +231,4 @@
   log('Debugger ready');
   boot();
 })();
+```0
