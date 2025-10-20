@@ -1,22 +1,29 @@
-name: Edge Decider (ping every minute)
+name: Warm Global Timer
 on:
   schedule:
     - cron: "*/1 * * * *"   # every minute
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: warm-global-timer
+  cancel-in-progress: true
+
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
-      - name: Ping global-timer 6x to simulate 10s cadence
-        run: |
-          for i in {1..6}; do
-            curl -sS -X GET \
-              -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-              -H "apikey: $SUPABASE_ANON_KEY" \
-              "$SUPABASE_URL/functions/v1/global-timer" || true
-            sleep 10
-          done
+      - name: Curl edge (keep warm)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Single, fast ping with auth headers. 8s network timeout.
+          curl -sS --max-time 8 -X GET \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/functions/v1/global-timer" \
+            > /dev/null || true
