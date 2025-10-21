@@ -168,11 +168,12 @@ async function getPairFromWinners(baseISO, leftKey, rightKey, rebuildLeft, rebui
 
 async function packFor(slot){
   const base = baseForSlot(slot);
+  if (!base) return null;
   if (slot.startsWith('r32')){
     const n = Number(slot.split('_')[1]); return r32Pack(base, n);
   }
   if (slot.startsWith('r16')){
-    const i = Number(slot.split('_')[1]); // 1..8 maps to (1/2),(3/4)...
+    const i = Number(slot.split('_')[1]);
     const pair = [i*2-1, i*2];
     const k1 = `${base}::r32_${pair[0]}`, k2 = `${base}::r32_${pair[1]}`;
     const rebuild = (n)=>()=> Promise.resolve(r32Pack(base, n));
@@ -217,32 +218,9 @@ async function paintSlot(slot){
 }
 
 /* bracket render (compact) */
-
 async function renderBracket(){
   const base = cycleStart;
-  // fetch winners once for this cycle_start
-  const { data: winners } = await supabase.from('winners_v2').select('phase_key,color').eq('base_iso', base);
-  const haveWin = new Set((winners||[]).map(w=> (w.phase_key||'').split('::')[1]));
-
-  // Helper: prerequisites which must have winners before we show thumbnails in this row
-  function prereq(slot){
-    if(slot.startsWith('r32')) return []; // always show r32 seeds
-    if(slot.startsWith('r16')){
-      const i = Number(slot.split('_')[1]);
-      const pair = [i*2-1, i*2];
-      return [`r32_${pair[0]}`, `r32_${pair[1]}`];
-    }
-    if(slot.startsWith('qf')){
-      const map = {qf1:[1,2], qf2:[3,4], qf3:[5,6], qf4:[7,8]}[slot];
-      return [`r16_${map[0]}`, `r16_${map[1]}`];
-    }
-    if(slot.startsWith('sf')){
-      const map = slot==='sf1' ? ['qf1','qf2'] : ['qf3','qf4'];
-      return map;
-    }
-    return ['sf1','sf2']; // final
-  }
-
+  if (!base){ brows.innerHTML=''; return; }
   const order = [
     'r32_1','r32_2','r32_3','r32_4','r32_5','r32_6','r32_7','r32_8',
     'r32_9','r32_10','r32_11','r32_12','r32_13','r32_14','r32_15','r32_16',
@@ -250,12 +228,7 @@ async function renderBracket(){
     'qf1','qf2','qf3','qf4','sf1','sf2','final'
   ];
   const blocks = await Promise.all(order.map(async s=>{
-    // Only build thumbs if prerequisites are all winners (except r32)
-    const req = prereq(s);
-    let p=null;
-    if(req.every(k=>haveWin.has(k)) || req.length===0){
-      p = await packFor(s);
-    }
+    const p = await packFor(s);
     const key = slotKey(s, base);
     const {r,b} = await countVotes(key).catch(()=>({r:0,b:0}));
     return `
@@ -276,7 +249,6 @@ async function renderBracket(){
       await paintSlot(activeSlot);
     });
   });
-}
 }
 
 /* auth badge */
@@ -355,48 +327,12 @@ supabase.channel('v2-winners')
   await renderBracket();
 
   // light loop just for clock/state freshness
-  let __lastCp = -1;
   const tick = async ()=>{
-    try{
-      await fetchState(); 
-      lockUI();
-      if (lastCheckpoint !== __lastCp){
-        console.log(`[ROUND] decided -> ${lastCheckpoint}`);
-        __lastCp = lastCheckpoint;
-        // Refresh bracket from DB when checkpoint changes
-        await renderBracket();
-      }
-    }catch(e){}
+    try{ await fetchState(); lockUI(); }catch{}
     setTimeout(tick, 1000);
   };
   tick();
 })();
 </script>
-
-<!-- Live status overlay -->
-<style>
-  #statusOverlay{position:fixed;left:12px;bottom:12px;background:#0a0a0acc;border:1px solid #18ff66;padding:.6rem .8rem;border-radius:.8rem;font:12px/1.2 monospace;color:#9cffb0;z-index:9999}
-  #statusOverlay b{color:#18ff66}
-</style>
-<div id="statusOverlay" hidden>—</div>
-<script>
-(function(){
-  const el = document.getElementById('statusOverlay');
-  const NAMES = ["—","R32","R16","QF","SF","FINAL"];
-  async function poll(){
-    try{
-      const r = await fetch(EDGE_URL, {headers:{apikey:SUPABASE_ANON,Authorization:`Bearer ${SUPABASE_ANON}`}});
-      if(!r.ok){ el.hidden=false; el.innerHTML = `<b>err</b> ${r.status}`; return; }
-      const {state} = await r.json();
-      const roundNow = Math.min(5, (state.last_checkpoint||0) + 1);
-      el.hidden = false;
-      el.innerHTML = `<b>${NAMES[roundNow]}</b> • t-<b>${state.remaining_sec}</b>s • decided=<b>${state.last_checkpoint}</b> • paused=${state.paused}`;
-    }catch(e){ el.hidden=false; el.textContent = 'net/type error'; }
-    finally{ setTimeout(poll, 1000); }
-  }
-  poll();
-})();
-</script>
-
 </body>
 </html>
