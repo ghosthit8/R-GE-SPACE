@@ -1,20 +1,24 @@
 // supabase/functions/global-timer/index.ts
-// Deno deploy function — global timer + phase rollover + winners upsert.
+// Deno deploy function — global timer + phase rollover + winners upsert + admin actions.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-const supa = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supa = createClient(SUPABASE_URL!, SERVICE_ROLE_KEY!, {
   auth: { persistSession: false },
 });
 
 // ---------- Types the frontend expects ----------
 type TimerState = {
   phase_end_at: string;       // ISO string, Z, no ms
-  period_sec: number;         // now defaults to 30 if null
+  period_sec: number;         // defaults to 30 if null in DB
   paused: boolean;
   remaining_sec: number | null;
 };
@@ -22,7 +26,7 @@ type TimerState = {
 // ---------- Helpers ----------
 function isoZ(d: Date | number | string) {
   const s = new Date(d).toISOString();
-  // strip ms to match UI
+  // strip ms to match UI and make equals checks saner
   return s.replace(/\.\d{3}Z$/, "Z");
 }
 
@@ -31,12 +35,14 @@ function cors() {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Headers": "*",
+    // be explicit about caching (clients poll frequently)
+    "Cache-Control": "no-store",
   };
 }
 
-function ok(body: unknown) {
+function ok(body: unknown, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
-    headers: { "content-type": "application/json", ...cors() },
+    headers: { "content-type": "application/json", ...cors(), ...extraHeaders },
   });
 }
 
@@ -82,6 +88,22 @@ async function setNextPhaseEnd(nextEnd: string) {
   const { error } = await supa
     .from("timer_state")
     .update({ phase_end_at: nextEnd, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) throw error;
+}
+
+async function setRemainingSec(value: number | null) {
+  const { error } = await supa
+    .from("timer_state")
+    .update({ remaining_sec: value, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) throw error;
+}
+
+async function setPeriodSec(value: number) {
+  const { error } = await supa
+    .from("timer_state")
+    .update({ period_sec: value, updated_at: new Date().toISOString() })
     .eq("id", 1);
   if (error) throw error;
 }
@@ -234,7 +256,9 @@ async function maybeAdvance(): Promise<TimerState> {
   const now = Date.now();
   const end = Date.parse(cur.phase_end_at);
 
-  if (now < end) return { ...cur, remaining_sec: Math.ceil((end - now) / 1000) };
+  if (now < end) {
+    return { ...cur, remaining_sec: Math.ceil((end - now) / 1000) };
+  }
 
   // Phase has ended → decide winners for the just-ended base
   const endedBaseISO = isoZ(cur.phase_end_at);
@@ -254,6 +278,40 @@ async function maybeAdvance(): Promise<TimerState> {
   return await getTimer();
 }
 
+// ---------- Admin-style actions ----------
+async function advanceNow(): Promise<TimerState> {
+  // Decide winners for the *current* base (the one ending at phase_end_at)
+  const cur = await getTimer();
+  const curBaseISO = isoZ(cur.phase_end_at);
+
+  try {
+    await decideAllForBase(curBaseISO);
+  } catch (e) {
+    console.error("decideAllForBase (advanceNow) failed:", e);
+  }
+
+  // Move to next phase starting now + period
+  const nextEnd = isoZ(new Date(Date.now() + cur.period_sec * 1000));
+  await setNextPhaseEnd(nextEnd);
+  return await getTimer();
+}
+
+async function resetTimer(periodOverride?: number): Promise<TimerState> {
+  const cur = await getTimer();
+  const newPeriod = Number.isFinite(periodOverride) && periodOverride! > 0
+    ? Math.floor(periodOverride!)
+    : cur.period_sec;
+
+  // Persist the period change if overridden
+  if (newPeriod !== cur.period_sec) {
+    await setPeriodSec(newPeriod);
+  }
+
+  await setNextPhaseEnd(isoZ(new Date(Date.now() + newPeriod * 1000)));
+  await setRemainingSec(null);
+  return await getTimer();
+}
+
 // ---------- HTTP handler ----------
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -261,18 +319,31 @@ serve(async (req) => {
   }
 
   // Accept action in GET ?action= or POST {action}
-  let action: "pause" | "resume" | undefined;
+  let action: "pause" | "resume" | "advance" | "reset" | undefined;
+  let periodOverride: number | undefined;
+
   try {
     const u = new URL(req.url);
     const q = (u.searchParams.get("action") || "").toLowerCase();
-    if (q === "pause" || q === "resume") action = q;
+    if (q === "pause" || q === "resume" || q === "advance" || q === "reset") {
+      action = q as typeof action;
+    }
+    const p = u.searchParams.get("period");
+    if (p != null) {
+      const n = Number(p);
+      if (Number.isFinite(n) && n > 0) periodOverride = n;
+    }
   } catch {}
 
   if (!action && req.method === "POST") {
     try {
       const j = await req.json();
       const a = String(j?.action || "").toLowerCase();
-      if (a === "pause" || a === "resume") action = a;
+      if (a === "pause" || a === "resume" || a === "advance" || a === "reset") {
+        action = a as typeof action;
+      }
+      const n = Number(j?.period);
+      if (Number.isFinite(n) && n > 0) periodOverride = n;
     } catch { /* ignore */ }
   }
 
@@ -285,6 +356,14 @@ serve(async (req) => {
     if (action === "resume") {
       await setPause(false);
       const state = await getTimer();
+      return ok({ ok: true, state });
+    }
+    if (action === "advance") {
+      const state = await advanceNow();
+      return ok({ ok: true, state });
+    }
+    if (action === "reset") {
+      const state = await resetTimer(periodOverride);
       return ok({ ok: true, state });
     }
 
