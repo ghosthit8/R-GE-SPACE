@@ -1,4 +1,6 @@
-// matchup.app.js
+// matchup.app.js (hardened)
+// Based on your latest file; adds robust fetchState + advancers loader + safer paints.
+
 import { SUPABASE_URL, SUPABASE_ANON, EDGE_URL } from './matchup.config.js';
 
 // Supabase
@@ -6,68 +8,84 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // STATE
 let currentUid = null;
-let cycleStart = null;
+let cycleStart = null;       // ISO string for current tournament base
 let periodSec = 100;
-let lastCheckpoint = 0; // 0..5
+let lastCheckpoint = 0;      // 0..5
 let paused = false;
 
 let activeSlot = 'r32_1';
 let currentStage = 'r32';
 
-// --- NEW: advancers cache (phase_key -> color) ---
+// advancers cache (phase_key -> "red"/"blue")
 let advancers = new Map();
 
 // DOM
 const $ = (id)=>document.getElementById(id);
-const clockEl = $('clock');
-const phaseBadge = $('phaseBadge');
-const loginBadge = $('loginBadge');
-const voteA = $('voteA');
-const voteB = $('voteB');
-const imgA = $('imgA');
-const imgB = $('imgB');
-const countA = $('countA');
-const countB = $('countB');
-const submitBtn = $('submitBtn');
-const btnPause = $('btnPause');
-const btnReset = $('btnReset');
-const brows = $('brows');
-const overlay = $('overlay');
-const overlayImg = $('overlayImg');
+const clockEl     = $('clock');
+const phaseBadge  = $('phaseBadge');
+const loginBadge  = $('loginBadge');
+const voteA       = $('voteA');
+const voteB       = $('voteB');
+const imgA        = $('imgA');
+const imgB        = $('imgB');
+const countA      = $('countA');
+const countB      = $('countB');
+const submitBtn   = $('submitBtn');
+const btnPause    = $('btnPause');
+const btnReset    = $('btnReset');
+const brows       = $('brows');
+const overlay     = $('overlay');
+const overlayImg  = $('overlayImg');
 const overlayNote = $('overlayNote');
 
 // helpers
-const stageOf = (slot)=> slot.startsWith('r32')?'r32':slot.startsWith('r16')?'r16':slot.startsWith('qf')?'qf':(slot.startsWith('sf')?'sf':'final');
-const stageLevel = (s)=> s==='r32'?1:s==='r16'?2:s==='qf'?3:s==='sf'?4:5;
+const stageOf   = (slot)=> slot.startsWith('r32')?'r32':slot.startsWith('r16')?'r16':slot.startsWith('qf')?'qf':(slot.startsWith('sf')?'sf':'final');
+const stageLevel= (s)=> s==='r32'?1:s==='r16'?2:s==='qf'?3:s==='sf'?4:5;
 const slotLevel = (slot)=> stageLevel(stageOf(slot));
-function baseForSlot(){ return cycleStart; }
-function slotKey(slot, base){ return slot==='final' ? `${base}::final` : `${base}::${slot}`; }
-function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
-function r32Pack(baseISO, n){ return { A: seedUrlFromKey(baseISO, `A${n}`), B: seedUrlFromKey(baseISO, `B${n}`) }; }
+const baseForSlot = ()=> cycleStart;
+const slotKey = (slot, base)=> (slot==='final' ? `${base}::final` : `${base}::${slot}`);
+const seedUrlFromKey = (baseISO, suffix)=> {
+  const s = encodeURIComponent(`${baseISO}-${suffix}`);
+  return `https://picsum.photos/seed/${s}/1600/1200`;
+};
+const r32Pack = (baseISO, n)=> ({ A: seedUrlFromKey(baseISO, `A${n}`), B: seedUrlFromKey(baseISO, `B${n}`) });
 
-// --- NEW: load advancers for the current base ---
-// It fills the `advancers` Map with entries like: `${base}::r16_1` -> "red"/"blue"
+// --- advancers (winners) fetcher --------------------------------------------
 async function loadAdvancers(baseISO){
-  if (!baseISO){ advancers = new Map(); return; }
-  const url =
-    `${SUPABASE_URL}/rest/v1/advancers_v2`
-    + `?select=phase_key,color,from_key&base_iso=eq.${encodeURIComponent(baseISO)}`;
-  const rows = await fetch(url, {
-    headers: {
-      apikey: SUPABASE_ANON,
-      Authorization: `Bearer ${SUPABASE_ANON}`
-    }
-  }).then(r => r.ok ? r.json() : []);
-  advancers = new Map((rows || []).map(r => [r.phase_key, String(r.color || '').toLowerCase()]));
-  // expose to Debugger
-  window.RageDebug && window.RageDebug.log && window.RageDebug.log('advancers loaded', advancers.size);
+  try{
+    if (!baseISO){ advancers = new Map(); return; }
+    const url =
+      `${SUPABASE_URL}/rest/v1/advancers_v2`
+      + `?select=phase_key,color,from_key&base_iso=eq.${encodeURIComponent(baseISO)}`;
+    const rows = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_ANON,
+        Authorization: `Bearer ${SUPABASE_ANON}`
+      }
+    }).then(r => r.ok ? r.json() : []);
+    advancers = new Map((rows || []).map(r => [r.phase_key, String(r.color || '').toLowerCase()]));
+    window.RageDebug?.log?.(`ADV: loaded ${advancers.size} advancers`);
+  }catch(err){
+    window.RageDebug?.error?.('ADV: load failed', err);
+  }
 }
 
+// --- phase pairing -----------------------------------------------------------
 async function getPairFromWinners(baseISO, leftKey, rightKey, rebuildLeft, rebuildRight){
-  const { data } = await supabase.from('winners_v2').select('phase_key,color').in('phase_key', [leftKey, rightKey]);
+  const { data, error } = await supabase
+    .from('winners_v2')
+    .select('phase_key,color')
+    .in('phase_key', [leftKey, rightKey]);
+
+  if (error){
+    window.RageDebug?.error?.('SQL winners_v2 failed', error);
+    return null;
+  }
   const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, String(r.color||'').toLowerCase()]));
   if (!(map[leftKey] && map[rightKey])) return null;
-  const L = await rebuildLeft();  const R = await rebuildRight();
+
+  const L = await rebuildLeft();
+  const R = await rebuildRight();
   const leftSrc  = (map[leftKey]==='red') ? L.A : L.B;
   const rightSrc = (map[rightKey]==='red') ? R.A : R.B;
   return { A: leftSrc, B: rightSrc };
@@ -76,9 +94,12 @@ async function getPairFromWinners(baseISO, leftKey, rightKey, rebuildLeft, rebui
 async function packFor(slot){
   const base = baseForSlot();
   if (!base) return null;
+
   if (slot.startsWith('r32')){
-    const n = Number(slot.split('_')[1]); return r32Pack(base, n);
+    const n = Number(slot.split('_')[1]);
+    return r32Pack(base, n);
   }
+
   if (slot.startsWith('r16')){
     const i = Number(slot.split('_')[1]);
     const pair = [i*2-1, i*2];
@@ -86,47 +107,70 @@ async function packFor(slot){
     const rebuild = (n)=>()=> Promise.resolve(r32Pack(base, n));
     return await getPairFromWinners(base, k1, k2, rebuild(pair[0]), rebuild(pair[1]));
   }
+
   if (slot.startsWith('qf')){
     const map = {qf1:[1,2], qf2:[3,4], qf3:[5,6], qf4:[7,8]}[slot];
     const k1 = `${base}::r16_${map[0]}`, k2 = `${base}::r16_${map[1]}`;
     const rebuild = (n)=>()=> packFor(`r16_${n}`);
     return await getPairFromWinners(base, k1, k2, rebuild(map[0]), rebuild(map[1]));
   }
+
   if (slot.startsWith('sf')){
-    const map = slot==='sf1' ? ['qf1','qf2'] : ['qf3','qf4'];
+    const map = (slot==='sf1') ? ['qf1','qf2'] : ['qf3','qf4'];
     const k1 = `${base}::${map[0]}`, k2 = `${base}::${map[1]}`;
     const rebuild = (s)=>()=> packFor(s);
     return await getPairFromWinners(base, k1, k2, rebuild(map[0]), rebuild(map[1]));
   }
+
+  // final
   const k1 = `${base}::sf1`, k2 = `${base}::sf2`;
   const rebuild = (s)=>()=> packFor(s);
   return await getPairFromWinners(base, k1, k2, rebuild('sf1'), rebuild('sf2'));
 }
 
+// --- votes -------------------------------------------------------------------
 async function countVotes(key){
-  const { data } = await supabase.from('phase_votes_v2').select('vote').eq('phase_key', key);
+  const { data, error } = await supabase
+    .from('phase_votes_v2')
+    .select('vote')
+    .eq('phase_key', key);
+
+  if (error){
+    window.RageDebug?.error?.('SQL phase_votes_v2 failed', error);
+    return { r:0, b:0 };
+  }
   let r=0,b=0; (data||[]).forEach(v=>{ if(v.vote==='red') r++; else if(v.vote==='blue') b++; });
-  return {r,b};
+  return { r, b };
 }
 
+// --- paints ------------------------------------------------------------------
 export async function paintSlot(slot){
   const base = baseForSlot();
   if (!base) return;
-  $('phaseBadge').textContent = `phase: ${base}`;
+
+  phaseBadge.textContent = `phase: ${base}`;
+
   const pack = await packFor(slot);
-  if (pack){ imgA.src = pack.A; imgB.src = pack.B; } else { imgA.removeAttribute('src'); imgB.removeAttribute('src'); }
+  if (pack){
+    imgA.src = pack.A;
+    imgB.src = pack.B;
+  }else{
+    imgA.removeAttribute('src');
+    imgB.removeAttribute('src');
+  }
+
   const key = slotKey(slot, base);
-  const {r,b} = await countVotes(key);
-  $('countA').textContent = `${r} vote${r===1?'':'s'}`;
-  $('countB').textContent = `${b} vote${b===1?'':'s'}`;
-  window.RageDebug && window.RageDebug.markCounts && window.RageDebug.markCounts(slot, r, b);
+  const { r, b } = await countVotes(key);
+  countA.textContent = `${r} vote${r===1?'':'s'}`;
+  countB.textContent = `${b} vote${b===1?'':'s'}`;
+
+  window.RageDebug?.markCounts?.(slot, r, b);
 }
 
 async function renderBracket(){
   const base = cycleStart;
   if (!base){ brows.innerHTML=''; return; }
 
-  // NEW: refresh advancers before painting the list
   await loadAdvancers(base);
 
   const order = [
@@ -135,10 +179,11 @@ async function renderBracket(){
     'r16_1','r16_2','r16_3','r16_4','r16_5','r16_6','r16_7','r16_8',
     'qf1','qf2','qf3','qf4','sf1','sf2','final'
   ];
+
   const blocks = await Promise.all(order.map(async s=>{
     const p = await packFor(s);
     const key = slotKey(s, base);
-    const {r,b} = await countVotes(key).catch(()=>({r:0,b:0}));
+    const { r, b } = await countVotes(key).catch(()=>({r:0,b:0}));
     const decided = advancers.has(key) ? 'decided' : '';
     return `
       <div class="brow ${decided}" data-slot="${s}">
@@ -151,6 +196,7 @@ async function renderBracket(){
         <div class="bscore">${r} - ${b}</div>
       </div>`;
   }));
+
   brows.innerHTML = blocks.join('');
   brows.querySelectorAll('.brow').forEach(row=>{
     row.addEventListener('click', async ()=>{
@@ -160,46 +206,106 @@ async function renderBracket(){
   });
 }
 
+// --- auth --------------------------------------------------------------------
 async function setAuth(){
   const { data:{session} } = await supabase.auth.getSession();
   currentUid = session?.user?.id || null;
   loginBadge.textContent = currentUid ? 'logged in' : 'not logged in';
 }
 
+// --- edge state --------------------------------------------------------------
 async function fetchState(){
-  const res = await fetch(EDGE_URL, { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` }});
-  const { state } = await res.json();
-  cycleStart = state.cycle_start;
-  periodSec = state.period_sec;
-  lastCheckpoint = state.last_checkpoint;
-  paused = state.paused;
-  currentStage = ['r32','r16','qf','sf','final'][Math.max(0, lastCheckpoint)-1] || 'r32';
-  clockEl.textContent = String(state.remaining_sec);
+  try{
+    const res = await fetch(EDGE_URL, {
+      headers: {
+        apikey: SUPABASE_ANON,
+        Authorization: `Bearer ${SUPABASE_ANON}`
+      }
+    });
+    if (!res.ok) throw new Error(`edge ${res.status}`);
+    const body  = await res.json().catch(()=> ({}));
+
+    // accept either {state:{...}} or the state object itself
+    const state = body?.state ?? body;
+
+    if (!state || typeof state !== 'object'){
+      window.RageDebug?.warn?.('EDGE: no state object in body', body);
+      return false;
+    }
+    if (!state.cycle_start){
+      window.RageDebug?.warn?.('EDGE: state missing cycle_start', state);
+      return false;
+    }
+
+    cycleStart     = state.cycle_start;
+    periodSec      = Number(state.period_sec ?? periodSec);
+    lastCheckpoint = Number(state.last_checkpoint ?? lastCheckpoint);
+    paused         = !!state.paused;
+
+    currentStage = ['r32','r16','qf','sf','final'][Math.max(0, lastCheckpoint)-1] || 'r32';
+    if (clockEl) clockEl.textContent = String(state.remaining_sec ?? '');
+
+    return true;
+  }catch(err){
+    window.RageDebug?.error?.('EDGE fetch failed', err);
+    return false;
+  }
 }
 
+// --- ui locks ----------------------------------------------------------------
 function lockUI(){
   const locked = (stageLevel(stageOf(activeSlot)) !== stageLevel(currentStage));
   [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
 }
 
+// --- edge actions ------------------------------------------------------------
 async function postAction(action){
-  await fetch(EDGE_URL, { method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':`Bearer ${SUPABASE_ANON}`}, body: JSON.stringify({action}) });
+  try{
+    await fetch(EDGE_URL, {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        apikey: SUPABASE_ANON,
+        Authorization: `Bearer ${SUPABASE_ANON}`
+      },
+      body: JSON.stringify({ action })
+    });
+  }catch(err){
+    window.RageDebug?.error?.('EDGE post failed', { action, err });
+  }
   await fetchState();
 }
 
+// --- wiring ------------------------------------------------------------------
 function wireControls(){
   $('overlayClose').onclick = ()=> overlay.classList.remove('show');
-  $('btnPause').onclick = async ()=> postAction(paused ? 'resume':'pause');
-  $('btnReset').onclick = async ()=> { await postAction('reset'); await paintSlot(activeSlot); await renderBracket(); };
+
+  btnPause.onclick = async ()=> postAction(paused ? 'resume' : 'pause');
+  btnReset.onclick = async ()=> {
+    await postAction('reset');
+    await paintSlot(activeSlot);
+    await renderBracket();
+  };
 
   let chosen=null;
-  $('voteA').onclick=()=>{ chosen='red'; voteA.classList.add('selected'); voteB.classList.remove('selected'); submitBtn.disabled=!currentUid; };
-  $('voteB').onclick=()=>{ chosen='blue'; voteB.classList.add('selected'); voteA.classList.remove('selected'); submitBtn.disabled=!currentUid; };
-  $('submitBtn').onclick=async ()=>{
+  voteA.onclick = ()=>{
+    chosen='red';
+    voteA.classList.add('selected');
+    voteB.classList.remove('selected');
+    submitBtn.disabled=!currentUid;
+  };
+  voteB.onclick = ()=>{
+    chosen='blue';
+    voteB.classList.add('selected');
+    voteA.classList.remove('selected');
+    submitBtn.disabled=!currentUid;
+  };
+  submitBtn.onclick = async ()=>{
     if (!chosen) return;
     if (!currentUid) return alert('Log in to vote');
     const key = slotKey(activeSlot, baseForSlot());
-    await supabase.from('phase_votes_v2').upsert({ phase_key: key, user_id: currentUid, vote: chosen }, { onConflict:'phase_key,user_id' });
+    await supabase.from('phase_votes_v2')
+      .upsert({ phase_key:key, user_id:currentUid, vote:chosen }, { onConflict:'phase_key,user_id' });
     await paintSlot(activeSlot);
     submitBtn.textContent='✔ Voted'; submitBtn.disabled=true;
   };
@@ -223,28 +329,37 @@ function wireRealtime(){
     }).subscribe();
 }
 
+// --- boot --------------------------------------------------------------------
 async function boot(){
   await setAuth();
-  supabase.auth.onAuthStateChange((_evt, session)=>{ currentUid=session?.user?.id || null; loginBadge.textContent = currentUid ? 'logged in' : 'not logged in'; lockUI(); });
-  await fetchState();
+  supabase.auth.onAuthStateChange((_evt, session)=>{
+    currentUid = session?.user?.id || null;
+    loginBadge.textContent = currentUid ? 'logged in' : 'not logged in';
+    lockUI();
+  });
+
+  const ok = await fetchState();
+  if (!ok){
+    // Keep UI benign if edge is momentarily unavailable
+    phaseBadge.textContent = 'phase: —';
+    clockEl.textContent = '—';
+  }
   lockUI();
 
-  // ensure advancers are available before first paints
-  await loadAdvancers(cycleStart);
-
+  await loadAdvancers(cycleStart || null);
   await paintSlot(activeSlot);
   await renderBracket();
 
   // tick
   (async function tick(){
     try{
-      await fetchState();
+      const got = await fetchState();
       lockUI();
-      // keep advancers fresh (cheap GET)
-      await loadAdvancers(cycleStart);
+      if (got) await loadAdvancers(cycleStart);
     }catch{}
     setTimeout(tick, 1000);
   })();
+
   wireControls();
   wireRealtime();
 }
