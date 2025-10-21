@@ -1,0 +1,17 @@
+name: Heartbeat timer
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"  # every 5 minutes (GitHub minimum)
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the global timer
+        run: |
+          curl -sS -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+                   -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+                   "${{ secrets.SUPABASE_URL }}/functions/v1/global-timer-v2" \
+          || true
