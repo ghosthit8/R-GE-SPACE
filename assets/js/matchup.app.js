@@ -46,7 +46,6 @@ function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}
 function r32Pack(baseISO, n){ return { A: seedUrlFromKey(baseISO, `A${n}`), B: seedUrlFromKey(baseISO, `B${n}`) }; }
 
 // --- NEW: load advancers for the current base ---
-// This mirrors the example you asked about, but plugs straight into the app.
 // It fills the `advancers` Map with entries like: `${base}::r16_1` -> "red"/"blue"
 async function loadAdvancers(baseISO){
   if (!baseISO){ advancers = new Map(); return; }
