@@ -1634,5 +1634,15 @@ submitBtn.onclick=async()=>{
   window.addEventListener('load', watchClock);
 })();
 </script>
+else {
+  log("✅ forced winner inserted");
+  // 🔁 Reload winners so next-round UI updates
+  if (typeof loadWinners === "function") {
+    log("🔄 refreshing winners...");
+    loadWinners(); // existing function in your file that populates bracket
+  } else {
+    log("⚠️ loadWinners() not found, skipping UI refresh");
+  }
+}
 </body>
 </html>
