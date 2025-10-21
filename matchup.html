@@ -1582,5 +1582,57 @@ submitBtn.onclick=async()=>{
 })();
 </script>
 <!-- ================== /RAGE DEBUGGER v2 ================== -->
+<script>
+/* ===== Emergency Winner Decision (phaseKey watchdog) ===== */
+(() => {
+  const log = (...a) => console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
+
+  let decidedPhase = null;
+
+  async function safeCountVotes(key) {
+    try {
+      const { data } = await supabase.from('phase_votes').select('vote').eq('phase_key', key);
+      let r = 0, b = 0;
+      (data || []).forEach(v => v.vote === 'red' ? r++ : v.vote === 'blue' ? b++ : null);
+      return { r, b };
+    } catch (e) {
+      log('vote read error', e);
+      return { r: 0, b: 0 };
+    }
+  }
+
+  async function forceDecide() {
+    const phaseKeyISO = currentBattleKey?.();
+    if (!phaseKeyISO || decidedPhase === phaseKeyISO) return;
+    decidedPhase = phaseKeyISO;
+
+    const { r, b } = await safeCountVotes(phaseKeyISO);
+    const color = (r === b)
+      ? (Math.random() < 0.5 ? 'red' : 'blue')
+      : (r > b ? 'red' : 'blue');
+
+    log('🏁 FORCED DECISION', { phaseKeyISO, color, r, b });
+    const { error } = await supabase.from('winners').insert({
+      phase_key: phaseKeyISO,
+      color,
+      decided_at: new Date().toISOString(),
+    });
+    if (error) log('❌ insert failed', error);
+    else log('✅ forced winner inserted');
+  }
+
+  function watchClock() {
+    const el = document.getElementById('clock');
+    if (!el) return;
+    new MutationObserver(() => {
+      const v = parseInt(el.textContent, 10);
+      if (v === 0) forceDecide();
+    }).observe(el, { childList: true, subtree: true });
+    log('👁 clock observer armed');
+  }
+
+  window.addEventListener('load', watchClock);
+})();
+</script>
 </body>
 </html>
