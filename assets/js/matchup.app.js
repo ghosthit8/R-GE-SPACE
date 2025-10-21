@@ -14,6 +14,9 @@ let paused = false;
 let activeSlot = 'r32_1';
 let currentStage = 'r32';
 
+// --- NEW: advancers cache (phase_key -> color) ---
+let advancers = new Map();
+
 // DOM
 const $ = (id)=>document.getElementById(id);
 const clockEl = $('clock');
@@ -41,6 +44,25 @@ function baseForSlot(){ return cycleStart; }
 function slotKey(slot, base){ return slot==='final' ? `${base}::final` : `${base}::${slot}`; }
 function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
 function r32Pack(baseISO, n){ return { A: seedUrlFromKey(baseISO, `A${n}`), B: seedUrlFromKey(baseISO, `B${n}`) }; }
+
+// --- NEW: load advancers for the current base ---
+// This mirrors the example you asked about, but plugs straight into the app.
+// It fills the `advancers` Map with entries like: `${base}::r16_1` -> "red"/"blue"
+async function loadAdvancers(baseISO){
+  if (!baseISO){ advancers = new Map(); return; }
+  const url =
+    `${SUPABASE_URL}/rest/v1/advancers_v2`
+    + `?select=phase_key,color,from_key&base_iso=eq.${encodeURIComponent(baseISO)}`;
+  const rows = await fetch(url, {
+    headers: {
+      apikey: SUPABASE_ANON,
+      Authorization: `Bearer ${SUPABASE_ANON}`
+    }
+  }).then(r => r.ok ? r.json() : []);
+  advancers = new Map((rows || []).map(r => [r.phase_key, String(r.color || '').toLowerCase()]));
+  // expose to Debugger
+  window.RageDebug && window.RageDebug.log && window.RageDebug.log('advancers loaded', advancers.size);
+}
 
 async function getPairFromWinners(baseISO, leftKey, rightKey, rebuildLeft, rebuildRight){
   const { data } = await supabase.from('winners_v2').select('phase_key,color').in('phase_key', [leftKey, rightKey]);
@@ -98,12 +120,16 @@ export async function paintSlot(slot){
   const {r,b} = await countVotes(key);
   $('countA').textContent = `${r} vote${r===1?'':'s'}`;
   $('countB').textContent = `${b} vote${b===1?'':'s'}`;
-  window.RageDebug && window.RageDebug.markCounts(slot, r, b);
+  window.RageDebug && window.RageDebug.markCounts && window.RageDebug.markCounts(slot, r, b);
 }
 
 async function renderBracket(){
   const base = cycleStart;
   if (!base){ brows.innerHTML=''; return; }
+
+  // NEW: refresh advancers before painting the list
+  await loadAdvancers(base);
+
   const order = [
     'r32_1','r32_2','r32_3','r32_4','r32_5','r32_6','r32_7','r32_8',
     'r32_9','r32_10','r32_11','r32_12','r32_13','r32_14','r32_15','r32_16',
@@ -114,8 +140,9 @@ async function renderBracket(){
     const p = await packFor(s);
     const key = slotKey(s, base);
     const {r,b} = await countVotes(key).catch(()=>({r:0,b:0}));
+    const decided = advancers.has(key) ? 'decided' : '';
     return `
-      <div class="brow" data-slot="${s}">
+      <div class="brow ${decided}" data-slot="${s}">
         <div class="bbadge">${stageOf(s).toUpperCase()}</div>
         <div style="display:flex;gap:8px">
           <div class="thumb">${p?.A ? `<img src="${p.A}" alt="">` : ''}</div>
@@ -202,12 +229,21 @@ async function boot(){
   supabase.auth.onAuthStateChange((_evt, session)=>{ currentUid=session?.user?.id || null; loginBadge.textContent = currentUid ? 'logged in' : 'not logged in'; lockUI(); });
   await fetchState();
   lockUI();
+
+  // ensure advancers are available before first paints
+  await loadAdvancers(cycleStart);
+
   await paintSlot(activeSlot);
   await renderBracket();
 
   // tick
   (async function tick(){
-    try{ await fetchState(); lockUI(); }catch{}
+    try{
+      await fetchState();
+      lockUI();
+      // keep advancers fresh (cheap GET)
+      await loadAdvancers(cycleStart);
+    }catch{}
     setTimeout(tick, 1000);
   })();
   wireControls();
@@ -215,6 +251,6 @@ async function boot(){
 }
 
 // expose for debugger helpers
-window.__matchup__ = { paintSlot, fetchState };
+window.__matchup__ = { paintSlot, fetchState, advancers };
 
 boot();
