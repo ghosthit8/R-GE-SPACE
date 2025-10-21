@@ -1,6 +1,7 @@
 /* main.js — resilient boot with Supabase meta/global auto-inject + Edge support
-   - Suppress fallback warning if we injected meta ourselves
-   - Delay timer toast to avoid false alarms
+   - Removes legacy 3s offline path
+   - Resilient timer fetch with 5.5s timeout + backoff retries
+   - Control buttons: Force decide / Reset 30s / Pause-Resume
 */
 (() => {
   'use strict';
@@ -29,11 +30,10 @@
   const FALLBACK_URL  = 'https://tuqvpcevrhciursxrgav.supabase.co';
   const FALLBACK_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y';
 
-  // Track if these existed before we touch them (so we only warn if truly missing)
   const hadMetaUrl  = hasMeta('supabase-url');
   const hadMetaAnon = hasMeta('supabase-anon-key');
 
-  // If you prefer to control these in index.html, add the meta tags there and remove these two lines:
+  // Keep meta fallbacks (harmless if globals are set in HTML)
   const injectedUrl  = ensureMeta('supabase-url', FALLBACK_URL);
   const injectedAnon = ensureMeta('supabase-anon-key', FALLBACK_ANON);
 
@@ -49,16 +49,6 @@
   const SUPA_ANON =
     (window.SUPABASE_ANON_KEY && String(window.SUPABASE_ANON_KEY)) ||
     meta('supabase-anon-key') || FALLBACK_ANON;
-
-  // Only warn if we’re truly using fallbacks the user didn’t provide
-  const usingFallbacks = (SUPA_URL === FALLBACK_URL) || (SUPA_ANON === FALLBACK_ANON);
-  const userProvidedGlobals = !!(window.SUPABASE_URL || window.SUPABASE_ANON_KEY);
-  const userProvidedMeta    = hadMetaUrl || hadMetaAnon; // present before our injection
-  if (usingFallbacks && !userProvidedGlobals && !userProvidedMeta) {
-    // We injected fallbacks intentionally—no need to warn loudly.
-    // If you want a hard warning instead, uncomment next line:
-    // warn('Supabase anon key not found via meta/global; using fallback constant.');
-  }
 
   // ---------------------------------------------------------------
   // 📡 Endpoints + headers
@@ -77,7 +67,7 @@
   // 💻 UI helpers
   // ---------------------------------------------------------------
   const ui = {
-    statusEl: $('#boot-status') || { textContent: '' },
+    statusEl: $('#boot-status') || $('#bootMsg') || { textContent: '' },
     toastBox: $('#toast') || null,
     setStatus(txt) {
       this.statusEl.textContent = txt;
@@ -93,23 +83,27 @@
   };
 
   // ---------------------------------------------------------------
-  // 🔧 Small utils
+  // 🕹 State + small utils
   // ---------------------------------------------------------------
-  const withTimeout = (p, ms, onTimeout) =>
-    new Promise((resolve, reject) => {
-      const t = setTimeout(() => {
-        onTimeout?.();
-        resolve({ __timeout: true });
-      }, ms);
-      p.then((v) => { clearTimeout(t); resolve(v); })
-       .catch((e) => { clearTimeout(t); reject(e); });
-    });
+  const state = {
+    timer: { ok: false, lastEdgeIso: null, offline: false },
+    winners: new Set(),
+    votesTotal: 0,
+    booted: false,
+  };
+
+  function withAbortTimeout(ms) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort('timeout'), ms);
+    return { signal: ctrl.signal, cancel: () => clearTimeout(t) };
+  }
 
   async function getJSON(url, opts = {}) {
     const r = await fetch(url, {
       method: 'GET',
       credentials: 'omit',
       headers: { ...SB_HEADERS, ...(opts.headers || {}) },
+      signal: opts.signal,
     });
     if (!r.ok) {
       const text = await r.text().catch(() => '');
@@ -119,27 +113,66 @@
   }
 
   // ---------------------------------------------------------------
-  // 🕹 State + fetchers
+  // ⏱ Resilient timer sync: 5.5s timeout + backoffs
   // ---------------------------------------------------------------
-  const state = {
-    timer: { ok: false, lastEdgeIso: null, offline: false },
-    winners: new Set(),
-    votesTotal: 0,
-    booted: false,
-  };
+  const EDGE_TIMEOUT_MS = 5500;
+  const EDGE_BACKOFF_MS = [0, 1200, 2400];
 
-  async function probeEdgeTimer() {
-    const res = await withTimeout(
-      getJSON(EDGE_TIMER),
-      3000,
-      () => { state.timer.offline = true; }
-    );
-    if (!res || res.__timeout) return;
-    state.timer.ok = true;
-    state.timer.offline = false;
-    state.timer.lastEdgeIso = res?.now || null;
+  async function syncTimerOnce() {
+    if (window.__EDGE_TIMER_IN_FLIGHT__) return null;
+    window.__EDGE_TIMER_IN_FLIGHT__ = true;
+    window.__EDGE_TIMER_FAILED__ = false;
+
+    for (let i = 0; i < EDGE_BACKOFF_MS.length; i++) {
+      if (i > 0) {
+        log('TIMER:', `backoff ${i+1} @ ${EDGE_BACKOFF_MS[i]}ms`);
+        await new Promise(r => setTimeout(r, EDGE_BACKOFF_MS[i]));
+      }
+      const at = withAbortTimeout(EDGE_TIMEOUT_MS);
+      const t0 = performance.now();
+      try {
+        const json = await getJSON(EDGE_TIMER, { signal: at.signal });
+        const ms = (performance.now() - t0).toFixed(0);
+        log('EDGE:', 'GET', EDGE_TIMER, `→ 200 (${ms}ms)`);
+        state.timer.ok = true;
+        state.timer.offline = false;
+        state.timer.lastEdgeIso = json?.state?.phase_end_at || json?.now || null;
+        window.__EDGE_TIMER_IN_FLIGHT__ = false;
+        window.__EDGE_TIMER_FAILED__ = false;
+        maybeClearOfflineToast();
+        return json;
+      } catch (err) {
+        at.cancel();
+        const last = i === EDGE_BACKOFF_MS.length - 1;
+        warn(`timer attempt #${i+1} failed`, err?.message || err);
+        if (last) {
+          window.__EDGE_TIMER_IN_FLIGHT__ = false;
+          window.__EDGE_TIMER_FAILED__ = true;
+          state.timer.ok = false;
+          state.timer.offline = true;
+          showOfflineToastOnce();
+          return null;
+        }
+      }
+    }
   }
 
+  // Offline toast guard
+  let offlineToastShown = false;
+  function showOfflineToastOnce() {
+    if (offlineToastShown) return;
+    offlineToastShown = true;
+    ui.toast("Couldn't reach timer. Offline mode.");
+  }
+  function maybeClearOfflineToast() {
+    if (!offlineToastShown) return;
+    offlineToastShown = false;
+    ui.toast('Timer reachable again. Online.');
+  }
+
+  // ---------------------------------------------------------------
+  // Data fetchers (winners/votes) — unchanged, but no legacy 3s timer
+  // ---------------------------------------------------------------
   async function fetchState() {
     const sf  = ['sf1', 'sf2'];
     const qf  = ['qf1', 'qf2', 'qf3', 'qf4'];
@@ -153,8 +186,6 @@
       getJSON(WINNERS(r32)),
     ]);
     const votesP = getJSON(VOTES);
-    const timerP = probeEdgeTimer(); // don’t await; let it resolve in background
-
     const [w1, w2, w3, w4] = await winnersP;
     const votes = await votesP;
 
@@ -162,35 +193,31 @@
       [...w1, ...w2, ...w3, ...w4].map((r) => r.phase_key).filter(Boolean)
     );
     state.votesTotal = Array.isArray(votes) ? votes.length : 0;
-
-    timerP.catch(() => { state.timer.offline = true; });
   }
 
   // ---------------------------------------------------------------
-  // 🚀 Boot sequence
+  // 🚀 Boot sequence (no legacy 3s offline toast)
   // ---------------------------------------------------------------
   async function boot() {
     ui.setStatus('initializing');
-    let forced = false;
 
-    // If network slow, proceed without waiting for timer
-    const watchdog = setTimeout(() => {
-      if (state.booted) return;
-      forced = true;
-      ui.toast('Network slow. Continuing without timer.');
-      proceed();
-    }, 2500);
+    // Visual watchdog: move the boot bar a bit while we work
+    const fill = $('#bootFill');
+    const setFill = (p) => { if (fill) fill.style.width = `${Math.min(100, Math.max(0, p))}%`; };
+    setFill(10);
 
     try {
       ui.setStatus('syncing…');
+      setFill(30);
       await fetchState();
-      if (!forced) proceed();
+      setFill(55);
+      await syncTimerOnce();
+      setFill(86);
+      proceed();
     } catch (e) {
       console.error('ERR:', e);
       ui.toast("You're offline or unauthorized. Showing cached/empty view.");
       proceed(true);
-    } finally {
-      clearTimeout(watchdog);
     }
   }
 
@@ -198,14 +225,12 @@
     if (state.booted) return;
     state.booted = true;
     ui.setStatus('ready');
+    setFillSafe(100);
     startLoop();
-
-    // Delay the timer toast slightly; skip if timer becomes OK shortly
-    setTimeout(() => {
-      if (offlined) return ui.toast("Couldn't reach timer. Offline mode.");
-      if (!state.timer.ok) ui.toast("Couldn't reach timer. Offline mode.");
-    }, 900);
+    if (offlined) showOfflineToastOnce();
   }
+
+  function setFillSafe(p){ const f=$('#bootFill'); if (f) f.style.width = `${p}%`; }
 
   // ---------------------------------------------------------------
   // ⏱ Render loop + debug hook
@@ -222,13 +247,70 @@
     refresh: async () => {
       ui.toast('Refreshing…');
       await fetchState();
+      await syncTimerOnce();
       ui.toast('Refreshed');
     },
   };
 
   // ---------------------------------------------------------------
+  // 🧰 Control buttons wiring (Edge actions)
+  // ---------------------------------------------------------------
+  const EDGE = EDGE_TIMER;
+  async function callEdge(action, extra='') {
+    const url = `${EDGE}?action=${action}${extra}`;
+    const r = await fetch(url, { method:'GET' });
+    if (!r.ok) throw new Error(`${action} → ${r.status}`);
+    const j = await r.json().catch(()=> ({}));
+    // If you render the countdown, hook here with j.state
+    return j;
+  }
+
+  $('#btnForceDecide')?.addEventListener('click', async () => {
+    try {
+      ui.toast('Forcing decision…');
+      await callEdge('advance');
+      await syncTimerOnce();
+      ui.toast('Advanced');
+    } catch (e) { warn('force decide failed', e?.message||e); }
+  });
+
+  $('#btnReset30')?.addEventListener('click', async () => {
+    try {
+      ui.toast('Resetting 30s…');
+      await callEdge('reset', '&period=30');
+      await syncTimerOnce();
+      ui.toast('Reset');
+    } catch (e) { warn('reset failed', e?.message||e); }
+  });
+
+  $('#btnPauseResume')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    const stateAttr = btn.dataset.state || 'run';
+    try {
+      if (stateAttr === 'run') {
+        await callEdge('pause');
+        btn.dataset.state = 'pause';
+        btn.textContent = '▶️ Resume';
+        ui.toast('Paused');
+      } else {
+        await callEdge('resume');
+        btn.dataset.state = 'run';
+        btn.textContent = '⏸️ Pause';
+        ui.toast('Resumed');
+      }
+      await syncTimerOnce();
+    } catch (e) { warn('pause/resume failed', e?.message||e); }
+  });
+
+  // ---------------------------------------------------------------
   // 🟢 Start
   // ---------------------------------------------------------------
   log('Debugger ready');
-  boot();
+  // Prevent double init if concatenated
+  if (!window.__RAGE_TIMER_PATCHED__) {
+    window.__RAGE_TIMER_PATCHED__ = true;
+    boot();
+    // Optional: keep warm polling every minute for freshness
+    setInterval(syncTimerOnce, 60_000);
+  }
 })(); // EOF
