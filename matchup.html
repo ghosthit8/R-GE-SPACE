@@ -1,402 +1,148 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Rage Space — Matchup</title>
 
-  <!-- no-cache hints for GH Pages -->
-  <meta http-equiv="Cache-Control" content="no-store, max-age=0, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
+  <!-- Optional: these are injected by JS if missing -->
+  <meta name="supabase-url" content="https://tuqvpcevrhciursxrgav.supabase.co" />
+  <meta name="supabase-anon-key" content="" />
 
-  <!-- Preconnect + Supabase client -->
-  <link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-
-  <!-- Main stylesheet -->
-  <link rel="stylesheet" href="./css/matchup.css"/>
-
-  <!-- Minimal safe fallback to avoid a flash while CSS loads -->
   <style>
-    body{background:#000;color:#39ff14;margin:0;font-family:system-ui,Arial,Helvetica,sans-serif}
-    .wrap{max-width:980px;margin:16px auto 64px;padding:0 16px}
-    #bootLoader{position:fixed;inset:0;display:grid;place-items:center;background:#000}
-    .boot-bar{width:76vw;max-width:640px;height:8px;background:#111;border:1px solid #0a0;box-shadow:0 0 10px #0a0 inset}
-    .boot-fill{height:100%;width:0;background:#0f0;transition:width .1s linear}
-    .boot-title{color:#0f0;margin-bottom:8px}
-    .boot-sub{color:#8f8;margin-top:8px}
-    .controls {display:flex; gap:8px; flex-wrap:wrap}
-    .btn {background:#000;color:#0f0;border:1px solid #0f0;border-radius:6px;padding:6px 10px;cursor:pointer}
-    .btn.primary {border-color:#39ff14}
-    .badge{border:1px solid #39ff14;border-radius:4px;padding:2px 6px}
-    .tiny{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
-    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
-    .clock{margin-left:4px}
-    .scorebar{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:10px 0}
-    .switch{display:flex; gap:6px; align-items:center}
-    .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
-           background:#111;color:#9f9;border:1px solid #0f0;border-radius:6px;
-           padding:8px 12px;opacity:0;pointer-events:none;transition:opacity .2s}
-    .toast.show{opacity:1}
+    :root { --bg:#000; --fg:#d4ffd9; --muted:#79a07f; --line:#0f3; --accent:#39ff14; }
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Ubuntu,Arial,sans-serif}
+    .wrap{max-width:980px;margin:16px auto;padding:12px}
+    .hud{border:1px solid var(--line);border-radius:14px;padding:14px;background:#060606}
+    .hud .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .chip{padding:4px 10px;border:1px solid var(--line);border-radius:999px;color:var(--fg);font-size:12px}
+    .chip .k{opacity:.7;margin-right:6px}
+    .btn{padding:8px 12px;border:1px solid var(--line);background:#050; color:var(--fg); border-radius:10px;cursor:pointer}
+    .btn:hover{filter:brightness(1.1)}
+    .btn[data-variant="warn"]{background:#1a1a00}
+    .btn[data-variant="danger"]{background:#330}
+    .grid{display:grid;grid-template-columns:1fr;gap:14px;margin-top:14px}
+    @media(min-width:760px){.grid{grid-template-columns:1fr 1fr}}
+    .card{border:1px dashed var(--line);border-radius:16px;padding:12px;min-height:300px;background:#050505;position:relative}
+    .title{color:var(--accent);font-weight:700;margin:0 0 6px}
+    .votes{position:absolute;left:0;right:0;bottom:10px;text-align:center;color:var(--muted)}
+    .imgwrap{display:block;overflow:hidden;border-radius:10px;border:1px solid #113}
+    .imgwrap img{display:block;width:100%;height:300px;object-fit:cover;background:#0b0b0b}
+
+    /* Loader overlay */
+    #bootLoader{position:fixed;inset:0;display:grid;place-items:center;background:#000;z-index:9999}
+    #bootLoader .inner{text-align:center}
+    #bootLoader h1{letter-spacing:.25em;color:var(--accent);font-weight:800;font-size:14px;margin:0 0 16px}
+    #bootLoader .bar{height:10px;border-radius:20px;background:#032;border:1px solid #0a2;width:min(720px,86vw);margin:0 auto}
+    #bootLoader .bar::after{content:"";display:block;height:100%;width:64%;background:var(--accent);border-radius:20px}
+    #boot-status{margin-top:16px;color:#8cff9b;font-size:12px}
+
+    /* Tiny toast (optional) */
+    #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#081; color:#eaffea; border:1px solid var(--line); padding:8px 12px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity .2s}
+    #toast.show{opacity:1}
   </style>
 </head>
 <body>
-
-  <!-- CYBERPUNK LOADING OVERLAY -->
-  <div id="bootLoader" aria-live="polite">
-    <div class="boot-title">Rage Space — syncing…</div>
-    <div class="boot-bar"><div class="boot-fill" id="bootFill"></div></div>
-    <div class="boot-sub" id="bootMsg">initializing</div>
+  <!-- Boot overlay (hidden by JS once ready) -->
+  <div id="bootLoader">
+    <div class="inner">
+      <h1>RAGE SPACE — SYNCING…</h1>
+      <div class="bar"></div>
+      <div id="boot-status">starting…</div>
+    </div>
   </div>
 
+  <div id="toast"></div>
+
   <div class="wrap">
-    <div class="scorebar">
-      <div class="tiny">
-        <strong>Decision in</strong>
-        <span id="clock" class="clock">Sync…</span>
-        <span id="state" class="clock">—</span>
-        <span id="phaseKey" class="clock">phase: —</span>
-        <span id="loginBadge" class="badge">checking auth…</span>
+    <!-- HUD -->
+    <div class="hud">
+      <div class="row" style="margin-bottom:10px">
+        <span class="chip"><span class="k">Decision in</span><strong id="decisionIn" data-decision-in>--:--</strong></span>
+        <span class="chip"><span class="k">Sync</span><strong id="syncLabel" data-sync-label>Syncing…</strong></span>
+        <span class="chip"><span class="k">phase:</span><strong id="phaseLabel" data-phase-label>—</strong></span>
       </div>
-      <div class="controls">
-        <button id="btnForceDecide" class="btn">⚡ Force decide</button>
-        <button id="btnReset30" class="btn">🔁 Reset 30s</button>
-        <button id="btnPauseResume" class="btn" data-state="run">⏸️ Pause</button>
+      <div class="row">
+        <button class="btn" id="btnForceDecide">⚡ Force decide</button>
+        <button class="btn" id="btnReset30">🔁 Reset 30s</button>
+        <button class="btn" id="btnPauseResume" data-state="run">⏸️ Pause</button>
         <a class="btn" href="./winners.html">🏁 Winners</a>
       </div>
     </div>
 
-    <!-- Current Match tiles -->
-    <div class="tile" id="tileA" data-color="red">
-      <div class="artbox">
-        <img id="imgA" class="art" alt="Entry Left"/>
-        <button class="fsbtn" data-target="imgA" title="View fullscreen">⛶</button>
+    <!-- Entries -->
+    <div class="grid">
+      <div class="card" id="entry-left" data-entry="left">
+        <div class="title" data-title>Entry Left</div>
+        <a class="imgwrap" href="javascript:void(0)"><img loading="lazy" alt="" /></a>
+        <div class="votes" data-votes>0 votes</div>
+        <div style="margin-top:8px"><button class="btn">Vote This</button></div>
       </div>
-      <div class="caption" id="countA">0 votes</div>
-      <div class="meta">
-        <span id="labelA">Left</span>
-        <button class="btn primary" id="voteA">Vote This</button>
-      </div>
-    </div>
 
-    <div class="tile" id="tileB" data-color="blue">
-      <div class="artbox">
-        <img id="imgB" class="art" alt="Entry Right"/>
-        <button class="fsbtn" data-target="imgB" title="View fullscreen">⛶</button>
+      <div class="card" id="entry-right" data-entry="right">
+        <div class="title" data-title>Entry Right</div>
+        <a class="imgwrap" href="javascript:void(0)"><img loading="lazy" alt="" /></a>
+        <div class="votes" data-votes>0 votes</div>
       </div>
-      <div class="caption" id="countB">0 votes</div>
-      <div class="meta">
-        <span id="labelB">Right</span>
-        <button class="btn primary" id="voteB">Vote This</button>
-      </div>
-    </div>
-
-    <div class="row">
-      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
-    </div>
-
-    <!-- Bracket list -->
-    <section class="bracket" id="bracket">
-      <div class="bracket-head">
-        <div class="bracket-title">Bracket</div>
-        <label class="switch">
-          <input id="showDone" type="checkbox" />
-          <span>Show finished rounds</span>
-        </label>
-      </div>
-      <div id="brows"></div>
-    </section>
-  </div>
-
-  <div id="toast" class="toast"></div>
-
-  <!-- FINAL OVERLAY (unchanged from your file) -->
-  <div id="overlay">
-    <canvas id="confetti"></canvas>
-    <div class="overlay-bg">
-      <div class="scanlines-behind"></div>
-      <div class="vignette"></div>
-      <div class="overlay-stage">
-        <div class="art-wrap">
-          <img id="overlayArtImg" alt="Winning Art"/>
-          <div class="scanline-frame">
-            <div class="band top"></div>
-            <div class="band bottom"></div>
-            <div class="band left"></div>
-            <div class="band right"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <button id="overlayClose" class="btn">✕</button>
-    <div class="overlay-card" id="overlayCard">
-      <h1 id="overlayTitle">CHAMPION</h1>
-      <div class="sub typewriter-text" id="overlaySubtitle"></div>
-      <div class="motto typewriter-text" id="overlayMotto"></div>
     </div>
   </div>
 
-  <!-- Fullscreen overlay -->
-  <div id="fsOverlay">
-    <button id="fsClose">✕</button>
-    <img id="fsImage" alt="Fullscreen Art"/>
-  </div>
+  <!-- Your robust timer + controls script (ES5 safe) -->
+  <script src="./js/main.v3.js?v=2025-10-21-03"></script>
 
-  <!-- Main app config first (matches your project) -->
-  <script type="module">
-    export const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-    export const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
-    window.SUPABASE_URL = SUPABASE_URL;
-    window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
-  </script>
-
-  <!-- Version tag to bust module caches -->
+  <!-- Minimal renderer so the HUD & cards update when the timer sync returns -->
   <script>
-    window.__APP_VER__ = "2025-10-21-01";
-  </script>
-
-  <!-- App entrypoint (order matters). Add ?v=VER for cache-bust -->
-  <script type="module" src="./js/core.js?v=2025-10-21-01"></script>
-  <script type="module" src="./js/services.js?v=2025-10-21-01"></script>
-  <script type="module" src="./js/ui.js?v=2025-10-21-01"></script>
-  <script type="module" src="./js/features/bracket.js?v=2025-10-21-01"></script>
-  <script type="module" src="./js/features/overlay.js?v=2025-10-21-01"></script>
-  <script type="module" src="./js/main.v3.js?v=2025-10-21-01"></script>
-
-  <!-- Optional: unregister any old service workers (harmless if none) -->
-  <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistrations?.().then((regs) => {
-        for (const r of regs) r.unregister();
-      }).catch(() => {});
-    }
-  </script>
-
-  <!-- ================== RAGE DEBUGGER v2 (unchanged) ================== -->
-  <!-- (Keeping your excellent debug panel) -->
-  <script>
-    /* ... keep your existing RAGE DEBUGGER v2 block here ... */
-  </script>
-  <!-- ================== /RAGE DEBUGGER v2 ================== -->
-  <!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
-<script>
-(function () {
-  const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
-
-  // --- create floating button OUTSIDE the hidden panel ---
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'dbgFloatingBtn';
-  floatBtn.textContent = '🐛 Debug';
-  floatBtn.style.cssText = `
-    position: fixed; right: 8px; bottom: 8px;
-    z-index: 2147483647; background:#000; color:#0f0;
-    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
-    font: 12px/1.1 monospace; cursor:pointer;
-  `;
-  document.body.appendChild(floatBtn);
-
-  // --- panel wrapper (starts hidden) ---
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
-  `;
-
-  const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-  bar.innerHTML = `
-    <span style="color:#6f6">Rage Debug</span>
-    <label>Filter:
-      <select id="dbgFilter">
-        <option value="">All</option>
-        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
-        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
-        <option>ERR</option><option>WARN</option><option>LOG</option>
-      </select>
-    </label>
-    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgDownload">Download</button>
-    <button id="dbgClear">Clear</button>
-    <span style="margin-left:auto"></span>
-    <button id="dbgClose">✕</button>
-  `;
-
-  const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-
-  // button wiring
-  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-  // controls
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
-  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
-  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-  bar.querySelector('#dbgDownload').onclick = () => {
-    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
-    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  };
-
-  // ring buffer + rendering
-  let buffer = [];
-  function push(kind, msg, extra) {
-    if (!recordChk.checked) return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
-    if (buffer.length > MAX_LINES) buffer.shift();
-    const f = filterSel.value;
-    if (!f || f === kind) addLine({kind, line});
-  }
-  function addLine(r){
-    const div = document.createElement('div');
-    div.textContent = r.line;
-    if (r.kind === 'ERR') div.style.color = '#f88';
-    else if (r.kind === 'WARN') div.style.color = '#ff8';
-    else if (r.kind === 'EDGE') div.style.color = '#8ff';
-    else if (r.kind === 'NET')  div.style.color = '#8cf';
-    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-    list.appendChild(div); list.scrollTop = list.scrollHeight;
-  }
-  function render(){
-    list.innerHTML = '';
-    const f = filterSel.value;
-    for (const r of buffer) if (!f || f === r.kind) addLine(r);
-  }
-  filterSel.onchange = render;
-
-  // console hooks
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-
-  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-
-  // visibility & UI observers
-  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-  const q = (id) => document.getElementById(id);
-
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
+    window.applyBaseAndPeriod = function (state) {
+      try {
+        console.log('[applyBaseAndPeriod] state:', state);
+        var phase = (state && (state.phase || state.phase_key)) || '—';
+        var endAt = state && (state.phase_end_at || state.ends_at || null);
+        var remain = Number(state && state.remaining_sec);
+        if (!isFinite(remain) || remain <= 0) {
+          var endMs = Date.parse(endAt || 0);
+          remain = endMs ? Math.max(0, Math.ceil((endMs - Date.now())/1000)) : 0;
+        }
+        var phaseEl = document.getElementById('phaseLabel');
+        var decideEl = document.getElementById('decisionIn');
+        var syncEl = document.getElementById('syncLabel');
+        if (phaseEl) phaseEl.textContent = String(phase);
+        if (syncEl) syncEl.textContent = 'Synced';
+        if (decideEl) decideEl.textContent = new Date(remain*1000).toISOString().substr(14,5);
+        ensureEntryCard('left');
+        ensureEntryCard('right');
+      } catch (e) {
+        console.warn('applyBaseAndPeriod failed:', e);
       }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
+    };
 
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
-    let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
-        const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
-        last = el.textContent; lastAt = now;
+    function ensureEntryCard(side){
+      var root = document.querySelector('[data-entry="'+side+'"]') || document.getElementById('entry-'+side);
+      if (!root) return;
+      var img = root.querySelector('img');
+      var title = root.querySelector('[data-title]');
+      var votes = root.querySelector('[data-votes]');
+      if (img && !img.src) {
+        img.alt = 'Placeholder';
+        img.src = 'https://placehold.co/800x600/0b0b0b/39ff14?text=Rage+Space';
       }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  })();
-
-  // fetch tracer
-  const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
-    const start = performance.now();
-    const method = (opts && opts.method) || 'GET';
-    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
-    push(tag, `${method} ${url}`);
-    try {
-      const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-      return res;
-    } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
-      throw e;
+      if (title && !title.textContent.trim()) title.textContent = 'Entry ' + (side==='left' ? 'Left' : 'Right');
+      if (votes && !votes.textContent.trim()) votes.textContent = '0 votes';
     }
-  };
 
-  // timers & rAF
-  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-
-  const timers = new Map();
-  window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-  window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-  window.requestAnimationFrame = function(fn){
-    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
-  };
-  window.cancelAnimationFrame = function(id){ _caf(id); };
-
-  // image load tracing
-  function hookImg(img){
-    if (!img || img.__dbgHooked) return;
-    img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
-  }
-  Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
-      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
-
-  // bracket observer
-  const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
-      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
-  }
-
-  // public helpers
-  window.RageDebug = {
-    log: (k, m) => push(k||'LOG', m||''),
-    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
-    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
-    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
-  };
-
-  // small banner
-  (console.log||(()=>{}))('Debugger ready');
-})();
-</script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
+    // Smooth client-side countdown between server syncs
+    (function tickDecision(){
+      var el = document.getElementById('decisionIn');
+      if (el){
+        var parts = (el.textContent || '00:00').split(':');
+        var mm = parseInt(parts[0]||'0',10), ss = parseInt(parts[1]||'0',10);
+        if (isFinite(mm) && isFinite(ss)){
+          var t = mm*60 + ss; if (t>0) t -= 1;
+          el.textContent = new Date(Math.max(0,t)*1000).toISOString().substr(14,5);
+        }
+      }
+      setTimeout(tickDecision, 1000);
+    })();
+  </script>
 </body>
 </html>
