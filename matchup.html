@@ -3,33 +3,26 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Minimal Matchup (v2 outline)</title>
+  <title>Rage Space — Minimal Matchup (v2)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
     .wrap { max-width:700px; margin:0 auto; padding:16px 12px 28px; }
     h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
     .row { display:flex; align-items:center; gap:10px; }
-    .timer {
-      font-variant-numeric: tabular-nums;
-      font-weight:700; font-size:32px; line-height:1;
-      padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318;
-    }
+    .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
     .state { color:var(--muted); font-size:12px; }
-    .card {
-      margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318;
-    }
+    .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
     .imgBox { position:relative; width:100%; aspect-ratio: 3/4; background:#0b0d0f; display:grid; place-items:center; }
     .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
     .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-top:1px solid #20242a; gap:8px; }
     .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
     .counts { font-variant-numeric: tabular-nums; font-weight:700; }
-    button.vote {
-      appearance:none; border:1px solid #24303a; background:#131920; color:var(--fg);
-      padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:700;
-    }
+    button.vote { appearance:none; border:1px solid #24303a; background:#131920; color:var(--fg); padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:700; }
     button.vote:disabled { opacity:.6; cursor:default; }
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
+    .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
+    .winner b { color:var(--accent); }
   </style>
 </head>
 <body>
@@ -60,12 +53,26 @@
       </div>
     </div>
 
-    <div class="hint">Timer auto-loops every 20s. A winner is decided at 0 (random if tied).</div>
+    <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
+    <div class="hint">Timer auto-loops every 20s. A winner is decided at 0 (random if tied). One vote per device per round.</div>
   </div>
 
   <script>
-    // <<< CHANGE THIS AFTER YOU DEPLOY >>>
-    const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.functions.supabase.co/global-timer-v2";
+    // <<< CHANGE THIS TO YOUR LIVE FUNCTION URL >>>
+    const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
+
+    // Generate/persist a local token used for one-vote-per-round
+    const RSID_KEY = "rsid_v2";
+    let RSID = localStorage.getItem(RSID_KEY);
+    if (!RSID) {
+      RSID = crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + Date.now());
+      localStorage.setItem(RSID_KEY, RSID);
+    }
+
+    // track local "already voted this round" so we can disable the buttons
+    const votedKey = (baseIso) => `voted:${baseIso}`;
+    function hasVoted(baseIso) { return localStorage.getItem(votedKey(baseIso)) === "1"; }
+    function markVoted(baseIso) { localStorage.setItem(votedKey(baseIso), "1"); }
 
     const elRemain = document.getElementById('tRemain');
     const elMeta = document.getElementById('tMeta');
@@ -75,6 +82,7 @@
     const cBlue = document.getElementById('countBlue');
     const btnRed = document.getElementById('btnRed');
     const btnBlue = document.getElementById('btnBlue');
+    const winnerText = document.getElementById('winnerText');
 
     let state = {
       ends_at: null,
@@ -85,12 +93,30 @@
       red_count: 0,
       blue_count: 0,
       remaining_ms: 0,
+      last_winner: null
     };
+
+    function setVoteButtons(enabled) {
+      btnRed.disabled = btnBlue.disabled = !enabled;
+    }
+
+    function renderLastWinner(last) {
+      if (!last) {
+        winnerText.textContent = "No winner yet — first round in progress.";
+        return;
+      }
+      const by = last.decided_by === "random_tie" ? "random tie" : "votes";
+      const score = `${last.red_count}–${last.blue_count}`;
+      const name = last.winner_color === "red" ? "Red" : "Blue";
+      winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
+    }
 
     async function fetchState() {
       const res = await fetch(FUNCTION_URL, { method: 'GET' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'GET failed');
+
+      const baseChanged = state.base_iso && state.base_iso !== data.base_iso;
 
       state.ends_at = data.ends_at;
       state.period_sec = data.period_sec;
@@ -100,43 +126,61 @@
       state.red_count = data.red_count;
       state.blue_count = data.blue_count;
       state.remaining_ms = data.remaining_ms;
+      state.last_winner = data.last_winner || null;
 
       imgRed.src = state.red_url;
       imgBlue.src = state.blue_url;
       cRed.textContent = state.red_count;
       cBlue.textContent = state.blue_count;
-
       elMeta.textContent = `cycle: ${state.base_iso} • period: ${state.period_sec}s`;
+      renderLastWinner(state.last_winner);
+
+      // if we rolled to a new base_iso, re-enable buttons unless we already voted this new round
+      if (baseChanged) {
+        setVoteButtons(!hasVoted(state.base_iso));
+      } else {
+        // initial load
+        setVoteButtons(!hasVoted(state.base_iso));
+      }
     }
 
     async function sendVote(color) {
       try {
         const res = await fetch(FUNCTION_URL, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: {
+            'content-type': 'application/json',
+            'x-rsid': RSID
+          },
           body: JSON.stringify({ color })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'vote failed');
+
+        if (data.ignored && data.reason === 'already_voted') {
+          setVoteButtons(false);
+          return;
+        }
         if (!data.ignored) {
           cRed.textContent = data.red_count;
           cBlue.textContent = data.blue_count;
+          markVoted(state.base_iso);
+          setVoteButtons(false);
         }
       } catch (e) {
         console.log('vote error', e);
       }
     }
 
-    // UI
     btnRed.addEventListener('click', async () => {
-      btnRed.disabled = btnBlue.disabled = true;
+      if (btnRed.disabled) return;
+      setVoteButtons(false);
       await sendVote('red');
-      setTimeout(() => { btnRed.disabled = btnBlue.disabled = false; }, 400);
     });
     btnBlue.addEventListener('click', async () => {
-      btnRed.disabled = btnBlue.disabled = true;
+      if (btnBlue.disabled) return;
+      setVoteButtons(false);
       await sendVote('blue');
-      setTimeout(() => { btnRed.disabled = btnBlue.disabled = false; }, 400);
     });
 
     // Timer render loop
@@ -145,16 +189,13 @@
       const remain = new Date(state.ends_at).getTime() - Date.now();
       const clamped = Math.max(0, remain);
       elRemain.textContent = (clamped / 1000).toFixed(1);
-
-      // when we cross 0, quickly resync to get the next images / reset counts
       if (remain <= -900) {
-        // small debounce to let server roll forward
         fetchState().catch(console.error);
       }
       rafId = requestAnimationFrame(tick);
     }
 
-    // Light polling to keep counts fresh every 1s
+    // Light polling to keep counts + last winner fresh
     setInterval(() => fetchState().catch(() => {}), 1000);
 
     // Boot
