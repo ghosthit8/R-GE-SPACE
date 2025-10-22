@@ -1,14 +1,22 @@
-// matchup.app.js — v2.4: 100s cycle, 20s checkpoints, client-side countdown + checkpoint “decide” pings
+// matchup.app.js — v2.5 (debug-instrumented voting path)
+// Source baseline: v2.4 with 100s cycle / 20s checkpoints
+// Changes: Added robust logging around vote upsert, countVotes(), realtime, and decide boundaries.
+
 import { SUPABASE_URL, SUPABASE_ANON, EDGE_URL } from './matchup.config.js';
 
-// Supabase
+// ---- TABLES (centralized) ----
+const TABLE_VOTES     = 'phase_votes_v2';
+const TABLE_WINNERS   = 'winners_v2';
+const TABLE_ADVANCERS = 'advancers_v2';
+
+// ---- Supabase ----
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-// ---- CONSTANTS FOR THE SCHEDULE ----
+// ---- SCHEDULE ----
 const CYCLE_SEC = 100; // total cycle length
 const STEP_SEC  = 20;  // decision cadence (every 20s)
 
-// STATE
+// ---- STATE ----
 let currentUid = null;
 let cycleStart = null;   // base ISO for current tournament cycle
 let paused = false;
@@ -23,7 +31,7 @@ let advancers = new Map();
 // checkpoint watcher (to only fire once per boundary)
 let lastCheckpointIndex = null;
 
-// DOM
+// ---- DOM ----
 const $ = (id)=>document.getElementById(id);
 const clockEl    = $('clock');
 const phaseBadge = $('phaseBadge');
@@ -42,10 +50,20 @@ const overlay    = $('overlay');
 const overlayImg = $('overlayImg');
 const overlayNote= $('overlayNote');
 
+// ---- Helpers / Debug ----
 const stageOf    = (slot)=> slot.startsWith('r32')?'r32':slot.startsWith('r16')?'r16':slot.startsWith('qf')?'qf':(slot.startsWith('sf')?'sf':'final');
 const stageOrder = ['r32','r16','qf','sf','final'];
 
 function note(...a){ try{ window.RageDebug?.log?.(...a); }catch{} }
+function d(tag, obj){ // ultra-safe debug logger
+  const time = new Date().toLocaleTimeString();
+  try {
+    window.RageDebug?.log?.(`[${time}] ${tag}`, obj ?? '');
+  } catch {}
+  try {
+    console.log(`[${time}] ${tag}`, obj ?? '');
+  } catch {}
+}
 
 function slotKey(slot, base){ return slot==='final' ? `${base}::final` : `${base}::${slot}`; }
 function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
@@ -90,13 +108,17 @@ async function maybeDecide(left){
 
   if (atBoundary && !isStartOfCycle && checkpointIndex !== lastCheckpointIndex){
     lastCheckpointIndex = checkpointIndex;
+    d('DECIDE → POST /edge', {elapsed, checkpointIndex});
     try {
-      await postAction('decide'); // server should compute winners/advancers for the round gate we just passed
-    } catch(e){ note('decide post failed', e); }
+      await postAction('decide'); // server computes winners/advancers for the round gate we just passed
+    } catch(e){
+      d('DECIDE post failed', e);
+    }
   }
 
   // When we roll over to a new cycle (left jumps from ~1 back to 100), reset the tracker
   if (isStartOfCycle) {
+    d('Cycle rollover detected; reset checkpoint tracker', {});
     lastCheckpointIndex = null;
   }
 }
@@ -105,16 +127,22 @@ async function maybeDecide(left){
 async function loadAdvancers(baseISO){
   if (!baseISO){ advancers = new Map(); return; }
   const url =
-    `${SUPABASE_URL}/rest/v1/advancers_v2`
+    `${SUPABASE_URL}/rest/v1/${TABLE_ADVANCERS}`
     + `?select=phase_key,color,from_key&base_iso=eq.${encodeURIComponent(baseISO)}`;
   const rows = await fetch(url, {
     headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }
   }).then(r => r.ok ? r.json() : []);
   advancers = new Map((rows || []).map(r => [r.phase_key, String(r.color || '').toLowerCase()]));
+  d('Advancers cache loaded', {count:(rows||[]).length});
 }
 
 async function getPairFromWinners(baseISO, leftKey, rightKey, rebuildLeft, rebuildRight){
-  const { data } = await supabase.from('winners_v2').select('phase_key,color').in('phase_key', [leftKey, rightKey]);
+  const { data, error } = await supabase
+    .from(TABLE_WINNERS)
+    .select('phase_key,color')
+    .in('phase_key', [leftKey, rightKey]);
+
+  if (error) d('getPairFromWinners: select error', error);
   const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, String(r.color||'').toLowerCase()]));
   if (!(map[leftKey] && map[rightKey])) return null;
   const L = await rebuildLeft();  const R = await rebuildRight();
@@ -160,8 +188,10 @@ async function packFor(slot){
 }
 
 async function countVotes(key){
-  const { data } = await supabase.from('phase_votes_v2').select('vote').eq('phase_key', key);
+  const { data, error } = await supabase.from(TABLE_VOTES).select('vote').eq('phase_key', key);
+  if (error){ d('countVotes error', {key, error}); return {r:0,b:0}; }
   let r=0,b=0; (data||[]).forEach(v=>{ if(v.vote==='red') r++; else if(v.vote==='blue') b++; });
+  d('countVotes', {key, r, b, total:(data||[]).length});
   return {r,b};
 }
 
@@ -176,6 +206,7 @@ export async function paintSlot(slot){
   $('countA').textContent = `${r} vote${r===1?'':'s'}`;
   $('countB').textContent = `${b} vote${b===1?'':'s'}`;
   window.RageDebug?.markCounts?.(slot, r, b);
+  d('paintSlot', {slot, key, r, b, hasImages: Boolean(pack)});
 }
 
 async function renderBracket(){
@@ -210,6 +241,7 @@ async function renderBracket(){
   brows.querySelectorAll('.brow').forEach(row=>{
     row.addEventListener('click', async ()=>{
       activeSlot = row.dataset.slot;
+      d('Bracket click → activeSlot', {activeSlot});
       await paintSlot(activeSlot);
     });
   });
@@ -226,15 +258,30 @@ function lockUI(){
   // Only allow votes in the current round
   const locked = (stageOf(activeSlot) !== currentStage);
   [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
+
+  d('lockUI', {
+    left, stage, activeSlot,
+    locked,
+    loggedIn: Boolean(currentUid)
+  });
 }
 
 async function fetchState(){
   // GET server state
-  const res  = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
-  const body = await res.json();
+  let body = {};
+  try{
+    const res  = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
+    body = await res.json();
+  }catch(e){
+    d('EDGE GET error', e);
+  }
+
+  if (body?.baseISO && body.baseISO !== cycleStart) {
+    d('EDGE baseISO update', {old:cycleStart, new:body.baseISO});
+  }
 
   cycleStart = body.baseISO || cycleStart;
-  if (typeof body.paused === 'boolean') paused = body.paused;
+  if (typeof body?.paused === 'boolean') paused = body.paused;
 
   // If no base yet, try POST once; otherwise fallback to local base so the UI always runs.
   if (!cycleStart && !usedLocalFallback){
@@ -244,8 +291,8 @@ async function fetchState(){
         headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
         body: JSON.stringify({})
       });
-      if (!r.ok) note('Edge POST failed', r.status);
-    }catch(e){ note('Edge POST error', e); }
+      if (!r.ok) d('Edge POST failed', {status:r.status});
+    }catch(e){ d('Edge POST error', e); }
 
     try{
       const again = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
@@ -276,12 +323,50 @@ async function fetchState(){
 }
 
 async function postAction(action){
-  await fetch(EDGE_URL, {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json', apikey:SUPABASE_ANON, Authorization:`Bearer ${SUPABASE_ANON}` },
-    body: JSON.stringify({action})
-  }).catch(()=>{});
+  try{
+    await fetch(EDGE_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', apikey:SUPABASE_ANON, Authorization:`Bearer ${SUPABASE_ANON}` },
+      body: JSON.stringify({action})
+    });
+  }catch(e){
+    d('postAction error', {action, e});
+  }
   await fetchState();
+}
+
+// --- Deep vote debugger: probes before/after upsert ---
+async function debugVoteProbe(key, chosen){
+  try{
+    const pre = await supabase
+      .from(TABLE_VOTES)
+      .select('user_id,vote,inserted_at')
+      .eq('phase_key', key);
+
+    d('VOTE PROBE (before upsert)', {
+      key, chosen,
+      total: pre.data?.length ?? 0,
+      mine: (pre.data||[]).find(r=>r.user_id===currentUid) || null,
+      error: pre.error || null
+    });
+  }catch(e){ d('VOTE PROBE pre error', e); }
+
+  // small wait to let the DB settle after upsert when called post-upsert
+  await new Promise(r=>setTimeout(r,120));
+
+  try{
+    const post = await supabase
+      .from(TABLE_VOTES)
+      .select('user_id,vote,inserted_at')
+      .eq('phase_key', key);
+
+    d('VOTE PROBE (after upsert)', {
+      key, chosen,
+      total: post.data?.length ?? 0,
+      mine: (post.data||[]).find(r=>r.user_id===currentUid) || null,
+      error: post.error || null
+    });
+  }catch(e){ d('VOTE PROBE post error', e); }
 }
 
 function wireControls(){
@@ -300,22 +385,53 @@ function wireControls(){
   $('submitBtn').onclick=async ()=>{
     if (!chosen) return;
     if (!currentUid) return alert('Log in to vote');
+
     const key = slotKey(activeSlot, cycleStart);
-    await supabase.from('phase_votes_v2').upsert({ phase_key: key, user_id: currentUid, vote: chosen }, { onConflict:'phase_key,user_id' });
-    await paintSlot(activeSlot);
-    submitBtn.textContent='✔ Voted'; submitBtn.disabled=true;
-    setTimeout(()=>{ submitBtn.textContent='Submit Vote'; submitBtn.disabled=false; voteA.classList.remove('selected'); voteB.classList.remove('selected'); chosen=null; }, 1200);
+    d('VOTE click', {key, chosen, activeSlot, cycleStart, currentStage, slotStage:stageOf(activeSlot)});
+
+    await debugVoteProbe(key, chosen); // before
+
+    // perform upsert with explicit onConflict
+    try{
+      const { error } = await supabase
+        .from(TABLE_VOTES)
+        .upsert({ phase_key: key, user_id: currentUid, vote: chosen }, { onConflict:'phase_key,user_id' });
+
+      if (error){
+        d('VOTE upsert ERROR', {key, error});
+        submitBtn.textContent='✖ Vote failed';
+        submitBtn.disabled=true;
+        setTimeout(()=>{ submitBtn.textContent='Submit Vote'; submitBtn.disabled=false; }, 1300);
+        alert(`Vote failed: ${error.message || 'unknown error'}`);
+        return;
+      }
+
+      d('VOTE upsert OK', {key, chosen});
+      await debugVoteProbe(key, chosen); // after
+
+      await paintSlot(activeSlot);
+      submitBtn.textContent='✔ Voted'; submitBtn.disabled=true;
+      setTimeout(()=>{ submitBtn.textContent='Submit Vote'; submitBtn.disabled=false; voteA.classList.remove('selected'); voteB.classList.remove('selected'); chosen=null; }, 1200);
+    }catch(e){
+      d('VOTE upsert EXCEPTION', e);
+      submitBtn.textContent='✖ Vote failed';
+      submitBtn.disabled=true;
+      setTimeout(()=>{ submitBtn.textContent='Submit Vote'; submitBtn.disabled=false; }, 1300);
+      alert(`Vote failed (exception). See console for details.`);
+    }
   };
 }
 
 function wireRealtime(){
   supabase.channel('v2-votes')
-    .on('postgres_changes',{event:'*',schema:'public',table:'phase_votes_v2'}, async ()=>{
+    .on('postgres_changes',{event:'*',schema:'public',table:TABLE_VOTES}, async (payload)=>{
+      d('Realtime: votes change', payload);
       await paintSlot(activeSlot);
-    }).subscribe();
+    }).subscribe((status)=>{ d('Realtime channel v2-votes status', status); });
 
   supabase.channel('v2-winners')
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners_v2'}, (payload)=>{
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:TABLE_WINNERS}, (payload)=>{
+      d('Realtime: winners INSERT', payload);
       const pk = payload?.new?.phase_key || '';
       if (pk.endsWith('::final') && pk.startsWith(cycleStart)){
         const color = (payload?.new?.color||'').toLowerCase();
@@ -323,7 +439,7 @@ function wireRealtime(){
         overlayImg.src = color==='red' ? imgA.src : imgB.src;
         overlay.classList.add('show');
       }
-    }).subscribe();
+    }).subscribe((status)=>{ d('Realtime channel v2-winners status', status); });
 }
 
 async function boot(){
@@ -334,6 +450,7 @@ async function boot(){
   supabase.auth.onAuthStateChange((_evt, session2)=>{
     currentUid = session2?.user?.id || null;
     loginBadge.textContent = currentUid ? 'logged in' : 'not logged in';
+    d('Auth state change', {loggedIn:Boolean(currentUid)});
     lockUI();
   });
 
@@ -352,7 +469,7 @@ async function boot(){
       await loadAdvancers(cycleStart);
       await paintSlot(activeSlot);
       await renderBracket();
-    }catch(e){ note('tick error', e); }
+    }catch(e){ d('tick error', e); }
     setTimeout(tick, 1000);
   })();
 
