@@ -1,165 +1,45 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Rage Space — Matchup (v2)</title>
 
 <link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
 <link rel="stylesheet" href="./assets/css/matchup.css">
 </head>
 <body>
   <div class="wrap">
     <div class="scorebar">
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div class="timerline">
         <strong>Decision in</strong>
-        <span id="clock" class="clock">—</span>
-        <span id="phaseBadge" class="clock">phase: —</span>
-        <span id="loginBadge" class="badge">checking auth…</span>
-      </div>
-      <div class="row">
-        <button id="btnPause" class="btn">⏸️ Pause</button>
-        <button id="btnReset" class="btn">🔁 Reset</button>
-        <a class="btn" href="./winners.html">🏁 Winners</a>
+        <span id="clock" class="clock">--</span>s
       </div>
     </div>
 
-    <div class="tile" id="tileA">
-      <img id="imgA" class="art" alt="Entry Left"/>
-      <div class="caption" id="countA">0 votes</div>
-      <div class="meta">
-        <span id="labelA">Left</span>
-        <button class="btn primary" id="voteA">Vote This</button>
-      </div>
-    </div>
+    <!-- Example matchup UI: make sure IDs exist -->
+    <main class="matchup">
+      <section class="card left">
+        <button id="voteLeft" class="vote">Vote This</button>
+        <div class="count"><span id="leftVotes">0</span> votes</div>
+      </section>
 
-    <div class="tile" id="tileB">
-      <img id="imgB" class="art" alt="Entry Right"/>
-      <div class="caption" id="countB">0 votes</div>
-      <div class="meta">
-        <span id="labelB">Right</span>
-        <button class="btn primary" id="voteB">Vote This</button>
-      </div>
-    </div>
+      <section class="card right">
+        <button id="voteRight" class="vote">Vote This</button>
+        <div class="count"><span id="rightVotes">0</span> votes</div>
+      </section>
 
-    <div class="row">
-      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
-    </div>
-
-    <section class="bracket" id="bracket">
-      <div class="bracket-head">
-        <div class="title">Bracket</div>
-        <label style="display:flex;align-items:center;gap:8px">
-          <input id="showDone" type="checkbox" checked>
-          <span>Show finished rounds</span>
-        </label>
-      </div>
-      <div id="brows"></div>
-    </section>
+      <div id="votedBadge" class="voted hidden">✓ Voted</div>
+    </main>
   </div>
 
-  <div id="overlay">
-    <button id="overlayClose" class="btn">✕</button>
-    <div style="text-align:center;max-width:80vw">
-      <h1>CHAMPION</h1>
-      <img id="overlayImg" style="max-width:80vw;max-height:70vh;border:1px solid var(--border);border-radius:12px"/>
-      <p id="overlayNote" style="color:var(--muted)"></p>
-    </div>
-  </div>
-
-  <!-- ===== Rage Debugger (inline) ===== -->
-  <script>
-  (function () {
-    const floatBtn = document.createElement('button');
-    floatBtn.id = 'dbgFloatingBtn';
-    floatBtn.textContent = '🐛 Debug';
-    floatBtn.style.cssText = 'position: fixed; right: 8px; bottom: 8px; z-index: 2147483647; background:#000; color:#0f0; border:1px solid #0f0; border-radius:6px; padding:6px 10px; font: 12px/1.1 monospace; cursor:pointer;';
-    document.body.appendChild(floatBtn);
-
-    const wrap = document.createElement('div');
-    wrap.id = 'dbg';
-    wrap.style.cssText = 'position: fixed; right: 0; bottom: 0; left: 0; background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace; z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);';
-    const bar = document.createElement('div');
-    bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-    bar.innerHTML = '<span style="color:#6f6">Rage Debug</span><label>Filter:<select id="dbgFilter"><option value="">All</option><option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option><option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option><option>ERR</option><option>WARN</option><option>LOG</option></select></label><label><input id="dbgRecord" type="checkbox" checked> Record</label><button id="dbgCopy">Copy</button><button id="dbgDownload">Download</button><button id="dbgClose">Close</button>';
-    const list = document.createElement('div');
-    list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-    wrap.appendChild(bar); wrap.appendChild(list); document.body.appendChild(wrap);
-
-    function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-    floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-    bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-    const filterSel  = bar.querySelector('#dbgFilter');
-    const recordChk  = bar.querySelector('#dbgRecord');
-    bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-    bar.querySelector('#dbgDownload').onclick = () => { const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'}); const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`}); a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000); };
-
-    let buffer = [];
-    function addLine(r){ const div = document.createElement('div'); div.textContent = r.line; if (r.kind === 'ERR') div.style.color = '#f88'; else if (r.kind === 'WARN') div.style.color = '#ff8'; else if (r.kind === 'EDGE') div.style.color = '#8ff'; else if (r.kind === 'NET')  div.style.color = '#8cf'; else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6'; list.appendChild(div); list.scrollTop = list.scrollHeight; }
-    function render(){ list.innerHTML = ''; const f = filterSel.value; for (const r of buffer) if (!f || f === r.kind) addLine(r); }
-    function push(kind, msg){ if (!recordChk.checked) return; const ts = new Date().toLocaleTimeString(); const line = `[${ts}] ${kind}: ${msg}`; buffer.push({kind, line}); if (buffer.length > 2000) buffer.shift(); const f = filterSel.value; if (!f || f === kind) addLine({kind, line}); }
-
-    const _log = console.log, _warn = console.warn, _err = console.error;
-    console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-    console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-    console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-    window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-    window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-    document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-
-    (function watchClock(){ const el = document.getElementById('clock'); if (!el) return; let last = el.textContent, lastAt = performance.now(); const mo = new MutationObserver(() => { const now = performance.now(); if (el.textContent !== last) { const dt = ((now - lastAt)/1000).toFixed(2); push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`); last = el.textContent; lastAt = now; } }); mo.observe(el, {childList:true, characterData:true, subtree:true}); })();
-
-    const _fetch = window.fetch.bind(window);
-    window.fetch = async function(url, opts = {}) {
-      const start = performance.now();
-      const method = (opts && opts.method) || 'GET';
-      const tag = /\/functions\/v1\/global-timer/.test(String(url)) ? 'EDGE' : 'NET';
-      push(tag, `${method} ${url}`);
-      try {
-        const res = await _fetch(url, opts);
-        const ms = (performance.now() - start).toFixed(0);
-        push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-        return res;
-      } catch (e) {
-        const ms = (performance.now() - start).toFixed(0);
-        push(tag, `${method} ${url} ✖ ${e.name||'TypeError'} (${ms}ms)`);
-        throw e;
-      }
-    };
-
-    const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-    const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-    const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-    const timers = new Map();
-    window.setInterval = function(fn, ms, ...rest){
-      const id = _setInterval(function(){ try{fn()}finally{} } , ms, ...rest);
-      timers.set(id, {type:'interval', ms});
-      push('TIMER', `interval ${id} set @ ${ms}ms`);
-      return id;
-    };
-    window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-    window.setTimeout  = function(fn, ms, ...rest){
-      const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{ push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`) } }, ms, ...rest);
-      timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-    };
-    window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-    window.requestAnimationFrame = function(fn){ return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{ push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`) } }); };
-    window.cancelAnimationFrame = function(id){ _caf(id); };
-
-    const brows = document.getElementById('brows');
-    if (brows) {
-      const mo = new MutationObserver((ms)=>{ let adds = 0, rems = 0; for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; } console.log(`OBS: bracket changed: +${adds} -${rems} (children=${brows.children.length})`); });
-      mo.observe(brows, {childList:true, subtree:false});
-    }
-
-    console.log('Debugger ready');
-  })();
-  </script>
-  <!-- ===== /Rage Debugger ===== -->
-
-  <script type="module" src="./assets/js/matchup.app.js"></script>
-  <script type="module" src="./assets/js/matchup.config.js"></script>
+  <!-- Config then App -->
+  <!-- Put config first so app can read window.MATCHUP_CONFIG -->
+  <!-- Replace anon key in the config file before publishing -->
+  <!-- (You can also inline both <script> blocks here if you prefer) -->
+  <!-- matchup.config.js content pasted above -->
+  <!-- matchup.app.js content pasted above -->
 </body>
 </html>
