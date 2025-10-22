@@ -1,240 +1,374 @@
-<script type="module">
-// ======= CONFIG =======
-const EDGE_URL = 'https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2';
-const SUPABASE_REST = 'https://tuqvpcevrhciursxrgav.supabase.co/rest/v1';
-const SUPABASE_ANON_KEY = window?.ENV_SUPABASE_ANON_KEY || (window.localStorage.getItem('sb-anon') || '');
-const AUTH_HEADERS = {
-  'apikey': SUPABASE_ANON_KEY,
-  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-};
+// matchup.app.js — v2.4: 100s cycle, 20s checkpoints, client-side countdown + checkpoint “decide” pings
+import { SUPABASE_URL, SUPABASE_ANON, EDGE_URL } from './matchup.config.js';
 
-// ======= ROUND / CLOCK SETTINGS (updated) =======
-// One full game cycle is 100 → 0, with decisions every 20s at 100/80/60/40/20/0
-const periodSec = 20;                                  // was 30
-const CHECKPOINTS = [100, 80, 60, 40, 20, 0];          // explicit gates
-let lastCheckpointFired = null;                        // what we’ve already pinged for this cycle
+// Supabase
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-// ======= STATE =======
-const G = {
-  baseIso: null,
-  clock: 100,             // show 100 at start
-  lastCheckpoint: null,   // from server (read-only)
-  bracket: null,
-  paused: false,
-  _prevClock: null,
-};
+// ---- CONSTANTS FOR THE SCHEDULE ----
+const CYCLE_SEC = 100; // total cycle length
+const STEP_SEC  = 20;  // decision cadence (every 20s)
 
-// ======= UTIL =======
-const log = (...args) => console.log(...args);
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+// STATE
+let currentUid = null;
+let cycleStart = null;   // base ISO for current tournament cycle
+let paused = false;
 
-// Compute a 0–100 clock from server payload.
-// We clamp to the nearest integer to stabilize boundary checks.
-function computeClockFromServer(payload) {
-  // server might already return a 0..100 scale via payload.clock; if so, use it.
-  if (typeof payload?.clock === 'number') {
-    return Math.max(0, Math.min(100, Math.round(payload.clock)));
-  }
-  // fallback: derive from seconds-left
-  if (typeof payload?.seconds_left === 'number') {
-    const pct = (payload.seconds_left / 100) * 100; // keep 0..100 scale if server uses 100s horizon
-    return Math.max(0, Math.min(100, Math.round(pct)));
-  }
-  // ultimate fallback: keep current
-  return G.clock;
+let activeSlot = 'r32_1';
+let currentStage = 'r32';    // r32 -> r16 -> qf -> sf -> final
+let usedLocalFallback = false;
+
+// advancers cache (phase_key -> color)
+let advancers = new Map();
+
+// checkpoint watcher (to only fire once per boundary)
+let lastCheckpointIndex = null;
+
+// DOM
+const $ = (id)=>document.getElementById(id);
+const clockEl    = $('clock');
+const phaseBadge = $('phaseBadge');
+const loginBadge = $('loginBadge');
+const voteA      = $('voteA');
+const voteB      = $('voteB');
+const imgA       = $('imgA');
+const imgB       = $('imgB');
+const countA     = $('countA');
+const countB     = $('countB');
+const submitBtn  = $('submitBtn');
+const btnPause   = $('btnPause');
+const btnReset   = $('btnReset');
+const brows      = $('brows');
+const overlay    = $('overlay');
+const overlayImg = $('overlayImg');
+const overlayNote= $('overlayNote');
+
+const stageOf    = (slot)=> slot.startsWith('r32')?'r32':slot.startsWith('r16')?'r16':slot.startsWith('qf')?'qf':(slot.startsWith('sf')?'sf':'final');
+const stageOrder = ['r32','r16','qf','sf','final'];
+
+function note(...a){ try{ window.RageDebug?.log?.(...a); }catch{} }
+
+function slotKey(slot, base){ return slot==='final' ? `${base}::final` : `${base}::${slot}`; }
+function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
+function r32Pack(baseISO, n){ return { A: seedUrlFromKey(baseISO, `A${n}`), B: seedUrlFromKey(baseISO, `B${n}`) }; }
+
+// ---------- TIME / STAGE DERIVATION ----------
+function secondsSinceBase(baseISO){
+  const baseMs = Date.parse(baseISO);
+  const nowMs  = Date.now();
+  return Math.max(0, Math.floor((nowMs - baseMs)/1000));
 }
 
-// POST helper to edge with JSON
-async function postEdge(body) {
-  const res = await fetch(EDGE_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body || {}),
+function leftFromBase(baseISO){
+  if (!baseISO) return null;
+  const elapsed = secondsSinceBase(baseISO) % CYCLE_SEC; // 0..99
+  let left = (CYCLE_SEC - elapsed) % CYCLE_SEC;          // 0..99 (0 means boundary)
+  // Show 100 at the start boundary so the clock *starts at 100*
+  if (left === 0) left = CYCLE_SEC;                      // 100..1
+  return left;
+}
+
+// Which tournament stage should be active given seconds-left
+function stageForLeft(left){
+  // (80,100] r32; (60,80] r16; (40,60] qf; (20,40] sf; (0,20] final
+  if (left > 80) return 'r32';
+  if (left > 60) return 'r16';
+  if (left > 40) return 'qf';
+  if (left > 20) return 'sf';
+  return 'final';
+}
+
+// Fire server “decide” at each 20s boundary exactly once
+async function maybeDecide(left){
+  if (!cycleStart || paused || left == null) return;
+  // Convert left to “elapsed within cycle”, 0..99 (but we display left as 100..1)
+  const elapsed = (CYCLE_SEC - (left % CYCLE_SEC)) % CYCLE_SEC; // 0..99
+  // Index 0..5 for checkpoints at 100,80,60,40,20,0 seconds-left
+  const checkpointIndex = Math.floor(elapsed / STEP_SEC); // 0..4 during the cycle; wraps at next cycle
+
+  const atBoundary = (elapsed % STEP_SEC) === 0; // exactly at 0,20,40,60,80 elapsed
+  const isStartOfCycle = (elapsed === 0);        // skip “decide” at cycle start
+
+  if (atBoundary && !isStartOfCycle && checkpointIndex !== lastCheckpointIndex){
+    lastCheckpointIndex = checkpointIndex;
+    try {
+      await postAction('decide'); // server should compute winners/advancers for the round gate we just passed
+    } catch(e){ note('decide post failed', e); }
+  }
+
+  // When we roll over to a new cycle (left jumps from ~1 back to 100), reset the tracker
+  if (isStartOfCycle) {
+    lastCheckpointIndex = null;
+  }
+}
+
+// ---------- DATA HELPERS ----------
+async function loadAdvancers(baseISO){
+  if (!baseISO){ advancers = new Map(); return; }
+  const url =
+    `${SUPABASE_URL}/rest/v1/advancers_v2`
+    + `?select=phase_key,color,from_key&base_iso=eq.${encodeURIComponent(baseISO)}`;
+  const rows = await fetch(url, {
+    headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }
+  }).then(r => r.ok ? r.json() : []);
+  advancers = new Map((rows || []).map(r => [r.phase_key, String(r.color || '').toLowerCase()]));
+}
+
+async function getPairFromWinners(baseISO, leftKey, rightKey, rebuildLeft, rebuildRight){
+  const { data } = await supabase.from('winners_v2').select('phase_key,color').in('phase_key', [leftKey, rightKey]);
+  const map = Object.fromEntries((data||[]).map(r=>[r.phase_key, String(r.color||'').toLowerCase()]));
+  if (!(map[leftKey] && map[rightKey])) return null;
+  const L = await rebuildLeft();  const R = await rebuildRight();
+  const leftSrc  = (map[leftKey]==='red') ? L.A : L.B;
+  const rightSrc = (map[rightKey]==='red') ? R.A : R.B;
+  return { A: leftSrc, B: rightSrc };
+}
+
+async function packFor(slot){
+  const base = cycleStart;
+  if (!base) return null;
+
+  if (slot.startsWith('r32')){
+    const n = Number(slot.split('_')[1]);
+    return r32Pack(base, n);
+  }
+
+  if (slot.startsWith('r16')){
+    const i = Number(slot.split('_')[1]);
+    const pair = [i*2-1, i*2];
+    const k1 = `${base}::r32_${pair[0]}`, k2 = `${base}::r32_${pair[1]}`;
+    const rebuild = (n)=>()=> Promise.resolve(r32Pack(base, n));
+    return await getPairFromWinners(base, k1, k2, rebuild(pair[0]), rebuild(pair[1]));
+  }
+
+  if (slot.startsWith('qf')){
+    const map = {qf1:[1,2], qf2:[3,4], qf3:[5,6], qf4:[7,8]}[slot];
+    const k1 = `${base}::r16_${map[0]}`, k2 = `${base}::r16_${map[1]}`;
+    const rebuild = (n)=>()=> packFor(`r16_${n}`);
+    return await getPairFromWinners(base, k1, k2, rebuild(map[0]), rebuild(map[1]));
+  }
+
+  if (slot.startsWith('sf')){
+    const map = slot==='sf1' ? ['qf1','qf2'] : ['qf3','qf4'];
+    const k1 = `${base}::${map[0]}`, k2 = `${base}::${map[1]}`;
+    const rebuild = (s)=>()=> packFor(s);
+    return await getPairFromWinners(base, k1, k2, rebuild(map[0]), rebuild(map[1]));
+  }
+
+  const k1 = `${base}::sf1`, k2 = `${base}::sf2`;
+  const rebuild = (s)=>()=> packFor(s);
+  return await getPairFromWinners(base, k1, k2, rebuild('sf1'), rebuild('sf2'));
+}
+
+async function countVotes(key){
+  const { data } = await supabase.from('phase_votes_v2').select('vote').eq('phase_key', key);
+  let r=0,b=0; (data||[]).forEach(v=>{ if(v.vote==='red') r++; else if(v.vote==='blue') b++; });
+  return {r,b};
+}
+
+// ---------- UI PAINT ----------
+export async function paintSlot(slot){
+  const base = cycleStart;
+  if (!base) return;
+  const pack = await packFor(slot);
+  if (pack){ imgA.src = pack.A; imgB.src = pack.B; } else { imgA.removeAttribute('src'); imgB.removeAttribute('src'); }
+  const key = slotKey(slot, base);
+  const {r,b} = await countVotes(key);
+  $('countA').textContent = `${r} vote${r===1?'':'s'}`;
+  $('countB').textContent = `${b} vote${b===1?'':'s'}`;
+  window.RageDebug?.markCounts?.(slot, r, b);
+}
+
+async function renderBracket(){
+  const base = cycleStart;
+  if (!base){ brows.innerHTML=''; return; }
+
+  await loadAdvancers(base);
+
+  const order = [
+    'r32_1','r32_2','r32_3','r32_4','r32_5','r32_6','r32_7','r32_8',
+    'r32_9','r32_10','r32_11','r32_12','r32_13','r32_14','r32_15','r32_16',
+    'r16_1','r16_2','r16_3','r16_4','r16_5','r16_6','r16_7','r16_8',
+    'qf1','qf2','qf3','qf4','sf1','sf2','final'
+  ];
+  const blocks = await Promise.all(order.map(async s=>{
+    const p = await packFor(s);
+    const key = slotKey(s, base);
+    const {r,b} = await countVotes(key).catch(()=>({r:0,b:0}));
+    const decided = advancers.has(key) ? 'decided' : '';
+    return `
+      <div class="brow ${decided}" data-slot="${s}">
+        <div class="bbadge">${stageOf(s).toUpperCase()}</div>
+        <div style="display:flex;gap:8px">
+          <div class="thumb">${p?.A ? `<img src="${p.A}" alt="">` : ''}</div>
+          <div class="thumb">${p?.B ? `<img src="${p.B}" alt="">` : ''}</div>
+        </div>
+        <div class="bmeta"><div class="title">${s}</div></div>
+        <div class="bscore">${r} - ${b}</div>
+      </div>`;
+  }));
+  brows.innerHTML = blocks.join('');
+  brows.querySelectorAll('.brow').forEach(row=>{
+    row.addEventListener('click', async ()=>{
+      activeSlot = row.dataset.slot;
+      await paintSlot(activeSlot);
+    });
   });
-  if (!res.ok) {
-    const t = await res.text().catch(() => '');
-    throw new Error(`edge POST ${res.status}: ${t}`);
-  }
-  return res.json().catch(() => ({}));
 }
 
-// GET helper to edge
-async function getEdge() {
-  const res = await fetch(EDGE_URL, { method: 'GET' });
-  if (!res.ok) {
-    const t = await res.text().catch(() => '');
-    throw new Error(`edge GET ${res.status}: ${t}`);
-  }
-  return res.json().catch(() => ({}));
+function lockUI(){
+  const left = leftFromBase(cycleStart);
+  const stage = left!=null ? stageForLeft(left) : currentStage;
+  currentStage = stage;
+
+  phaseBadge.textContent = cycleStart ? `phase: ${cycleStart}${usedLocalFallback?' (local)':''}` : 'phase: —';
+  btnPause.textContent = paused ? 'Resume' : 'Pause';
+
+  // Only allow votes in the current round
+  const locked = (stageOf(activeSlot) !== currentStage);
+  [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
 }
 
-// load advancers for the active baseIso
-async function loadAdvancers(baseIso) {
-  const url = `${SUPABASE_REST}/advancers_v2?select=phase_key,color,from_key&base_iso=eq.${encodeURIComponent(baseIso)}`;
-  const res = await fetch(url, { headers: AUTH_HEADERS });
-  if (!res.ok) throw new Error('advancers load failed');
-  return res.json();
-}
+async function fetchState(){
+  // GET server state
+  const res  = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
+  const body = await res.json();
 
-// load winners for a set of keys
-async function loadWinners(keys) {
-  if (!keys?.length) return [];
-  const list = keys.map(encodeURIComponent).join(',');
-  const url = `${SUPABASE_REST}/winners_v2?select=phase_key,color&phase_key=in.(${list})`;
-  const res = await fetch(url, { headers: AUTH_HEADERS });
-  if (!res.ok) throw new Error('winners load failed');
-  return res.json();
-}
+  cycleStart = body.baseISO || cycleStart;
+  if (typeof body.paused === 'boolean') paused = body.paused;
 
-// ======= RENDER (kept as-is, only where needed) =======
-function renderClock() {
-  const el = document.querySelector('[data-clock]');
-  if (!el) return;
-  el.textContent = String(G.clock);
-}
+  // If no base yet, try POST once; otherwise fallback to local base so the UI always runs.
+  if (!cycleStart && !usedLocalFallback){
+    try{
+      const r = await fetch(EDGE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+        body: JSON.stringify({})
+      });
+      if (!r.ok) note('Edge POST failed', r.status);
+    }catch(e){ note('Edge POST error', e); }
 
-// call after any bracket update
-function renderBracket(bracketRows) {
-  // your existing UI render function(s) — unchanged
-  // (left intact because your DOM/layout is already working)
-}
-
-// ======= CHECKPOINT DRIVER (new) =======
-function crossedCheckpoint(prev, curr) {
-  if (prev == null) return null;
-  // detect any checkpoint crossed between prev -> curr (counting down)
-  for (const cp of CHECKPOINTS) {
-    // prev >= cp > curr  OR exact hit
-    if ((prev > cp && curr <= cp) || curr === cp) return cp;
-  }
-  return null;
-}
-
-async function handleCheckpoint(cp) {
-  if (cp === lastCheckpointFired) return; // avoid double pings
-  lastCheckpointFired = cp;
-  log('[CLOCK]', 'checkpoint →', cp);
-
-  // 1) Nudge the edge function to “decide” at this checkpoint
-  //    (keeps authoritative logic server-side).
-  //    If your edge expects a different op name like "decide" or "tick",
-  //    change "checkpoint" accordingly; the idea is the same.
-  try {
-    await postEdge({ op: 'checkpoint', at: cp });
-  } catch (e) {
-    console.warn('edge checkpoint post failed', e);
+    try{
+      const again = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
+      const b2 = await again.json();
+      cycleStart = b2.baseISO || null;
+    }catch(e){}
   }
 
-  // 2) Shortly after, refresh bracket data (so UI advances as soon as the backend writes)
-  await sleep(1000);
-  try {
-    const adv = await loadAdvancers(G.baseIso);
-    G.bracket = adv;
-    renderBracket(adv);
-  } catch (e) {
-    console.warn('advancers refresh failed after checkpoint', e);
+  if (!cycleStart){
+    let local = localStorage.getItem('rs_local_base');
+    if (!local) {
+      const now = new Date(); now.setSeconds(0,0);
+      local = now.toISOString();
+      localStorage.setItem('rs_local_base', local);
+    }
+    cycleStart = local;
+    usedLocalFallback = true;
   }
+
+  // drive the visible countdown strictly from baseISO
+  const left = leftFromBase(cycleStart);
+  if (left != null){
+    clockEl.textContent = paused ? `⏸ ${left}` : String(left);
+  }
+
+  // at each tick, if we’re exactly on a 20s boundary (except cycle start), ask server to decide
+  await maybeDecide(left);
 }
 
-// ======= POLL / TICK LOOP =======
-let edgePollInterval = null;
-let clockPaintInterval = null;
+async function postAction(action){
+  await fetch(EDGE_URL, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', apikey:SUPABASE_ANON, Authorization:`Bearer ${SUPABASE_ANON}` },
+    body: JSON.stringify({action})
+  }).catch(()=>{});
+  await fetchState();
+}
 
-function startLoops() {
-  // Poll edge every ~25s for fresh clock/base/checkpoint (kept from your logs cadence)
-  if (edgePollInterval) clearInterval(edgePollInterval);
-  edgePollInterval = setInterval(async () => {
-    try {
-      const data = await getEdge();
-      if (data?.base_iso) G.baseIso = data.base_iso;
+function wireControls(){
+  $('overlayClose').onclick = ()=> overlay.classList.remove('show');
+  $('btnPause').onclick = async ()=> postAction(paused ? 'resume':'pause');
+  $('btnReset').onclick = async ()=>{
+    lastCheckpointIndex = null;            // clear the local checkpoint tracker
+    await postAction('reset');
+    await paintSlot(activeSlot);
+    await renderBracket();
+  };
 
-      const newClock = computeClockFromServer(data);
-      const prev = G._prevClock ?? newClock;
-      G.clock = newClock;
-      G._prevClock = newClock;
+  let chosen=null;
+  $('voteA').onclick=()=>{ chosen='red';  voteA.classList.add('selected'); voteB.classList.remove('selected'); submitBtn.disabled=!currentUid; };
+  $('voteB').onclick=()=>{ chosen='blue'; voteB.classList.add('selected'); voteA.classList.remove('selected'); submitBtn.disabled=!currentUid; };
+  $('submitBtn').onclick=async ()=>{
+    if (!chosen) return;
+    if (!currentUid) return alert('Log in to vote');
+    const key = slotKey(activeSlot, cycleStart);
+    await supabase.from('phase_votes_v2').upsert({ phase_key: key, user_id: currentUid, vote: chosen }, { onConflict:'phase_key,user_id' });
+    await paintSlot(activeSlot);
+    submitBtn.textContent='✔ Voted'; submitBtn.disabled=true;
+    setTimeout(()=>{ submitBtn.textContent='Submit Vote'; submitBtn.disabled=false; voteA.classList.remove('selected'); voteB.classList.remove('selected'); chosen=null; }, 1200);
+  };
+}
 
-      // fire checkpoint if we crossed one (100/80/60/40/20/0)
-      const cp = crossedCheckpoint(prev, newClock);
-      if (cp !== null) {
-        handleCheckpoint(cp);
+function wireRealtime(){
+  supabase.channel('v2-votes')
+    .on('postgres_changes',{event:'*',schema:'public',table:'phase_votes_v2'}, async ()=>{
+      await paintSlot(activeSlot);
+    }).subscribe();
+
+  supabase.channel('v2-winners')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'winners_v2'}, (payload)=>{
+      const pk = payload?.new?.phase_key || '';
+      if (pk.endsWith('::final') && pk.startsWith(cycleStart)){
+        const color = (payload?.new?.color||'').toLowerCase();
+        overlayNote.textContent = color === 'red' ? 'Left side triumphs.' : 'Right side triumphs.';
+        overlayImg.src = color==='red' ? imgA.src : imgB.src;
+        overlay.classList.add('show');
       }
-
-      // Update local lastCheckpoint if server provides it (read-only origin)
-      if (typeof data?.last_checkpoint === 'number') {
-        G.lastCheckpoint = data.last_checkpoint;
-      }
-
-      renderClock();
-    } catch (e) {
-      console.warn('edge poll failed', e);
-    }
-  }, 25000);
-
-  // Smooth-ish paint for the clock text to feel live (every 1s)
-  if (clockPaintInterval) clearInterval(clockPaintInterval);
-  clockPaintInterval = setInterval(() => {
-    renderClock();
-  }, 1000);
+    }).subscribe();
 }
 
-async function initialBoot() {
-  log('[DEBUG]', 'boot');
-  // tell the edge “we’re here”; also makes sure a base is created if needed
-  try {
-    await postEdge({ op: 'ensure-base', periodSec, checkpoints: CHECKPOINTS });
-  } catch (e) {
-    console.warn('ensure-base failed', e);
+async function boot(){
+  // auth
+  const { data:{session} } = await supabase.auth.getSession();
+  currentUid = session?.user?.id || null;
+  loginBadge.textContent = currentUid ? 'logged in' : 'not logged in';
+  supabase.auth.onAuthStateChange((_evt, session2)=>{
+    currentUid = session2?.user?.id || null;
+    loginBadge.textContent = currentUid ? 'logged in' : 'not logged in';
+    lockUI();
+  });
+
+  // first state load + initial paints
+  await fetchState();
+  lockUI();
+  await loadAdvancers(cycleStart);
+  await paintSlot(activeSlot);
+  await renderBracket();
+
+  // heartbeat (1s): recompute left from baseISO so the clock starts at 100 and ticks down
+  (async function tick(){
+    try{
+      await fetchState();     // updates countdown + may trigger decide at boundaries
+      lockUI();               // updates stage gates from left
+      await loadAdvancers(cycleStart);
+      await paintSlot(activeSlot);
+      await renderBracket();
+    }catch(e){ note('tick error', e); }
+    setTimeout(tick, 1000);
+  })();
+
+  wireControls();
+  wireRealtime();
+}
+
+// expose for debugger
+window.__matchup__ = { paintSlot, fetchState, advancers };
+
+// start app when DOM is ready
+function startWhenReady(){
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
   }
-
-  // prime all data right away
-  try {
-    const data = await getEdge();
-    if (data?.base_iso) G.baseIso = data.base_iso;
-    G.clock = computeClockFromServer(data);
-    G._prevClock = G.clock;
-    if (typeof data?.last_checkpoint === 'number') {
-      G.lastCheckpoint = data.last_checkpoint;
-    }
-    renderClock();
-  } catch (e) {
-    console.warn('initial edge get failed', e);
-  }
-
-  // load bracket on boot
-  if (G.baseIso) {
-    try {
-      const adv = await loadAdvancers(G.baseIso);
-      G.bracket = adv;
-      renderBracket(adv);
-    } catch (e) {
-      console.warn('initial advancers load failed', e);
-    }
-  }
-
-  // spin the loops
-  startLoops();
 }
-
-// ======= ACTION BUTTONS (unchanged API) =======
-async function onPause() {
-  try {
-    await postEdge({ op: 'pause' });
-  } catch (e) { /* noop */ }
-}
-async function onResume() {
-  try {
-    await postEdge({ op: 'resume' });
-  } catch (e) { /* noop */ }
-}
-async function onReset() {
-  try {
-    // reset back to 100 with our 20s checkpoints
-    await postEdge({ op: 'reset', periodSec, checkpoints: CHECKPOINTS });
-    lastCheckpointFired = null;
-  } catch (e) { /* noop */ }
-}
-
-// ======= BOOT =======
-initialBoot();
-
-</script>
+startWhenReady();
