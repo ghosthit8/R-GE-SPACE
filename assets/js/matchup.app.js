@@ -1,4 +1,4 @@
-// matchup.app.js — v2 fixed for Edge payload (baseISO/clock/decision_seconds)
+// matchup.app.js — v2.1: robust Edge mapping + safe local fallback
 import { SUPABASE_URL, SUPABASE_ANON, EDGE_URL } from './matchup.config.js';
 
 // Supabase
@@ -6,13 +6,16 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // STATE
 let currentUid = null;
-let cycleStart = null;         // baseISO from Edge
+let cycleStart = null;         // active base ISO (Edge or local fallback)
 let periodSec = 30;
 let lastCheckpoint = 0;        // 0..5 (if Edge returns it)
 let paused = false;
 
 let activeSlot = 'r32_1';
 let currentStage = 'r32';
+
+// Track if we had to fallback locally (so we don’t spam POSTs)
+let usedLocalFallback = false;
 
 // --- advancers cache (phase_key -> color) ---
 let advancers = new Map();
@@ -45,6 +48,8 @@ function slotKey(slot, base){ return slot==='final' ? `${base}::final` : `${base
 function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
 function r32Pack(baseISO, n){ return { A: seedUrlFromKey(baseISO, `A${n}`), B: seedUrlFromKey(baseISO, `B${n}`) }; }
 
+function note(...a){ try{ window.RageDebug?.log?.(...a); }catch{} }
+
 // --- load advancers for the current base ---
 async function loadAdvancers(baseISO){
   if (!baseISO){ advancers = new Map(); return; }
@@ -55,7 +60,7 @@ async function loadAdvancers(baseISO){
     headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }
   }).then(r => r.ok ? r.json() : []);
   advancers = new Map((rows || []).map(r => [r.phase_key, String(r.color || '').toLowerCase()]));
-  window.RageDebug?.log?.('advancers loaded', advancers.size);
+  note('advancers loaded', advancers.size);
 }
 
 async function getPairFromWinners(baseISO, leftKey, rightKey, rebuildLeft, rebuildRight){
@@ -113,7 +118,7 @@ async function countVotes(key){
 export async function paintSlot(slot){
   const base = baseForSlot();
   if (!base) return;
-  $('phaseBadge').textContent = `phase: ${base}`;
+  $('phaseBadge').textContent = `phase: ${base}` + (usedLocalFallback ? ' (local)' : '');
   const pack = await packFor(slot);
   if (pack){ imgA.src = pack.A; imgB.src = pack.B; } else { imgA.removeAttribute('src'); imgB.removeAttribute('src'); }
   const key = slotKey(slot, base);
@@ -167,44 +172,60 @@ async function setAuth(){
   loginBadge.textContent = currentUid ? 'logged in' : 'not logged in';
 }
 
-// ---- FIXED: map Edge GET → UI fields; bootstrap if no base ----
+// ---- Edge GET mapping + graceful local fallback when POST 500s ----
 async function fetchState(){
-  // 1) GET current state
+  // 1) GET current state from Edge (works in your logs)
   const res  = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
   const body = await res.json();
 
-  // New Edge payload (no {state:{…}})
   cycleStart = body.baseISO || null;
   periodSec  = Number(body.decision_seconds ?? periodSec ?? 30);
   if (typeof body.last_checkpoint === 'number') lastCheckpoint = body.last_checkpoint;
   if (typeof body.paused === 'boolean') paused = body.paused;
   if (typeof body.clock === 'number') clockEl.textContent = String(Math.floor(body.clock));
 
-  // optional stage derivation if checkpoint present
   if (typeof lastCheckpoint === 'number') {
     currentStage = ['r32','r16','qf','sf','final'][Math.max(0, lastCheckpoint)-1] || currentStage || 'r32';
   }
 
-  // 2) If still no active base, POST once to start, then re-fetch (guard errors)
-  if (!cycleStart) {
+  // 2) If there is no base yet, try POST ONCE (it’s currently 500 in your logs)
+  if (!cycleStart && !usedLocalFallback) {
     try{
-      await fetch(EDGE_URL, {
+      const r = await fetch(EDGE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
         body: JSON.stringify({})
       });
-    }catch{}
+      if (!r.ok) note('Edge POST failed', r.status);
+    }catch(e){ note('Edge POST error', e); }
+
+    // Re-GET after POST attempt
     try{
       const again = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
-      const body2 = await again.json();
-      cycleStart = body2.baseISO || null;
-      if (typeof body2.clock === 'number') clockEl.textContent = String(Math.floor(body2.clock));
-    }catch{}
+      const b2 = await again.json();
+      cycleStart = b2.baseISO || null;
+      if (typeof b2.clock === 'number') clockEl.textContent = String(Math.floor(b2.clock));
+    }catch(e){ note('Edge re-GET error', e); }
+  }
+
+  // 3) Still no base? Fall back to a local base so UI can render images/bracket.
+  if (!cycleStart) {
+    let local = localStorage.getItem('rs_local_base');
+    if (!local) {
+      const now = new Date();
+      // trim seconds for tidier seeds
+      now.setSeconds(0, 0);
+      local = now.toISOString();
+      localStorage.setItem('rs_local_base', local);
+    }
+    cycleStart = local;
+    usedLocalFallback = true;
+    note('Using LOCAL base fallback', cycleStart);
   }
 }
 
 function lockUI(){
-  phaseBadge.textContent = cycleStart ? `phase: ${cycleStart}` : 'phase: —';
+  phaseBadge.textContent = cycleStart ? `phase: ${cycleStart}${usedLocalFallback?' (local)':''}` : 'phase: —';
   const locked = (stageLevel(stageOf(activeSlot)) !== stageLevel(currentStage));
   [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
 }
@@ -255,19 +276,22 @@ function wireRealtime(){
 }
 
 async function boot(){
-  await setAuth();
-  supabase.auth.onAuthStateChange((_evt, session)=>{
-    currentUid = session?.user?.id || null;
+  // auth
+  const { data:{session} } = await supabase.auth.getSession();
+  currentUid = session?.user?.id || null;
+  loginBadge.textContent = currentUid ? 'logged in' : 'not logged in';
+  supabase.auth.onAuthStateChange((_evt, session2)=>{
+    currentUid = session2?.user?.id || null;
     loginBadge.textContent = currentUid ? 'logged in' : 'not logged in';
     lockUI();
   });
 
+  // state + UI
   await fetchState();
   lockUI();
 
-  // ensure advancers are available before first paints
+  // paints
   await loadAdvancers(cycleStart);
-
   await paintSlot(activeSlot);
   await renderBracket();
 
@@ -277,10 +301,9 @@ async function boot(){
       await fetchState();
       lockUI();
       await loadAdvancers(cycleStart);
-      // repaint the active slot and bracket thumbnails (cheap)
       await paintSlot(activeSlot);
       await renderBracket();
-    }catch{}
+    }catch(e){ note('tick error', e); }
     setTimeout(tick, 1000);
   })();
 
