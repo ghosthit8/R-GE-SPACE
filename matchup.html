@@ -1,165 +1,169 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Rage Space — Matchup (v2)</title>
-
-<link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="./assets/css/matchup.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rage Space — Minimal Matchup (v2 outline)</title>
+  <style>
+    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
+    .wrap { max-width:700px; margin:0 auto; padding:16px 12px 28px; }
+    h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
+    .row { display:flex; align-items:center; gap:10px; }
+    .timer {
+      font-variant-numeric: tabular-nums;
+      font-weight:700; font-size:32px; line-height:1;
+      padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318;
+    }
+    .state { color:var(--muted); font-size:12px; }
+    .card {
+      margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318;
+    }
+    .imgBox { position:relative; width:100%; aspect-ratio: 3/4; background:#0b0d0f; display:grid; place-items:center; }
+    .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
+    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-top:1px solid #20242a; gap:8px; }
+    .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
+    .counts { font-variant-numeric: tabular-nums; font-weight:700; }
+    button.vote {
+      appearance:none; border:1px solid #24303a; background:#131920; color:var(--fg);
+      padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:700;
+    }
+    button.vote:disabled { opacity:.6; cursor:default; }
+    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
+  </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="scorebar">
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <strong>Decision in</strong>
-        <span id="clock" class="clock">—</span>
-        <span id="phaseBadge" class="clock">phase: —</span>
-        <span id="loginBadge" class="badge">checking auth…</span>
-      </div>
-      <div class="row">
-        <button id="btnPause" class="btn">⏸️ Pause</button>
-        <button id="btnReset" class="btn">🔁 Reset</button>
-        <a class="btn" href="./winners.html">🏁 Winners</a>
-      </div>
-    </div>
-
-    <div class="tile" id="tileA">
-      <img id="imgA" class="art" alt="Entry Left"/>
-      <div class="caption" id="countA">0 votes</div>
-      <div class="meta">
-        <span id="labelA">Left</span>
-        <button class="btn primary" id="voteA">Vote This</button>
-      </div>
-    </div>
-
-    <div class="tile" id="tileB">
-      <img id="imgB" class="art" alt="Entry Right"/>
-      <div class="caption" id="countB">0 votes</div>
-      <div class="meta">
-        <span id="labelB">Right</span>
-        <button class="btn primary" id="voteB">Vote This</button>
-      </div>
-    </div>
-
+    <h1>Rage Space — Minimal Matchup (v2)</h1>
     <div class="row">
-      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
+      <div class="timer" id="tRemain">20.0</div>
+      <div class="state" id="tMeta">syncing…</div>
     </div>
 
-    <section class="bracket" id="bracket">
-      <div class="bracket-head">
-        <div class="title">Bracket</div>
-        <label style="display:flex;align-items:center;gap:8px">
-          <input id="showDone" type="checkbox" checked>
-          <span>Show finished rounds</span>
-        </label>
+    <!-- RED on top -->
+    <div class="card" id="cardRed">
+      <div class="imgBox"><img id="imgRed" alt="Red contender" /></div>
+      <div class="bar">
+        <div class="label">Red</div>
+        <div class="counts" id="countRed">0</div>
+        <button class="vote" id="btnRed">Vote Red</button>
       </div>
-      <div id="brows"></div>
-    </section>
-  </div>
-
-  <div id="overlay">
-    <button id="overlayClose" class="btn">✕</button>
-    <div style="text-align:center;max-width:80vw">
-      <h1>CHAMPION</h1>
-      <img id="overlayImg" style="max-width:80vw;max-height:70vh;border:1px solid var(--border);border-radius:12px"/>
-      <p id="overlayNote" style="color:var(--muted)"></p>
     </div>
+
+    <!-- BLUE below -->
+    <div class="card" id="cardBlue">
+      <div class="imgBox"><img id="imgBlue" alt="Blue contender" /></div>
+      <div class="bar">
+        <div class="label">Blue</div>
+        <div class="counts" id="countBlue">0</div>
+        <button class="vote" id="btnBlue">Vote Blue</button>
+      </div>
+    </div>
+
+    <div class="hint">Timer auto-loops every 20s. A winner is decided at 0 (random if tied).</div>
   </div>
 
-  <!-- ===== Rage Debugger (inline) ===== -->
   <script>
-  (function () {
-    const floatBtn = document.createElement('button');
-    floatBtn.id = 'dbgFloatingBtn';
-    floatBtn.textContent = '🐛 Debug';
-    floatBtn.style.cssText = 'position: fixed; right: 8px; bottom: 8px; z-index: 2147483647; background:#000; color:#0f0; border:1px solid #0f0; border-radius:6px; padding:6px 10px; font: 12px/1.1 monospace; cursor:pointer;';
-    document.body.appendChild(floatBtn);
+    // <<< CHANGE THIS AFTER YOU DEPLOY >>>
+    const FUNCTION_URL = "https://YOUR-PROJECT.functions.supabase.co/global-timer-v2";
 
-    const wrap = document.createElement('div');
-    wrap.id = 'dbg';
-    wrap.style.cssText = 'position: fixed; right: 0; bottom: 0; left: 0; background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace; z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);';
-    const bar = document.createElement('div');
-    bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-    bar.innerHTML = '<span style="color:#6f6">Rage Debug</span><label>Filter:<select id="dbgFilter"><option value="">All</option><option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option><option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option><option>ERR</option><option>WARN</option><option>LOG</option></select></label><label><input id="dbgRecord" type="checkbox" checked> Record</label><button id="dbgCopy">Copy</button><button id="dbgDownload">Download</button><button id="dbgClose">Close</button>';
-    const list = document.createElement('div');
-    list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-    wrap.appendChild(bar); wrap.appendChild(list); document.body.appendChild(wrap);
+    const elRemain = document.getElementById('tRemain');
+    const elMeta = document.getElementById('tMeta');
+    const imgRed = document.getElementById('imgRed');
+    const imgBlue = document.getElementById('imgBlue');
+    const cRed = document.getElementById('countRed');
+    const cBlue = document.getElementById('countBlue');
+    const btnRed = document.getElementById('btnRed');
+    const btnBlue = document.getElementById('btnBlue');
 
-    function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-    floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-    bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-    const filterSel  = bar.querySelector('#dbgFilter');
-    const recordChk  = bar.querySelector('#dbgRecord');
-    bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-    bar.querySelector('#dbgDownload').onclick = () => { const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'}); const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`}); a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000); };
-
-    let buffer = [];
-    function addLine(r){ const div = document.createElement('div'); div.textContent = r.line; if (r.kind === 'ERR') div.style.color = '#f88'; else if (r.kind === 'WARN') div.style.color = '#ff8'; else if (r.kind === 'EDGE') div.style.color = '#8ff'; else if (r.kind === 'NET')  div.style.color = '#8cf'; else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6'; list.appendChild(div); list.scrollTop = list.scrollHeight; }
-    function render(){ list.innerHTML = ''; const f = filterSel.value; for (const r of buffer) if (!f || f === r.kind) addLine(r); }
-    function push(kind, msg){ if (!recordChk.checked) return; const ts = new Date().toLocaleTimeString(); const line = `[${ts}] ${kind}: ${msg}`; buffer.push({kind, line}); if (buffer.length > 2000) buffer.shift(); const f = filterSel.value; if (!f || f === kind) addLine({kind, line}); }
-
-    const _log = console.log, _warn = console.warn, _err = console.error;
-    console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-    console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-    console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-    window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-    window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-    document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-
-    (function watchClock(){ const el = document.getElementById('clock'); if (!el) return; let last = el.textContent, lastAt = performance.now(); const mo = new MutationObserver(() => { const now = performance.now(); if (el.textContent !== last) { const dt = ((now - lastAt)/1000).toFixed(2); push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`); last = el.textContent; lastAt = now; } }); mo.observe(el, {childList:true, characterData:true, subtree:true}); })();
-
-    const _fetch = window.fetch.bind(window);
-    window.fetch = async function(url, opts = {}) {
-      const start = performance.now();
-      const method = (opts && opts.method) || 'GET';
-      const tag = /\/functions\/v1\/global-timer/.test(String(url)) ? 'EDGE' : 'NET';
-      push(tag, `${method} ${url}`);
-      try {
-        const res = await _fetch(url, opts);
-        const ms = (performance.now() - start).toFixed(0);
-        push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-        return res;
-      } catch (e) {
-        const ms = (performance.now() - start).toFixed(0);
-        push(tag, `${method} ${url} ✖ ${e.name||'TypeError'} (${ms}ms)`);
-        throw e;
-      }
+    let state = {
+      ends_at: null,
+      period_sec: 20,
+      base_iso: null,
+      red_url: '',
+      blue_url: '',
+      red_count: 0,
+      blue_count: 0,
+      remaining_ms: 0,
     };
 
-    const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-    const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-    const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-    const timers = new Map();
-    window.setInterval = function(fn, ms, ...rest){
-      const id = _setInterval(function(){ try{fn()}finally{} } , ms, ...rest);
-      timers.set(id, {type:'interval', ms});
-      push('TIMER', `interval ${id} set @ ${ms}ms`);
-      return id;
-    };
-    window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-    window.setTimeout  = function(fn, ms, ...rest){
-      const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{ push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`) } }, ms, ...rest);
-      timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-    };
-    window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-    window.requestAnimationFrame = function(fn){ return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{ push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`) } }); };
-    window.cancelAnimationFrame = function(id){ _caf(id); };
+    async function fetchState() {
+      const res = await fetch(FUNCTION_URL, { method: 'GET' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'GET failed');
 
-    const brows = document.getElementById('brows');
-    if (brows) {
-      const mo = new MutationObserver((ms)=>{ let adds = 0, rems = 0; for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; } console.log(`OBS: bracket changed: +${adds} -${rems} (children=${brows.children.length})`); });
-      mo.observe(brows, {childList:true, subtree:false});
+      state.ends_at = data.ends_at;
+      state.period_sec = data.period_sec;
+      state.base_iso = data.base_iso;
+      state.red_url = data.red_url;
+      state.blue_url = data.blue_url;
+      state.red_count = data.red_count;
+      state.blue_count = data.blue_count;
+      state.remaining_ms = data.remaining_ms;
+
+      imgRed.src = state.red_url;
+      imgBlue.src = state.blue_url;
+      cRed.textContent = state.red_count;
+      cBlue.textContent = state.blue_count;
+
+      elMeta.textContent = `cycle: ${state.base_iso} • period: ${state.period_sec}s`;
     }
 
-    console.log('Debugger ready');
-  })();
-  </script>
-  <!-- ===== /Rage Debugger ===== -->
+    async function sendVote(color) {
+      try {
+        const res = await fetch(FUNCTION_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ color })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'vote failed');
+        if (!data.ignored) {
+          cRed.textContent = data.red_count;
+          cBlue.textContent = data.blue_count;
+        }
+      } catch (e) {
+        console.log('vote error', e);
+      }
+    }
 
-  <script type="module" src="./assets/js/matchup.app.js"></script>
-  <script type="module" src="./assets/js/matchup.config.js"></script>
+    // UI
+    btnRed.addEventListener('click', async () => {
+      btnRed.disabled = btnBlue.disabled = true;
+      await sendVote('red');
+      setTimeout(() => { btnRed.disabled = btnBlue.disabled = false; }, 400);
+    });
+    btnBlue.addEventListener('click', async () => {
+      btnRed.disabled = btnBlue.disabled = true;
+      await sendVote('blue');
+      setTimeout(() => { btnRed.disabled = btnBlue.disabled = false; }, 400);
+    });
+
+    // Timer render loop
+    let rafId = 0;
+    function tick() {
+      const remain = new Date(state.ends_at).getTime() - Date.now();
+      const clamped = Math.max(0, remain);
+      elRemain.textContent = (clamped / 1000).toFixed(1);
+
+      // when we cross 0, quickly resync to get the next images / reset counts
+      if (remain <= -900) {
+        // small debounce to let server roll forward
+        fetchState().catch(console.error);
+      }
+      rafId = requestAnimationFrame(tick);
+    }
+
+    // Light polling to keep counts fresh every 1s
+    setInterval(() => fetchState().catch(() => {}), 1000);
+
+    // Boot
+    (async () => {
+      elMeta.textContent = 'syncing…';
+      await fetchState();
+      if (rafId) cancelAnimationFrame(rafId);
+      tick();
+    })();
+  </script>
 </body>
 </html>
