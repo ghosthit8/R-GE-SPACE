@@ -169,6 +169,7 @@ async function setAuth(){
 
 // ---- FIXED: map Edge GET → UI fields; bootstrap if no base ----
 async function fetchState(){
+  // 1) GET current state
   const res  = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
   const body = await res.json();
 
@@ -184,17 +185,21 @@ async function fetchState(){
     currentStage = ['r32','r16','qf','sf','final'][Math.max(0, lastCheckpoint)-1] || currentStage || 'r32';
   }
 
-  // If there is still no active base, POST once to start, then re-fetch
+  // 2) If still no active base, POST once to start, then re-fetch (guard errors)
   if (!cycleStart) {
-    await fetch(EDGE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
-      body: JSON.stringify({})
-    });
-    const again = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
-    const body2 = await again.json();
-    cycleStart = body2.baseISO || null;
-    if (typeof body2.clock === 'number') clockEl.textContent = String(Math.floor(body2.clock));
+    try{
+      await fetch(EDGE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+        body: JSON.stringify({})
+      });
+    }catch{}
+    try{
+      const again = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
+      const body2 = await again.json();
+      cycleStart = body2.baseISO || null;
+      if (typeof body2.clock === 'number') clockEl.textContent = String(Math.floor(body2.clock));
+    }catch{}
   }
 }
 
@@ -209,7 +214,7 @@ async function postAction(action){
     method:'POST',
     headers:{ 'Content-Type':'application/json', apikey:SUPABASE_ANON, Authorization:`Bearer ${SUPABASE_ANON}` },
     body: JSON.stringify({action})
-  });
+  }).catch(()=>{});
   await fetchState();
 }
 
@@ -272,6 +277,9 @@ async function boot(){
       await fetchState();
       lockUI();
       await loadAdvancers(cycleStart);
+      // repaint the active slot and bracket thumbnails (cheap)
+      await paintSlot(activeSlot);
+      await renderBracket();
     }catch{}
     setTimeout(tick, 1000);
   })();
