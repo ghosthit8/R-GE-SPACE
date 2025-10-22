@@ -1,175 +1,165 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>matchup</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    :root { color-scheme: dark; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0d11; color:#e7ecf3; }
-    header { display:flex; align-items:center; gap:16px; padding:12px 16px; position:sticky; top:0; background:rgba(11,13,17,.9); backdrop-filter:saturate(1.2) blur(6px); border-bottom:1px solid #1a1f2a; z-index:2; }
-    .pill { padding:4px 10px; border:1px solid #253047; border-radius:999px; font-size:12px; background:#0e131b; }
-    .spacer { flex:1; }
-    main { display:grid; grid-template-columns: 340px 1fr; gap:16px; padding:16px; }
-    #brows { display:grid; gap:10px; max-height: calc(100dvh - 84px); overflow:auto; padding-right:4px; }
-    .brow { padding:10px; border:1px solid #1a1f2a; border-radius:14px; background:#0e1218; display:grid; grid-template-columns: 58px 1fr auto; gap:10px; align-items:center; }
-    .brow.decided { border-color:#2a8844; box-shadow: inset 0 0 0 1px rgba(42,136,68,.25); }
-    .bbadge { font-size:11px; letter-spacing:.08em; color:#9aa7bd; border:1px dashed #2a334a; border-radius:10px; padding:4px 6px; text-align:center; }
-    .bmeta .title { font-weight:600; color:#cdd7e8; }
-    .bscore { font-variant-numeric: tabular-nums; color:#a8b6ce; }
-    .thumb { width:64px; height:48px; border-radius:8px; border:1px solid #20283a; overflow:hidden; background:#0a0d12; display:flex; align-items:center; justify-content:center; }
-    .thumb img { width:100%; height:100%; object-fit:cover; display:block; }
-    .board { display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-content:start; }
-    .card { border:1px solid #1a1f2a; border-radius:16px; background:#0e1218; padding:12px; }
-    .bigimg { border-radius:12px; border:1px solid #20283a; overflow:hidden; height:360px; background:#080a0f; display:flex; align-items:center; justify-content:center; }
-    .bigimg img { width:100%; height:100%; object-fit:cover; display:block; }
-    .row { display:flex; gap:10px; align-items:center; }
-    .row + .row { margin-top:8px; }
-    button.btn { padding:10px 14px; border:1px solid #26314a; background:#101521; color:#d6e2fb; border-radius:12px; cursor:pointer; }
-    button.btn[disabled] { opacity:.5; cursor:not-allowed; }
-    .vote { display:flex; align-items:center; gap:8px; }
-    .vote .chip { padding:6px 10px; border:1px solid #26314a; border-radius:999px; font-size:12px; }
-    .tap { padding:8px 12px; border:1px solid #283351; border-radius:10px; background:#0b1019; cursor:pointer; }
-    .tap.selected { border-color:#4a7cf0; box-shadow: inset 0 0 0 1px rgba(74,124,240,.35); }
-    #overlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(4,6,10,.6); z-index:10; }
-    #overlay.show { display:flex; }
-    #overlayPanel { width:min(680px, 92vw); background:#0e1218; border:1px solid #1a1f2a; border-radius:18px; padding:16px; }
-    #overlayImg { width:100%; height:420px; object-fit:cover; border-radius:12px; border:1px solid #20283a; }
-    #debugDock { position:fixed; right:8px; bottom:8px; width:min(560px, 96vw); height:220px; background:#0d1117; border:1px solid #1f2633; border-radius:12px; overflow:hidden; display:flex; flex-direction:column; z-index:12; }
-    #debugHead { display:flex; align-items:center; justify-content:space-between; padding:6px 10px; font-size:12px; border-bottom:1px solid #1f2633; color:#9fb2d3; }
-    #debugLog { flex:1; overflow:auto; font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; padding:8px 10px; white-space:pre-wrap; }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Rage Space — Matchup (v2)</title>
+
+<link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="./assets/css/matchup.css">
 </head>
 <body>
-  <header>
-    <div class="pill">phase: <span id="phaseBadge">—</span></div>
-    <div class="pill">clock: <span id="clock">—</span>s</div>
-    <div class="pill">auth: <span id="loginBadge">…</span></div>
-    <div class="spacer"></div>
-    <button id="btnPause" class="btn">Pause</button>
-    <button id="btnReset" class="btn">Reset</button>
-  </header>
+  <div class="wrap">
+    <div class="scorebar">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <strong>Decision in</strong>
+        <span id="clock" class="clock">—</span>
+        <span id="phaseBadge" class="clock">phase: —</span>
+        <span id="loginBadge" class="badge">checking auth…</span>
+      </div>
+      <div class="row">
+        <button id="btnPause" class="btn">⏸️ Pause</button>
+        <button id="btnReset" class="btn">🔁 Reset</button>
+        <a class="btn" href="./winners.html">🏁 Winners</a>
+      </div>
+    </div>
 
-  <main>
-    <section>
+    <div class="tile" id="tileA">
+      <img id="imgA" class="art" alt="Entry Left"/>
+      <div class="caption" id="countA">0 votes</div>
+      <div class="meta">
+        <span id="labelA">Left</span>
+        <button class="btn primary" id="voteA">Vote This</button>
+      </div>
+    </div>
+
+    <div class="tile" id="tileB">
+      <img id="imgB" class="art" alt="Entry Right"/>
+      <div class="caption" id="countB">0 votes</div>
+      <div class="meta">
+        <span id="labelB">Right</span>
+        <button class="btn primary" id="voteB">Vote This</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="btn" id="submitBtn" disabled>✅ Submit Vote</button>
+    </div>
+
+    <section class="bracket" id="bracket">
+      <div class="bracket-head">
+        <div class="title">Bracket</div>
+        <label style="display:flex;align-items:center;gap:8px">
+          <input id="showDone" type="checkbox" checked>
+          <span>Show finished rounds</span>
+        </label>
+      </div>
       <div id="brows"></div>
     </section>
+  </div>
 
-    <section class="board">
-      <div class="card">
-        <div class="row" style="justify-content:space-between">
-          <div class="vote">
-            <button id="voteA" class="tap">Pick Left</button>
-            <span id="countA" class="chip">0 votes</span>
-          </div>
-          <button id="submitBtn" class="btn" disabled>Submit vote</button>
-          <div class="vote">
-            <span id="countB" class="chip">0 votes</span>
-            <button id="voteB" class="tap">Pick Right</button>
-          </div>
-        </div>
-        <div class="row" style="margin-top:10px; gap:16px;">
-          <div class="bigimg"><img id="imgA" alt=""></div>
-          <div class="bigimg"><img id="imgB" alt=""></div>
-        </div>
-      </div>
-      <div class="card">
-        <h3 style="margin:0 0 8px 0; font-size:14px; color:#9fb2d3;">Notes</h3>
-        <p id="notes" style="margin:0; color:#aebbd3; font-size:13px;">Live tournament view.</p>
-      </div>
-    </section>
-  </main>
-
-  <!-- Winner overlay -->
   <div id="overlay">
-    <div id="overlayPanel">
-      <div class="row" style="justify-content:space-between; margin-bottom:8px;">
-        <div id="overlayNote" style="font-weight:600; color:#cfe0ff;">Winner decided!</div>
-        <button id="overlayClose" class="btn">Close</button>
-      </div>
-      <img id="overlayImg" alt="">
+    <button id="overlayClose" class="btn">✕</button>
+    <div style="text-align:center;max-width:80vw">
+      <h1>CHAMPION</h1>
+      <img id="overlayImg" style="max-width:80vw;max-height:70vh;border:1px solid var(--border);border-radius:12px"/>
+      <p id="overlayNote" style="color:var(--muted)"></p>
     </div>
   </div>
 
-  <!-- Debugger -->
-  <div id="debugDock">
-    <div id="debugHead">
-      <div>Debugger</div>
-      <div id="dbgClock">—</div>
-    </div>
-    <div id="debugLog"></div>
-  </div>
-
+  <!-- ===== Rage Debugger (inline) ===== -->
   <script>
-    // Lightweight Debugger — logs timers, fetches, DOM hints
-    (function(){
-      const logEl = document.getElementById('debugLog');
-      const fmt = (s)=> '[' + new Date().toLocaleTimeString() + '] ' + s + '\n';
-      const push = (s)=> { logEl.textContent += fmt(s); logEl.scrollTop = logEl.scrollHeight; };
+  (function () {
+    const floatBtn = document.createElement('button');
+    floatBtn.id = 'dbgFloatingBtn';
+    floatBtn.textContent = '🐛 Debug';
+    floatBtn.style.cssText = 'position: fixed; right: 8px; bottom: 8px; z-index: 2147483647; background:#000; color:#0f0; border:1px solid #0f0; border-radius:6px; padding:6px 10px; font: 12px/1.1 monospace; cursor:pointer;';
+    document.body.appendChild(floatBtn);
 
-      window.RageDebug = {
-        log:  (...a)=> push('LOG: ' + a.map(x=> typeof x==='string'?x:JSON.stringify(x)).join(' ')),
-        warn: (...a)=> push('WARN: ' + a.map(x=> typeof x==='string'?x:JSON.stringify(x)).join(' ')),
-        error:(...a)=> push('ERR: ' + a.map(x=> typeof x==='string'?x:JSON.stringify(x)).join(' ')),
-        markCounts: (slot, r, b)=> push(`COUNT: ${slot} ${r}-${b}`),
-        edge: (kind, url, status)=> push(`EDGE: ${kind} ${url}${status? ' → '+status:''}`),
-        timer: (kind, id, ms, action='set')=> push(`TIMER: ${kind} ${id} ${action} @ ${ms}ms`),
-        obs: (msg)=> push('OBS: ' + msg)
-      };
+    const wrap = document.createElement('div');
+    wrap.id = 'dbg';
+    wrap.style.cssText = 'position: fixed; right: 0; bottom: 0; left: 0; background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace; z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
+    bar.innerHTML = '<span style="color:#6f6">Rage Debug</span><label>Filter:<select id="dbgFilter"><option value="">All</option><option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option><option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option><option>ERR</option><option>WARN</option><option>LOG</option></select></label><label><input id="dbgRecord" type="checkbox" checked> Record</label><button id="dbgCopy">Copy</button><button id="dbgDownload">Download</button><button id="dbgClose">Close</button>';
+    const list = document.createElement('div');
+    list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
+    wrap.appendChild(bar); wrap.appendChild(list); document.body.appendChild(wrap);
 
-      // Patch fetch to log EDGE calls
-      const _fetch = window.fetch;
-      window.fetch = async (input, init={})=>{
-        const url = String(input);
-        const isEdge = /\/functions\/v1\/global-timer-v2/.test(url);
-        if (isEdge) window.RageDebug.edge((init && init.method)||'GET', url);
-        try{
-          const res = await _fetch(input, init);
-          if (isEdge) window.RageDebug.edge((init && init.method)||'GET', url, res.status);
-          return res;
-        }catch(err){
-          if (isEdge) window.RageDebug.error('Failed to fetch', String(err));
-          throw err;
-        }
-      };
+    function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
+    floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
+    bar.querySelector('#dbgClose').onclick = () => showDbg(false);
 
-      // Simple timer wrappers for visibility
-      const _setTimeout = window.setTimeout;
-      window.setTimeout = (cb, ms, ...rest)=>{
-        const id = _setTimeout(()=>{ cb(); }, ms, ...rest);
-        window.RageDebug.timer('timeout', id, ms, 'set');
-        return id;
-      };
-      const _setInterval = window.setInterval;
-      window.setInterval = (cb, ms, ...rest)=>{
-        const id = _setInterval(cb, ms, ...rest);
-        window.RageDebug.timer('interval', id, ms, 'set');
-        return id;
-      };
-      const _clearTimeout = window.clearTimeout;
-      window.clearTimeout = (id)=>{ window.RageDebug.timer('timeout', id, 0, 'cleared'); _clearTimeout(id); };
-      const _clearInterval = window.clearInterval;
-      window.clearInterval = (id)=>{ window.RageDebug.timer('interval', id, 0, 'cleared'); _clearInterval(id); };
+    const filterSel  = bar.querySelector('#dbgFilter');
+    const recordChk  = bar.querySelector('#dbgRecord');
+    bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
+    bar.querySelector('#dbgDownload').onclick = () => { const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'}); const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`}); a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000); };
 
-      push('LOG: Debugger ready');
-      document.addEventListener('visibilitychange', ()=>{
-        window.RageDebug.obs('visibility: ' + document.visibilityState);
-      });
-      const obs = new MutationObserver((muts)=>{
-        const added = muts.reduce((n,m)=> n + m.addedNodes.length, 0);
-        const removed = muts.reduce((n,m)=> n + m.removedNodes.length, 0);
-        const total = (document.getElementById('brows')?.children.length) || 0;
-        if (added||removed) window.RageDebug.obs(`bracket changed: +${added} -${removed} (children=${total})`);
-      });
-      obs.observe(document.getElementById('brows'), { childList:true });
-    })();
+    let buffer = [];
+    function addLine(r){ const div = document.createElement('div'); div.textContent = r.line; if (r.kind === 'ERR') div.style.color = '#f88'; else if (r.kind === 'WARN') div.style.color = '#ff8'; else if (r.kind === 'EDGE') div.style.color = '#8ff'; else if (r.kind === 'NET')  div.style.color = '#8cf'; else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6'; list.appendChild(div); list.scrollTop = list.scrollHeight; }
+    function render(){ list.innerHTML = ''; const f = filterSel.value; for (const r of buffer) if (!f || f === r.kind) addLine(r); }
+    function push(kind, msg){ if (!recordChk.checked) return; const ts = new Date().toLocaleTimeString(); const line = `[${ts}] ${kind}: ${msg}`; buffer.push({kind, line}); if (buffer.length > 2000) buffer.shift(); const f = filterSel.value; if (!f || f === kind) addLine({kind, line}); }
+
+    const _log = console.log, _warn = console.warn, _err = console.error;
+    console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
+    console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
+    console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
+    window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
+    window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
+    document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
+
+    (function watchClock(){ const el = document.getElementById('clock'); if (!el) return; let last = el.textContent, lastAt = performance.now(); const mo = new MutationObserver(() => { const now = performance.now(); if (el.textContent !== last) { const dt = ((now - lastAt)/1000).toFixed(2); push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`); last = el.textContent; lastAt = now; } }); mo.observe(el, {childList:true, characterData:true, subtree:true}); })();
+
+    const _fetch = window.fetch.bind(window);
+    window.fetch = async function(url, opts = {}) {
+      const start = performance.now();
+      const method = (opts && opts.method) || 'GET';
+      const tag = /\/functions\/v1\/global-timer/.test(String(url)) ? 'EDGE' : 'NET';
+      push(tag, `${method} ${url}`);
+      try {
+        const res = await _fetch(url, opts);
+        const ms = (performance.now() - start).toFixed(0);
+        push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
+        return res;
+      } catch (e) {
+        const ms = (performance.now() - start).toFixed(0);
+        push(tag, `${method} ${url} ✖ ${e.name||'TypeError'} (${ms}ms)`);
+        throw e;
+      }
+    };
+
+    const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
+    const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
+    const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
+    const timers = new Map();
+    window.setInterval = function(fn, ms, ...rest){
+      const id = _setInterval(function(){ try{fn()}finally{} } , ms, ...rest);
+      timers.set(id, {type:'interval', ms});
+      push('TIMER', `interval ${id} set @ ${ms}ms`);
+      return id;
+    };
+    window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
+    window.setTimeout  = function(fn, ms, ...rest){
+      const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{ push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`) } }, ms, ...rest);
+      timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
+    };
+    window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
+    window.requestAnimationFrame = function(fn){ return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{ push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`) } }); };
+    window.cancelAnimationFrame = function(id){ _caf(id); };
+
+    const brows = document.getElementById('brows');
+    if (brows) {
+      const mo = new MutationObserver((ms)=>{ let adds = 0, rems = 0; for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; } console.log(`OBS: bracket changed: +${adds} -${rems} (children=${brows.children.length})`); });
+      mo.observe(brows, {childList:true, subtree:false});
+    }
+
+    console.log('Debugger ready');
+  })();
   </script>
+  <!-- ===== /Rage Debugger ===== -->
 
-  <!-- Supabase client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-
-  <!-- Your app code -->
-  <script type="module" src="./matchup.config.js"></script>
-  <script type="module" src="./matchup.app.js"></script>
+  <script type="module" src="./assets/js/matchup.app.js"></script>
+  <script type="module" src="./assets/js/matchup.config.js"></script>
 </body>
 </html>
