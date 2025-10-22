@@ -1,23 +1,23 @@
-// matchup.app.js — v2.2: Edge mapping + countdown + safe local fallback
+// matchup.app.js — v2.3: 100s cycle, 20s checkpoints, client-side countdown from baseISO
 import { SUPABASE_URL, SUPABASE_ANON, EDGE_URL } from './matchup.config.js';
 
 // Supabase
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
+// ---- CONSTANTS FOR THE SCHEDULE ----
+const CYCLE_SEC = 100; // total cycle length
+const STEP_SEC  = 20;  // decision cadence
+
 // STATE
 let currentUid = null;
-let cycleStart = null;         // active base ISO (Edge or local fallback)
-let periodSec = 30;
-let lastCheckpoint = 0;        // 0..5 (if Edge returns it)
+let cycleStart = null;   // base ISO for current tournament cycle
 let paused = false;
 
 let activeSlot = 'r32_1';
-let currentStage = 'r32';
-
-// Track if we had to fallback locally (so we don’t spam POSTs)
+let currentStage = 'r32';    // r32 -> r16 -> qf -> sf -> final
 let usedLocalFallback = false;
 
-// --- advancers cache (phase_key -> color) ---
+// advancers cache (phase_key -> color)
 let advancers = new Map();
 
 // DOM
@@ -39,27 +39,44 @@ const overlay    = $('overlay');
 const overlayImg = $('overlayImg');
 const overlayNote= $('overlayNote');
 
-// helpers
 const stageOf    = (slot)=> slot.startsWith('r32')?'r32':slot.startsWith('r16')?'r16':slot.startsWith('qf')?'qf':(slot.startsWith('sf')?'sf':'final');
-const stageLevel = (s)=> s==='r32'?1:s==='r16'?2:s==='qf'?3:s==='sf'?4:5;
-const slotLevel  = (slot)=> stageLevel(stageOf(slot));
-function baseForSlot(){ return cycleStart; }
+const stageOrder = ['r32','r16','qf','sf','final'];
+
+function note(...a){ try{ window.RageDebug?.log?.(...a); }catch{} }
+
 function slotKey(slot, base){ return slot==='final' ? `${base}::final` : `${base}::${slot}`; }
 function seedUrlFromKey(baseISO, suffix){ const s=encodeURIComponent(`${baseISO}-${suffix}`); return `https://picsum.photos/seed/${s}/1600/1200`; }
 function r32Pack(baseISO, n){ return { A: seedUrlFromKey(baseISO, `A${n}`), B: seedUrlFromKey(baseISO, `B${n}`) }; }
 
-function note(...a){ try{ window.RageDebug?.log?.(...a); }catch{} }
-
-// --- COUNTDOWN: Edge returns a monotonic "clock" (seconds elapsed). We render time LEFT. ---
-function toCountdown(elapsed, period){
-  if (period <= 0) return 0;
-  // elapsed%period is seconds into the current decision window
-  const into = Math.floor(elapsed % period);
-  const left = (period - into) % period;
-  return left;
+// ---------- TIME / STAGE DERIVATION ----------
+// We ignore the Edge “clock” for display and instead compute countdown
+// from the authoritative baseISO (server decides winners; we render consistently).
+function secondsSinceBase(baseISO){
+  const baseMs = Date.parse(baseISO);
+  const nowMs  = Date.now();
+  return Math.max(0, Math.floor((nowMs - baseMs)/1000));
 }
 
-// --- load advancers for the current base ---
+function leftFromBase(baseISO){
+  if (!baseISO) return null;
+  const elapsed = secondsSinceBase(baseISO) % CYCLE_SEC;
+  const left    = (CYCLE_SEC - elapsed) % CYCLE_SEC; // 100..1..0
+  // show 100 instead of 0 at cycle boundary start (so it "starts at 100")
+  return left === 0 ? 0 : left;
+}
+
+// Which tournament stage should be active given seconds-left in the 100s window
+function stageForLeft(left){
+  // intervals (exclusive, inclusive on right):
+  // (80,100] r32; (60,80] r16; (40,60] qf; (20,40] sf; [0,20] final
+  if (left > 80) return 'r32';
+  if (left > 60) return 'r16';
+  if (left > 40) return 'qf';
+  if (left > 20) return 'sf';
+  return 'final';
+}
+
+// ---------- DATA HELPERS ----------
 async function loadAdvancers(baseISO){
   if (!baseISO){ advancers = new Map(); return; }
   const url =
@@ -69,7 +86,6 @@ async function loadAdvancers(baseISO){
     headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }
   }).then(r => r.ok ? r.json() : []);
   advancers = new Map((rows || []).map(r => [r.phase_key, String(r.color || '').toLowerCase()]));
-  note('advancers loaded', advancers.size);
 }
 
 async function getPairFromWinners(baseISO, leftKey, rightKey, rebuildLeft, rebuildRight){
@@ -83,7 +99,7 @@ async function getPairFromWinners(baseISO, leftKey, rightKey, rebuildLeft, rebui
 }
 
 async function packFor(slot){
-  const base = baseForSlot();
+  const base = cycleStart;
   if (!base) return null;
 
   if (slot.startsWith('r32')){
@@ -124,10 +140,10 @@ async function countVotes(key){
   return {r,b};
 }
 
+// ---------- UI PAINT ----------
 export async function paintSlot(slot){
-  const base = baseForSlot();
+  const base = cycleStart;
   if (!base) return;
-  $('phaseBadge').textContent = `phase: ${base}` + (usedLocalFallback ? ' (local)' : '');
   const pack = await packFor(slot);
   if (pack){ imgA.src = pack.A; imgB.src = pack.B; } else { imgA.removeAttribute('src'); imgB.removeAttribute('src'); }
   const key = slotKey(slot, base);
@@ -141,7 +157,6 @@ async function renderBracket(){
   const base = cycleStart;
   if (!base){ brows.innerHTML=''; return; }
 
-  // refresh advancers before painting the list
   await loadAdvancers(base);
 
   const order = [
@@ -175,35 +190,29 @@ async function renderBracket(){
   });
 }
 
-async function setAuth(){
-  const { data:{session} } = await supabase.auth.getSession();
-  currentUid = session?.user?.id || null;
-  loginBadge.textContent = currentUid ? 'logged in' : 'not logged in';
+function lockUI(){
+  const left = leftFromBase(cycleStart);
+  const stage = left!=null ? stageForLeft(left) : currentStage;
+  currentStage = stage;
+
+  phaseBadge.textContent = cycleStart ? `phase: ${cycleStart}${usedLocalFallback?' (local)':''}` : 'phase: —';
+  btnPause.textContent = paused ? 'Resume' : 'Pause';
+
+  // Only allow votes in the current round
+  const locked = (stageOf(activeSlot) !== currentStage);
+  [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
 }
 
-// ---- Edge GET mapping + graceful local fallback when POST 500s ----
 async function fetchState(){
-  // 1) GET current state from Edge (works in your logs)
+  // GET server state
   const res  = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
   const body = await res.json();
 
-  cycleStart = body.baseISO || null;
-  periodSec  = Number(body.decision_seconds ?? periodSec ?? 30);
-  if (typeof body.last_checkpoint === 'number') lastCheckpoint = body.last_checkpoint;
+  cycleStart = body.baseISO || cycleStart;
   if (typeof body.paused === 'boolean') paused = body.paused;
 
-  // We render countdown even if Edge clock is counting up.
-  if (typeof body.clock === 'number') {
-    const left = toCountdown(body.clock, periodSec);
-    clockEl.textContent = paused ? `⏸ ${left}` : String(left);
-  }
-
-  if (typeof lastCheckpoint === 'number') {
-    currentStage = ['r32','r16','qf','sf','final'][Math.max(0, lastCheckpoint)-1] || currentStage || 'r32';
-  }
-
-  // 2) If there is no base yet, try POST ONCE (it’s currently 500 in your logs)
-  if (!cycleStart && !usedLocalFallback) {
+  // If no base yet, try POST once; otherwise fallback to local base so the UI always runs.
+  if (!cycleStart && !usedLocalFallback){
     try{
       const r = await fetch(EDGE_URL, {
         method: 'POST',
@@ -213,38 +222,30 @@ async function fetchState(){
       if (!r.ok) note('Edge POST failed', r.status);
     }catch(e){ note('Edge POST error', e); }
 
-    // Re-GET after POST attempt
     try{
       const again = await fetch(EDGE_URL, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }});
       const b2 = await again.json();
       cycleStart = b2.baseISO || null;
-      if (typeof b2.clock === 'number'){
-        const left = toCountdown(b2.clock, Number(b2.decision_seconds ?? periodSec));
-        clockEl.textContent = String(left);
-      }
-    }catch(e){ note('Edge re-GET error', e); }
+    }catch(e){}
   }
 
-  // 3) Still no base? Fall back to a local base so UI can render images/bracket.
-  if (!cycleStart) {
+  if (!cycleStart){
     let local = localStorage.getItem('rs_local_base');
     if (!local) {
-      const now = new Date();
-      now.setSeconds(0, 0); // tidy seeds
+      const now = new Date(); now.setSeconds(0,0);
       local = now.toISOString();
       localStorage.setItem('rs_local_base', local);
     }
     cycleStart = local;
     usedLocalFallback = true;
-    note('Using LOCAL base fallback', cycleStart);
   }
-}
 
-function lockUI(){
-  phaseBadge.textContent = cycleStart ? `phase: ${cycleStart}${usedLocalFallback?' (local)':''}` : 'phase: —';
-  const locked = (stageLevel(stageOf(activeSlot)) !== stageLevel(currentStage));
-  [voteA, voteB, submitBtn].forEach(b=> b.disabled = locked || !currentUid);
-  btnPause.textContent = paused ? 'Resume' : 'Pause';
+  // drive the visible countdown strictly from baseISO
+  const left = leftFromBase(cycleStart);
+  if (left != null){
+    // show 100 at the start, then 99..1..0; on the exact boundary we show 0 for a beat
+    clockEl.textContent = paused ? `⏸ ${left === 0 ? 0 : left}` : String(left === 0 ? 0 : left);
+  }
 }
 
 async function postAction(action){
@@ -267,7 +268,7 @@ function wireControls(){
   $('submitBtn').onclick=async ()=>{
     if (!chosen) return;
     if (!currentUid) return alert('Log in to vote');
-    const key = slotKey(activeSlot, baseForSlot());
+    const key = slotKey(activeSlot, cycleStart);
     await supabase.from('phase_votes_v2').upsert({ phase_key: key, user_id: currentUid, vote: chosen }, { onConflict:'phase_key,user_id' });
     await paintSlot(activeSlot);
     submitBtn.textContent='✔ Voted'; submitBtn.disabled=true;
@@ -304,20 +305,18 @@ async function boot(){
     lockUI();
   });
 
-  // state + UI
+  // first state load + initial paints
   await fetchState();
   lockUI();
-
-  // paints
   await loadAdvancers(cycleStart);
   await paintSlot(activeSlot);
   await renderBracket();
 
-  // tick
+  // heartbeat (1s): recompute left from baseISO so the clock starts at 100 and ticks down
   (async function tick(){
     try{
-      await fetchState();
-      lockUI();
+      await fetchState();     // updates countdown + base
+      lockUI();               // updates stage gates from left
       await loadAdvancers(cycleStart);
       await paintSlot(activeSlot);
       await renderBracket();
@@ -329,10 +328,10 @@ async function boot(){
   wireRealtime();
 }
 
-// expose for debugger helpers
+// expose for debugger
 window.__matchup__ = { paintSlot, fetchState, advancers };
 
-// start app when DOM is ready (wrapper must come AFTER boot is defined)
+// start app when DOM is ready
 function startWhenReady(){
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot, { once: true });
