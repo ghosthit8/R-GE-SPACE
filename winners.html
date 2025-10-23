@@ -11,16 +11,25 @@
     h1 { margin:0 0 10px; font-size:20px; font-weight:800; letter-spacing:.5px; }
     .top { display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px; }
     a.btn, button.btn { text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:#131920; color:var(--fg); font-weight:700; }
-    .meta { color:var(--muted); font-size:12px; }
+    .meta { color:var(--muted); font-size:12px; margin-bottom:8px; }
     .card { border:1px solid var(--line); background:var(--card); border-radius:14px; overflow:hidden; }
-    table { width:100%; border-collapse:collapse; font-size:14px; }
-    th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; }
-    th { color:#cbd5e1; font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:14px; table-layout:auto; }
+    th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
+    th { color:#cbd5e1; font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
     .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
     .red  { background:#2a1212; border:1px solid #4c2222; }
     .blue { background:#0f1f33; border:1px solid #20344d; }
-    .by   { color:#cbd5e1; font-size:12px; }
-    .empty { padding:18px; color:var(--muted); }
+    .by   { color:#cbd5e1; font-size:12px; white-space:nowrap; }
+    .score { font-variant-numeric: tabular-nums; white-space:nowrap; font-weight:700; }
+    .cycle { word-break:break-all; color:#cbd5e1; opacity:.9; }
+
+    @media (max-width: 520px) {
+      th.cycle, td.cycle { display:none; }
+      th, td { padding:8px 10px; }
+      table { font-size:13px; }
+      .pill { padding:3px 9px; font-size:11px; }
+    }
   </style>
 </head>
 <body>
@@ -32,61 +41,76 @@
         <button class="btn" id="refresh">Refresh</button>
       </div>
     </div>
+
     <div class="meta" id="meta">Loading…</div>
-    <div class="card" id="tableWrap">
-      <div class="empty">Loading winners…</div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Decided At</th>
+              <th class="cycle">Cycle</th>
+              <th>Winner</th>
+              <th>Score</th>
+              <th>Decided By</th>
+            </tr>
+          </thead>
+          <tbody id="body">
+            <tr><td colspan="6" style="padding:18px;color:#9aa0a6;">Loading winners…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
   <script>
     const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
     const metaEl = document.getElementById('meta');
-    const tableWrap = document.getElementById('tableWrap');
+    const tbody = document.getElementById('body');
     const btnRefresh = document.getElementById('refresh');
 
     function fmtTime(iso) {
-      try {
-        const d = new Date(iso);
-        return d.toLocaleString(undefined, { hour12:false });
-      } catch { return iso; }
+      try { return new Date(iso).toLocaleString(undefined, { hour12:false }); }
+      catch { return iso; }
     }
 
-    function render(rows) {
+    function render(rows, caughtUp=0) {
       if (!rows || rows.length === 0) {
-        tableWrap.innerHTML = '<div class="empty">No winners yet.</div>';
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
         return;
       }
-      const thead = `
-        <thead><tr>
-          <th>#</th><th>Decided At</th><th>Cycle</th><th>Winner</th><th>Score</th><th>Decided By</th>
-        </tr></thead>`;
-      const tbody = rows.map((r, i) => {
+
+      // Sort oldest → newest so #1 is oldest and appears at bottom
+      rows = [...rows].reverse();
+
+      tbody.innerHTML = rows.map((r, i) => {
         const pillClass = r.winner_color === 'red' ? 'pill red' : 'pill blue';
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count}–${r.blue_count}`;
-        return `<tr>
-          <td>${i+1}</td>
-          <td>${fmtTime(r.decided_at)}</td>
-          <td>${r.base_iso}</td>
-          <td><span class="${pillClass}">${r.winner_color}</span></td>
-          <td>${score}</td>
-          <td class="by">${by}</td>
-        </tr>`;
+        return `
+          <tr>
+            <td>${i+1}</td>
+            <td>${fmtTime(r.decided_at)}</td>
+            <td class="cycle">${r.base_iso}</td>
+            <td><span class="${pillClass}">${r.winner_color}</span></td>
+            <td class="score">${score}</td>
+            <td class="by">${by}</td>
+          </tr>`;
       }).join('');
-      tableWrap.innerHTML = `<table>${thead}<tbody>${tbody}</tbody></table>`;
     }
 
     async function load() {
       metaEl.textContent = 'Loading…';
-      const url = FUNCTION_URL + "?winners=1&limit=200";
-      const res = await fetch(url);
+      const res = await fetch(FUNCTION_URL + "?winners=1&limit=200");
       const data = await res.json();
-      render(data.winners || []);
-      metaEl.textContent = `Showing ${data.winners?.length || 0} recent winners • caught up: ${data.caught_up ?? 0}`;
+      render(data.winners || [], data.caught_up ?? 0);
+      metaEl.textContent = `Showing ${data.winners?.length || 0} total winners • caught up: ${data.caught_up ?? 0} • #1 = oldest`;
     }
 
     btnRefresh.onclick = load;
-    setInterval(load, 5000); // auto-refresh
+    setInterval(load, 5000);
     load();
   </script>
 </body>
