@@ -68,7 +68,22 @@
     const btnRefresh = document.getElementById('refresh');
     const btnClear   = document.getElementById('clear');
 
-    function fmtTime(iso){ try{ return new Date(iso).toLocaleString(undefined,{hour12:false}); }catch{ return iso; } }
+    // Updated: format time in 12-hour with AM/PM
+    function fmtTime(iso) {
+      try {
+        return new Date(iso).toLocaleString(undefined, {
+          hour12: true,
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit",
+          month: "2-digit",
+          day: "2-digit",
+          year: "numeric"
+        });
+      } catch {
+        return iso;
+      }
+    }
 
     function render(rows, caughtUp=0){
       if(!rows || rows.length===0){
