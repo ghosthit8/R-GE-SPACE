@@ -125,20 +125,14 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       </div>
     </div>
 
-    <!-- Queue (collapsible) -->
+    <!-- Queue -->
     <div class="card" style="margin-top:16px">
-      <div class="row" style="justify-content:space-between; align-items:center">
+      <div class="row" style="justify-content:space-between">
         <strong>📜 In the Queue</strong>
-        <div class="row small" style="gap:8px">
-          <span id="queueCount" class="small"></span>
-          <button id="queueToggle" class="btn ghost" style="padding:6px 10px">Expand ▼</button>
-        </div>
+        <span class="small">Oldest first → next in</span>
       </div>
-      <div id="queuePanel" style="display:none; margin-top:12px">
-        <div id="queue" class="grid"></div>
-        <div id="queueEmpty" class="small" style="margin-top:6px; display:none">No items in queue.</div>
-      </div>
-      <div class="small" style="margin-top:6px">Oldest first → next in</div>
+      <div id="queue" class="grid" style="margin-top:12px"></div>
+      <div id="queueEmpty" class="small" style="margin-top:6px; display:none">No items in queue.</div>
     </div>
   </div>
 
@@ -148,7 +142,7 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 /* ---------- Supabase + constants ---------- */
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
+const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 const BUCKET = 'art-uploads';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -166,9 +160,6 @@ const consent = document.getElementById('consent');
 const btnSubmit = document.getElementById('btnSubmit');
 const submitMsg = document.getElementById('submitMsg');
 
-const queuePanel = document.getElementById('queuePanel');
-const queueToggle = document.getElementById('queueToggle');
-const queueCount = document.getElementById('queueCount');
 const queueGrid = document.getElementById('queue');
 const queueEmpty = document.getElementById('queueEmpty');
 
@@ -269,24 +260,12 @@ btnSubmit.addEventListener('click', async ()=>{
 
     toast('✅ Art queued for next round');
     submitMsg.textContent = 'Art queued for next round.';
-    await renderQueue();
-    if (queuePanel && queuePanel.style.display === 'none') { queuePanel.style.display = 'block'; queueToggle.textContent = 'Collapse ▲'; }
   }catch(e){
     console.error(e);
     toast(e?.message || 'Submit failed');
     submitMsg.textContent = 'Submit failed.';
   }
 });
-
-
-/* ---------- Queue toggle ---------- */
-if (queueToggle){
-  queueToggle.addEventListener('click', ()=>{
-    const shown = queuePanel.style.display !== 'none';
-    queuePanel.style.display = shown ? 'none' : 'block';
-    queueToggle.textContent = shown ? 'Expand ▼' : 'Collapse ▲';
-  });
-}
 
 /* ---------- Queue render ---------- */
 async function renderQueue(){
@@ -301,11 +280,9 @@ async function renderQueue(){
     if (!data || !data.length){
       queueGrid.innerHTML = '';
       queueEmpty.style.display = 'block';
-      if (queueCount) queueCount.textContent = '(0)';
       return;
     }
     queueEmpty.style.display = 'none';
-    if (queueCount) queueCount.textContent = `(${data.length})`;
     queueGrid.innerHTML = data.map((r,i)=>`
       <div class="thumb" title="${r.image_url}">
         <span class="idx">#${i+1}</span>
