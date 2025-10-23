@@ -34,7 +34,7 @@
     </div>
 
     <!-- RED on top -->
-    <div class="card" id="cardRed">
+    <div class="card">
       <div class="imgBox"><img id="imgRed" alt="Red contender" /></div>
       <div class="bar">
         <div class="label">Red</div>
@@ -44,7 +44,7 @@
     </div>
 
     <!-- BLUE below -->
-    <div class="card" id="cardBlue">
+    <div class="card">
       <div class="imgBox"><img id="imgBlue" alt="Blue contender" /></div>
       <div class="bar">
         <div class="label">Blue</div>
@@ -54,14 +54,13 @@
     </div>
 
     <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
-    <div class="hint">Timer auto-loops every 20s. A winner is decided at 0 (random if tied). One vote per device per round.</div>
+    <div class="hint">Timer auto-loops every 20 s. A winner is decided at 0 (random if tied). One vote per device per round.</div>
   </div>
 
   <script>
-    // <<< CHANGE THIS TO YOUR LIVE FUNCTION URL >>>
     const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
 
-    // Generate/persist a local token used for one-vote-per-round
+    // --- persistent vote token ---
     const RSID_KEY = "rsid_v2";
     let RSID = localStorage.getItem(RSID_KEY);
     if (!RSID) {
@@ -69,140 +68,93 @@
       localStorage.setItem(RSID_KEY, RSID);
     }
 
-    // track local "already voted this round" so we can disable the buttons
     const votedKey = (baseIso) => `voted:${baseIso}`;
-    function hasVoted(baseIso) { return localStorage.getItem(votedKey(baseIso)) === "1"; }
-    function markVoted(baseIso) { localStorage.setItem(votedKey(baseIso), "1"); }
+    const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
+    const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
 
-    const elRemain = document.getElementById('tRemain');
-    const elMeta = document.getElementById('tMeta');
-    const imgRed = document.getElementById('imgRed');
-    const imgBlue = document.getElementById('imgBlue');
-    const cRed = document.getElementById('countRed');
-    const cBlue = document.getElementById('countBlue');
-    const btnRed = document.getElementById('btnRed');
-    const btnBlue = document.getElementById('btnBlue');
-    const winnerText = document.getElementById('winnerText');
+    const elRemain = document.getElementById("tRemain");
+    const elMeta = document.getElementById("tMeta");
+    const imgRed = document.getElementById("imgRed");
+    const imgBlue = document.getElementById("imgBlue");
+    const cRed = document.getElementById("countRed");
+    const cBlue = document.getElementById("countBlue");
+    const btnRed = document.getElementById("btnRed");
+    const btnBlue = document.getElementById("btnBlue");
+    const winnerText = document.getElementById("winnerText");
 
     let state = {
       ends_at: null,
-      period_sec: 20,
       base_iso: null,
-      red_url: '',
-      blue_url: '',
+      red_url: "",
+      blue_url: "",
       red_count: 0,
       blue_count: 0,
-      remaining_ms: 0,
-      last_winner: null
+      last_winner: null,
     };
 
     function setVoteButtons(enabled) {
       btnRed.disabled = btnBlue.disabled = !enabled;
     }
 
-    function renderLastWinner(last) {
-      if (!last) {
+    function showWinner(winner) {
+      if (!winner) {
         winnerText.textContent = "No winner yet — first round in progress.";
         return;
       }
-      const by = last.decided_by === "random_tie" ? "random tie" : "votes";
-      const score = `${last.red_count}–${last.blue_count}`;
-      const name = last.winner_color === "red" ? "Red" : "Blue";
+      const by = winner.decided_by === "random_tie" ? "random tie" : "votes";
+      const score = `${winner.red_count}–${winner.blue_count}`;
+      const name = winner.winner_color === "red" ? "Red" : "Blue";
       winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
     }
 
     async function fetchState() {
-      const res = await fetch(FUNCTION_URL, { method: 'GET' });
+      const res = await fetch(FUNCTION_URL);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'GET failed');
+      if (!res.ok) throw new Error(data.error || "GET failed");
 
-      const baseChanged = state.base_iso && state.base_iso !== data.base_iso;
-
-      state.ends_at = data.ends_at;
-      state.period_sec = data.period_sec;
-      state.base_iso = data.base_iso;
-      state.red_url = data.red_url;
-      state.blue_url = data.blue_url;
-      state.red_count = data.red_count;
-      state.blue_count = data.blue_count;
-      state.remaining_ms = data.remaining_ms;
-      state.last_winner = data.last_winner || null;
-
+      const newRound = state.base_iso && state.base_iso !== data.base_iso;
+      state = data;
       imgRed.src = state.red_url;
       imgBlue.src = state.blue_url;
       cRed.textContent = state.red_count;
       cBlue.textContent = state.blue_count;
-      elMeta.textContent = `cycle: ${state.base_iso} • period: ${state.period_sec}s`;
-      renderLastWinner(state.last_winner);
+      elMeta.textContent = `cycle: ${state.base_iso}`;
+      showWinner(state.last_winner);
 
-      // if we rolled to a new base_iso, re-enable buttons unless we already voted this new round
-      if (baseChanged) {
-        setVoteButtons(!hasVoted(state.base_iso));
-      } else {
-        // initial load
-        setVoteButtons(!hasVoted(state.base_iso));
-      }
+      if (newRound) setVoteButtons(!hasVoted(state.base_iso));
     }
 
     async function sendVote(color) {
-      try {
-        const res = await fetch(FUNCTION_URL, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-rsid': RSID
-          },
-          body: JSON.stringify({ color })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'vote failed');
-
-        if (data.ignored && data.reason === 'already_voted') {
-          setVoteButtons(false);
-          return;
-        }
-        if (!data.ignored) {
-          cRed.textContent = data.red_count;
-          cBlue.textContent = data.blue_count;
-          markVoted(state.base_iso);
-          setVoteButtons(false);
-        }
-      } catch (e) {
-        console.log('vote error', e);
+      const res = await fetch(FUNCTION_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-rsid": RSID },
+        body: JSON.stringify({ color }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "vote failed");
+      if (data.ignored && data.reason === "already_voted") return setVoteButtons(false);
+      if (!data.ignored) {
+        markVoted(state.base_iso);
+        setVoteButtons(false);
+        cRed.textContent = data.red_count;
+        cBlue.textContent = data.blue_count;
       }
     }
 
-    btnRed.addEventListener('click', async () => {
-      if (btnRed.disabled) return;
-      setVoteButtons(false);
-      await sendVote('red');
-    });
-    btnBlue.addEventListener('click', async () => {
-      if (btnBlue.disabled) return;
-      setVoteButtons(false);
-      await sendVote('blue');
-    });
+    btnRed.onclick = () => !btnRed.disabled && sendVote("red");
+    btnBlue.onclick = () => !btnBlue.disabled && sendVote("blue");
 
-    // Timer render loop
-    let rafId = 0;
+    // Timer loop
     function tick() {
       const remain = new Date(state.ends_at).getTime() - Date.now();
-      const clamped = Math.max(0, remain);
-      elRemain.textContent = (clamped / 1000).toFixed(1);
-      if (remain <= -900) {
-        fetchState().catch(console.error);
-      }
-      rafId = requestAnimationFrame(tick);
+      elRemain.textContent = (Math.max(0, remain) / 1000).toFixed(1);
+      if (remain <= -900) fetchState().catch(console.error);
+      requestAnimationFrame(tick);
     }
 
-    // Light polling to keep counts + last winner fresh
     setInterval(() => fetchState().catch(() => {}), 1000);
-
-    // Boot
     (async () => {
-      elMeta.textContent = 'syncing…';
       await fetchState();
-      if (rafId) cancelAnimationFrame(rafId);
       tick();
     })();
   </script>
