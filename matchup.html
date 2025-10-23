@@ -9,8 +9,8 @@
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
     .wrap { max-width:700px; margin:0 auto; padding:16px 12px 28px; }
     h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
-    .row { display:flex; align-items:center; gap:10px; }
-    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
     .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
     .state { color:var(--muted); font-size:12px; }
     .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
@@ -31,7 +31,20 @@
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
     .winner b { color:var(--accent); }
-    .linkbtn { text-decoration:none; display:inline-flex; align-items:center; padding:8px 12px; border:1px solid #20242a; border-radius:12px; background:#131920; color:var(--fg); font-weight:700; }
+    .linkbtn, .backbtn {
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      padding:8px 12px;
+      border:1px solid #20242a;
+      border-radius:12px;
+      background:#131920;
+      color:var(--fg);
+      font-weight:700;
+      transition:background .15s;
+    }
+    .backbtn { color:var(--accent); }
+    .linkbtn:hover, .backbtn:hover { background:#0d1218; }
 
     /* Fullscreen overlay */
     .fullscreen-overlay {
@@ -55,7 +68,10 @@
         <div class="timer" id="tRemain">20.0</div>
         <div class="state" id="tMeta">syncing…</div>
       </div>
-      <a class="linkbtn" href="winners.html">Winners</a>
+      <div class="row">
+        <a class="backbtn" href="menu.html">← Menu</a>
+        <a class="linkbtn" href="winners.html">Winners</a>
+      </div>
     </div>
 
     <!-- SEED A -->
@@ -95,14 +111,10 @@
   </div>
 
   <script>
-
-    // Supabase (for art_queue integration)
+    // --- existing logic unchanged ---
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-    const supabase = window.supabase?.createClient
-      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-      : null;
-
+    const supabase = window.supabase?.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
     const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
 
     const RSID_KEY = "rsid_v2";
@@ -112,7 +124,7 @@
       localStorage.setItem(RSID_KEY, RSID);
     }
 
-    const votedKey = (baseIso) => `voted:${baseIso}`;
+    const votedKey = (b) => `voted:${b}`;
     const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
     const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
 
@@ -131,56 +143,33 @@
 
     btnClose.onclick = () => overlay.style.display = 'none';
 
-    
-    // ----- Queue helpers -----
-    const CLAIM_KEY = (b)=> `queue_claimed:${b}`;
+    const CLAIM_KEY = (b) => `queue_claimed:${b}`;
 
-    async function fetchPendingQueue(n=2){
+    async function fetchPendingQueue(n = 2) {
       if (!supabase) return [];
-      const { data, error } = await supabase
-        .from('art_queue')
-        .select('id,image_url,created_at')
-        .eq('status','pending')
-        .order('created_at',{ascending:true})
-        .limit(n);
+      const { data, error } = await supabase.from('art_queue').select('id,image_url,created_at').eq('status', 'pending').order('created_at', { ascending: true }).limit(n);
       if (error) { console.warn('queue fetch error', error); return []; }
-      return data||[];
+      return data || [];
     }
 
-    async function markQueueUsed(ids=[], baseIso){
+    async function markQueueUsed(ids = [], baseIso) {
       if (!supabase || !ids.length) return;
-      const { error } = await supabase
-        .from('art_queue')
-        .update({ status:'used', used_at: new Date().toISOString(), used_in_base: baseIso })
-        .in('id', ids);
+      const { error } = await supabase.from('art_queue').update({ status: 'used', used_at: new Date().toISOString(), used_in_base: baseIso }).in('id', ids);
       if (error) console.warn('queue mark used error', error);
     }
 
-    function openFull(which){
+    function openFull(which) {
       const url = which === 'A' ? imgA.src : imgB.src;
       fullImg.src = url;
       overlay.style.display = 'flex';
     }
 
-    let state = {
-      ends_at: null,
-      base_iso: null,
-      red_url: "",
-      blue_url: "",
-      red_count: 0,
-      blue_count: 0,
-      last_winner: null,
-    };
+    let state = { ends_at: null, base_iso: null, red_url: "", blue_url: "", red_count: 0, blue_count: 0, last_winner: null };
 
-    function setVoteButtons(enabled) {
-      btnA.disabled = btnB.disabled = !enabled;
-    }
+    function setVoteButtons(enabled) { btnA.disabled = btnB.disabled = !enabled; }
 
     function showWinner(winner) {
-      if (!winner) {
-        winnerText.textContent = "No winner yet — first round in progress.";
-        return;
-      }
+      if (!winner) { winnerText.textContent = "No winner yet — first round in progress."; return; }
       const by = winner.decided_by === "random_tie" ? "random tie" : "votes";
       const score = `${winner.red_count}–${winner.blue_count}`;
       const name = winner.winner_color === "red" ? "Seed A" : "Seed B";
@@ -195,22 +184,19 @@
       const newRound = state.base_iso && state.base_iso !== data.base_iso;
       state = data;
       let red = state.red_url, blue = state.blue_url;
-      // If a new round and not already claimed, swap in queue images (priority over defaults)
       const claimFlag = localStorage.getItem(CLAIM_KEY(state.base_iso));
-      if (newRound && !claimFlag){
-        try{
+      if (newRound && !claimFlag) {
+        try {
           const q = await fetchPendingQueue(2);
-          if (q.length>=1) red = q[0].image_url;
-          if (q.length>=2) blue = q[1].image_url;
-          const usedIds = q.slice(0,2).map(r=>r.id);
+          if (q.length >= 1) red = q[0].image_url;
+          if (q.length >= 2) blue = q[1].image_url;
+          const usedIds = q.slice(0, 2).map(r => r.id);
           if (usedIds.length) await markQueueUsed(usedIds, state.base_iso);
-          localStorage.setItem(CLAIM_KEY(state.base_iso),'1');
-        }catch(e){ console.warn('queue override failed', e); }
+          localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
+        } catch (e) { console.warn('queue override failed', e); }
       }
-      imgA.src = red;
-      imgB.src = blue;
-      cA.textContent = state.red_count;
-      cB.textContent = state.blue_count;
+      imgA.src = red; imgB.src = blue;
+      cA.textContent = state.red_count; cB.textContent = state.blue_count;
       elMeta.textContent = `cycle: ${state.base_iso}`;
       showWinner(state.last_winner);
 
@@ -245,10 +231,7 @@
     }
 
     setInterval(() => fetchState().catch(() => {}), 1000);
-    (async () => {
-      await fetchState();
-      tick();
-    })();
+    (async () => { await fetchState(); tick(); })();
   </script>
 </body>
 </html>
