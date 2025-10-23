@@ -62,6 +62,7 @@
 
   <script>
     const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
+    const ADMIN_KEY = "Inklink88!"; // must match ADMIN_CLEAR_KEY in Supabase
     const metaEl = document.getElementById('meta');
     const tbody  = document.getElementById('body');
     const btnRefresh = document.getElementById('refresh');
@@ -74,12 +75,9 @@
         tbody.innerHTML = `<tr><td colspan="6" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
         return;
       }
-
-      // Expect rows newest→oldest from API (decided_at desc). Number descending:
-      // top row gets N, bottom gets 1.
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
-        const n = N - idx; // descending number
+        const n = N - idx;
         const pillClass = r.winner_color === 'red' ? 'pill red' : 'pill blue';
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count}–${r.blue_count}`;
@@ -107,7 +105,10 @@
     async function clearData(){
       if(!confirm("⚠️ Permanently delete all winner data?")) return;
       metaEl.textContent = 'Clearing data…';
-      const res = await fetch(FUNCTION_URL + "?clear=1", { method:"DELETE" });
+      const res = await fetch(FUNCTION_URL + "?clear=1", {
+        method:"DELETE",
+        headers:{ "x-admin-key": ADMIN_KEY }
+      });
       const data = await res.json().catch(()=>({}));
       if(res.ok){ alert("Winner data cleared."); load(); }
       else { alert("Error: " + (data.error || "failed to clear")); }
