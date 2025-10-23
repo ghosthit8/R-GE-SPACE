@@ -1,260 +1,93 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Rage Space — Winners</title>
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<style>
-:root{
-  --green:#39ff14; --green-bright:#7dff62;
-  --bg:#000; --ink:#e5e5e5;
-  --card:#0b0b0b; --border:#153b16; --muted:#8aff8a; --maxw:980px;
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--green);font-family:system-ui,Arial,Helvetica,sans-serif}
-.wrap{max-width:var(--maxw);margin:16px auto 64px;padding:0 16px}
-.header{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid var(--border);padding:12px;border-radius:12px;background:rgba(7,7,7,.6);flex-wrap:wrap}
-.btn{border:1px solid var(--green);color:var(--green);background:transparent;border-radius:10px;padding:8px 12px;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
-.btn:hover{box-shadow:0 0 12px rgba(57,255,20,.18)}
-.h1{font-weight:700;font-size:18px}
-.list{margin-top:16px;display:grid;gap:12px}
-.card{border:1px solid var(--border);background:rgba(7,7,7,.6);border-radius:14px;padding:12px;display:flex;justify-content:space-between;align-items:center}
-.badge{border:1px solid var(--border);border-radius:8px;padding:2px 8px}
-.kv{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.time{color:var(--muted);font-size:12px}
-.color-dot{width:14px;height:14px;border-radius:50%;border:1px solid var(--border)}
-.color-red{background:#a60000}
-.color-blue{background:#0058a6}
-.empty{color:var(--muted);text-align:center;margin-top:24px}
-
-/* Queue Modal */
-.modal-overlay{
-  position:fixed;top:0;left:0;width:100%;height:100%;
-  background:rgba(0,0,0,.8);
-  display:none;align-items:center;justify-content:center;
-  z-index:1000;
-}
-.modal{
-  position:relative;
-  background:rgba(10,10,10,.95);
-  border:1px solid var(--border);
-  border-radius:16px;
-  max-width:90%;max-height:80%;
-  overflow:auto;padding:20px;
-}
-.modal h2{margin:0 0 8px 0;font-size:20px;text-align:center}
-.modal-sub{color:var(--muted);font-size:12px;text-align:center;margin-bottom:8px}
-.queue-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
-  gap:12px;
-  margin-top:12px;
-}
-.queue-item{display:flex;flex-direction:column}
-.queue-item img{
-  width:100%;border-radius:8px;border:1px solid var(--border);
-  display:block;aspect-ratio:1/1;object-fit:cover;
-}
-.queue-item span{
-  display:block;text-align:center;font-size:12px;margin-top:4px;word-break:break-all;
-}
-.modal-close{
-  position:absolute;top:16px;right:20px;
-  font-size:22px;cursor:pointer;color:var(--green);
-}
-.modal-close:hover{color:var(--green-bright)}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rage Space — Winners</title>
+  <style>
+    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a;}
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
+    .wrap { max-width:780px; margin:0 auto; padding:16px 12px 24px; }
+    h1 { margin:0 0 10px; font-size:20px; font-weight:800; letter-spacing:.5px; }
+    .top { display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px; }
+    a.btn, button.btn { text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:#131920; color:var(--fg); font-weight:700; }
+    .meta { color:var(--muted); font-size:12px; }
+    .card { border:1px solid var(--line); background:var(--card); border-radius:14px; overflow:hidden; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; }
+    th { color:#cbd5e1; font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+    .red  { background:#2a1212; border:1px solid #4c2222; }
+    .blue { background:#0f1f33; border:1px solid #20344d; }
+    .by   { color:#cbd5e1; font-size:12px; }
+    .empty { padding:18px; color:var(--muted); }
+  </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="header">
-      <div class="h1">🏁 Winners</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button id="viewQueueBtn" class="btn">📜 View Queue</button>
-        <a class="btn" href="/R-GE-SPACE/matchup.html">⬅ Back to Matchup</a>
+    <div class="top">
+      <h1>Winners Log</h1>
+      <div>
+        <a class="btn" href="matchup.html">← Back</a>
+        <button class="btn" id="refresh">Refresh</button>
       </div>
     </div>
-
-    <div id="winnersList" class="list" aria-live="polite"></div>
-    <div id="emptyState" class="empty" style="display:none;">No winners recorded yet.</div>
-  </div>
-
-  <!-- Queue Modal -->
-  <div class="modal-overlay" id="queueModal" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="queueTitle">
-      <div class="modal-close" id="queueClose" title="Close">✖</div>
-      <h2 id="queueTitle">🖼️ Images in Queue</h2>
-      <div class="modal-sub">Oldest files first → next to be added to the tournament</div>
-      <div id="queueGrid" class="queue-grid"></div>
+    <div class="meta" id="meta">Loading…</div>
+    <div class="card" id="tableWrap">
+      <div class="empty">Loading winners…</div>
     </div>
   </div>
 
-<script>
-const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  <script>
+    const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
+    const metaEl = document.getElementById('meta');
+    const tableWrap = document.getElementById('tableWrap');
+    const btnRefresh = document.getElementById('refresh');
 
-/* ===== Winners list (unchanged) ===== */
-const listEl = document.getElementById('winnersList');
-const emptyEl = document.getElementById('emptyState');
-
-function rowHTML({ color, phase_key, created_at }) {
-  const c = (color || '').toLowerCase();
-  const dotClass = c === 'red' ? 'color-red' : c === 'blue' ? 'color-blue' : '';
-  const time = created_at ? new Date(created_at).toLocaleString() : '—';
-  const key = phase_key || '—';
-  return `
-    <div class="card">
-      <div class="kv">
-        <span class="color-dot ${dotClass}" title="${c}"></span>
-        <strong>${c ? c.toUpperCase() : '—'}</strong>
-      </div>
-      <div class="kv">
-        <span class="badge">phase: ${key}</span>
-        <span class="time">${time}</span>
-      </div>
-    </div>`;
-}
-
-async function loadWinners(){
-  try{
-    const { data, error } = await supabase
-      .from('winners')
-      .select('color, phase_key, created_at')
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (error) throw error;
-
-    if (!data || data.length === 0) {
-      emptyEl.style.display = 'block';
-      listEl.innerHTML = '';
-      return;
+    function fmtTime(iso) {
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString(undefined, { hour12:false });
+      } catch { return iso; }
     }
 
-    emptyEl.style.display = 'none';
-    listEl.innerHTML = data.map(rowHTML).join('');
-  } catch (e) {
-    emptyEl.style.display = 'block';
-    emptyEl.textContent = 'Failed to load winners.';
-  }
-}
-
-loadWinners();
-
-supabase.channel('winners-feed')
-  .on('postgres_changes', { event:'INSERT', schema:'public', table:'winners' }, (payload)=>{
-    const r = payload?.new;
-    if (!r) return;
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = rowHTML(r);
-    listEl.prepend(wrapper.firstElementChild);
-    emptyEl.style.display = 'none';
-  })
-  .subscribe();
-
-/* =========================
-   📜 View Queue (Storage)
-   ========================= */
-const BUCKET = 'art-uploads';
-const viewQueueBtn = document.getElementById('viewQueueBtn');
-const queueModal   = document.getElementById('queueModal');
-const queueClose   = document.getElementById('queueClose');
-const queueGrid    = document.getElementById('queueGrid');
-
-// Get a URL for a file (public if possible, otherwise signed)
-async function fileUrl(path){
-  // Try public URL
-  const pub = supabase.storage.from(BUCKET).getPublicUrl(path);
-  if (pub?.data?.publicUrl) return pub.data.publicUrl;
-
-  // Fallback: signed URL for 1 hour
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
-  if (error) throw error;
-  return data.signedUrl;
-}
-
-// List files at a prefix, sorted by updated_at asc
-async function listAt(prefix=""){
-  const { data, error } = await supabase
-    .storage
-    .from(BUCKET)
-    .list(prefix, {
-      limit: 1000,
-      sortBy: { column: 'updated_at', order: 'asc' }
-    });
-  if (error) throw error;
-  // Filter files (exclude "folders")
-  return (data || []).filter(item => !item.metadata?.isDirectory && item.name);
-}
-
-// Load from root and optional "queue/" folder, merge & sort by updated_at
-async function loadQueueFiles(){
-  const [root, queue] = await Promise.allSettled([listAt(""), listAt("queue")]);
-  const files = []
-    .concat(root.status === 'fulfilled' ? root.value : [])
-    .concat(queue.status === 'fulfilled' ? queue.value : []);
-
-  // Deduplicate by full path (prefix + name)
-  const seen = new Set();
-  const deduped = [];
-  for (const f of files){
-    const full = (f.id || f.name); // id may not exist; name is unique within prefix
-    if (seen.has(full)) continue;
-    seen.add(full);
-    deduped.push(f);
-  }
-
-  // Build display objects
-  // We don’t have the prefix in the item, so if it came from "queue" call it would have been listed with that prefix.
-  // To be safe, try both paths (root and queue/) — whichever resolves first will be used.
-  const out = [];
-  for (const f of deduped){
-    const candidates = [f.name, `queue/${f.name}`];
-    let url = null, used = null;
-    for (const p of candidates){
-      try { url = await fileUrl(p); used = p; break; } catch(_) {}
+    function render(rows) {
+      if (!rows || rows.length === 0) {
+        tableWrap.innerHTML = '<div class="empty">No winners yet.</div>';
+        return;
+      }
+      const thead = `
+        <thead><tr>
+          <th>#</th><th>Decided At</th><th>Cycle</th><th>Winner</th><th>Score</th><th>Decided By</th>
+        </tr></thead>`;
+      const tbody = rows.map((r, i) => {
+        const pillClass = r.winner_color === 'red' ? 'pill red' : 'pill blue';
+        const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
+        const score = `${r.red_count}–${r.blue_count}`;
+        return `<tr>
+          <td>${i+1}</td>
+          <td>${fmtTime(r.decided_at)}</td>
+          <td>${r.base_iso}</td>
+          <td><span class="${pillClass}">${r.winner_color}</span></td>
+          <td>${score}</td>
+          <td class="by">${by}</td>
+        </tr>`;
+      }).join('');
+      tableWrap.innerHTML = `<table>${thead}<tbody>${tbody}</tbody></table>`;
     }
-    if (!url) continue;
-    out.push({
-      path: used,
-      name: f.name,
-      updated_at: f.updated_at || '',
-      url
-    });
-  }
 
-  // Sort by updated_at asc as “oldest first”
-  out.sort((a,b)=> new Date(a.updated_at||0) - new Date(b.updated_at||0));
-  return out;
-}
-
-viewQueueBtn.addEventListener('click', async ()=>{
-  queueModal.style.display = 'flex';
-  queueModal.setAttribute('aria-hidden','false');
-  queueGrid.innerHTML = '<div class="empty">Loading…</div>';
-
-  try {
-    const items = await loadQueueFiles();
-    if (!items.length){
-      queueGrid.innerHTML = '<div class="empty">No images in queue.</div>';
-      return;
+    async function load() {
+      metaEl.textContent = 'Loading…';
+      const url = FUNCTION_URL + "?winners=1&limit=200";
+      const res = await fetch(url);
+      const data = await res.json();
+      render(data.winners || []);
+      metaEl.textContent = `Showing ${data.winners?.length || 0} recent winners • caught up: ${data.caught_up ?? 0}`;
     }
-    queueGrid.innerHTML = items.map((img, i)=>`
-      <div class="queue-item" title="${img.path}">
-        <img src="${img.url}" alt="${img.name}"/>
-        <span>#${i+1} — ${img.name}</span>
-      </div>
-    `).join('');
-  } catch (e) {
-    queueGrid.innerHTML = '<div class="empty">Failed to load queue.</div>';
-  }
-});
 
-queueClose.addEventListener('click', ()=>{
-  queueModal.style.display = 'none';
-  queueModal.setAttribute('aria-hidden','true');
-});
-</script>
+    btnRefresh.onclick = load;
+    setInterval(load, 5000); // auto-refresh
+    load();
+  </script>
 </body>
 </html>
