@@ -17,13 +17,12 @@
     table { width:100%; border-collapse:collapse; font-size:14px; table-layout:auto; }
     th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
     th { color:#cbd5e1; font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
-    .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
-    .red  { background:#2a1212; border:1px solid #4c2222; }
-    .blue { background:#0f1f33; border:1px solid #20344d; }
-    .by   { color:#cbd5e1; font-size:12px; white-space:nowrap; }
+    .pillA { background:#2a1212; border:1px solid #4c2222; display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+    .pillB { background:#0f1f33; border:1px solid #20344d; display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+    .by { color:#cbd5e1; font-size:12px; white-space:nowrap; }
     .score { font-variant-numeric: tabular-nums; white-space:nowrap; font-weight:700; }
     .cycle { word-break:break-all; color:#cbd5e1; opacity:.9; }
-    @media (max-width:520px){ th.cycle,td.cycle{display:none;} th,td{padding:8px 10px;} table{font-size:13px;} .pill{padding:3px 9px;font-size:11px;} }
+    @media (max-width:520px){ th.cycle,td.cycle{display:none;} th,td{padding:8px 10px;} table{font-size:13px;} }
   </style>
 </head>
 <body>
@@ -62,13 +61,13 @@
 
   <script>
     const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
-    const ADMIN_KEY = "Inklink88!"; // must match ADMIN_CLEAR_KEY in Supabase
+    const ADMIN_KEY = "Inklink88!";
+
     const metaEl = document.getElementById('meta');
     const tbody  = document.getElementById('body');
     const btnRefresh = document.getElementById('refresh');
     const btnClear   = document.getElementById('clear');
 
-    // Updated: format time in 12-hour with AM/PM
     function fmtTime(iso) {
       try {
         return new Date(iso).toLocaleString(undefined, {
@@ -93,7 +92,9 @@
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
-        const pillClass = r.winner_color === 'red' ? 'pill red' : 'pill blue';
+        const pill = r.winner_color === 'red'
+          ? `<span class="pillA">Seed A</span>`
+          : `<span class="pillB">Seed B</span>`;
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count}–${r.blue_count}`;
         return `
@@ -101,7 +102,7 @@
             <td>${n}</td>
             <td>${fmtTime(r.decided_at)}</td>
             <td class="cycle">${r.base_iso}</td>
-            <td><span class="${pillClass}">${r.winner_color}</span></td>
+            <td>${pill}</td>
             <td class="score">${score}</td>
             <td class="by">${by}</td>
           </tr>`;
