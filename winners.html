@@ -9,8 +9,8 @@
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
     .wrap { max-width:780px; margin:0 auto; padding:16px 12px 24px; }
     h1 { margin:0 0 10px; font-size:20px; font-weight:800; letter-spacing:.5px; }
-    .top { display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px; }
-    a.btn, button.btn { text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:#131920; color:var(--fg); font-weight:700; }
+    .top { display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; }
+    a.btn, button.btn { text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:#131920; color:var(--fg); font-weight:700; cursor:pointer; }
     .meta { color:var(--muted); font-size:12px; margin-bottom:8px; }
     .card { border:1px solid var(--line); background:var(--card); border-radius:14px; overflow:hidden; }
     .table-wrap { overflow-x:auto; }
@@ -36,9 +36,10 @@
   <div class="wrap">
     <div class="top">
       <h1>Winners Log</h1>
-      <div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <a class="btn" href="matchup.html">← Back</a>
         <button class="btn" id="refresh">Refresh</button>
+        <button class="btn" id="clear">Clear Data</button>
       </div>
     </div>
 
@@ -70,6 +71,7 @@
     const metaEl = document.getElementById('meta');
     const tbody = document.getElementById('body');
     const btnRefresh = document.getElementById('refresh');
+    const btnClear = document.getElementById('clear');
 
     function fmtTime(iso) {
       try { return new Date(iso).toLocaleString(undefined, { hour12:false }); }
@@ -81,10 +83,7 @@
         tbody.innerHTML = `<tr><td colspan="6" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
         return;
       }
-
-      // Sort oldest → newest so #1 is oldest and appears at bottom
       rows = [...rows].reverse();
-
       tbody.innerHTML = rows.map((r, i) => {
         const pillClass = r.winner_color === 'red' ? 'pill red' : 'pill blue';
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
@@ -109,7 +108,21 @@
       metaEl.textContent = `Showing ${data.winners?.length || 0} total winners • caught up: ${data.caught_up ?? 0} • #1 = oldest`;
     }
 
+    async function clearData() {
+      if (!confirm("⚠️ This will permanently delete all winner data. Continue?")) return;
+      metaEl.textContent = 'Clearing data…';
+      const res = await fetch(FUNCTION_URL + "?clear=1", { method: "DELETE" });
+      const data = await res.json().catch(()=>({}));
+      if (res.ok) {
+        alert("Winner data cleared.");
+        load();
+      } else {
+        alert("Error: " + (data.error || "failed to clear"));
+      }
+    }
+
     btnRefresh.onclick = load;
+    btnClear.onclick = clearData;
     setInterval(load, 5000);
     load();
   </script>
