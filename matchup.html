@@ -10,7 +10,7 @@
     .wrap { max-width:700px; margin:0 auto; padding:16px 12px 28px; }
     h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
     .row { display:flex; align-items:center; gap:10px; }
-    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
     .state { color:var(--muted); font-size:12px; }
     .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
@@ -43,21 +43,8 @@
       position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent);
       color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer;
     }
-
-    /* Back button */
-    .backbtn {
-      text-decoration:none;
-      display:inline-flex;
-      align-items:center;
-      padding:8px 12px;
-      border:1px solid #20242a;
-      border-radius:12px;
-      background:#131920;
-      color:var(--accent);
-      font-weight:700;
-    }
-    .backbtn:hover { background:#0d1218; }
   </style>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="wrap">
@@ -68,10 +55,7 @@
         <div class="timer" id="tRemain">20.0</div>
         <div class="state" id="tMeta">syncing…</div>
       </div>
-      <div class="row">
-        <a class="backbtn" href="menu.html">← Menu</a>
-        <a class="linkbtn" href="winners.html">Winners</a>
-      </div>
+      <a class="linkbtn" href="winners.html">Winners</a>
     </div>
 
     <!-- SEED A -->
@@ -111,6 +95,14 @@
   </div>
 
   <script>
+
+    // Supabase (for art_queue integration)
+    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+    const supabase = window.supabase?.createClient
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      : null;
+
     const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
 
     const RSID_KEY = "rsid_v2";
@@ -138,6 +130,31 @@
     const btnClose = document.getElementById("closeFull");
 
     btnClose.onclick = () => overlay.style.display = 'none';
+
+    
+    // ----- Queue helpers -----
+    const CLAIM_KEY = (b)=> `queue_claimed:${b}`;
+
+    async function fetchPendingQueue(n=2){
+      if (!supabase) return [];
+      const { data, error } = await supabase
+        .from('art_queue')
+        .select('id,image_url,created_at')
+        .eq('status','pending')
+        .order('created_at',{ascending:true})
+        .limit(n);
+      if (error) { console.warn('queue fetch error', error); return []; }
+      return data||[];
+    }
+
+    async function markQueueUsed(ids=[], baseIso){
+      if (!supabase || !ids.length) return;
+      const { error } = await supabase
+        .from('art_queue')
+        .update({ status:'used', used_at: new Date().toISOString(), used_in_base: baseIso })
+        .in('id', ids);
+      if (error) console.warn('queue mark used error', error);
+    }
 
     function openFull(which){
       const url = which === 'A' ? imgA.src : imgB.src;
@@ -177,8 +194,21 @@
 
       const newRound = state.base_iso && state.base_iso !== data.base_iso;
       state = data;
-      imgA.src = state.red_url;
-      imgB.src = state.blue_url;
+      let red = state.red_url, blue = state.blue_url;
+      // If a new round and not already claimed, swap in queue images (priority over defaults)
+      const claimFlag = localStorage.getItem(CLAIM_KEY(state.base_iso));
+      if (newRound && !claimFlag){
+        try{
+          const q = await fetchPendingQueue(2);
+          if (q.length>=1) red = q[0].image_url;
+          if (q.length>=2) blue = q[1].image_url;
+          const usedIds = q.slice(0,2).map(r=>r.id);
+          if (usedIds.length) await markQueueUsed(usedIds, state.base_iso);
+          localStorage.setItem(CLAIM_KEY(state.base_iso),'1');
+        }catch(e){ console.warn('queue override failed', e); }
+      }
+      imgA.src = red;
+      imgB.src = blue;
       cA.textContent = state.red_count;
       cB.textContent = state.blue_count;
       elMeta.textContent = `cycle: ${state.base_iso}`;
