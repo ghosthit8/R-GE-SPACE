@@ -31,7 +31,6 @@
   <div class="wrap">
     <h1>Rage Space — Minimal Matchup (v2)</h1>
 
-    <!-- Header row with timer/meta on the left and Winners button on the right -->
     <div class="header">
       <div class="row">
         <div class="timer" id="tRemain">20.0</div>
@@ -40,23 +39,23 @@
       <a class="linkbtn" href="winners.html">Winners</a>
     </div>
 
-    <!-- RED on top -->
+    <!-- SEED A -->
     <div class="card">
-      <div class="imgBox"><img id="imgRed" alt="Red contender" /></div>
+      <div class="imgBox"><img id="imgA" alt="Seed A contender" /></div>
       <div class="bar">
-        <div class="label">Red</div>
-        <div class="counts" id="countRed">0</div>
-        <button class="vote" id="btnRed">Vote Red</button>
+        <div class="label">Seed A</div>
+        <div class="counts" id="countA">0</div>
+        <button class="vote" id="btnA">Vote Seed A</button>
       </div>
     </div>
 
-    <!-- BLUE below -->
+    <!-- SEED B -->
     <div class="card">
-      <div class="imgBox"><img id="imgBlue" alt="Blue contender" /></div>
+      <div class="imgBox"><img id="imgB" alt="Seed B contender" /></div>
       <div class="bar">
-        <div class="label">Blue</div>
-        <div class="counts" id="countBlue">0</div>
-        <button class="vote" id="btnBlue">Vote Blue</button>
+        <div class="label">Seed B</div>
+        <div class="counts" id="countB">0</div>
+        <button class="vote" id="btnB">Vote Seed B</button>
       </div>
     </div>
 
@@ -67,7 +66,6 @@
   <script>
     const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
 
-    // --- persistent vote token ---
     const RSID_KEY = "rsid_v2";
     let RSID = localStorage.getItem(RSID_KEY);
     if (!RSID) {
@@ -81,12 +79,12 @@
 
     const elRemain = document.getElementById("tRemain");
     const elMeta = document.getElementById("tMeta");
-    const imgRed = document.getElementById("imgRed");
-    const imgBlue = document.getElementById("imgBlue");
-    const cRed = document.getElementById("countRed");
-    const cBlue = document.getElementById("countBlue");
-    const btnRed = document.getElementById("btnRed");
-    const btnBlue = document.getElementById("btnBlue");
+    const imgA = document.getElementById("imgA");
+    const imgB = document.getElementById("imgB");
+    const cA = document.getElementById("countA");
+    const cB = document.getElementById("countB");
+    const btnA = document.getElementById("btnA");
+    const btnB = document.getElementById("btnB");
     const winnerText = document.getElementById("winnerText");
 
     let state = {
@@ -100,7 +98,7 @@
     };
 
     function setVoteButtons(enabled) {
-      btnRed.disabled = btnBlue.disabled = !enabled;
+      btnA.disabled = btnB.disabled = !enabled;
     }
 
     function showWinner(winner) {
@@ -110,7 +108,7 @@
       }
       const by = winner.decided_by === "random_tie" ? "random tie" : "votes";
       const score = `${winner.red_count}–${winner.blue_count}`;
-      const name = winner.winner_color === "red" ? "Red" : "Blue";
+      const name = winner.winner_color === "red" ? "Seed A" : "Seed B";
       winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
     }
 
@@ -121,10 +119,10 @@
 
       const newRound = state.base_iso && state.base_iso !== data.base_iso;
       state = data;
-      imgRed.src = state.red_url;
-      imgBlue.src = state.blue_url;
-      cRed.textContent = state.red_count;
-      cBlue.textContent = state.blue_count;
+      imgA.src = state.red_url;
+      imgB.src = state.blue_url;
+      cA.textContent = state.red_count;
+      cB.textContent = state.blue_count;
       elMeta.textContent = `cycle: ${state.base_iso}`;
       showWinner(state.last_winner);
 
@@ -143,15 +141,14 @@
       if (!data.ignored) {
         markVoted(state.base_iso);
         setVoteButtons(false);
-        cRed.textContent = data.red_count;
-        cBlue.textContent = data.blue_count;
+        cA.textContent = data.red_count;
+        cB.textContent = data.blue_count;
       }
     }
 
-    btnRed.onclick = () => !btnRed.disabled && sendVote("red");
-    btnBlue.onclick = () => !btnBlue.disabled && sendVote("blue");
+    btnA.onclick = () => !btnA.disabled && sendVote("red");
+    btnB.onclick = () => !btnB.disabled && sendVote("blue");
 
-    // Timer loop
     function tick() {
       const remain = new Date(state.ends_at).getTime() - Date.now();
       elRemain.textContent = (Math.max(0, remain) / 1000).toFixed(1);
