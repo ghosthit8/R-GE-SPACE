@@ -10,6 +10,7 @@
     .wrap { max-width:700px; margin:0 auto; padding:16px 12px 28px; }
     h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
     .row { display:flex; align-items:center; gap:10px; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
     .state { color:var(--muted); font-size:12px; }
     .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
@@ -23,14 +24,20 @@
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
     .winner b { color:var(--accent); }
+    .linkbtn { text-decoration:none; display:inline-flex; align-items:center; padding:8px 12px; border:1px solid #20242a; border-radius:12px; background:#131920; color:var(--fg); font-weight:700; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Rage Space — Minimal Matchup (v2)</h1>
-    <div class="row">
-      <div class="timer" id="tRemain">20.0</div>
-      <div class="state" id="tMeta">syncing…</div>
+
+    <!-- Header row with timer/meta on the left and Winners button on the right -->
+    <div class="header">
+      <div class="row">
+        <div class="timer" id="tRemain">20.0</div>
+        <div class="state" id="tMeta">syncing…</div>
+      </div>
+      <a class="linkbtn" href="winners.html">Winners</a>
     </div>
 
     <!-- RED on top -->
