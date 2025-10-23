@@ -10,7 +10,7 @@
     .wrap { max-width:700px; margin:0 auto; padding:16px 12px 28px; }
     h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
     .row { display:flex; align-items:center; gap:10px; }
-    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
     .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
     .state { color:var(--muted); font-size:12px; }
     .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
@@ -43,6 +43,20 @@
       position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent);
       color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer;
     }
+
+    /* Back button */
+    .backbtn {
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      padding:8px 12px;
+      border:1px solid #20242a;
+      border-radius:12px;
+      background:#131920;
+      color:var(--accent);
+      font-weight:700;
+    }
+    .backbtn:hover { background:#0d1218; }
   </style>
 </head>
 <body>
@@ -54,7 +68,10 @@
         <div class="timer" id="tRemain">20.0</div>
         <div class="state" id="tMeta">syncing…</div>
       </div>
-      <a class="linkbtn" href="winners.html">Winners</a>
+      <div class="row">
+        <a class="backbtn" href="menu.html">← Menu</a>
+        <a class="linkbtn" href="winners.html">Winners</a>
+      </div>
     </div>
 
     <!-- SEED A -->
