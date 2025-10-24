@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Minimal Matchup (pair-locked)</title>
+  <title>Rage Space — Minimal Matchup (consume queue)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -37,16 +37,9 @@
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
     .winner b { color:var(--accent); }
 
-    /* Fullscreen overlay */
-    .fullscreen-overlay {
-      display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95);
-      justify-content:center; align-items:center; z-index:9999;
-    }
+    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
     .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
-    .fullscreen-overlay button {
-      position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent);
-      color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer;
-    }
+    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
@@ -96,7 +89,6 @@
     <div class="hint">Timer auto-loops every ~20 s. A winner is decided at 0 (random if tied). One vote per device per round.</div>
   </div>
 
-  <!-- fullscreen modal -->
   <div class="fullscreen-overlay" id="overlay">
     <button id="closeFull">✕ Close</button>
     <img id="fullImg" src="">
@@ -118,7 +110,7 @@
     const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
     const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
 
-    // pair lock helpers (avoid flicker)
+    // pair lock to avoid flicker
     const PAIR_KEY = (b) => `pair:${b}`;
     const loadPair = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
     const savePair = (b, red, blue) => localStorage.setItem(PAIR_KEY(b), JSON.stringify({red, blue}));
@@ -160,13 +152,16 @@
       if (error) { console.warn('queue fetch error', error); return []; }
       return data || [];
     }
-    async function markQueueUsed(ids = [], baseIso) {
-      if (!supabase || !ids.length) return;
+
+    // CONSUME = delete after taking so it can’t repeat
+    async function consumeQueue(ids = []) {
+      if (!supabase || !ids.length) return { ok: false };
       const { error } = await supabase
         .from('art_queue')
-        .update({ status: 'used', used_at: new Date().toISOString(), used_in_base: baseIso })
+        .delete()
         .in('id', ids);
-      if (error) console.warn('queue mark used error', error);
+      if (error) { console.warn('queue delete error', error); return { ok:false, error }; }
+      return { ok:true };
     }
 
     let state = { ends_at: null, base_iso: null, red_url: "", blue_url: "", red_count: 0, blue_count: 0, last_winner: null };
@@ -192,39 +187,47 @@
         const newRound = state.base_iso && state.base_iso !== data.base_iso;
         state = data;
 
-        // Always start from any locked pair for this base
+        // Use locked pair if exists for this base
         let locked = loadPair(state.base_iso);
         let red = locked?.red ?? state.red_url;
         let blue = locked?.blue ?? state.blue_url;
 
         const urlForce = new URLSearchParams(location.search).get('claim') === '1';
-        const claimKey = CLAIM_KEY(state.base_iso);
-        const alreadyClaimed = localStorage.getItem(claimKey) === '1';
+        const alreadyClaimed = localStorage.getItem(CLAIM_KEY(state.base_iso)) === '1';
+
+        // consume if new round OR not claimed yet OR force
         const shouldTryQueue = forceQueue || newRound || (!alreadyClaimed && !locked) || urlForce;
 
         if (shouldTryQueue) {
           try {
             const q = await fetchPendingQueue(2);
-            if (q.length >= 1) red  = q[0].image_url;
-            if (q.length >= 2) blue = q[1].image_url;
+            if (q.length) {
+              if (q[0]) red = q[0].image_url;
+              if (q[1]) blue = q[1].image_url;
+              const usedIds = q.slice(0, 2).map(r => r.id);
 
-            const usedIds = q.slice(0, 2).map(r => r.id);
-            if (usedIds.length) await markQueueUsed(usedIds, state.base_iso);
+              // delete them so they cannot repeat
+              const del = await consumeQueue(usedIds);
+              if (!del.ok) {
+                // fallback: lock still prevents duplicate on this device,
+                // but other devices might see them; consider enabling UPDATE policy instead.
+                console.warn('Queue consume failed; items may repeat across devices');
+              }
 
-            localStorage.setItem(claimKey, '1');
-            savePair(state.base_iso, red, blue);         // lock for this round
-            locked = { red, blue };
-            // clean ?claim=1
-            if (urlForce && history.replaceState) {
-              const u = new URL(location.href); u.searchParams.delete('claim');
-              history.replaceState({}, '', u.toString());
+              localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
+              savePair(state.base_iso, red, blue);
+              locked = { red, blue };
+
+              // clean ?claim=1 once used
+              if (urlForce && history.replaceState) {
+                const u = new URL(location.href); u.searchParams.delete('claim');
+                history.replaceState({}, '', u.toString());
+              }
             }
-          } catch (e) { console.warn('queue override failed', e); }
+          } catch (e) { console.warn('queue consume failed', e); }
         }
 
-        // apply images (from lock if present)
         imgA.src = red; imgB.src = blue;
-        // keep counts/metadata fresh
         cA.textContent = state.red_count; cB.textContent = state.blue_count;
         elMeta.textContent = `cycle: ${state.base_iso}`;
         showWinner(state.last_winner);
@@ -237,12 +240,12 @@
       }
     }
 
-    // Force button for immediate testing (ignores claim + lock)
+    // Force button: clears claim+lock and consumes next 2 immediately
     document.getElementById('forceQueue')?.addEventListener('click', async ()=>{
       if (!state?.base_iso) return;
       localStorage.removeItem(CLAIM_KEY(state.base_iso));
       localStorage.removeItem(PAIR_KEY(state.base_iso));
-      await fetchState(true); // force pull now
+      await fetchState(true);
     });
 
     // ---------- voting ----------
@@ -270,18 +273,14 @@
       if (!state?.ends_at) return requestAnimationFrame(tick);
       const remain = new Date(state.ends_at).getTime() - Date.now();
       elRemain.textContent = (Math.max(0, remain) / 1000).toFixed(1);
-      // when the server says we're ~1s past zero, refresh once (will advance base)
       if (remain <= -900) fetchState().catch(()=>{});
       requestAnimationFrame(tick);
     }
 
-    // poll state (gentle)
+    // poll gently
     setInterval(() => fetchState().catch(()=>{}), 4000);
 
-    (async () => {
-      await fetchState();  // initial — will lock pair if unclaimed
-      tick();
-    })();
+    (async () => { await fetchState(); tick(); })();
   </script>
 </body>
 </html>
