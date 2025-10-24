@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Minimal Matchup (consume queue)</title>
+  <title>Rage Space — Matchup (Queue-Integrated)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -36,16 +36,22 @@
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
     .winner b { color:var(--accent); }
-
-    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
+    /* Fullscreen overlay */
+    .fullscreen-overlay {
+      display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95);
+      justify-content:center; align-items:center; z-index:9999;
+    }
     .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
-    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
+    .fullscreen-overlay button {
+      position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent);
+      color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer;
+    }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="wrap">
-    <h1>Rage Space — Minimal Matchup</h1>
+    <h1>Rage Space — Matchup</h1>
 
     <div class="header">
       <div class="row">
@@ -53,7 +59,8 @@
         <div class="state" id="tMeta">syncing…</div>
       </div>
       <div class="row">
-        <button id="forceQueue" class="btn ghost" title="Use next 2 from queue immediately">Use Next From Queue Now</button>
+        <button id="forceQueue" class="btn ghost" title="Consume next 2 from queue now">Use Next From Queue Now</button>
+        <button id="resetPair" class="btn ghost" title="Forget locked pair for this round">Reset Pair</button>
         <a class="backbtn" href="menu.html">← Menu</a>
         <a class="linkbtn" href="winners.html">Winners</a>
       </div>
@@ -86,146 +93,134 @@
     </div>
 
     <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
-    <div class="hint">Timer auto-loops every ~20 s. A winner is decided at 0 (random if tied). One vote per device per round.</div>
+    <div class="hint">Timer auto-loops ~20s. Winner decided at 0 (random if tied). One vote per device per round.</div>
   </div>
 
+  <!-- fullscreen modal -->
   <div class="fullscreen-overlay" id="overlay">
     <button id="closeFull">✕ Close</button>
     <img id="fullImg" src="">
   </div>
 
   <script>
-    // --- Supabase + runtime constants ---
+    // --- Supabase + constants ---
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-    const supabase = window.supabase?.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
-    // device id for vote limiting
+    // vote identity
     const RSID_KEY = "rsid_v2";
     let RSID = localStorage.getItem(RSID_KEY);
-    if (!RSID) { RSID = (crypto.randomUUID?.() || (Math.random().toString(36).slice(2)+Date.now())); localStorage.setItem(RSID_KEY, RSID); }
-
+    if (!RSID) { RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
     const votedKey = (b) => `voted:${b}`;
     const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
     const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
 
-    // pair lock to avoid flicker
-    const PAIR_KEY = (b) => `pair:${b}`;
-    const loadPair = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
-    const savePair = (b, red, blue) => localStorage.setItem(PAIR_KEY(b), JSON.stringify({red, blue}));
-
-    // queue claim flag
+    // pair lock / claim keys
+    const PAIR_KEY  = (b) => `pair:${b}`;
     const CLAIM_KEY = (b) => `queue_claimed:${b}`;
+    const loadPair  = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
+    const savePair  = (b, red, blue) => { if (red && blue) localStorage.setItem(PAIR_KEY(b), JSON.stringify({ red, blue })); };
+    const clearPair = (b) => localStorage.removeItem(PAIR_KEY(b));
 
     // elements
     const elRemain = document.getElementById("tRemain");
-    const elMeta = document.getElementById("tMeta");
-    const imgA = document.getElementById("imgA");
-    const imgB = document.getElementById("imgB");
-    const cA = document.getElementById("countA");
-    const cB = document.getElementById("countB");
-    const btnA = document.getElementById("btnA");
-    const btnB = document.getElementById("btnB");
+    const elMeta   = document.getElementById("tMeta");
+    const imgA     = document.getElementById("imgA");
+    const imgB     = document.getElementById("imgB");
+    const cA       = document.getElementById("countA");
+    const cB       = document.getElementById("countB");
+    const btnA     = document.getElementById("btnA");
+    const btnB     = document.getElementById("btnB");
     const winnerText = document.getElementById("winnerText");
-    const overlay = document.getElementById("overlay");
-    const fullImg = document.getElementById("fullImg");
+    const overlay  = document.getElementById("overlay");
+    const fullImg  = document.getElementById("fullImg");
     const btnClose = document.getElementById("closeFull");
     const forceBtn = document.getElementById("forceQueue");
+    const resetBtn = document.getElementById("resetPair");
     btnClose.onclick = () => overlay.style.display = 'none';
+    function openFull(which){ fullImg.src = which==='A'?imgA.src:imgB.src; overlay.style.display='flex'; }
 
-    function openFull(which) {
-      const url = which === 'A' ? imgA.src : imgB.src;
-      fullImg.src = url;
-      overlay.style.display = 'flex';
-    }
-
-    // ---------- Queue helpers ----------
-    async function fetchPendingQueue(n = 2) {
-      if (!supabase) return [];
+    // ----- Queue helpers -----
+    async function fetchPendingQueue(n=2){
       const { data, error } = await supabase
         .from('art_queue')
         .select('id,image_url,created_at')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: true })
+        .eq('status','pending')
+        .not('image_url','is',null)
+        .order('created_at',{ ascending:true })
         .limit(n);
-      if (error) { console.warn('queue fetch error', error); return []; }
-      return data || [];
+      if (error) { console.warn('[QUEUE] fetch error', error); return []; }
+      return (data||[]).filter(r=>!!r.image_url);
     }
 
-    // CONSUME = delete after taking so it can’t repeat
-    async function consumeQueue(ids = []) {
-      if (!supabase || !ids.length) return { ok: false };
+    // mark as used (safer than delete; requires UPDATE policy)
+    async function consumeQueue(ids=[], baseIso){
+      if (!ids.length) return { ok:false };
       const { error } = await supabase
         .from('art_queue')
-        .delete()
+        .update({ status:'used', used_at:new Date().toISOString(), used_in_base: baseIso })
         .in('id', ids);
-      if (error) { console.warn('queue delete error', error); return { ok:false, error }; }
+      if (error) { console.warn('[QUEUE] update→used error', error); return { ok:false, error }; }
       return { ok:true };
     }
 
-    let state = { ends_at: null, base_iso: null, red_url: "", blue_url: "", red_count: 0, blue_count: 0, last_winner: null };
-
-    function setVoteButtons(enabled) { btnA.disabled = btnB.disabled = !enabled; }
-    function showWinner(winner) {
-      if (!winner) { winnerText.textContent = "No winner yet — first round in progress."; return; }
-      const by = winner.decided_by === "random_tie" ? "random tie" : "votes";
+    // ----- UI helpers -----
+    function setVoteButtons(enabled){ btnA.disabled = btnB.disabled = !enabled; }
+    function showWinner(winner){
+      if (!winner){ winnerText.textContent='No winner yet — first round in progress.'; return; }
+      const by = winner.decided_by==='random_tie' ? 'random tie' : 'votes';
+      const name = winner.winner_color==='red' ? 'Seed A' : 'Seed B';
       const score = `${winner.red_count}–${winner.blue_count}`;
-      const name = winner.winner_color === "red" ? "Seed A" : "Seed B";
       winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
     }
 
-    // ---------- fetch state (pair-locked & debounced) ----------
+    // ----- state -----
+    let state = { ends_at:null, base_iso:null, red_url:'', blue_url:'', red_count:0, blue_count:0, last_winner:null };
     let fetching = false;
-    async function fetchState(forceQueue = false) {
+
+    async function fetchState(forceQueue=false){
       if (fetching) return; fetching = true;
-      try {
+      try{
         const res = await fetch(FUNCTION_URL);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "GET failed");
+        if (!res.ok) throw new Error(data.error || 'GET failed');
 
         const newRound = state.base_iso && state.base_iso !== data.base_iso;
         state = data;
 
-        // Use locked pair if exists for this base
-        let locked = loadPair(state.base_iso);
-        let red = locked?.red ?? state.red_url;
-        let blue = locked?.blue ?? state.blue_url;
+        // start from server defaults
+        let red = state.red_url, blue = state.blue_url;
 
-        const urlForce = new URLSearchParams(location.search).get('claim') === '1';
-        const alreadyClaimed = localStorage.getItem(CLAIM_KEY(state.base_iso)) === '1';
+        // pair lock (prevents flicker)
+        const locked = loadPair(state.base_iso);
+        if (locked?.red && locked?.blue){ red = locked.red; blue = locked.blue; }
 
-        // consume if new round OR not claimed yet OR force
-        const shouldTryQueue = forceQueue || newRound || (!alreadyClaimed && !locked) || urlForce;
+        const alreadyClaimed = !!localStorage.getItem(CLAIM_KEY(state.base_iso));
+        const shouldTryQueue = forceQueue || newRound || (!alreadyClaimed && !locked);
 
-        if (shouldTryQueue) {
-          try {
-            const q = await fetchPendingQueue(2);
-            if (q.length) {
-              if (q[0]) red = q[0].image_url;
-              if (q[1]) blue = q[1].image_url;
-              const usedIds = q.slice(0, 2).map(r => r.id);
+        if (shouldTryQueue){
+          const q = await fetchPendingQueue(2);
+          if (q.length){
+            if (q[0]) red = q[0].image_url;
+            if (q[1]) blue = q[1].image_url;
 
-              // delete them so they cannot repeat
-              const del = await consumeQueue(usedIds);
-              if (!del.ok) {
-                // fallback: lock still prevents duplicate on this device,
-                // but other devices might see them; consider enabling UPDATE policy instead.
-                console.warn('Queue consume failed; items may repeat across devices');
-              }
+            const ids = q.slice(0,2).map(r=>r.id);
+            const ok = await consumeQueue(ids, state.base_iso);
+            if (!ok.ok) console.warn('[QUEUE] consume failed (RLS?)');
 
-              localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
+            // only lock & claim if we actually have urls
+            if (red && blue){
               savePair(state.base_iso, red, blue);
-              locked = { red, blue };
-
-              // clean ?claim=1 once used
-              if (urlForce && history.replaceState) {
-                const u = new URL(location.href); u.searchParams.delete('claim');
-                history.replaceState({}, '', u.toString());
-              }
+              localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
             }
-          } catch (e) { console.warn('queue consume failed', e); }
+          }
         }
+
+        // final safety: never paint empty
+        if (!red)  red  = state.red_url;
+        if (!blue) blue = state.blue_url;
 
         imgA.src = red; imgB.src = blue;
         cA.textContent = state.red_count; cB.textContent = state.blue_count;
@@ -233,54 +228,63 @@
         showWinner(state.last_winner);
 
         if (newRound) setVoteButtons(!hasVoted(state.base_iso));
-      } catch (e) {
+      }catch(e){
         console.error(e);
-      } finally {
+      }finally{
         fetching = false;
       }
     }
 
-    // Force button: clears claim+lock and consumes next 2 immediately
-    document.getElementById('forceQueue')?.addEventListener('click', async ()=>{
+    // force actions
+    forceBtn.addEventListener('click', async ()=>{
       if (!state?.base_iso) return;
       localStorage.removeItem(CLAIM_KEY(state.base_iso));
-      localStorage.removeItem(PAIR_KEY(state.base_iso));
-      await fetchState(true);
+      clearPair(state.base_iso);
+      await fetchState(true); // force consume next two now
+    });
+    resetBtn.addEventListener('click', async ()=>{
+      if (!state?.base_iso) return;
+      clearPair(state.base_iso);
+      await fetchState(false); // just refetch; will use existing claim or defaults
     });
 
-    // ---------- voting ----------
-    async function sendVote(color) {
+    // voting
+    async function sendVote(color){
       const res = await fetch(FUNCTION_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-rsid": RSID },
-        body: JSON.stringify({ color }),
+        method:'POST',
+        headers:{ 'content-type':'application/json', 'x-rsid': RSID },
+        body: JSON.stringify({ color })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "vote failed");
-      if (data.ignored && data.reason === "already_voted") return setVoteButtons(false);
-      if (!data.ignored) {
+      if (!res.ok) throw new Error(data.error || 'vote failed');
+      if (data.ignored && data.reason==='already_voted') return setVoteButtons(false);
+      if (!data.ignored){
         markVoted(state.base_iso);
         setVoteButtons(false);
         cA.textContent = data.red_count;
         cB.textContent = data.blue_count;
       }
     }
-    btnA.onclick = () => !btnA.disabled && sendVote("red");
-    btnB.onclick = () => !btnB.disabled && sendVote("blue");
+    btnA.onclick = () => !btnA.disabled && sendVote('red');
+    btnB.onclick = () => !btnB.disabled && sendVote('blue');
 
-    // ---------- timer ----------
-    function tick() {
+    // timer
+    function tick(){
       if (!state?.ends_at) return requestAnimationFrame(tick);
       const remain = new Date(state.ends_at).getTime() - Date.now();
-      elRemain.textContent = (Math.max(0, remain) / 1000).toFixed(1);
+      elRemain.textContent = (Math.max(0, remain)/1000).toFixed(1);
       if (remain <= -900) fetchState().catch(()=>{});
       requestAnimationFrame(tick);
     }
 
-    // poll gently
-    setInterval(() => fetchState().catch(()=>{}), 4000);
+    // gentle polling
+    setInterval(()=> fetchState().catch(()=>{}), 4000);
 
-    (async () => { await fetchState(); tick(); })();
+    // boot
+    (async()=>{ await fetchState(); tick(); })();
+
+    // expose for debugger if you like
+    window.__match = { fetchState };
   </script>
 </body>
 </html>
