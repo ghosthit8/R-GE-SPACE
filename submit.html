@@ -12,66 +12,130 @@
   --bg:#000; --card:#090909; --border:#153b16; --muted:#8aff8a;
   --maxw:860px;
 }
-*{box-sizing:border-box}
+*{box-sizing: border-box}
 html,body{height:100%}
 body{
-  margin:0; background:radial-gradient(1200px 900px at 50% -10%,rgba(57,255,20,.08),transparent 60%), #000;
-  color:var(--ink); font:14px/1.45 system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
+  margin:0; background: radial-gradient(120% 120% at 50% 0%, rgba(0,255,120,.08), rgba(0,0,0,.96) 60%), #000;
+  color:var(--green); font-family: system-ui, Arial, Helvetica, sans-serif;
 }
-.wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 80px}
-h1{margin:0 0 12px; font-size:24px; letter-spacing:.6px}
-.header{display:flex; align-items:center; justify-content:space-between; gap:10px}
-.badge{border:1px solid var(--border); padding:6px 10px; border-radius:12px; color:var(--ink)}
+.wrap{max-width:var(--maxw); margin:28px auto 80px; padding:0 16px}
+.hdr{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  border:1px solid var(--border); border-radius:14px; background:rgba(7,7,7,.55); padding:12px 14px;
+}
+.h1{letter-spacing:2px; text-transform:uppercase; font-size:18px; font-weight:800}
+.badge{border:1px solid var(--border); border-radius:8px; padding:2px 8px}
 .btn{
-  display:inline-flex; align-items:center; gap:8px; justify-content:center; text-decoration:none;
-  border:1px solid var(--border); border-radius:14px; padding:10px 14px; font-weight:600;
-  background:linear-gradient(180deg, rgba(57,255,20,.08), rgba(57,255,20,.02));
-  color:var(--green); transition:box-shadow .2s ease, transform .08s ease; cursor:pointer;
+  border:1px solid var(--green); color:var(--green); background:transparent;
+  border-radius:12px; padding:10px 14px; cursor:pointer; text-decoration:none; display:inline-flex; gap:8px; align-items:center;
 }
 .btn:hover{box-shadow:0 0 14px rgba(57,255,20,.22)}
 .btn.big{font-size:18px; padding:16px 18px}
 .btn.ghost{opacity:.9}
 .btn[disabled]{opacity:.45; cursor:not-allowed; box-shadow:none}
-.input{width:100%; border:1px solid var(--border); border-radius:12px; background:#0b0b0b; color:var(--ink); padding:10px 12px; font-size:14px}
-.hidden{display:none !important}
 
-.card{border:1px solid var(--border); border-radius:18px; background:rgba(9,9,9,.6); padding:16px}
+.card{border:1px solid var(--border); border-radius:16px; background:rgba(9,9,9,.6); padding:16px}
 .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
 .small{font-size:12px; color:var(--muted)}
-.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.mono{font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace}
 .center{display:flex; justify-content:center; align-items:center; gap:12px}
 
 hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 
+/* Minimal uploader */
+#pickZone{
+  display:grid; gap:12px; justify-items:center; text-align:center;
+  padding:24px; border:1px dashed var(--border); border-radius:16px; background:rgba(0,0,0,.35);
+}
+#fileName{font-size:12px; color:var(--muted)}
+.input{width:100%; border:1px solid var(--border); border-radius:10px; background:#0b0b0b; color:var(--ink); padding:10px 12px; font-size:14px}
+.hidden{display:none !important}
+
 /* Queue grid */
-.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px}
-.thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#ff3aa0; min-height:120px}
-.thumb img{display:block; width:100%; height:100%; object-fit:cover}
-.thumb .idx{
-  position:absolute; top:6px; left:6px; font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
-  background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35)
+.grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px,1fr));
+  gap:12px;
 }
+.thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:rgba(0,0,0,.35)}
+.thumb img{width:100%; height:100%; object-fit:cover; aspect-ratio:1/1; display:block}
+.thumb .idx{position:absolute; top:6px; left:6px; font-size:12px; background:rgba(0,0,0,.6); border:1px solid var(--border); border-radius:8px; padding:2px 6px}
 
-/* Timer card */
-.timer .row{justify-content:space-between}
-.clock,.stage{display:inline-flex; min-width:36px; height:26px; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:10px; padding:0 10px}
-
+/* Toast */
 .toast{
-  position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
-  background:rgba(0,0,0,.85); color:var(--ink); border:1px solid var(--border); padding:10px 12px; border-radius:12px;
-  opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px;
+  background:#071c07; color:var(--green); border:1px solid var(--border);
+  border-radius:12px; padding:10px 14px; display:none; z-index:50; box-shadow:0 0 18px rgba(57,255,20,.18);
 }
-.toast.show{opacity:1; transform:translateX(-50%) translateY(-4px)}
+.toast.show{display:block}
+
+/* Timer row */
+.timer{
+  display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;
+  border:1px solid var(--border); border-radius:12px; background:rgba(7,7,7,.55); padding:10px 12px;
+}
+.clock{font-weight:800; border:1px solid var(--border); border-radius:8px; padding:2px 8px; min-width:52px; text-align:center}
+.stage{border:1px solid var(--border); border-radius:8px; padding:2px 8px}
 </style>
+
+  <!-- === QUEUE BUCKET CONFIG (non-destructive addition) === -->
+  <script>
+  // Queue bucket support: after upload we mirror the image into the
+  // `matchup-queue` bucket via the `enqueue-image` Edge Function.
+  // This does NOT replace your DB queue; it just keeps a storage mirror.
+  (function(){
+    const SUPABASE_URL_Q = "https://tuqvpcevrhciursxrgav.supabase.co";
+    const EDGE_ENQUEUE = `${SUPABASE_URL_Q}/functions/v1/enqueue-image`;
+    const QUEUE_BUCKET = "matchup-queue";
+
+    // parse "…/storage/v1/object/public/<bucket>/<path>"
+    window._parseStoragePublicUrl = function(url){
+      try{
+        const m = url.match(/\/storage\/v1\/object\/public\/(.+?)\/(.+)$/);
+        if(!m) return null;
+        return { bucket: m[1], path: m[2] };
+      }catch(e){ return null; }
+    };
+
+    // enqueue helper exposed globally
+    window._enqueueToQueueBucket = async function(publicUrl){
+      const info = window._parseStoragePublicUrl(publicUrl);
+      if(!info){ console.log("[QUEUE] skip enqueue (not a supabase public URL)"); return { skipped:true }; }
+      const body = {
+        source_bucket: info.bucket,
+        source_path: info.path,
+        queue_bucket: QUEUE_BUCKET,
+        target_path: info.path
+      };
+      try{
+        const res = await fetch(EDGE_ENQUEUE, {
+          method:"POST",
+          headers:{ "content-type":"application/json" },
+          body: JSON.stringify(body)
+        });
+        const json = await res.json().catch(()=>({}));
+        if(!res.ok){ console.warn("[QUEUE] enqueue failed", json); return { ok:false, error: json?.error || "enqueue failed" }; }
+
+        // Try to construct a public URL for the queued copy (best effort)
+        const qPublic = publicUrl.replace(/(\/public\/)([^/]+)(\/)/, `$1${QUEUE_BUCKET}$3`);
+        return { ok:true, queue_bucket: QUEUE_BUCKET, queue_path: info.path, public_url: qPublic, ...json };
+      }catch(err){
+        console.warn("[QUEUE] enqueue exception", err);
+        return { ok:false, error: String(err) };
+      }
+    };
+  })();
+  </script>
+
 </head>
 <body>
   <div class="wrap">
-    <div class="header">
-      <h1 style="color:var(--green)">SUBMIT ART</h1>
+    <div class="hdr">
       <div class="row">
-        <span id="authBadge" class="badge small">not logged in</span>
-        <a class="btn ghost" href="./menu.html">← Menu</a>
+        <div class="h1">Submit Art</div>
+        <span id="authBadge" class="badge">checking auth…</span>
       </div>
+      <a class="btn ghost" href="./menu.html">← Menu</a>
     </div>
 
     <!-- Minimal uploader -->
@@ -111,20 +175,14 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       </div>
     </div>
 
-    <!-- Queue (collapsible) -->
+    <!-- Queue -->
     <div class="card" style="margin-top:16px">
-      <div class="row" style="justify-content:space-between; align-items:center">
+      <div class="row" style="justify-content:space-between">
         <strong>📜 In the Queue</strong>
-        <div class="row small" style="gap:8px">
-          <span id="queueCount" class="small"></span>
-          <button id="queueToggle" class="btn ghost" style="padding:6px 10px">Expand ▼</button>
-        </div>
+        <span class="small">Oldest first → next in</span>
       </div>
-      <div id="queuePanel" style="display:none; margin-top:12px">
-        <div id="queue" class="grid"></div>
-        <div id="queueEmpty" class="small" style="margin-top:6px; display:none">No items in queue.</div>
-      </div>
-      <div class="small" style="margin-top:6px">Oldest first → next in</div>
+      <div id="queue" class="grid" style="margin-top:12px"></div>
+      <div id="queueEmpty" class="small" style="margin-top:6px; display:none">No items in queue.</div>
     </div>
   </div>
 
@@ -134,7 +192,7 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 /* ---------- Supabase + constants ---------- */
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
+const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer`;
 const BUCKET = 'art-uploads';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -152,24 +210,16 @@ const consent = document.getElementById('consent');
 const btnSubmit = document.getElementById('btnSubmit');
 const submitMsg = document.getElementById('submitMsg');
 
-const queuePanel = document.getElementById('queuePanel');
-const queueToggle = document.getElementById('queueToggle');
-const queueCount = document.getElementById('queueCount');
 const queueGrid = document.getElementById('queue');
 const queueEmpty = document.getElementById('queueEmpty');
 
 const clockEl = document.getElementById('clock');
 const stageEl = document.getElementById('stage');
 
-/* ---------- Debugger (kept) ---------- */
-const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
-log('LOG: Debugger ready');
-
 /* ---------- Utils ---------- */
 const iso = (d)=> new Date(d).toISOString().replace(/\.\d{3}Z$/,'Z');
 function toast(msg, ms=1600){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
 function bytesToMB(n){ return (n/(1024*1024)).toFixed(2); }
-const varGreen = ()=> getComputedStyle(document.documentElement).getPropertyValue('--green') || '#39ff14';
 
 /* ---------- Auth badge ---------- */
 async function uid(){
@@ -180,6 +230,7 @@ function paintAuth(id){
   if (id){ authBadge.textContent='logged in'; authBadge.style.color=varGreen(); }
   else   { authBadge.textContent='not logged in'; authBadge.style.color='#ff6b6b'; authBadge.style.borderColor='#3b1616'; }
 }
+const varGreen = ()=> getComputedStyle(document.documentElement).getPropertyValue('--green') || '#39ff14';
 
 /* ---------- Pick flow (file or URL) ---------- */
 let picked = { file:null, url:'' };
@@ -212,125 +263,29 @@ urlInput.addEventListener('input', ()=>{
 
 /* ---------- Upload helper ---------- */
 async function uploadToStorage(uid, file){
-  const d=new Date();
-  const path = `${uid}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${crypto.randomUUID()}-${file.name}`;
-  const t0=performance.now();
-  const { data, error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl:'3600', upsert:false });
-  const dt=(performance.now()-t0).toFixed(0);
-  if (error) throw error;
-  const { data:{publicUrl} } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
-  log('IMG: uploaded ', publicUrl, `(${dt}ms)`);
-  return publicUrl;
-}
+  const today = new Date();
+  const yyyy = today.getUTCFullYear();
+  const mm = String(today.getUTCMonth()+1).padStart(2,'0');
+  const dd = String(today.getUTCDate()).padStart(2,'0');
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  const path = `${uid}/${yyyy}/${mm}/${dd}/${crypto.randomUUID()}-${safe}`;
 
-/* ---------- Edge call + timer normalize ---------- */
-async function callEdge(){
-  const t0 = performance.now();
-  log('EDGE: GET', EDGE_URL);
-  const res = await fetch(EDGE_URL, {
-    method:'GET',
-    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`, 'apikey':SUPABASE_ANON_KEY }
+  const { error:upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+    contentType: file.type || 'application/octet-stream', cacheControl: '3600', upsert: false
   });
-  const raw = await res.text();
-  const dt = (performance.now()-t0).toFixed(0);
-  log(`EDGE: GET ${EDGE_URL} → ${res.status} (${dt}ms)`);
-  // Show a snippet of the raw body so we can see actual keys
-  const preview = raw.length>200 ? raw.slice(0,200)+'…' : raw;
-  log('EDGE: body ~200b =', preview);
+  if (upErr) throw upErr;
 
-  let j=null; try{ j=JSON.parse(raw); }catch(e){ log('EDGE: JSON parse error', String(e)); }
-  if (!res.ok) throw new Error((j&&j.error)||raw||'edge error');
-  return j?.state || j || {};
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  if (!data?.publicUrl) throw new Error('No public URL returned');
+  return data.publicUrl;
 }
 
-function normalize(s){
-  // Mirror your debugger style so it appears in your feed
-  try { log('[EDGE] raw state', JSON.stringify(s)); } catch {}
-  const phaseEnd =
-    s.phase_end_at || s.phaseEndAt || s.next_at || s.next_iso || s.base_iso || null;
-
-  const period =
-    (typeof s.period_sec==='number') ? s.period_sec
-  : (typeof s.period==='number')     ? s.period
-  : (typeof s.period_s==='number')   ? s.period_s
-  : 20;
-
-  let remaining =
-    (typeof s.remaining_sec==='number') ? s.remaining_sec
-  : (typeof s.remaining==='number')     ? s.remaining
-  : (typeof s.remaining_ms==='number')  ? Math.ceil(s.remaining_ms/1000)
-  : (typeof s.next_ms==='number')       ? Math.ceil(s.next_ms/1000)
-  : null;
-
-  if (remaining==null && phaseEnd){
-    const ms = Date.parse(phaseEnd) - Date.now();
-    if (!isNaN(ms)) remaining = Math.max(0, Math.ceil(ms/1000));
-  }
-
-  try { log('[EDGE] normalized', JSON.stringify({phase_end_at:phaseEnd, period_sec:period, remaining_sec:remaining, paused:!!s.paused})); } catch {}
-  return { phase_end_at: phaseEnd, period_sec: period, paused: !!s.paused, remaining_sec: remaining };
-}
-
-/* ---------- Timer state ---------- */
-let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
-
-/* ---------- Stage display (placeholder) ---------- */
-function computeStage(){ return 'R32'; } // leave as-is for now
-
-/* ---------- Sync ---------- */
-async function syncState(){
-  try{
-    const s = normalize(await callEdge());
-    serverPhaseEndISO = s.phase_end_at; if (!serverPhaseEndISO && s.base_iso) serverPhaseEndISO = s.base_iso;
-    remainingSec = s.remaining_sec;
-    periodSec = s.period_sec ?? 20;
-    paused = !!s.paused;
-    lastSyncAt = Date.now();
-
-    stageEl.textContent = computeStage();
-    log('CLOCK: clock — →', (typeof remainingSec==='number')?remainingSec:'—', `(Δdom ${(performance.now()/1000).toFixed(2)}s)`);
-  }catch(e){
-    console.error(e);
-    toast('Timer sync failed');
-  }
-}
-
-/* ---------- Render loop (prefers remainingSec) ---------- */
-let raf;
-function loop(){
-  if (typeof remainingSec === 'number') {
-    const elapsed = (Date.now() - lastSyncAt) / 1000;
-    const sec = Math.max(0, Math.ceil(remainingSec - elapsed));
-    clockEl.textContent = String(sec);
-    if (sec<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
-  } else if (serverPhaseEndISO) {
-    const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
-    clockEl.textContent = String(Math.ceil(rem/1000));
-    if (rem<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
-  } else {
-    // Ultimate fallback: local loop based on periodSec (so UI isn't frozen)
-    const elapsed = Math.floor(((Date.now()% (periodSec*1000)))/1000);
-    const sec = Math.max(0, periodSec - elapsed);
-    clockEl.textContent = String(sec);
-    if (Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
-  }
-  raf = requestAnimationFrame(loop);
-  // keep your vibe of rAF logging
-  // (short, doesn't spam massive numbers)
-  // log('TIMER: rAF', `${(performance.now()%1).toFixed(1)}ms`);
-}
-
-/* Keep your style of periodic logging */
-log('TIMER: interval 3 set @ 30000ms');
-const int3 = setInterval(()=> syncState().catch(()=>{}), 30000);
-log('TIMER: timeout 4 set @ 0ms');
-setTimeout(()=>{ log('TIMER: timeout 4 run 0.0ms'); }, 0);
-
-/* ---------- Submit handler ---------- */
+/* ---------- Submit (+ mirror to queue bucket) ---------- */
 btnSubmit.addEventListener('click', async ()=>{
   submitMsg.textContent='';
   const id = await uid();
   if (!id) return toast('Log in to submit');
+
   if (!consent.checked) return toast('Please consent to the rules');
 
   let finalUrl = picked.url;
@@ -341,21 +296,36 @@ btnSubmit.addEventListener('click', async ()=>{
     }
     if (!finalUrl) return toast('Pick a file or paste a URL');
 
+    // 1) DB queue as before
     const { error } = await supabase.from('art_queue').insert({
       image_url: finalUrl, status: 'pending'
     });
     if (error) throw error;
 
+    // 2) NEW: mirror storage object into matchup-queue bucket
+    const enq = await window._enqueueToQueueBucket(finalUrl);
+    if (enq?.ok){
+      toast('✅ Mirrored to queue bucket');
+      // quick verification fetch (HEAD) — best effort
+      if (enq.public_url){
+        try{
+          const r = await fetch(enq.public_url, { method:'HEAD', cache:'no-store' });
+          if (r.ok) toast('📦 Queue file verified');
+        }catch{}
+      }
+    } else if (!enq?.skipped){
+      toast('Queue mirror failed (still submitted)');
+      console.warn('Queue mirror failed:', enq?.error || enq);
+    }
+
+    // reset UI
     picked = {file:null, url:''};
     fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
     fileName.textContent = 'jpg / png / webp — 10MB max';
     previewHint.textContent = '';
     consent.checked = false;
 
-    toast('✅ Art queued for next round');
     submitMsg.textContent = 'Art queued for next round.';
-    await renderQueue();
-    if (queuePanel && queuePanel.style.display === 'none') { queuePanel.style.display = 'block'; queueToggle.textContent = 'Collapse ▲'; }
   }catch(e){
     console.error(e);
     toast(e?.message || 'Submit failed');
@@ -363,16 +333,7 @@ btnSubmit.addEventListener('click', async ()=>{
   }
 });
 
-/* ---------- Queue toggle ---------- */
-if (queueToggle){
-  queueToggle.addEventListener('click', ()=>{
-    const shown = queuePanel.style.display !== 'none';
-    queuePanel.style.display = shown ? 'none' : 'block';
-    queueToggle.textContent = shown ? 'Expand ▼' : 'Collapse ▲';
-  });
-}
-
-/* ---------- Queue render ---------- */
+/* ---------- Queue render (DB view) ---------- */
 async function renderQueue(){
   try{
     const { data, error } = await supabase
@@ -385,35 +346,111 @@ async function renderQueue(){
     if (!data || !data.length){
       queueGrid.innerHTML = '';
       queueEmpty.style.display = 'block';
-      if (queueCount) queueCount.textContent = '(0)';
       return;
     }
     queueEmpty.style.display = 'none';
-    if (queueCount) queueCount.textContent = `(${data.length})`;
     queueGrid.innerHTML = data.map((r,i)=>`
       <div class="thumb" title="${r.image_url}">
         <span class="idx">#${i+1}</span>
         <img src="${r.image_url}" alt="queued art ${i+1}"/>
       </div>
     `).join('');
-
-    // Image load logs (your style)
-    queueGrid.querySelectorAll('img').forEach(img=>{
-      img.addEventListener('load', ()=> log('IMG: loaded  ', img.src));
-      img.addEventListener('error', ()=> console.warn('IMG: error   ', img.src));
-    });
   }catch(e){
     console.error(e);
-    toast('Queue failed to load');
+    queueGrid.innerHTML = '<div class="small">Failed to load queue.</div>';
   }
+}
+
+// realtime updates
+supabase.channel('queue-live')
+  .on('postgres_changes', { event:'*', schema:'public', table:'art_queue' }, renderQueue)
+  .subscribe();
+
+/* ---------- Tournament clock + stage ---------- */
+async function callEdge(){
+  const res = await fetch(EDGE_URL, {
+    method:'GET',
+    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`, 'apikey':SUPABASE_ANON_KEY }
+  });
+  const raw = await res.text();
+  let j=null; try{ j=JSON.parse(raw); }catch{}
+  if (!res.ok) throw new Error((j&&j.error)||raw||'edge error');
+  return j?.state || j || {};
+}
+const normalize = (s)=>({phase_end_at:s.phase_end_at??null, period_sec:s.period_sec??20, paused:!!s.paused, remaining_sec:(typeof s.remaining_sec==='number')?s.remaining_sec:null});
+
+let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
+let currentPhaseKey=null, prevPhaseKey=null, currentStage='r32';
+
+function isoOnly(d){ return new Date(d).toISOString().replace(/\.\d{3}Z$/,'Z'); }
+function stageLevel(st){ return st==='r32'?1 : st==='r16'?2 : st==='qf'?3 : st==='sf'?4 : 5; }
+
+async function detectStage(){
+  if (!currentPhaseKey || !prevPhaseKey) return {stage:'r32'};
+
+  const prev = prevPhaseKey;
+  const keys = {
+    r32: Array.from({length:16},(_,i)=>`${prev}::r32_${i+1}`),
+    r16: Array.from({length:8}, (_,i)=>`${prev}::r16_${i+1}`),
+    qf : [`${prev}::qf1`,`${prev}::qf2`,`${prev}::qf3`,`${prev}::qf4`],
+    sf : [`${prev}::sf1`,`${prev}::sf2`],
+    final: [`${prev}::final`]
+  };
+
+  const { data: r32W } = await supabase.from('winners').select('phase_key').in('phase_key', keys.r32);
+  if ((r32W||[]).length<16) return {stage:'r32'};
+
+  const { data: r16W } = await supabase.from('winners').select('phase_key').in('phase_key', keys.r16);
+  if ((r16W||[]).length<8)  return {stage:'r16'};
+
+  const { data: qfW } = await supabase.from('winners').select('phase_key').in('phase_key', keys.qf);
+  if ((qfW||[]).length<4)   return {stage:'qf'};
+
+  const { data: sfW } = await supabase.from('winners').select('phase_key').in('phase_key', keys.sf);
+  if ((sfW||[]).length<2)   return {stage:'sf'};
+
+  return {stage:'final'};
+}
+
+async function syncState(){
+  const s = normalize(await callEdge());
+  serverPhaseEndISO = s.phase_end_at;
+  paused = s.paused;
+  remainingSec = s.remaining_sec;
+  periodSec = s.period_sec ?? 20;
+  lastSyncAt = Date.now();
+
+  currentPhaseKey = serverPhaseEndISO ? isoOnly(serverPhaseEndISO) : null;
+  prevPhaseKey = currentPhaseKey && periodSec ? isoOnly(Date.parse(currentPhaseKey) - periodSec*1000) : null;
+
+  const { stage } = await detectStage();
+  stageEl.textContent = (stage || 'r32').toUpperCase();
+}
+
+let raf=null;
+function loop(){
+  if (paused){
+    const sec = (typeof remainingSec==='number') ? Math.max(0, Math.ceil(remainingSec)) : 0;
+    clockEl.textContent = String(sec);
+    if (Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
+  } else {
+    const rem = serverPhaseEndISO ? Math.max(0, Date.parse(serverPhaseEndISO) - Date.now()) : 0;
+    clockEl.textContent = String(Math.ceil(rem/1000));
+    if (rem<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
+  }
+  raf = requestAnimationFrame(loop);
 }
 
 /* ---------- Boot ---------- */
 (async()=>{
-  paintAuth(await uid());
-  supabase.auth.onAuthStateChange((_e, session)=> paintAuth(session?.user?.id || null));
-  await Promise.all([renderQueue(), syncState()]);
-  loop();
+  try{
+    paintAuth(await uid());
+    supabase.auth.onAuthStateChange((_e, session)=> paintAuth(session?.user?.id || null));
+    await Promise.all([renderQueue(), syncState()]);
+    loop();
+  }catch(err){
+    console.error('boot error', err);
+  }
 })();
 </script>
 </body>
