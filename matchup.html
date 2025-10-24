@@ -3,271 +3,262 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup</title>
+  <title>Rage Space — Matchup (Queue-Integrated, Hardened v2)</title>
   <style>
-    :root { --fg:#e5e7eb; --bg:#0b0d0f; --panel:#0f1318; --muted:#9aa0a6; --line:#1f2530; --accent:#39ff14; }
-    * { box-sizing:border-box }
-    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family: ui-sans-serif, system-ui, Segoe UI, Inter, Roboto; }
-    .wrap { max-width:960px; margin:0 auto; padding:16px 12px 48px; }
-    .header { display:flex; gap:12px; align-items:center; justify-content:space-between; }
-    h1 { margin:0; font-size:26px; letter-spacing:.3px }
-    .sub { color:var(--muted); font-size:12px }
-    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap }
-    .btn { appearance:none; border:1px solid var(--line); background:var(--panel); color:var(--fg);
-           padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:600; }
-    .btn[disabled]{ opacity:.5; cursor:not-allowed }
-    .chip { padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:var(--panel); font-variant-numeric:tabular-nums; font-weight:700 }
-    .grid { margin-top:14px; display:grid; grid-template-columns:1fr; gap:12px }
-    @media (min-width:860px){ .grid{ grid-template-columns:1fr 1fr } }
-    .card { position:relative; border:1px solid var(--line); border-radius:14px; overflow:hidden; background:#111419; min-height:340px }
-    .card img { width:100%; height:100%; display:block; object-fit:cover; aspect-ratio:4/3; background:#ff0095; }
-    .corner { position:absolute; right:10px; top:10px; width:36px; height:36px; border-radius:9px; border:1px solid var(--line); background:rgba(0,0,0,.35); display:grid; place-items:center; cursor:pointer }
-    .corner:after { content:"⤢"; font-size:16px }
-    .state { margin-top:6px; color:var(--muted); font-size:12px }
-    .debugDock { position:fixed; left:12px; right:12px; bottom:12px; z-index:50 }
-    .debugBox { display:none; font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      background:#0a0c10; color:#b7ffb7; border:1px solid #223; border-radius:12px; padding:10px; max-height:44vh; overflow:auto }
-    .debugHead { display:flex; gap:8px; align-items:center; margin:0 0 8px 0 }
-    .dbgBtn { font:12px/1 ui-sans-serif; padding:6px 10px; border-radius:8px; border:1px solid #223; background:#0f1318; color:#b7ffb7; cursor:pointer }
-    .right { margin-left:auto }
+    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
+    .wrap { max-width:700px; margin:0 auto; padding:16px 12px 28px; }
+    h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
+    .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
+    .state { color:var(--muted); font-size:12px; }
+    .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
+    .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
+    .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
+    .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
+    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid #20242a; }
+    .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
+    .counts { font-variant-numeric: tabular-nums; font-weight:700; }
+    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:var(--fg); padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
+    .btn.ghost { color:#a0aec0; }
+    button.vote { padding:10px 14px; }
+    button.vote:disabled { opacity:.6; cursor:default; }
+    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
+    .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
+    .winner b { color:#39ff14; }
+    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
+    .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
+    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
   </style>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <!-- your debugger script can stay loaded here if you want -->
 </head>
 <body>
   <div class="wrap">
+    <h1>Rage Space — Matchup</h1>
+
     <div class="header">
-      <div>
-        <h1>Rage Space — Matchup</h1>
-        <div class="sub">cycle: <span id="cycle">—</span></div>
+      <div class="row">
+        <div class="timer" id="tRemain">20.0</div>
+        <div class="state" id="tMeta">syncing…</div>
       </div>
       <div class="row">
-        <div class="chip"><span id="count">0</span>.0</div>
-        <label class="btn" style="display:flex;gap:8px;align-items:center">
-          <input id="adminToggle" type="checkbox" style="accent-color:#39ff14; width:16px; height:16px"> Admin mode
-        </label>
+        <button id="forceQueue" class="btn ghost">Use Next From Queue Now</button>
+        <button id="resetPair" class="btn ghost">Reset Pair</button>
+        <a class="backbtn" href="menu.html">← Menu</a>
+        <a class="linkbtn" href="winners.html">Winners</a>
       </div>
     </div>
 
-    <div class="row" style="margin:10px 0 8px">
-      <button id="btnNext" class="btn" title="(Admin) Pull next pair from queue" disabled>Use Next From Queue Now</button>
-      <button id="btnReset" class="btn" title="Forget current pair (no server call)">Reset Pair</button>
-      <a class="btn" href="./winners.html">Winners</a>
-      <button id="btnDebug" class="btn">🐛 Debug</button>
-    </div>
-
-    <div class="grid">
-      <div class="card">
-        <img id="imgA" alt="">
-        <button class="corner" data-img="A" title="Open full"></button>
+    <div class="card">
+      <div class="imgBox">
+        <img id="imgA" alt="Seed A" />
+        <button class="fullscreenBtn" onclick="openFull('A')">⤢</button>
       </div>
-      <div class="card">
-        <img id="imgB" alt="">
-        <button class="corner" data-img="B" title="Open full"></button>
+      <div class="bar">
+        <div class="label">Seed A</div>
+        <div class="counts" id="countA">0</div>
+        <button class="vote" id="btnA">Vote Seed A</button>
       </div>
     </div>
 
-    <div class="state" id="state">—</div>
+    <div class="card">
+      <div class="imgBox">
+        <img id="imgB" alt="Seed B" />
+        <button class="fullscreenBtn" onclick="openFull('B')">⤢</button>
+      </div>
+      <div class="bar">
+        <div class="label">Seed B</div>
+        <div class="counts" id="countB">0</div>
+        <button class="vote" id="btnB">Vote Seed B</button>
+      </div>
+    </div>
+
+    <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
+    <div class="hint">Timer auto-loops ~20s. Winner decided at 0 (random if tied). One vote per device per round.</div>
   </div>
 
-  <!-- Debug dock -->
-  <div class="debugDock">
-    <div class="debugHead">
-      <strong style="color:#b7ffb7">Rage Debug</strong>
-      <select id="dbgLevel" class="dbgBtn">
-        <option value="none">Off</option>
-        <option value="info" selected>Info</option>
-        <option value="all">All</option>
-      </select>
-      <button id="dbgCopy" class="dbgBtn">Copy</button>
-      <button id="dbgClear" class="dbgBtn">Clear</button>
-      <span class="right" style="color:#607b60">client rAF + steady 1s poll</span>
-    </div>
-    <div id="debugBox" class="debugBox"></div>
+  <div class="fullscreen-overlay" id="overlay">
+    <button id="closeFull">✕ Close</button>
+    <img id="fullImg" src="">
   </div>
 
-<script>
-(() => {
-  const $ = sel => document.querySelector(sel);
-  const imgA = $("#imgA");
-  const imgB = $("#imgB");
-  const cycleEl = $("#cycle");
-  const countEl = $("#count");
-  const stateEl = $("#state");
-  const btnNext = $("#btnNext");
-  const btnReset = $("#btnReset");
-  const btnDebug = $("#btnDebug");
-  const adminToggle = $("#adminToggle");
-  const dbgBox = $("#debugBox");
-  const dbgLevel = $("#dbgLevel");
-  const dbgCopy = $("#dbgCopy");
-  const dbgClear = $("#dbgClear");
+  <script>
+    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
-  // -------- debug helpers
-  let debugOpen = false;
-  const log = (type, msg) => {
-    if (dbgLevel.value === "none") return;
-    if (dbgLevel.value === "info" && type === "spam") return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${msg}`;
-    if (debugOpen) {
-      const div = document.createElement("div");
-      div.textContent = line;
-      dbgBox.appendChild(div);
-      dbgBox.scrollTop = dbgBox.scrollHeight;
+    const RSID_KEY = "rsid_v2";
+    let RSID = localStorage.getItem(RSID_KEY);
+    if (!RSID) { RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
+    const votedKey = (b) => `voted:${b}`;
+    const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
+    const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
+
+    const PAIR_KEY  = (b) => `pair:${b}`;
+    const CLAIM_KEY = (b) => `queue_claimed:${b}`;
+    const loadPair  = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
+    const savePair  = (b, red, blue) => { if (red && blue) localStorage.setItem(PAIR_KEY(b), JSON.stringify({ red, blue })); };
+    const clearPair = (b) => localStorage.removeItem(PAIR_KEY(b));
+
+    const elRemain = document.getElementById("tRemain");
+    const elMeta   = document.getElementById("tMeta");
+    const imgA     = document.getElementById("imgA");
+    const imgB     = document.getElementById("imgB");
+    const cA       = document.getElementById("countA");
+    const cB       = document.getElementById("countB");
+    const btnA     = document.getElementById("btnA");
+    const btnB     = document.getElementById("btnB");
+    const winnerText = document.getElementById("winnerText");
+    const overlay  = document.getElementById("overlay");
+    const fullImg  = document.getElementById("fullImg");
+    const btnClose = document.getElementById("closeFull");
+    const forceBtn = document.getElementById("forceQueue");
+    const resetBtn = document.getElementById("resetPair");
+    btnClose.onclick = () => overlay.style.display = 'none';
+    function openFull(which){ fullImg.src = which==='A'?imgA.src:imgB.src; overlay.style.display='flex'; }
+
+    // ---- Queue helpers (exclude NULL AND empty string) ----
+    async function fetchPendingQueue(n=2){
+      const { data, error } = await supabase
+        .from('art_queue')
+        .select('id,image_url,created_at')
+        .eq('status','pending')
+        .not('image_url','is',null)
+        .neq('image_url','')
+        .order('created_at',{ ascending:true })
+        .limit(n);
+      if (error) { console.warn('[QUEUE] fetch error', error); return []; }
+      const rows = (data||[]).filter(r=>!!r.image_url);
+      console.log('[QUEUE] fetched', rows.map(r=>r.id).join(','));
+      return rows;
     }
-    // Also mirror to console for dev tools.
-    if (type === "error") console.error(line);
-    else console.log(line);
-  };
 
-  btnDebug.addEventListener("click", () => {
-    debugOpen = !debugOpen;
-    dbgBox.style.display = debugOpen ? "block" : "none";
-  });
-  dbgCopy.addEventListener("click", async () => {
-    const text = Array.from(dbgBox.childNodes).map(n => n.textContent).join("\n");
-    await navigator.clipboard.writeText(text);
-    log("info", "Debug copied to clipboard.");
-  });
-  dbgClear.addEventListener("click", () => { dbgBox.innerHTML = ""; });
-
-  // -------- admin gate (prevents anon viewers from hitting queue)
-  const setAdminUI = () => {
-    const on = adminToggle.checked;
-    btnNext.disabled = !on;
-  };
-  adminToggle.addEventListener("change", setAdminUI);
-  setAdminUI();
-
-  // -------- config
-  const EDGE_BASE = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1";
-  const TIMER_URL = `${EDGE_BASE}/global-timer-v2`;
-
-  // cache of last round key to avoid redundant swaps
-  let lastBaseISO = null;
-  let clockRemain = 0;
-
-  const preload = src => new Promise((resolve, reject) => {
-    const im = new Image();
-    im.onload  = () => resolve(src);
-    im.onerror = reject;
-    im.src = src;
-  });
-
-  const swapImages = async (redUrl, blueUrl) => {
-    try {
-      const [a, b] = await Promise.all([preload(redUrl), preload(blueUrl)]);
-      imgA.src = a;
-      imgB.src = b;
-      log("info", `IMG: swapped\n  A ${a}\n  B ${b}`);
-    } catch (e) {
-      log("error", `IMG: preload failed: ${e}`);
+    // fire-and-forget: mark used AFTER locking so the UI never goes pink
+    async function markUsed(ids=[], baseIso){
+      if (!ids.length) return;
+      const { error } = await supabase
+        .from('art_queue')
+        .update({ status:'used', used_at:new Date().toISOString(), used_in_base: baseIso })
+        .in('id', ids);
+      if (error) console.warn('[QUEUE] markUsed error (check RLS/columns)', error);
+      else console.log('[QUEUE] markUsed ok', ids.join(','));
     }
-  };
 
-  // -------- poller (de-duped; at most one in-flight fetch)
-  let inflight = false;
-  let wantedNextAt = 0; // ms epoch for the next scheduled fetch
-
-  async function pullState(reason = "poll") {
-    if (inflight) return;
-    inflight = true;
-    const started = performance.now();
-    try {
-      const res = await fetch(TIMER_URL, { method:"GET", cache:"no-store" });
-      const ms = (performance.now() - started).toFixed(1);
-      log("info", `EDGE: GET ${TIMER_URL} → ${res.status} (${ms}ms)`);
-      if (!res.ok) throw new Error(`timer http ${res.status}`);
-      const raw = await res.json();
-
-      // normalize server state
-      const baseISO = (raw.base_iso || "").replace(".000Z","Z");
-      const endsAt  = new Date(raw.ends_at || 0).getTime();
-      const now     = new Date(raw.now || Date.now()).getTime();
-      const period  = +(raw.period_sec || 20);
-      const remainingMs = Math.max(0, endsAt - now);
-
-      // countdown (secs)
-      clockRemain = Math.ceil(remainingMs / 1000);
-      countEl.textContent = String(clockRemain).padStart(2, "0");
-      cycleEl.textContent = baseISO || "—";
-
-      stateEl.textContent =
-        `period: ${period}s • remaining: ${clockRemain}s • caught_up: ${raw.caught_up ? 1 : 0}`;
-
-      // on cycle change, update images exactly once
-      if (baseISO && baseISO !== lastBaseISO) {
-        lastBaseISO = baseISO;
-
-        // IMPORTANT: we only display what the timer tells us.
-        // No automatic "next from queue" pulls here.
-        const red = raw.red_url || raw.seed_a_url;
-        const blue = raw.blue_url || raw.seed_b_url;
-        if (red && blue) await swapImages(red, blue);
-        else log("error", "TIMER: missing image urls in response");
-      }
-
-      // schedule next poll close to 1s cadence, but align around boundaries
-      const nowMs = Date.now();
-      const jitter = 80 + Math.random()*60; // small jitter avoids thundering herd
-      const nearBoundary = remainingMs <= 1300 ? 300 : 1000;
-      wantedNextAt = nowMs + (nearBoundary === 300 ? 280 : 1000) + jitter;
-
-    } catch (err) {
-      log("error", `EDGE: timer error: ${err.message || err}`);
-      // backoff on errors
-      wantedNextAt = Date.now() + 1500;
-    } finally {
-      inflight = false;
-    }
-  }
-
-  // steady 1s loop using rAF, but only fetch when scheduled
-  function loop() {
-    const now = Date.now();
-    if (now >= wantedNextAt) pullState("due");
-    requestAnimationFrame(loop);
-  }
-
-  // Buttons
-  btnReset.addEventListener("click", () => {
-    lastBaseISO = null;
-    imgA.removeAttribute("src");
-    imgB.removeAttribute("src");
-    log("info", "RESET: pair cleared locally (no server call).");
-  });
-
-  // NOTE: This is intentionally a NO-OP unless Admin is enabled.
-  // If you have a backend function to lock/pull next queue pair, connect it here.
-  btnNext.addEventListener("click", async () => {
-    if (!adminToggle.checked) return;
-    const endpoint = `${EDGE_BASE}/queue-next`; // change to your real function name if needed
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "content-type":"application/json" },
-        body: JSON.stringify({ reason: "manual", exclude_anonymous: true, filter: "ready_only" })
+    function setVoteButtons(enabled){ btnA.disabled = btnB.disabled = !enabled; }
+    async function sendVote(color){
+      const res = await fetch(FUNCTION_URL, {
+        method:'POST',
+        headers:{ 'content-type':'application/json', 'x-rsid': RSID },
+        body: JSON.stringify({ color })
       });
-      log("info", `EDGE: POST ${endpoint} → ${res.status}`);
-      // We do NOT automatically swap images; the timer response will drive display next cycle.
-    } catch (e) {
-      log("error", `EDGE: queue-next error: ${e.message || e}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'vote failed');
+      if (data.ignored && data.reason==='already_voted') return setVoteButtons(false);
+      if (!data.ignored){
+        markVoted(state.base_iso);
+        setVoteButtons(false);
+        cA.textContent = data.red_count;
+        cB.textContent = data.blue_count;
+      }
     }
-  });
+    btnA.onclick = () => !btnA.disabled && sendVote('red');
+    btnB.onclick = () => !btnB.disabled && sendVote('blue');
 
-  // Fullscreen open on corner buttons
-  document.querySelectorAll(".corner").forEach(btn => {
-    btn.addEventListener("click", e => {
-      const which = e.currentTarget.dataset.img;
-      const src = which === "A" ? imgA.src : imgB.src;
-      if (src) window.open(src, "_blank");
+    function showWinner(winner){
+      if (!winner){ winnerText.textContent='No winner yet — first round in progress.'; return; }
+      const by = winner.decided_by==='random_tie' ? 'random tie' : 'votes';
+      const name = winner.winner_color==='red' ? 'Seed A' : 'Seed B';
+      const score = `${winner.red_count}–${winner.blue_count}`;
+      winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
+    }
+
+    let state = { ends_at:null, base_iso:null, red_url:'', blue_url:'', red_count:0, blue_count:0, last_winner:null };
+    let fetching = false;
+
+    async function fetchState(forceQueue=false){
+      if (fetching) return; fetching = true;
+      try{
+        const res = await fetch(FUNCTION_URL);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'GET failed');
+
+        const newRound = state.base_iso && state.base_iso !== data.base_iso;
+        state = data;
+
+        let red = state.red_url, blue = state.blue_url;
+
+        const locked = loadPair(state.base_iso);
+        if (locked?.red && locked?.blue){ red = locked.red; blue = locked.blue; console.log('[PAIR] using locked', state.base_iso); }
+
+        const alreadyClaimed = !!localStorage.getItem(CLAIM_KEY(state.base_iso));
+        const shouldTryQueue = forceQueue || newRound || (!alreadyClaimed && !locked);
+        console.log('[ROUND]', state.base_iso, {newRound, alreadyClaimed, forceQueue, hasLocked: !!locked});
+
+        if (shouldTryQueue){
+          const q = await fetchPendingQueue(2);
+          const urls = q.map(r=>r.image_url).filter(Boolean);
+          if (urls.length >= 2){
+            red = urls[0]; blue = urls[1];
+
+            // lock immediately (so UI shows them even if markUsed fails)
+            localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
+            savePair(state.base_iso, red, blue);
+            console.log('[PAIR] locked', { red, blue });
+
+            // update UI right away
+            imgA.src = red; imgB.src = blue;
+
+            // mark used in the background
+            markUsed(q.slice(0,2).map(r=>r.id), state.base_iso);
+          } else {
+            console.log('[QUEUE] not enough usable rows → keep defaults');
+          }
+        }
+
+        if (!red)  red  = state.red_url;
+        if (!blue) blue = state.blue_url;
+
+        imgA.src = red; imgB.src = blue;
+        cA.textContent = state.red_count; cB.textContent = state.blue_count;
+        elMeta.textContent = `cycle: ${state.base_iso}`;
+        showWinner(state.last_winner);
+
+        if (newRound) setVoteButtons(!hasVoted(state.base_iso));
+      }catch(e){
+        console.error(e);
+      }finally{
+        fetching = false;
+      }
+    }
+
+    function tick(){
+      if (!state?.ends_at) return requestAnimationFrame(tick);
+      const remain = new Date(state.ends_at).getTime() - Date.now();
+      elRemain.textContent = (Math.max(0, remain)/1000).toFixed(1);
+      if (remain <= -900) fetchState().catch(()=>{});
+      requestAnimationFrame(tick);
+    }
+
+    document.getElementById('forceQueue').addEventListener('click', async ()=>{
+      if (!state?.base_iso) return;
+      localStorage.removeItem(CLAIM_KEY(state.base_iso));
+      clearPair(state.base_iso);
+      await fetchState(true);
     });
-  });
+    document.getElementById('resetPair').addEventListener('click', async ()=>{
+      if (!state?.base_iso) return;
+      clearPair(state.base_iso);
+      await fetchState(false);
+    });
 
-  // boot
-  wantedNextAt = 0;
-  pullState("boot");
-  loop();
-})();
-</script>
+    setInterval(()=> fetchState().catch(()=>{}), 4000);
+    (async()=>{ await fetchState(); tick(); })();
+
+    // expose for your debugger if needed
+    window.__match = { fetchState };
+  </script>
 </body>
 </html>
