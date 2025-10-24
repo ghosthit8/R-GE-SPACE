@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (Queue-Integrated, Hardened)</title>
+  <title>Rage Space — Matchup (Queue-Integrated, Hardened v2)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -16,32 +16,23 @@
     .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
     .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
     .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
-    .fullscreenBtn {
-      position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55);
-      color:var(--accent); border:1px solid var(--accent);
-      border-radius:8px; font-size:14px; padding:4px 8px;
-      cursor:pointer; font-weight:700; transition:background .15s;
-    }
-    .fullscreenBtn:hover { background:rgba(0,0,0,0.8); }
+    .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
     .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid #20242a; }
     .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
     .counts { font-variant-numeric: tabular-nums; font-weight:700; }
-    .btn, .vote, .linkbtn, .backbtn {
-      appearance:none; border:1px solid #24303a; background:#131920; color:var(--fg);
-      padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center;
-    }
+    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:var(--fg); padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
     .btn.ghost { color:#a0aec0; }
     button.vote { padding:10px 14px; }
     button.vote:disabled { opacity:.6; cursor:default; }
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
     .winner b { color:#39ff14; }
-
     .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
     .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
     .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <!-- your debugger script can stay loaded here if you want -->
 </head>
 <body>
   <div class="wrap">
@@ -53,17 +44,16 @@
         <div class="state" id="tMeta">syncing…</div>
       </div>
       <div class="row">
-        <button id="forceQueue" class="btn ghost" title="Consume next 2 from queue now">Use Next From Queue Now</button>
-        <button id="resetPair" class="btn ghost" title="Forget locked pair for this round">Reset Pair</button>
+        <button id="forceQueue" class="btn ghost">Use Next From Queue Now</button>
+        <button id="resetPair" class="btn ghost">Reset Pair</button>
         <a class="backbtn" href="menu.html">← Menu</a>
         <a class="linkbtn" href="winners.html">Winners</a>
       </div>
     </div>
 
-    <!-- SEED A -->
     <div class="card">
       <div class="imgBox">
-        <img id="imgA" alt="Seed A contender" />
+        <img id="imgA" alt="Seed A" />
         <button class="fullscreenBtn" onclick="openFull('A')">⤢</button>
       </div>
       <div class="bar">
@@ -73,10 +63,9 @@
       </div>
     </div>
 
-    <!-- SEED B -->
     <div class="card">
       <div class="imgBox">
-        <img id="imgB" alt="Seed B contender" />
+        <img id="imgB" alt="Seed B" />
         <button class="fullscreenBtn" onclick="openFull('B')">⤢</button>
       </div>
       <div class="bar">
@@ -96,13 +85,24 @@
   </div>
 
   <script>
-    // ---------- Supabase ----------
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
-    // ---------- Elements ----------
+    const RSID_KEY = "rsid_v2";
+    let RSID = localStorage.getItem(RSID_KEY);
+    if (!RSID) { RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
+    const votedKey = (b) => `voted:${b}`;
+    const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
+    const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
+
+    const PAIR_KEY  = (b) => `pair:${b}`;
+    const CLAIM_KEY = (b) => `queue_claimed:${b}`;
+    const loadPair  = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
+    const savePair  = (b, red, blue) => { if (red && blue) localStorage.setItem(PAIR_KEY(b), JSON.stringify({ red, blue })); };
+    const clearPair = (b) => localStorage.removeItem(PAIR_KEY(b));
+
     const elRemain = document.getElementById("tRemain");
     const elMeta   = document.getElementById("tMeta");
     const imgA     = document.getElementById("imgA");
@@ -120,47 +120,33 @@
     btnClose.onclick = () => overlay.style.display = 'none';
     function openFull(which){ fullImg.src = which==='A'?imgA.src:imgB.src; overlay.style.display='flex'; }
 
-    // ---------- Local keys ----------
-    const RSID_KEY = "rsid_v2";
-    let RSID = localStorage.getItem(RSID_KEY);
-    if (!RSID) { RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
-    const votedKey = (b) => `voted:${b}`;
-    const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
-    const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
-
-    const PAIR_KEY  = (b) => `pair:${b}`;
-    const CLAIM_KEY = (b) => `queue_claimed:${b}`;
-    const loadPair  = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
-    const savePair  = (b, red, blue) => { if (red && blue) localStorage.setItem(PAIR_KEY(b), JSON.stringify({ red, blue })); };
-    const clearPair = (b) => localStorage.removeItem(PAIR_KEY(b));
-
-    // ---------- Queue helpers ----------
+    // ---- Queue helpers (exclude NULL AND empty string) ----
     async function fetchPendingQueue(n=2){
       const { data, error } = await supabase
         .from('art_queue')
         .select('id,image_url,created_at')
         .eq('status','pending')
         .not('image_url','is',null)
+        .neq('image_url','')
         .order('created_at',{ ascending:true })
         .limit(n);
       if (error) { console.warn('[QUEUE] fetch error', error); return []; }
       const rows = (data||[]).filter(r=>!!r.image_url);
-      console.log('[QUEUE] fetched', rows.map(r=>r.id));
+      console.log('[QUEUE] fetched', rows.map(r=>r.id).join(','));
       return rows;
     }
 
+    // fire-and-forget: mark used AFTER locking so the UI never goes pink
     async function markUsed(ids=[], baseIso){
-      if (!ids.length) return { ok:false };
+      if (!ids.length) return;
       const { error } = await supabase
         .from('art_queue')
         .update({ status:'used', used_at:new Date().toISOString(), used_in_base: baseIso })
         .in('id', ids);
-      if (error) { console.warn('[QUEUE] update→used error', error); return { ok:false, error }; }
-      console.log('[QUEUE] marked used', ids);
-      return { ok:true };
+      if (error) console.warn('[QUEUE] markUsed error (check RLS/columns)', error);
+      else console.log('[QUEUE] markUsed ok', ids.join(','));
     }
 
-    // ---------- Vote ----------
     function setVoteButtons(enabled){ btnA.disabled = btnB.disabled = !enabled; }
     async function sendVote(color){
       const res = await fetch(FUNCTION_URL, {
@@ -181,7 +167,6 @@
     btnA.onclick = () => !btnA.disabled && sendVote('red');
     btnB.onclick = () => !btnB.disabled && sendVote('blue');
 
-    // ---------- Winner text ----------
     function showWinner(winner){
       if (!winner){ winnerText.textContent='No winner yet — first round in progress.'; return; }
       const by = winner.decided_by==='random_tie' ? 'random tie' : 'votes';
@@ -190,14 +175,12 @@
       winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
     }
 
-    // ---------- State & timer ----------
     let state = { ends_at:null, base_iso:null, red_url:'', blue_url:'', red_count:0, blue_count:0, last_winner:null };
     let fetching = false;
 
     async function fetchState(forceQueue=false){
       if (fetching) return; fetching = true;
       try{
-        const t0 = performance.now();
         const res = await fetch(FUNCTION_URL);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'GET failed');
@@ -207,40 +190,34 @@
 
         let red = state.red_url, blue = state.blue_url;
 
-        // Pair lock first (but only if complete)
         const locked = loadPair(state.base_iso);
-        if (locked?.red && locked?.blue){
-          red = locked.red; blue = locked.blue;
-          console.log('[PAIR] using locked pair for', state.base_iso);
-        }
+        if (locked?.red && locked?.blue){ red = locked.red; blue = locked.blue; console.log('[PAIR] using locked', state.base_iso); }
 
         const alreadyClaimed = !!localStorage.getItem(CLAIM_KEY(state.base_iso));
         const shouldTryQueue = forceQueue || newRound || (!alreadyClaimed && !locked);
-        console.log('[ROUND]', state.base_iso, { newRound, alreadyClaimed, forceQueue, hasLocked: !!locked });
+        console.log('[ROUND]', state.base_iso, {newRound, alreadyClaimed, forceQueue, hasLocked: !!locked});
 
         if (shouldTryQueue){
           const q = await fetchPendingQueue(2);
-          if (q.length){
-            if (q[0]) red  = q[0].image_url;
-            if (q[1]) blue = q[1].image_url;
+          const urls = q.map(r=>r.image_url).filter(Boolean);
+          if (urls.length >= 2){
+            red = urls[0]; blue = urls[1];
 
-            // even if RLS update fails, we still use them and lock the pair,
-            // so the UI shows them and doesn't flicker back
-            const ids = q.slice(0,2).map(r=>r.id);
-            const ok  = await markUsed(ids, state.base_iso);
-            if (!ok.ok) console.warn('[QUEUE] could not mark used (check RLS)');
+            // lock immediately (so UI shows them even if markUsed fails)
+            localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
+            savePair(state.base_iso, red, blue);
+            console.log('[PAIR] locked', { red, blue });
 
-            if (red && blue){
-              savePair(state.base_iso, red, blue);
-              localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
-              console.log('[PAIR] locked new pair', { red, blue });
-            }
+            // update UI right away
+            imgA.src = red; imgB.src = blue;
+
+            // mark used in the background
+            markUsed(q.slice(0,2).map(r=>r.id), state.base_iso);
           } else {
-            console.log('[QUEUE] empty → use server defaults');
+            console.log('[QUEUE] not enough usable rows → keep defaults');
           }
         }
 
-        // Safety: never paint empty
         if (!red)  red  = state.red_url;
         if (!blue) blue = state.blue_url;
 
@@ -250,7 +227,6 @@
         showWinner(state.last_winner);
 
         if (newRound) setVoteButtons(!hasVoted(state.base_iso));
-        console.log('[FETCH] done in', (performance.now()-t0).toFixed(0)+'ms');
       }catch(e){
         console.error(e);
       }finally{
@@ -258,7 +234,6 @@
       }
     }
 
-    // Timer
     function tick(){
       if (!state?.ends_at) return requestAnimationFrame(tick);
       const remain = new Date(state.ends_at).getTime() - Date.now();
@@ -267,243 +242,23 @@
       requestAnimationFrame(tick);
     }
 
-    // Debug buttons
-    forceBtn.addEventListener('click', async ()=>{
+    document.getElementById('forceQueue').addEventListener('click', async ()=>{
       if (!state?.base_iso) return;
       localStorage.removeItem(CLAIM_KEY(state.base_iso));
       clearPair(state.base_iso);
       await fetchState(true);
     });
-    resetBtn.addEventListener('click', async ()=>{
+    document.getElementById('resetPair').addEventListener('click', async ()=>{
       if (!state?.base_iso) return;
       clearPair(state.base_iso);
       await fetchState(false);
     });
 
-    // Poll gently & boot
     setInterval(()=> fetchState().catch(()=>{}), 4000);
     (async()=>{ await fetchState(); tick(); })();
 
-    // expose for quick console debugging
+    // expose for your debugger if needed
     window.__match = { fetchState };
   </script>
-<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
-<script>
-(function () {
-  const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
-
-  // --- create floating button OUTSIDE the hidden panel ---
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'dbgFloatingBtn';
-  floatBtn.textContent = '🐛 Debug';
-  floatBtn.style.cssText = `
-    position: fixed; right: 8px; bottom: 8px;
-    z-index: 2147483647; background:#000; color:#0f0;
-    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
-    font: 12px/1.1 monospace; cursor:pointer;
-  `;
-  document.body.appendChild(floatBtn);
-
-  // --- panel wrapper (starts hidden) ---
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
-  `;
-
-  const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-  bar.innerHTML = `
-    <span style="color:#6f6">Rage Debug</span>
-    <label>Filter:
-      <select id="dbgFilter">
-        <option value="">All</option>
-        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
-        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
-        <option>ERR</option><option>WARN</option><option>LOG</option>
-      </select>
-    </label>
-    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgDownload">Download</button>
-    <button id="dbgClear">Clear</button>
-    <span style="margin-left:auto"></span>
-    <button id="dbgClose">✕</button>
-  `;
-
-  const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-
-  // button wiring
-  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-  // controls
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
-  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
-  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-  bar.querySelector('#dbgDownload').onclick = () => {
-    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
-    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  };
-
-  // ring buffer + rendering
-  let buffer = [];
-  function push(kind, msg, extra) {
-    if (!recordChk.checked) return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
-    if (buffer.length > MAX_LINES) buffer.shift();
-    const f = filterSel.value;
-    if (!f || f === kind) addLine({kind, line});
-  }
-  function addLine(r){
-    const div = document.createElement('div');
-    div.textContent = r.line;
-    if (r.kind === 'ERR') div.style.color = '#f88';
-    else if (r.kind === 'WARN') div.style.color = '#ff8';
-    else if (r.kind === 'EDGE') div.style.color = '#8ff';
-    else if (r.kind === 'NET')  div.style.color = '#8cf';
-    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-    list.appendChild(div); list.scrollTop = list.scrollHeight;
-  }
-  function render(){
-    list.innerHTML = '';
-    const f = filterSel.value;
-    for (const r of buffer) if (!f || f === r.kind) addLine(r);
-  }
-  filterSel.onchange = render;
-
-  // console hooks
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-
-  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-
-  // visibility & UI observers
-  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-  const q = (id) => document.getElementById(id);
-
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
-
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
-    let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
-        const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
-        last = el.textContent; lastAt = now;
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  })();
-
-  // fetch tracer
-  const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
-    const start = performance.now();
-    const method = (opts && opts.method) || 'GET';
-    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
-    push(tag, `${method} ${url}`);
-    try {
-      const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-      return res;
-    } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
-      throw e;
-    }
-  };
-
-  // timers & rAF
-  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-
-  const timers = new Map();
-  window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-  window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-  window.requestAnimationFrame = function(fn){
-    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
-  };
-  window.cancelAnimationFrame = function(id){ _caf(id); };
-
-  // image load tracing
-  function hookImg(img){
-    if (!img || img.__dbgHooked) return;
-    img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
-  }
-  Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
-      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
-
-  // bracket observer
-  const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
-      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
-  }
-
-  // public helpers
-  window.RageDebug = {
-    log: (k, m) => push(k||'LOG', m||''),
-    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
-    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
-    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
-  };
-
-  // small banner
-  (console.log||(()=>{}))('Debugger ready');
-})();
-</script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
