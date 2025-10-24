@@ -5,24 +5,38 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Rage Space — Winners</title>
   <style>
-    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a;}
-    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
+    :root {
+      --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3;
+      --card:#0f1318; --line:#20242a; --neo:#39ff14; --neo-dim:#27cc0d;
+    }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg);
+      font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
     .wrap { max-width:780px; margin:0 auto; padding:16px 12px 24px; }
     h1 { margin:0 0 10px; font-size:20px; font-weight:800; letter-spacing:.5px; }
-    .top { display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; }
-    a.btn, button.btn { text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:#131920; color:var(--fg); font-weight:700; cursor:pointer; }
+    .top { display:flex; gap:8px; align-items:center; justify-content:space-between;
+      margin-bottom:8px; flex-wrap:wrap; }
+    a.btn, button.btn { text-decoration:none; display:inline-flex; align-items:center; gap:8px;
+      padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:#131920;
+      color:var(--fg); font-weight:700; cursor:pointer; }
     .meta { color:var(--muted); font-size:12px; margin-bottom:8px; }
     .card { border:1px solid var(--line); background:var(--card); border-radius:14px; overflow:hidden; }
     .table-wrap { overflow-x:auto; }
     table { width:100%; border-collapse:collapse; font-size:14px; table-layout:auto; }
-    th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
-    th { color:#cbd5e1; font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
-    .pillA { background:#2a1212; border:1px solid #4c2222; display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
-    .pillB { background:#0f1f33; border:1px solid #20344d; display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+    th, td { padding:10px 12px; border-bottom:1px solid var(--line);
+      text-align:left; vertical-align:middle; }
+    th { color:#cbd5e1; font-weight:700; font-size:12px; letter-spacing:.06em;
+      text-transform:uppercase; white-space:nowrap; }
+    .pillA { background:#2a1212; border:1px solid #4c2222; display:inline-block;
+      padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px;
+      letter-spacing:.08em; text-transform:uppercase; }
+    .pillB { background:#0f1f33; border:1px solid #20344d; display:inline-block;
+      padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px;
+      letter-spacing:.08em; text-transform:uppercase; }
     .by { color:#cbd5e1; font-size:12px; white-space:nowrap; }
     .score { font-variant-numeric: tabular-nums; white-space:nowrap; font-weight:700; }
     .cycle { word-break:break-all; color:#cbd5e1; opacity:.9; }
-    .thumb { width:42px; height:42px; object-fit:cover; border-radius:6px; border:1px solid var(--line); cursor:pointer; transition:transform .15s; }
+    .thumb { width:42px; height:42px; object-fit:cover; border-radius:6px;
+      border:1px solid var(--line); cursor:pointer; transition:transform .15s; }
     .thumb:hover { transform:scale(1.08); }
     .fullscreen-overlay {
       display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9);
@@ -33,15 +47,50 @@
       position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent);
       color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer;
     }
+
+    /* ---- Winners loading bar ---- */
+    #winners-loading {
+      position:sticky; top:0; z-index:10000;
+      background:linear-gradient(180deg,rgba(0,0,0,.9),rgba(0,0,0,.6));
+      backdrop-filter:blur(6px);
+      border-bottom:1px solid rgba(57,255,20,0.25);
+      padding:10px 14px;
+    }
+    #winners-loading.hidden { display:none; }
+    .wl-wrap { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; }
+    .wl-title { grid-column:1 / -1; font-weight:700; color:#e6ffe6; }
+    .wl-bar {
+      position:relative; height:10px; border-radius:999px;
+      background:rgba(255,255,255,0.08); overflow:hidden;
+      border:1px solid rgba(57,255,20,0.35);
+    }
+    .wl-bar-fill {
+      height:100%; background:var(--neo);
+      box-shadow:0 0 12px 2px rgba(57,255,20,0.6);
+      transition:width 220ms ease-out;
+    }
+    .wl-percent { min-width:3.5ch; text-align:right;
+      font-variant-numeric:tabular-nums; color:var(--neo); font-weight:700; }
+    .wl-done { animation:fadeout 0.4s ease forwards; }
+    @keyframes fadeout { to { opacity:0; visibility:hidden; height:0; margin:0; padding:0; } }
     @media (max-width:520px){ th.cycle,td.cycle{display:none;} th,td{padding:8px 10px;} table{font-size:13px;} }
   </style>
 </head>
 <body>
+  <!-- 🔸 Loading banner -->
+  <div id="winners-loading">
+    <div class="wl-wrap">
+      <div class="wl-title">Winners opening… please wait</div>
+      <div class="wl-bar"><div class="wl-bar-fill" style="width:0%"></div></div>
+      <div class="wl-percent">0%</div>
+    </div>
+  </div>
+
   <div class="wrap">
     <div class="top">
       <h1>Winners Log</h1>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <a class="btn" href="matchup.html">← Back</a>
+        <a class="btn" href="menu.html">← Back</a>
         <button class="btn" id="refresh">Refresh</button>
         <button class="btn" id="clear">Clear Data</button>
       </div>
@@ -87,83 +136,97 @@
     const btnClear   = document.getElementById('clear');
     const btnClose   = document.getElementById('closeFull');
 
-    btnClose.onclick = () => overlay.style.display = 'none';
+    const wl = document.getElementById('winners-loading');
+    const wlFill = wl.querySelector('.wl-bar-fill');
+    const wlPct = wl.querySelector('.wl-percent');
+    const wlTitle = wl.querySelector('.wl-title');
 
-    function openFull(url){
-      fullImg.src = url;
-      overlay.style.display = 'flex';
-    }
+    let totalWinners = 0;
+
+    btnClose.onclick = () => overlay.style.display = 'none';
+    function openFull(url){ fullImg.src = url; overlay.style.display = 'flex'; }
 
     function fmtTime(iso) {
       try {
-        return new Date(iso).toLocaleString(undefined, {
-          hour12: true,
-          hour: "numeric",
-          minute: "2-digit",
-          second: "2-digit",
-          month: "2-digit",
-          day: "2-digit",
-          year: "numeric"
+        return new Date(iso).toLocaleString(undefined,{
+          hour12:true,hour:"numeric",minute:"2-digit",second:"2-digit",
+          month:"2-digit",day:"2-digit",year:"numeric"
         });
-      } catch {
-        return iso;
-      }
+      } catch { return iso; }
     }
 
-    function render(rows, caughtUp=0){
+    function updateBar(percent, label) {
+      wlFill.style.width = percent + '%';
+      wlPct.textContent = percent + '%';
+      if (label) wlTitle.textContent = label;
+    }
+
+    function render(rows){
       if(!rows || rows.length===0){
         tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
         return;
       }
       const N = rows.length;
-      tbody.innerHTML = rows.map((r, idx) => {
+      tbody.innerHTML = rows.map((r,idx)=>{
         const n = N - idx;
-        const pill = r.winner_color === 'red'
-          ? `<span class="pillA">Seed A</span>`
-          : `<span class="pillB">Seed B</span>`;
-        const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
+        const pill = r.winner_color==='red'?`<span class="pillA">Seed A</span>`:`<span class="pillB">Seed B</span>`;
+        const by = r.decided_by==='random_tie'?'random tie':'votes';
         const score = `${r.red_count}–${r.blue_count}`;
-        const img = r.image_url || r.winner_url || ''; // fallback
-        const thumb = img
-          ? `<img src="${img}" class="thumb" onclick="openFull('${img}')">`
-          : `<span style="color:#666;">—</span>`;
-        return `
-          <tr>
-            <td>${n}</td>
-            <td>${fmtTime(r.decided_at)}</td>
-            <td class="cycle">${r.base_iso}</td>
-            <td>${pill}</td>
-            <td>${thumb}</td>
-            <td class="score">${score}</td>
-            <td class="by">${by}</td>
-          </tr>`;
+        const img = r.image_url || r.winner_url || '';
+        const thumb = img ? `<img src="${img}" class="thumb" onclick="openFull('${img}')">` : `<span style="color:#666;">—</span>`;
+        return `<tr>
+          <td>${n}</td>
+          <td>${fmtTime(r.decided_at)}</td>
+          <td class="cycle">${r.base_iso}</td>
+          <td>${pill}</td>
+          <td>${thumb}</td>
+          <td class="score">${score}</td>
+          <td class="by">${by}</td>
+        </tr>`;
       }).join('');
     }
 
     async function load(){
-      metaEl.textContent = 'Loading…';
-      const res = await fetch(FUNCTION_URL + "?winners=1&limit=200");
-      const data = await res.json();
-      render(data.winners || [], data.caught_up ?? 0);
-      const total = data.winners?.length || 0;
-      metaEl.textContent = `Showing ${total} winners • newest is #${total} at top • #1 at bottom • caught up: ${data.caught_up ?? 0}`;
+      wl.classList.remove('hidden','wl-done');
+      updateBar(0,'Winners opening… please wait');
+      metaEl.textContent='Loading…';
+      try{
+        const res = await fetch(FUNCTION_URL + "?winners=1&limit=200");
+        const data = await res.json();
+        const winners = data.winners || [];
+        totalWinners = winners.length;
+        for (let i=0;i<winners.length;i++){
+          render(winners.slice(0,i+1));
+          updateBar(Math.round(((i+1)/winners.length)*100));
+          await new Promise(r=>setTimeout(r,10));
+        }
+        updateBar(100,'Winners loaded');
+        wl.classList.add('wl-done');
+        setTimeout(()=>wl.classList.add('hidden'),700);
+        metaEl.textContent=`Showing ${totalWinners} winners • newest is #${totalWinners} at top • #1 at bottom • caught up: ${data.caught_up ?? 0}`;
+      }catch(err){
+        wlTitle.textContent='Failed to load winners';
+        wlFill.style.background='#ff0033';
+        wlPct.textContent='×';
+        setTimeout(()=>wl.classList.add('hidden'),1200);
+        metaEl.textContent='Error loading winners';
+      }
     }
 
     async function clearData(){
       if(!confirm("⚠️ Permanently delete all winner data?")) return;
-      metaEl.textContent = 'Clearing data…';
-      const res = await fetch(FUNCTION_URL + "?clear=1", {
-        method:"DELETE",
-        headers:{ "x-admin-key": ADMIN_KEY }
+      metaEl.textContent='Clearing data…';
+      const res = await fetch(FUNCTION_URL + "?clear=1",{
+        method:"DELETE",headers:{"x-admin-key":ADMIN_KEY}
       });
       const data = await res.json().catch(()=>({}));
       if(res.ok){ alert("Winner data cleared."); load(); }
-      else { alert("Error: " + (data.error || "failed to clear")); }
+      else{ alert("Error: " + (data.error || "failed to clear")); }
     }
 
-    btnRefresh.onclick = load;
-    btnClear.onclick = clearData;
-    setInterval(load, 5000);
+    btnRefresh.onclick=load;
+    btnClear.onclick=clearData;
+    setInterval(load,5000);
     load();
   </script>
 </body>
