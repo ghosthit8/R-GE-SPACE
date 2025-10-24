@@ -23,28 +23,19 @@
       cursor:pointer; font-weight:700; transition:background .15s;
     }
     .fullscreenBtn:hover { background:rgba(0,0,0,0.8); }
-    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-top:1px solid #20242a; gap:8px; }
+    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid #20242a; }
     .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
     .counts { font-variant-numeric: tabular-nums; font-weight:700; }
-    button.vote { appearance:none; border:1px solid #24303a; background:#131920; color:var(--fg); padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:700; }
+    .btn, .vote, .linkbtn, .backbtn {
+      appearance:none; border:1px solid #24303a; background:#131920; color:var(--fg);
+      padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center;
+    }
+    .btn.ghost { color:#a0aec0; }
+    button.vote { padding:10px 14px; }
     button.vote:disabled { opacity:.6; cursor:default; }
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
     .winner b { color:var(--accent); }
-    .linkbtn, .backbtn {
-      text-decoration:none;
-      display:inline-flex;
-      align-items:center;
-      padding:8px 12px;
-      border:1px solid #20242a;
-      border-radius:12px;
-      background:#131920;
-      color:var(--fg);
-      font-weight:700;
-      transition:background .15s;
-    }
-    .backbtn { color:var(--accent); }
-    .linkbtn:hover, .backbtn:hover { background:#0d1218; }
 
     /* Fullscreen overlay */
     .fullscreen-overlay {
@@ -69,6 +60,8 @@
         <div class="state" id="tMeta">syncing…</div>
       </div>
       <div class="row">
+        <!-- Optional one-tap tester: force consume from queue for THIS round -->
+        <button id="forceQueue" class="btn ghost" title="Use next 2 from queue immediately">Use Next From Queue Now</button>
         <a class="backbtn" href="menu.html">← Menu</a>
         <a class="linkbtn" href="winners.html">Winners</a>
       </div>
@@ -111,23 +104,22 @@
   </div>
 
   <script>
-    // --- existing logic unchanged ---
+    // --- Supabase + runtime constants ---
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase?.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-    const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
+    const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
+    // device id for vote limiting
     const RSID_KEY = "rsid_v2";
     let RSID = localStorage.getItem(RSID_KEY);
-    if (!RSID) {
-      RSID = crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + Date.now());
-      localStorage.setItem(RSID_KEY, RSID);
-    }
+    if (!RSID) { RSID = (crypto.randomUUID?.() || (Math.random().toString(36).slice(2)+Date.now())); localStorage.setItem(RSID_KEY, RSID); }
 
     const votedKey = (b) => `voted:${b}`;
     const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
     const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
 
+    // elements
     const elRemain = document.getElementById("tRemain");
     const elMeta = document.getElementById("tMeta");
     const imgA = document.getElementById("imgA");
@@ -140,21 +132,31 @@
     const overlay = document.getElementById("overlay");
     const fullImg = document.getElementById("fullImg");
     const btnClose = document.getElementById("closeFull");
+    const forceBtn = document.getElementById("forceQueue");
 
     btnClose.onclick = () => overlay.style.display = 'none';
 
+    // ---------- Queue helpers ----------
     const CLAIM_KEY = (b) => `queue_claimed:${b}`;
 
     async function fetchPendingQueue(n = 2) {
       if (!supabase) return [];
-      const { data, error } = await supabase.from('art_queue').select('id,image_url,created_at').eq('status', 'pending').order('created_at', { ascending: true }).limit(n);
+      const { data, error } = await supabase
+        .from('art_queue')
+        .select('id,image_url,created_at')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+        .limit(n);
       if (error) { console.warn('queue fetch error', error); return []; }
       return data || [];
     }
 
     async function markQueueUsed(ids = [], baseIso) {
       if (!supabase || !ids.length) return;
-      const { error } = await supabase.from('art_queue').update({ status: 'used', used_at: new Date().toISOString(), used_in_base: baseIso }).in('id', ids);
+      const { error } = await supabase
+        .from('art_queue')
+        .update({ status: 'used', used_at: new Date().toISOString(), used_in_base: baseIso })
+        .in('id', ids);
       if (error) console.warn('queue mark used error', error);
     }
 
@@ -176,6 +178,7 @@
       winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
     }
 
+    // ---------- fetch state & integrate queue ----------
     async function fetchState() {
       const res = await fetch(FUNCTION_URL);
       const data = await res.json();
@@ -183,18 +186,37 @@
 
       const newRound = state.base_iso && state.base_iso !== data.base_iso;
       state = data;
+
       let red = state.red_url, blue = state.blue_url;
-      const claimFlag = localStorage.getItem(CLAIM_KEY(state.base_iso));
-      if (newRound && !claimFlag) {
+
+      const claimKey = CLAIM_KEY(state.base_iso);
+      const alreadyClaimed = localStorage.getItem(claimKey) === '1';
+      const urlForce = new URLSearchParams(location.search).get('claim') === '1';
+
+      // Try to pull from queue if:
+      // - it's a new round, OR
+      // - this round hasn't claimed yet (first load), OR
+      // - user forced it (?claim=1) or pressed the button
+      const shouldTryQueue = newRound || !alreadyClaimed || urlForce;
+
+      if (shouldTryQueue) {
         try {
           const q = await fetchPendingQueue(2);
-          if (q.length >= 1) red = q[0].image_url;
+          if (q.length >= 1) red  = q[0].image_url;
           if (q.length >= 2) blue = q[1].image_url;
+
           const usedIds = q.slice(0, 2).map(r => r.id);
           if (usedIds.length) await markQueueUsed(usedIds, state.base_iso);
-          localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
+
+          localStorage.setItem(claimKey, '1');
+          // if we forced, strip ?claim=1 from the URL (nice-to-have)
+          if (urlForce && history.replaceState) {
+            const u = new URL(location.href); u.searchParams.delete('claim');
+            history.replaceState({}, '', u.toString());
+          }
         } catch (e) { console.warn('queue override failed', e); }
       }
+
       imgA.src = red; imgB.src = blue;
       cA.textContent = state.red_count; cB.textContent = state.blue_count;
       elMeta.textContent = `cycle: ${state.base_iso}`;
@@ -203,6 +225,14 @@
       if (newRound) setVoteButtons(!hasVoted(state.base_iso));
     }
 
+    // Force button for immediate testing
+    forceBtn?.addEventListener('click', async ()=>{
+      if (!state?.base_iso) return;
+      localStorage.removeItem(CLAIM_KEY(state.base_iso));
+      await fetchState(); // will pull from queue now
+    });
+
+    // ---------- voting ----------
     async function sendVote(color) {
       const res = await fetch(FUNCTION_URL, {
         method: "POST",
@@ -223,6 +253,7 @@
     btnA.onclick = () => !btnA.disabled && sendVote("red");
     btnB.onclick = () => !btnB.disabled && sendVote("blue");
 
+    // ---------- timer ----------
     function tick() {
       const remain = new Date(state.ends_at).getTime() - Date.now();
       elRemain.textContent = (Math.max(0, remain) / 1000).toFixed(1);
@@ -230,6 +261,7 @@
       requestAnimationFrame(tick);
     }
 
+    // poll state; first load claims immediately if unclaimed
     setInterval(() => fetchState().catch(() => {}), 1000);
     (async () => { await fetchState(); tick(); })();
   </script>
