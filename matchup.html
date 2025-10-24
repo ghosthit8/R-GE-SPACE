@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (Queue-Integrated, Hardened v2)</title>
+  <title>Rage Space — Matchup (Queue-Integrated, Hardened v3)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -32,7 +32,6 @@
     .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <!-- your debugger script can stay loaded here if you want -->
 </head>
 <body>
   <div class="wrap">
@@ -85,11 +84,20 @@
   </div>
 
   <script>
+    // ====== Constants & Client ======
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Timer function endpoint (unchanged)
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
+    // NEW: bucket queue Edge Function endpoint(s)
+    // - list/pull the next N items from the "matchup-queue" bucket and return signed URLs
+    // - you deployed this as described; adjust names if you used a different slug
+    const FN_QUEUE_LIST = `${SUPABASE_URL}/functions/v1/list-matchup-queue`;
+
+    // ====== Local session / vote keys ======
     const RSID_KEY = "rsid_v2";
     let RSID = localStorage.getItem(RSID_KEY);
     if (!RSID) { RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
@@ -97,12 +105,14 @@
     const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
     const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
 
+    // lock the pair to a round locally so UI stays consistent even if network lags
     const PAIR_KEY  = (b) => `pair:${b}`;
     const CLAIM_KEY = (b) => `queue_claimed:${b}`;
     const loadPair  = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
     const savePair  = (b, red, blue) => { if (red && blue) localStorage.setItem(PAIR_KEY(b), JSON.stringify({ red, blue })); };
     const clearPair = (b) => localStorage.removeItem(PAIR_KEY(b));
 
+    // ====== DOM ======
     const elRemain = document.getElementById("tRemain");
     const elMeta   = document.getElementById("tMeta");
     const imgA     = document.getElementById("imgA");
@@ -120,8 +130,42 @@
     btnClose.onclick = () => overlay.style.display = 'none';
     function openFull(which){ fullImg.src = which==='A'?imgA.src:imgB.src; overlay.style.display='flex'; }
 
-    // ---- Queue helpers (exclude NULL AND empty string) ----
-    async function fetchPendingQueue(n=2){
+    // ====== QUEUE HELPERS ======
+    // (1) NEW: Ask the bucket Edge Function for N next items (preferred path)
+    async function fetchBucketQueue(n=2){
+      try{
+        // POST to make this operation "claim" (pop) the items server-side
+        const res = await fetch(FN_QUEUE_LIST, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ n })
+        });
+        if (!res.ok) {
+          const msg = await res.text();
+          console.warn('[QUEUE][bucket] non-200', msg);
+          return [];
+        }
+        const json = await res.json();
+        // Accept a few common shapes:
+        //  - { urls: [signedUrl,...] }
+        //  - { items: [{ url }, { url }] }
+        //  - { data: [ "...signedUrl..." ] }
+        const urls =
+          (Array.isArray(json?.urls) && json.urls) ||
+          (Array.isArray(json?.data) && json.data) ||
+          (Array.isArray(json?.items) && json.items.map(i=>i.url).filter(Boolean)) ||
+          [];
+        const cleaned = urls.filter(Boolean).slice(0, n);
+        if (cleaned.length) console.log('[QUEUE][bucket] pulled', cleaned.length);
+        return cleaned;
+      }catch(err){
+        console.warn('[QUEUE][bucket] error', err);
+        return [];
+      }
+    }
+
+    // (2) Existing table fallback (kept exactly as-is, just wrapped) — excludes null/empty URLs
+    async function fetchPendingQueueFromTable(n=2){
       const { data, error } = await supabase
         .from('art_queue')
         .select('id,image_url,created_at')
@@ -130,23 +174,24 @@
         .neq('image_url','')
         .order('created_at',{ ascending:true })
         .limit(n);
-      if (error) { console.warn('[QUEUE] fetch error', error); return []; }
+      if (error) { console.warn('[QUEUE][table] fetch error', error); return []; }
       const rows = (data||[]).filter(r=>!!r.image_url);
-      console.log('[QUEUE] fetched', rows.map(r=>r.id).join(','));
+      console.log('[QUEUE][table] fetched', rows.map(r=>r.id).join(','));
       return rows;
     }
 
-    // fire-and-forget: mark used AFTER locking so the UI never goes pink
+    // (2b) Table fallback "mark used"
     async function markUsed(ids=[], baseIso){
       if (!ids.length) return;
       const { error } = await supabase
         .from('art_queue')
         .update({ status:'used', used_at:new Date().toISOString(), used_in_base: baseIso })
         .in('id', ids);
-      if (error) console.warn('[QUEUE] markUsed error (check RLS/columns)', error);
-      else console.log('[QUEUE] markUsed ok', ids.join(','));
+      if (error) console.warn('[QUEUE][table] markUsed error (check RLS/columns)', error);
+      else console.log('[QUEUE][table] markUsed ok', ids.join(','));
     }
 
+    // ====== Voting ======
     function setVoteButtons(enabled){ btnA.disabled = btnB.disabled = !enabled; }
     async function sendVote(color){
       const res = await fetch(FUNCTION_URL, {
@@ -175,6 +220,7 @@
       winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
     }
 
+    // ====== Round State ======
     let state = { ends_at:null, base_iso:null, red_url:'', blue_url:'', red_count:0, blue_count:0, last_winner:null };
     let fetching = false;
 
@@ -198,23 +244,37 @@
         console.log('[ROUND]', state.base_iso, {newRound, alreadyClaimed, forceQueue, hasLocked: !!locked});
 
         if (shouldTryQueue){
-          const q = await fetchPendingQueue(2);
-          const urls = q.map(r=>r.image_url).filter(Boolean);
-          if (urls.length >= 2){
-            red = urls[0]; blue = urls[1];
+          // 1) Try BUCKET queue first
+          const bucketUrls = await fetchBucketQueue(2);
+          if (bucketUrls.length >= 2){
+            red = bucketUrls[0];
+            blue = bucketUrls[1];
 
-            // lock immediately (so UI shows them even if markUsed fails)
+            // lock locally so we never flicker even if network later fails
             localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
             savePair(state.base_iso, red, blue);
-            console.log('[PAIR] locked', { red, blue });
+            console.log('[PAIR] locked from bucket', { red, blue });
 
-            // update UI right away
+            // update UI immediately
             imgA.src = red; imgB.src = blue;
-
-            // mark used in the background
-            markUsed(q.slice(0,2).map(r=>r.id), state.base_iso);
           } else {
-            console.log('[QUEUE] not enough usable rows → keep defaults');
+            // 2) Fall back to TABLE queue exactly as before
+            const q = await fetchPendingQueueFromTable(2);
+            const urls = q.map(r=>r.image_url).filter(Boolean);
+            if (urls.length >= 2){
+              red = urls[0]; blue = urls[1];
+
+              localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
+              savePair(state.base_iso, red, blue);
+              console.log('[PAIR] locked from table', { red, blue });
+
+              imgA.src = red; imgB.src = blue;
+
+              // table path: mark used in the background
+              markUsed(q.slice(0,2).map(r=>r.id), state.base_iso);
+            } else {
+              console.log('[QUEUE] none available → keep defaults from timer function');
+            }
           }
         }
 
