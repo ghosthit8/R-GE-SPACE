@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (Queue-Integrated)</title>
+  <title>Rage Space — Matchup (Queue-Integrated, Hardened)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -14,7 +14,7 @@
     .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
     .state { color:var(--muted); font-size:12px; }
     .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
-    .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#0b0d0f; display:grid; place-items:center; }
+    .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
     .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
     .fullscreenBtn {
       position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55);
@@ -35,17 +35,11 @@
     button.vote:disabled { opacity:.6; cursor:default; }
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
-    .winner b { color:var(--accent); }
-    /* Fullscreen overlay */
-    .fullscreen-overlay {
-      display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95);
-      justify-content:center; align-items:center; z-index:9999;
-    }
+    .winner b { color:#39ff14; }
+
+    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
     .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
-    .fullscreen-overlay button {
-      position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent);
-      color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer;
-    }
+    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
@@ -96,35 +90,19 @@
     <div class="hint">Timer auto-loops ~20s. Winner decided at 0 (random if tied). One vote per device per round.</div>
   </div>
 
-  <!-- fullscreen modal -->
   <div class="fullscreen-overlay" id="overlay">
     <button id="closeFull">✕ Close</button>
     <img id="fullImg" src="">
   </div>
 
   <script>
-    // --- Supabase + constants ---
+    // ---------- Supabase ----------
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
-    // vote identity
-    const RSID_KEY = "rsid_v2";
-    let RSID = localStorage.getItem(RSID_KEY);
-    if (!RSID) { RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
-    const votedKey = (b) => `voted:${b}`;
-    const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
-    const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
-
-    // pair lock / claim keys
-    const PAIR_KEY  = (b) => `pair:${b}`;
-    const CLAIM_KEY = (b) => `queue_claimed:${b}`;
-    const loadPair  = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
-    const savePair  = (b, red, blue) => { if (red && blue) localStorage.setItem(PAIR_KEY(b), JSON.stringify({ red, blue })); };
-    const clearPair = (b) => localStorage.removeItem(PAIR_KEY(b));
-
-    // elements
+    // ---------- Elements ----------
     const elRemain = document.getElementById("tRemain");
     const elMeta   = document.getElementById("tMeta");
     const imgA     = document.getElementById("imgA");
@@ -142,7 +120,21 @@
     btnClose.onclick = () => overlay.style.display = 'none';
     function openFull(which){ fullImg.src = which==='A'?imgA.src:imgB.src; overlay.style.display='flex'; }
 
-    // ----- Queue helpers -----
+    // ---------- Local keys ----------
+    const RSID_KEY = "rsid_v2";
+    let RSID = localStorage.getItem(RSID_KEY);
+    if (!RSID) { RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
+    const votedKey = (b) => `voted:${b}`;
+    const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
+    const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
+
+    const PAIR_KEY  = (b) => `pair:${b}`;
+    const CLAIM_KEY = (b) => `queue_claimed:${b}`;
+    const loadPair  = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
+    const savePair  = (b, red, blue) => { if (red && blue) localStorage.setItem(PAIR_KEY(b), JSON.stringify({ red, blue })); };
+    const clearPair = (b) => localStorage.removeItem(PAIR_KEY(b));
+
+    // ---------- Queue helpers ----------
     async function fetchPendingQueue(n=2){
       const { data, error } = await supabase
         .from('art_queue')
@@ -152,103 +144,24 @@
         .order('created_at',{ ascending:true })
         .limit(n);
       if (error) { console.warn('[QUEUE] fetch error', error); return []; }
-      return (data||[]).filter(r=>!!r.image_url);
+      const rows = (data||[]).filter(r=>!!r.image_url);
+      console.log('[QUEUE] fetched', rows.map(r=>r.id));
+      return rows;
     }
 
-    // mark as used (safer than delete; requires UPDATE policy)
-    async function consumeQueue(ids=[], baseIso){
+    async function markUsed(ids=[], baseIso){
       if (!ids.length) return { ok:false };
       const { error } = await supabase
         .from('art_queue')
         .update({ status:'used', used_at:new Date().toISOString(), used_in_base: baseIso })
         .in('id', ids);
       if (error) { console.warn('[QUEUE] update→used error', error); return { ok:false, error }; }
+      console.log('[QUEUE] marked used', ids);
       return { ok:true };
     }
 
-    // ----- UI helpers -----
+    // ---------- Vote ----------
     function setVoteButtons(enabled){ btnA.disabled = btnB.disabled = !enabled; }
-    function showWinner(winner){
-      if (!winner){ winnerText.textContent='No winner yet — first round in progress.'; return; }
-      const by = winner.decided_by==='random_tie' ? 'random tie' : 'votes';
-      const name = winner.winner_color==='red' ? 'Seed A' : 'Seed B';
-      const score = `${winner.red_count}–${winner.blue_count}`;
-      winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
-    }
-
-    // ----- state -----
-    let state = { ends_at:null, base_iso:null, red_url:'', blue_url:'', red_count:0, blue_count:0, last_winner:null };
-    let fetching = false;
-
-    async function fetchState(forceQueue=false){
-      if (fetching) return; fetching = true;
-      try{
-        const res = await fetch(FUNCTION_URL);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'GET failed');
-
-        const newRound = state.base_iso && state.base_iso !== data.base_iso;
-        state = data;
-
-        // start from server defaults
-        let red = state.red_url, blue = state.blue_url;
-
-        // pair lock (prevents flicker)
-        const locked = loadPair(state.base_iso);
-        if (locked?.red && locked?.blue){ red = locked.red; blue = locked.blue; }
-
-        const alreadyClaimed = !!localStorage.getItem(CLAIM_KEY(state.base_iso));
-        const shouldTryQueue = forceQueue || newRound || (!alreadyClaimed && !locked);
-
-        if (shouldTryQueue){
-          const q = await fetchPendingQueue(2);
-          if (q.length){
-            if (q[0]) red = q[0].image_url;
-            if (q[1]) blue = q[1].image_url;
-
-            const ids = q.slice(0,2).map(r=>r.id);
-            const ok = await consumeQueue(ids, state.base_iso);
-            if (!ok.ok) console.warn('[QUEUE] consume failed (RLS?)');
-
-            // only lock & claim if we actually have urls
-            if (red && blue){
-              savePair(state.base_iso, red, blue);
-              localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
-            }
-          }
-        }
-
-        // final safety: never paint empty
-        if (!red)  red  = state.red_url;
-        if (!blue) blue = state.blue_url;
-
-        imgA.src = red; imgB.src = blue;
-        cA.textContent = state.red_count; cB.textContent = state.blue_count;
-        elMeta.textContent = `cycle: ${state.base_iso}`;
-        showWinner(state.last_winner);
-
-        if (newRound) setVoteButtons(!hasVoted(state.base_iso));
-      }catch(e){
-        console.error(e);
-      }finally{
-        fetching = false;
-      }
-    }
-
-    // force actions
-    forceBtn.addEventListener('click', async ()=>{
-      if (!state?.base_iso) return;
-      localStorage.removeItem(CLAIM_KEY(state.base_iso));
-      clearPair(state.base_iso);
-      await fetchState(true); // force consume next two now
-    });
-    resetBtn.addEventListener('click', async ()=>{
-      if (!state?.base_iso) return;
-      clearPair(state.base_iso);
-      await fetchState(false); // just refetch; will use existing claim or defaults
-    });
-
-    // voting
     async function sendVote(color){
       const res = await fetch(FUNCTION_URL, {
         method:'POST',
@@ -268,7 +181,84 @@
     btnA.onclick = () => !btnA.disabled && sendVote('red');
     btnB.onclick = () => !btnB.disabled && sendVote('blue');
 
-    // timer
+    // ---------- Winner text ----------
+    function showWinner(winner){
+      if (!winner){ winnerText.textContent='No winner yet — first round in progress.'; return; }
+      const by = winner.decided_by==='random_tie' ? 'random tie' : 'votes';
+      const name = winner.winner_color==='red' ? 'Seed A' : 'Seed B';
+      const score = `${winner.red_count}–${winner.blue_count}`;
+      winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
+    }
+
+    // ---------- State & timer ----------
+    let state = { ends_at:null, base_iso:null, red_url:'', blue_url:'', red_count:0, blue_count:0, last_winner:null };
+    let fetching = false;
+
+    async function fetchState(forceQueue=false){
+      if (fetching) return; fetching = true;
+      try{
+        const t0 = performance.now();
+        const res = await fetch(FUNCTION_URL);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'GET failed');
+
+        const newRound = state.base_iso && state.base_iso !== data.base_iso;
+        state = data;
+
+        let red = state.red_url, blue = state.blue_url;
+
+        // Pair lock first (but only if complete)
+        const locked = loadPair(state.base_iso);
+        if (locked?.red && locked?.blue){
+          red = locked.red; blue = locked.blue;
+          console.log('[PAIR] using locked pair for', state.base_iso);
+        }
+
+        const alreadyClaimed = !!localStorage.getItem(CLAIM_KEY(state.base_iso));
+        const shouldTryQueue = forceQueue || newRound || (!alreadyClaimed && !locked);
+        console.log('[ROUND]', state.base_iso, { newRound, alreadyClaimed, forceQueue, hasLocked: !!locked });
+
+        if (shouldTryQueue){
+          const q = await fetchPendingQueue(2);
+          if (q.length){
+            if (q[0]) red  = q[0].image_url;
+            if (q[1]) blue = q[1].image_url;
+
+            // even if RLS update fails, we still use them and lock the pair,
+            // so the UI shows them and doesn't flicker back
+            const ids = q.slice(0,2).map(r=>r.id);
+            const ok  = await markUsed(ids, state.base_iso);
+            if (!ok.ok) console.warn('[QUEUE] could not mark used (check RLS)');
+
+            if (red && blue){
+              savePair(state.base_iso, red, blue);
+              localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
+              console.log('[PAIR] locked new pair', { red, blue });
+            }
+          } else {
+            console.log('[QUEUE] empty → use server defaults');
+          }
+        }
+
+        // Safety: never paint empty
+        if (!red)  red  = state.red_url;
+        if (!blue) blue = state.blue_url;
+
+        imgA.src = red; imgB.src = blue;
+        cA.textContent = state.red_count; cB.textContent = state.blue_count;
+        elMeta.textContent = `cycle: ${state.base_iso}`;
+        showWinner(state.last_winner);
+
+        if (newRound) setVoteButtons(!hasVoted(state.base_iso));
+        console.log('[FETCH] done in', (performance.now()-t0).toFixed(0)+'ms');
+      }catch(e){
+        console.error(e);
+      }finally{
+        fetching = false;
+      }
+    }
+
+    // Timer
     function tick(){
       if (!state?.ends_at) return requestAnimationFrame(tick);
       const remain = new Date(state.ends_at).getTime() - Date.now();
@@ -277,13 +267,24 @@
       requestAnimationFrame(tick);
     }
 
-    // gentle polling
-    setInterval(()=> fetchState().catch(()=>{}), 4000);
+    // Debug buttons
+    forceBtn.addEventListener('click', async ()=>{
+      if (!state?.base_iso) return;
+      localStorage.removeItem(CLAIM_KEY(state.base_iso));
+      clearPair(state.base_iso);
+      await fetchState(true);
+    });
+    resetBtn.addEventListener('click', async ()=>{
+      if (!state?.base_iso) return;
+      clearPair(state.base_iso);
+      await fetchState(false);
+    });
 
-    // boot
+    // Poll gently & boot
+    setInterval(()=> fetchState().catch(()=>{}), 4000);
     (async()=>{ await fetchState(); tick(); })();
 
-    // expose for debugger if you like
+    // expose for quick console debugging
     window.__match = { fetchState };
   </script>
 </body>
