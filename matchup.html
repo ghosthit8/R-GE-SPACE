@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Minimal Matchup (v2)</title>
+  <title>Rage Space — Minimal Matchup (pair-locked)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -52,7 +52,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Rage Space — Minimal Matchup (v2)</h1>
+    <h1>Rage Space — Minimal Matchup</h1>
 
     <div class="header">
       <div class="row">
@@ -60,7 +60,6 @@
         <div class="state" id="tMeta">syncing…</div>
       </div>
       <div class="row">
-        <!-- Optional one-tap tester: force consume from queue for THIS round -->
         <button id="forceQueue" class="btn ghost" title="Use next 2 from queue immediately">Use Next From Queue Now</button>
         <a class="backbtn" href="menu.html">← Menu</a>
         <a class="linkbtn" href="winners.html">Winners</a>
@@ -94,7 +93,7 @@
     </div>
 
     <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
-    <div class="hint">Timer auto-loops every 20 s. A winner is decided at 0 (random if tied). One vote per device per round.</div>
+    <div class="hint">Timer auto-loops every ~20 s. A winner is decided at 0 (random if tied). One vote per device per round.</div>
   </div>
 
   <!-- fullscreen modal -->
@@ -119,6 +118,14 @@
     const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
     const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
 
+    // pair lock helpers (avoid flicker)
+    const PAIR_KEY = (b) => `pair:${b}`;
+    const loadPair = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
+    const savePair = (b, red, blue) => localStorage.setItem(PAIR_KEY(b), JSON.stringify({red, blue}));
+
+    // queue claim flag
+    const CLAIM_KEY = (b) => `queue_claimed:${b}`;
+
     // elements
     const elRemain = document.getElementById("tRemain");
     const elMeta = document.getElementById("tMeta");
@@ -133,12 +140,15 @@
     const fullImg = document.getElementById("fullImg");
     const btnClose = document.getElementById("closeFull");
     const forceBtn = document.getElementById("forceQueue");
-
     btnClose.onclick = () => overlay.style.display = 'none';
 
-    // ---------- Queue helpers ----------
-    const CLAIM_KEY = (b) => `queue_claimed:${b}`;
+    function openFull(which) {
+      const url = which === 'A' ? imgA.src : imgB.src;
+      fullImg.src = url;
+      overlay.style.display = 'flex';
+    }
 
+    // ---------- Queue helpers ----------
     async function fetchPendingQueue(n = 2) {
       if (!supabase) return [];
       const { data, error } = await supabase
@@ -150,7 +160,6 @@
       if (error) { console.warn('queue fetch error', error); return []; }
       return data || [];
     }
-
     async function markQueueUsed(ids = [], baseIso) {
       if (!supabase || !ids.length) return;
       const { error } = await supabase
@@ -160,16 +169,9 @@
       if (error) console.warn('queue mark used error', error);
     }
 
-    function openFull(which) {
-      const url = which === 'A' ? imgA.src : imgB.src;
-      fullImg.src = url;
-      overlay.style.display = 'flex';
-    }
-
     let state = { ends_at: null, base_iso: null, red_url: "", blue_url: "", red_count: 0, blue_count: 0, last_winner: null };
 
     function setVoteButtons(enabled) { btnA.disabled = btnB.disabled = !enabled; }
-
     function showWinner(winner) {
       if (!winner) { winnerText.textContent = "No winner yet — first round in progress."; return; }
       const by = winner.decided_by === "random_tie" ? "random tie" : "votes";
@@ -178,58 +180,69 @@
       winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
     }
 
-    // ---------- fetch state & integrate queue ----------
-    async function fetchState() {
-      const res = await fetch(FUNCTION_URL);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "GET failed");
+    // ---------- fetch state (pair-locked & debounced) ----------
+    let fetching = false;
+    async function fetchState(forceQueue = false) {
+      if (fetching) return; fetching = true;
+      try {
+        const res = await fetch(FUNCTION_URL);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "GET failed");
 
-      const newRound = state.base_iso && state.base_iso !== data.base_iso;
-      state = data;
+        const newRound = state.base_iso && state.base_iso !== data.base_iso;
+        state = data;
 
-      let red = state.red_url, blue = state.blue_url;
+        // Always start from any locked pair for this base
+        let locked = loadPair(state.base_iso);
+        let red = locked?.red ?? state.red_url;
+        let blue = locked?.blue ?? state.blue_url;
 
-      const claimKey = CLAIM_KEY(state.base_iso);
-      const alreadyClaimed = localStorage.getItem(claimKey) === '1';
-      const urlForce = new URLSearchParams(location.search).get('claim') === '1';
+        const urlForce = new URLSearchParams(location.search).get('claim') === '1';
+        const claimKey = CLAIM_KEY(state.base_iso);
+        const alreadyClaimed = localStorage.getItem(claimKey) === '1';
+        const shouldTryQueue = forceQueue || newRound || (!alreadyClaimed && !locked) || urlForce;
 
-      // Try to pull from queue if:
-      // - it's a new round, OR
-      // - this round hasn't claimed yet (first load), OR
-      // - user forced it (?claim=1) or pressed the button
-      const shouldTryQueue = newRound || !alreadyClaimed || urlForce;
+        if (shouldTryQueue) {
+          try {
+            const q = await fetchPendingQueue(2);
+            if (q.length >= 1) red  = q[0].image_url;
+            if (q.length >= 2) blue = q[1].image_url;
 
-      if (shouldTryQueue) {
-        try {
-          const q = await fetchPendingQueue(2);
-          if (q.length >= 1) red  = q[0].image_url;
-          if (q.length >= 2) blue = q[1].image_url;
+            const usedIds = q.slice(0, 2).map(r => r.id);
+            if (usedIds.length) await markQueueUsed(usedIds, state.base_iso);
 
-          const usedIds = q.slice(0, 2).map(r => r.id);
-          if (usedIds.length) await markQueueUsed(usedIds, state.base_iso);
+            localStorage.setItem(claimKey, '1');
+            savePair(state.base_iso, red, blue);         // lock for this round
+            locked = { red, blue };
+            // clean ?claim=1
+            if (urlForce && history.replaceState) {
+              const u = new URL(location.href); u.searchParams.delete('claim');
+              history.replaceState({}, '', u.toString());
+            }
+          } catch (e) { console.warn('queue override failed', e); }
+        }
 
-          localStorage.setItem(claimKey, '1');
-          // if we forced, strip ?claim=1 from the URL (nice-to-have)
-          if (urlForce && history.replaceState) {
-            const u = new URL(location.href); u.searchParams.delete('claim');
-            history.replaceState({}, '', u.toString());
-          }
-        } catch (e) { console.warn('queue override failed', e); }
+        // apply images (from lock if present)
+        imgA.src = red; imgB.src = blue;
+        // keep counts/metadata fresh
+        cA.textContent = state.red_count; cB.textContent = state.blue_count;
+        elMeta.textContent = `cycle: ${state.base_iso}`;
+        showWinner(state.last_winner);
+
+        if (newRound) setVoteButtons(!hasVoted(state.base_iso));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        fetching = false;
       }
-
-      imgA.src = red; imgB.src = blue;
-      cA.textContent = state.red_count; cB.textContent = state.blue_count;
-      elMeta.textContent = `cycle: ${state.base_iso}`;
-      showWinner(state.last_winner);
-
-      if (newRound) setVoteButtons(!hasVoted(state.base_iso));
     }
 
-    // Force button for immediate testing
-    forceBtn?.addEventListener('click', async ()=>{
+    // Force button for immediate testing (ignores claim + lock)
+    document.getElementById('forceQueue')?.addEventListener('click', async ()=>{
       if (!state?.base_iso) return;
       localStorage.removeItem(CLAIM_KEY(state.base_iso));
-      await fetchState(); // will pull from queue now
+      localStorage.removeItem(PAIR_KEY(state.base_iso));
+      await fetchState(true); // force pull now
     });
 
     // ---------- voting ----------
@@ -249,21 +262,26 @@
         cB.textContent = data.blue_count;
       }
     }
-
     btnA.onclick = () => !btnA.disabled && sendVote("red");
     btnB.onclick = () => !btnB.disabled && sendVote("blue");
 
     // ---------- timer ----------
     function tick() {
+      if (!state?.ends_at) return requestAnimationFrame(tick);
       const remain = new Date(state.ends_at).getTime() - Date.now();
       elRemain.textContent = (Math.max(0, remain) / 1000).toFixed(1);
-      if (remain <= -900) fetchState().catch(console.error);
+      // when the server says we're ~1s past zero, refresh once (will advance base)
+      if (remain <= -900) fetchState().catch(()=>{});
       requestAnimationFrame(tick);
     }
 
-    // poll state; first load claims immediately if unclaimed
-    setInterval(() => fetchState().catch(() => {}), 1000);
-    (async () => { await fetchState(); tick(); })();
+    // poll state (gentle)
+    setInterval(() => fetchState().catch(()=>{}), 4000);
+
+    (async () => {
+      await fetchState();  // initial — will lock pair if unclaimed
+      tick();
+    })();
   </script>
 </body>
 </html>
