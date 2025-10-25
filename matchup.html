@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (Queue-Integrated, Hardened v3)</title>
+  <title>Rage Space — Matchup (Storage-Only, one-time-use)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -43,7 +43,7 @@
         <div class="state" id="tMeta">syncing…</div>
       </div>
       <div class="row">
-        <button id="forceQueue" class="btn ghost">Use Next From Queue Now</button>
+        <button id="forceQueue" class="btn ghost">Pull From Bucket Now</button>
         <button id="resetPair" class="btn ghost">Reset Pair</button>
         <a class="backbtn" href="menu.html">← Menu</a>
         <a class="linkbtn" href="winners.html">Winners</a>
@@ -75,7 +75,10 @@
     </div>
 
     <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
-    <div class="hint">Timer auto-loops ~20s. Winner decided at 0 (random if tied). One vote per device per round.</div>
+    <div class="hint">
+      Timer auto-loops ~20s. Winner decided at 0 (random if tied). One vote per device per round.<br/>
+      Images are pulled from <b>Storage › art-uploads</b>, used once, then deleted when the next round starts.
+    </div>
   </div>
 
   <div class="fullscreen-overlay" id="overlay">
@@ -84,20 +87,19 @@
   </div>
 
   <script>
-    // ====== Constants & Client ======
+    // --- Supabase config ---
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // Timer function endpoint (unchanged)
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
-    // NEW: bucket queue Edge Function endpoint(s)
-    // - list/pull the next N items from the "matchup-queue" bucket and return signed URLs
-    // - you deployed this as described; adjust names if you used a different slug
-    const FN_QUEUE_LIST = `${SUPABASE_URL}/functions/v1/list-matchup-queue`;
+    // --- Storage (bucket) settings ---
+    const BUCKET = "art-uploads";
+    // If you keep files inside a folder (e.g. "10/"), set this to that folder path (e.g. "10").
+    // Otherwise leave empty string to use the bucket root.
+    const UPLOAD_DIR = ""; // "" or "incoming" or "10" etc.
 
-    // ====== Local session / vote keys ======
+    // --- Local state / helpers ---
     const RSID_KEY = "rsid_v2";
     let RSID = localStorage.getItem(RSID_KEY);
     if (!RSID) { RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
@@ -105,14 +107,14 @@
     const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
     const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
 
-    // lock the pair to a round locally so UI stays consistent even if network lags
-    const PAIR_KEY  = (b) => `pair:${b}`;
-    const CLAIM_KEY = (b) => `queue_claimed:${b}`;
+    const PAIR_KEY   = (b) => `pair:${b}`;                // { redUrl, blueUrl, redPath, bluePath }
+    const CLAIM_KEY  = (b) => `bucket_claimed:${b}`;      // "1" when we've chosen images for this round
+    const DELETE_KEY = (b) => `bucket_to_delete:${b}`;    // JSON [paths...] to delete when round ends
+
     const loadPair  = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
-    const savePair  = (b, red, blue) => { if (red && blue) localStorage.setItem(PAIR_KEY(b), JSON.stringify({ red, blue })); };
+    const savePair  = (b, p) => { if (p?.redUrl && p?.blueUrl) localStorage.setItem(PAIR_KEY(b), JSON.stringify(p)); };
     const clearPair = (b) => localStorage.removeItem(PAIR_KEY(b));
 
-    // ====== DOM ======
     const elRemain = document.getElementById("tRemain");
     const elMeta   = document.getElementById("tMeta");
     const imgA     = document.getElementById("imgA");
@@ -130,69 +132,18 @@
     btnClose.onclick = () => overlay.style.display = 'none';
     function openFull(which){ fullImg.src = which==='A'?imgA.src:imgB.src; overlay.style.display='flex'; }
 
-    // ====== QUEUE HELPERS ======
-    // (1) NEW: Ask the bucket Edge Function for N next items (preferred path)
-    async function fetchBucketQueue(n=2){
-      try{
-        // POST to make this operation "claim" (pop) the items server-side
-        const res = await fetch(FN_QUEUE_LIST, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ n })
-        });
-        if (!res.ok) {
-          const msg = await res.text();
-          console.warn('[QUEUE][bucket] non-200', msg);
-          return [];
-        }
-        const json = await res.json();
-        // Accept a few common shapes:
-        //  - { urls: [signedUrl,...] }
-        //  - { items: [{ url }, { url }] }
-        //  - { data: [ "...signedUrl..." ] }
-        const urls =
-          (Array.isArray(json?.urls) && json.urls) ||
-          (Array.isArray(json?.data) && json.data) ||
-          (Array.isArray(json?.items) && json.items.map(i=>i.url).filter(Boolean)) ||
-          [];
-        const cleaned = urls.filter(Boolean).slice(0, n);
-        if (cleaned.length) console.log('[QUEUE][bucket] pulled', cleaned.length);
-        return cleaned;
-      }catch(err){
-        console.warn('[QUEUE][bucket] error', err);
-        return [];
-      }
-    }
-
-    // (2) Existing table fallback (kept exactly as-is, just wrapped) — excludes null/empty URLs
-    async function fetchPendingQueueFromTable(n=2){
-      const { data, error } = await supabase
-        .from('art_queue')
-        .select('id,image_url,created_at')
-        .eq('status','pending')
-        .not('image_url','is',null)
-        .neq('image_url','')
-        .order('created_at',{ ascending:true })
-        .limit(n);
-      if (error) { console.warn('[QUEUE][table] fetch error', error); return []; }
-      const rows = (data||[]).filter(r=>!!r.image_url);
-      console.log('[QUEUE][table] fetched', rows.map(r=>r.id).join(','));
-      return rows;
-    }
-
-    // (2b) Table fallback "mark used"
-    async function markUsed(ids=[], baseIso){
-      if (!ids.length) return;
-      const { error } = await supabase
-        .from('art_queue')
-        .update({ status:'used', used_at:new Date().toISOString(), used_in_base: baseIso })
-        .in('id', ids);
-      if (error) console.warn('[QUEUE][table] markUsed error (check RLS/columns)', error);
-      else console.log('[QUEUE][table] markUsed ok', ids.join(','));
-    }
-
-    // ====== Voting ======
     function setVoteButtons(enabled){ btnA.disabled = btnB.disabled = !enabled; }
+
+    // --- Placeholder when bucket is empty ---
+    function tbdPlaceholder() {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960">
+        <rect width="100%" height="100%" fill="#000"/>
+        <text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace" text-anchor="middle" dominant-baseline="middle">? tbd</text>
+      </svg>`;
+      return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    }
+
+    // --- Voting via Edge Function (unchanged logic) ---
     async function sendVote(color){
       const res = await fetch(FUNCTION_URL, {
         method:'POST',
@@ -220,73 +171,109 @@
       winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
     }
 
-    // ====== Round State ======
-    let state = { ends_at:null, base_iso:null, red_url:'', blue_url:'', red_count:0, blue_count:0, last_winner:null };
+    // --- Storage: list two oldest files from the bucket (optionally inside UPLOAD_DIR) ---
+    async function listTwoFromBucket() {
+      // 1) list files in target directory (non-recursive). If you keep subfolders-by-date,
+      //    set UPLOAD_DIR to that folder name or move uploads into a single folder like "incoming".
+      const { data, error } = await supabase
+        .storage.from(BUCKET)
+        .list(UPLOAD_DIR, { limit: 100, offset: 0, sortBy: { column: 'updated_at', order: 'asc' } });
+      if (error) { console.warn('[STORAGE] list error', error); return []; }
+      const files = (data || []).filter(item => !item.id || item.name) // items are files or folder entries
+        .map(item => ({ name: item.name, updated_at: item.updated_at, id: item.id }))
+        // folders may appear; keep only items that look like files (naively by having an extension)
+        .filter(f => /\.[a-z0-9]+$/i.test(f.name));
+
+      // 2) sort again in JS by updated/created just to be safe
+      files.sort((a,b) => new Date(a.updated_at||0) - new Date(b.updated_at||0));
+      // 3) take first two
+      return files.slice(0, 2).map(f => ({
+        path: (UPLOAD_DIR ? `${UPLOAD_DIR}/` : '') + f.name
+      }));
+    }
+
+    function publicUrl(path){
+      const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      return data.publicUrl;
+    }
+
+    async function deletePaths(paths=[]){
+      if (!paths.length) return;
+      const { error } = await supabase.storage.from(BUCKET).remove(paths);
+      if (error) console.warn('[STORAGE] delete error', error);
+      else console.log('[STORAGE] deleted', paths);
+    }
+
+    // --- Round state machine ---
+    let state = { ends_at:null, base_iso:null, red_count:0, blue_count:0, last_winner:null };
     let fetching = false;
 
-    async function fetchState(forceQueue=false){
+    async function fetchState(forcePull=false){
       if (fetching) return; fetching = true;
       try{
         const res = await fetch(FUNCTION_URL);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'GET failed');
 
-        const newRound = state.base_iso && state.base_iso !== data.base_iso;
+        const prevBase = state.base_iso;
+        const newRound = prevBase && prevBase !== data.base_iso;
         state = data;
 
-        let red = state.red_url, blue = state.blue_url;
+        // If we just crossed 0 → new base, delete the files that were used in the previous base
+        if (newRound) {
+          const toDelete = JSON.parse(localStorage.getItem(DELETE_KEY(prevBase) || 'null') || 'null');
+          if (Array.isArray(toDelete) && toDelete.length) {
+            deletePaths(toDelete).catch(()=>{});
+            localStorage.removeItem(DELETE_KEY(prevBase));
+            localStorage.removeItem(CLAIM_KEY(prevBase));
+            clearPair(prevBase);
+          }
+          // also reset vote buttons for the new round
+          setVoteButtons(!hasVoted(state.base_iso));
+        }
 
+        // Determine which images to show this round
+        let redUrl, blueUrl;
+
+        // Use locked pair if present
         const locked = loadPair(state.base_iso);
-        if (locked?.red && locked?.blue){ red = locked.red; blue = locked.blue; console.log('[PAIR] using locked', state.base_iso); }
+        if (locked?.redUrl && locked?.blueUrl){
+          redUrl = locked.redUrl; blueUrl = locked.blueUrl;
+          console.log('[PAIR] using locked pair for', state.base_iso);
+        }
 
         const alreadyClaimed = !!localStorage.getItem(CLAIM_KEY(state.base_iso));
-        const shouldTryQueue = forceQueue || newRound || (!alreadyClaimed && !locked);
-        console.log('[ROUND]', state.base_iso, {newRound, alreadyClaimed, forceQueue, hasLocked: !!locked});
+        const shouldPullFromBucket = forcePull || newRound || (!alreadyClaimed && !locked);
 
-        if (shouldTryQueue){
-          // 1) Try BUCKET queue first
-          const bucketUrls = await fetchBucketQueue(2);
-          if (bucketUrls.length >= 2){
-            red = bucketUrls[0];
-            blue = bucketUrls[1];
+        if (shouldPullFromBucket){
+          const picks = await listTwoFromBucket();
+          if (picks.length >= 2) {
+            const redPath = picks[0].path;
+            const bluePath = picks[1].path;
+            redUrl = publicUrl(redPath);
+            blueUrl = publicUrl(bluePath);
 
-            // lock locally so we never flicker even if network later fails
+            // Lock immediately so the UI is stable even if delete later fails
             localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
-            savePair(state.base_iso, red, blue);
-            console.log('[PAIR] locked from bucket', { red, blue });
-
-            // update UI immediately
-            imgA.src = red; imgB.src = blue;
+            savePair(state.base_iso, { redUrl, blueUrl, redPath, bluePath });
+            localStorage.setItem(DELETE_KEY(state.base_iso), JSON.stringify([redPath, bluePath]));
+            console.log('[PAIR] locked from bucket', { redPath, bluePath });
           } else {
-            // 2) Fall back to TABLE queue exactly as before
-            const q = await fetchPendingQueueFromTable(2);
-            const urls = q.map(r=>r.image_url).filter(Boolean);
-            if (urls.length >= 2){
-              red = urls[0]; blue = urls[1];
-
-              localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
-              savePair(state.base_iso, red, blue);
-              console.log('[PAIR] locked from table', { red, blue });
-
-              imgA.src = red; imgB.src = blue;
-
-              // table path: mark used in the background
-              markUsed(q.slice(0,2).map(r=>r.id), state.base_iso);
-            } else {
-              console.log('[QUEUE] none available → keep defaults from timer function');
-            }
+            console.log('[STORAGE] not enough images — using placeholders as needed');
           }
         }
 
-        if (!red)  red  = state.red_url;
-        if (!blue) blue = state.blue_url;
+        // Fall back to whatever server provided (if you keep defaults there) then to TBD
+        if (!redUrl)  redUrl  = tbdPlaceholder();
+        if (!blueUrl) blueUrl = tbdPlaceholder();
 
-        imgA.src = red; imgB.src = blue;
-        cA.textContent = state.red_count; cB.textContent = state.blue_count;
-        elMeta.textContent = `cycle: ${state.base_iso}`;
+        // Push to UI
+        document.getElementById('imgA').src = redUrl;
+        document.getElementById('imgB').src = blueUrl;
+        document.getElementById('countA').textContent = state.red_count;
+        document.getElementById('countB').textContent = state.blue_count;
+        document.getElementById('tMeta').textContent = `cycle: ${state.base_iso}`;
         showWinner(state.last_winner);
-
-        if (newRound) setVoteButtons(!hasVoted(state.base_iso));
       }catch(e){
         console.error(e);
       }finally{
@@ -297,11 +284,14 @@
     function tick(){
       if (!state?.ends_at) return requestAnimationFrame(tick);
       const remain = new Date(state.ends_at).getTime() - Date.now();
-      elRemain.textContent = (Math.max(0, remain)/1000).toFixed(1);
+      document.getElementById('tRemain').textContent = (Math.max(0, remain)/1000).toFixed(1);
+
+      // When we’re ~0 and server flips base shortly after, just keep polling
       if (remain <= -900) fetchState().catch(()=>{});
       requestAnimationFrame(tick);
     }
 
+    // Controls
     document.getElementById('forceQueue').addEventListener('click', async ()=>{
       if (!state?.base_iso) return;
       localStorage.removeItem(CLAIM_KEY(state.base_iso));
@@ -314,11 +304,12 @@
       await fetchState(false);
     });
 
+    // Boot
     setInterval(()=> fetchState().catch(()=>{}), 4000);
     (async()=>{ await fetchState(); tick(); })();
 
-    // expose for your debugger if needed
-    window.__match = { fetchState };
+    // for your overlay button
+    window.openFull = (w)=>{ openFull(w); };
   </script>
 </body>
 </html>
