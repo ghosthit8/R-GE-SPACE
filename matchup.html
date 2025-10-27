@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (Storage-Only, one-time-use)</title>
+  <title>Rage Space — Matchup (Storage-Only, recursive)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -95,9 +95,9 @@
 
     // --- Storage (bucket) settings ---
     const BUCKET = "art-uploads";
-    // If you keep files inside a folder (e.g. "10/"), set this to that folder path (e.g. "10").
-    // Otherwise leave empty string to use the bucket root.
-    const UPLOAD_DIR = ""; // "" or "incoming" or "10" etc.
+    // If you keep files inside a folder (e.g. "10/"), set this (e.g. "10" or "2025").
+    // Otherwise leave empty string to start at the bucket root.
+    const UPLOAD_DIR = ""; // starting folder; recursive scan will go deeper
 
     // --- Local state / helpers ---
     const RSID_KEY = "rsid_v2";
@@ -171,25 +171,47 @@
       winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
     }
 
-    // --- Storage: list two oldest files from the bucket (optionally inside UPLOAD_DIR) ---
-    async function listTwoFromBucket() {
-      // 1) list files in target directory (non-recursive). If you keep subfolders-by-date,
-      //    set UPLOAD_DIR to that folder name or move uploads into a single folder like "incoming".
-      const { data, error } = await supabase
-        .storage.from(BUCKET)
-        .list(UPLOAD_DIR, { limit: 100, offset: 0, sortBy: { column: 'updated_at', order: 'asc' } });
-      if (error) { console.warn('[STORAGE] list error', error); return []; }
-      const files = (data || []).filter(item => !item.id || item.name) // items are files or folder entries
-        .map(item => ({ name: item.name, updated_at: item.updated_at, id: item.id }))
-        // folders may appear; keep only items that look like files (naively by having an extension)
-        .filter(f => /\.[a-z0-9]+$/i.test(f.name));
+    // --- NEW: recursively list images from all subfolders and take two oldest ---
+    async function listTwoFromBucketRecursive() {
+      const exts = /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i;
 
-      // 2) sort again in JS by updated/created just to be safe
-      files.sort((a,b) => new Date(a.updated_at||0) - new Date(b.updated_at||0));
-      // 3) take first two
-      return files.slice(0, 2).map(f => ({
-        path: (UPLOAD_DIR ? `${UPLOAD_DIR}/` : '') + f.name
-      }));
+      // BFS queue of folders starting at UPLOAD_DIR ("" means root)
+      const queue = [UPLOAD_DIR];
+      const found = []; // { path, updated_at }
+
+      while (queue.length) {
+        const dir = queue.shift();
+        const { data, error } = await supabase
+          .storage.from(BUCKET)
+          .list(dir, { limit: 100, offset: 0, sortBy: { column: "updated_at", order: "asc" } });
+
+        if (error) {
+          console.warn("[STORAGE] list error", dir || "(root)", error);
+          continue;
+        }
+
+        for (const item of (data || [])) {
+          const path = (dir ? `${dir}/` : "") + item.name;
+
+          // If it looks like a file (has an extension), keep it; otherwise assume folder
+          if (exts.test(item.name)) {
+            found.push({ path, updated_at: item.updated_at || null });
+          } else {
+            queue.push(path); // dive deeper
+          }
+        }
+
+        if (found.length > 300) break; // safety cap
+      }
+
+      if (!found.length) return [];
+
+      // Oldest first to "drain" the incoming queue
+      found.sort((a, b) => new Date(a.updated_at || 0) - new Date(b.updated_at || 0));
+
+      const picks = found.slice(0, 2).map(f => ({ path: f.path }));
+      console.log("[STORAGE] recursive picks", picks);
+      return picks;
     }
 
     function publicUrl(path){
@@ -219,7 +241,7 @@
         const newRound = prevBase && prevBase !== data.base_iso;
         state = data;
 
-        // If we just crossed 0 → new base, delete the files that were used in the previous base
+        // If we just crossed 0 → new base, delete files from previous base
         if (newRound) {
           const toDelete = JSON.parse(localStorage.getItem(DELETE_KEY(prevBase) || 'null') || 'null');
           if (Array.isArray(toDelete) && toDelete.length) {
@@ -228,7 +250,6 @@
             localStorage.removeItem(CLAIM_KEY(prevBase));
             clearPair(prevBase);
           }
-          // also reset vote buttons for the new round
           setVoteButtons(!hasVoted(state.base_iso));
         }
 
@@ -246,7 +267,7 @@
         const shouldPullFromBucket = forcePull || newRound || (!alreadyClaimed && !locked);
 
         if (shouldPullFromBucket){
-          const picks = await listTwoFromBucket();
+          const picks = await listTwoFromBucketRecursive(); // 🔁 recursive scan
           if (picks.length >= 2) {
             const redPath = picks[0].path;
             const bluePath = picks[1].path;
@@ -263,7 +284,7 @@
           }
         }
 
-        // Fall back to whatever server provided (if you keep defaults there) then to TBD
+        // Fall back to TBD if still missing
         if (!redUrl)  redUrl  = tbdPlaceholder();
         if (!blueUrl) blueUrl = tbdPlaceholder();
 
@@ -286,7 +307,7 @@
       const remain = new Date(state.ends_at).getTime() - Date.now();
       document.getElementById('tRemain').textContent = (Math.max(0, remain)/1000).toFixed(1);
 
-      // When we’re ~0 and server flips base shortly after, just keep polling
+      // When we’re ~0 and server flips base shortly after, keep polling
       if (remain <= -900) fetchState().catch(()=>{});
       requestAnimationFrame(tick);
     }
@@ -311,223 +332,5 @@
     // for your overlay button
     window.openFull = (w)=>{ openFull(w); };
   </script>
-<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
-<script>
-(function () {
-  const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
-
-  // --- create floating button OUTSIDE the hidden panel ---
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'dbgFloatingBtn';
-  floatBtn.textContent = '🐛 Debug';
-  floatBtn.style.cssText = `
-    position: fixed; right: 8px; bottom: 8px;
-    z-index: 2147483647; background:#000; color:#0f0;
-    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
-    font: 12px/1.1 monospace; cursor:pointer;
-  `;
-  document.body.appendChild(floatBtn);
-
-  // --- panel wrapper (starts hidden) ---
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
-  `;
-
-  const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-  bar.innerHTML = `
-    <span style="color:#6f6">Rage Debug</span>
-    <label>Filter:
-      <select id="dbgFilter">
-        <option value="">All</option>
-        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
-        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
-        <option>ERR</option><option>WARN</option><option>LOG</option>
-      </select>
-    </label>
-    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgDownload">Download</button>
-    <button id="dbgClear">Clear</button>
-    <span style="margin-left:auto"></span>
-    <button id="dbgClose">✕</button>
-  `;
-
-  const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-
-  // button wiring
-  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-  // controls
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
-  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
-  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-  bar.querySelector('#dbgDownload').onclick = () => {
-    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
-    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  };
-
-  // ring buffer + rendering
-  let buffer = [];
-  function push(kind, msg, extra) {
-    if (!recordChk.checked) return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
-    if (buffer.length > MAX_LINES) buffer.shift();
-    const f = filterSel.value;
-    if (!f || f === kind) addLine({kind, line});
-  }
-  function addLine(r){
-    const div = document.createElement('div');
-    div.textContent = r.line;
-    if (r.kind === 'ERR') div.style.color = '#f88';
-    else if (r.kind === 'WARN') div.style.color = '#ff8';
-    else if (r.kind === 'EDGE') div.style.color = '#8ff';
-    else if (r.kind === 'NET')  div.style.color = '#8cf';
-    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-    list.appendChild(div); list.scrollTop = list.scrollHeight;
-  }
-  function render(){
-    list.innerHTML = '';
-    const f = filterSel.value;
-    for (const r of buffer) if (!f || f === r.kind) addLine(r);
-  }
-  filterSel.onchange = render;
-
-  // console hooks
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-
-  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-
-  // visibility & UI observers
-  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-  const q = (id) => document.getElementById(id);
-
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
-
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
-    let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
-        const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
-        last = el.textContent; lastAt = now;
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  })();
-
-  // fetch tracer
-  const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
-    const start = performance.now();
-    const method = (opts && opts.method) || 'GET';
-    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
-    push(tag, `${method} ${url}`);
-    try {
-      const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-      return res;
-    } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
-      throw e;
-    }
-  };
-
-  // timers & rAF
-  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-
-  const timers = new Map();
-  window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-  window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-  window.requestAnimationFrame = function(fn){
-    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
-  };
-  window.cancelAnimationFrame = function(id){ _caf(id); };
-
-  // image load tracing
-  function hookImg(img){
-    if (!img || img.__dbgHooked) return;
-    img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
-  }
-  Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
-      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
-
-  // bracket observer
-  const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
-      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
-  }
-
-  // public helpers
-  window.RageDebug = {
-    log: (k, m) => push(k||'LOG', m||''),
-    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
-    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
-    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
-  };
-
-  // small banner
-  (console.log||(()=>{}))('Debugger ready');
-})();
-</script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
