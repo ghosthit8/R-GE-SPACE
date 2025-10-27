@@ -281,11 +281,20 @@ function computeStage(){ return 'R32'; } // leave as-is for now
 async function syncState(){
   try{
     const s = normalize(await callEdge());
+
+    // NEW: capture previous marker BEFORE update (to detect flips)
+    const __prev = serverPhaseEndISO;
+
     serverPhaseEndISO = s.phase_end_at; if (!serverPhaseEndISO && s.base_iso) serverPhaseEndISO = s.base_iso;
     remainingSec = s.remaining_sec;
     periodSec = s.period_sec ?? 20;
     paused = !!s.paused;
     lastSyncAt = Date.now();
+
+    // NEW: if round flipped → refresh the queue immediately
+    if (__prev && serverPhaseEndISO && __prev !== serverPhaseEndISO) {
+      try { await renderQueue(); } catch {}
+    }
 
     stageEl.textContent = computeStage();
     log('CLOCK: clock — →', (typeof remainingSec==='number')?remainingSec:'—', `(Δdom ${(performance.now()/1000).toFixed(2)}s)`);
@@ -315,9 +324,6 @@ function loop(){
     if (Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
   }
   raf = requestAnimationFrame(loop);
-  // keep your vibe of rAF logging
-  // (short, doesn't spam massive numbers)
-  // log('TIMER: rAF', `${(performance.now()%1).toFixed(1)}ms`);
 }
 
 /* Keep your style of periodic logging */
@@ -412,8 +418,21 @@ async function renderQueue(){
 (async()=>{
   paintAuth(await uid());
   supabase.auth.onAuthStateChange((_e, session)=> paintAuth(session?.user?.id || null));
+
+  // First paint
   await Promise.all([renderQueue(), syncState()]);
   loop();
+
+  // NEW: keep the queue UI in sync every 5s (covers when matchup consumes rows)
+  setInterval(()=> renderQueue().catch(()=>{}), 5000);
+
+  // NEW: when tab becomes visible again, refresh immediately
+  document.addEventListener('visibilitychange', ()=>{
+    if (document.visibilityState === 'visible') {
+      renderQueue().catch(()=>{});
+      syncState().catch(()=>{});
+    }
+  });
 })();
 </script>
 <!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
@@ -636,3 +655,4 @@ async function renderQueue(){
 <!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
+```1
