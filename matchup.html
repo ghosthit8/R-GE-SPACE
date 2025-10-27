@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (Storage-Only, recursive + 0s delete)</title>
+  <title>Rage Space — Matchup (Storage-Only, recursive + 0s delete + folder prune)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -20,7 +20,7 @@
     .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid #20242a; }
     .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
     .counts { font-variant-numeric: tabular-nums; font-weight:700; }
-    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:var(--fg); padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
+    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
     .btn.ghost { color:#a0aec0; }
     button.vote { padding:10px 14px; }
     button.vote:disabled { opacity:.6; cursor:default; }
@@ -208,6 +208,45 @@
       else console.log('[STORAGE] deleted', paths);
     }
 
+    // --- NEW: Recursively delete empty folders in the bucket ---
+    async function deleteEmptyFolders(dir = "") {
+      const { data, error } = await supabase.storage.from(BUCKET).list(dir, { limit: 100 });
+      if (error) { console.warn("[STORAGE] list error while cleaning", dir || "(root)", error); return; }
+      if (!data || !data.length) return;
+
+      let sawFile = false;
+
+      for (const item of data) {
+        const path = dir ? `${dir}/${item.name}` : item.name;
+
+        // Heuristic: if name has an extension, treat as file; otherwise treat as a folder
+        if (/\.[a-z0-9]+$/i.test(item.name)) {
+          sawFile = true;
+        } else {
+          // Dive into subfolder
+          await deleteEmptyFolders(path);
+
+          // Re-check subfolder contents; if now empty, try removing the folder placeholder
+          const { data: check, error: checkErr } = await supabase.storage.from(BUCKET).list(path, { limit: 1 });
+          if (!checkErr && (!check || check.length === 0)) {
+            const { error: remErr } = await supabase.storage.from(BUCKET).remove([path]);
+            if (remErr) console.warn("[STORAGE] failed to remove empty folder", path, remErr);
+            else console.log("[STORAGE] removed empty folder", path);
+          }
+        }
+      }
+
+      // If current dir appears to have no files and (after recursion) no subfolders, remove it too
+      if (!sawFile && dir) {
+        const { data: check2 } = await supabase.storage.from(BUCKET).list(dir, { limit: 1 });
+        if (!check2 || check2.length === 0) {
+          const { error: remErr } = await supabase.storage.from(BUCKET).remove([dir]);
+          if (remErr) console.warn("[STORAGE] failed to remove folder", dir, remErr);
+          else console.log("[STORAGE] removed empty folder", dir);
+        }
+      }
+    }
+
     // --- Round state ---
     let state = { ends_at:null, base_iso:null, red_count:0, blue_count:0, last_winner:null };
     let fetching = false;
@@ -228,6 +267,7 @@
           const toDelete = JSON.parse(localStorage.getItem(DELETE_KEY(prevBase) || 'null') || 'null');
           if (Array.isArray(toDelete) && toDelete.length) {
             deletePaths(toDelete).catch(()=>{});
+            deleteEmptyFolders().catch(()=>{}); // <— prune empty folders
           }
           localStorage.removeItem(DELETE_KEY(prevBase));
           localStorage.removeItem(CLAIM_KEY(prevBase));
@@ -295,6 +335,7 @@
           const paths = raw ? JSON.parse(raw) : [];
           if (Array.isArray(paths) && paths.length) {
             deletePaths(paths).catch(()=>{});
+            deleteEmptyFolders().catch(()=>{}); // <— prune empty folders
             console.log('[STORAGE] deleted at 0s', paths);
           }
         } catch(e){ console.warn('delete at 0s failed', e); }
