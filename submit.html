@@ -234,7 +234,6 @@ async function callEdge(){
   const raw = await res.text();
   const dt = (performance.now()-t0).toFixed(0);
   log(`EDGE: GET ${EDGE_URL} → ${res.status} (${dt}ms)`);
-  // Show a snippet of the raw body so we can see actual keys
   const preview = raw.length>200 ? raw.slice(0,200)+'…' : raw;
   log('EDGE: body ~200b =', preview);
 
@@ -244,7 +243,6 @@ async function callEdge(){
 }
 
 function normalize(s){
-  // Mirror your debugger style so it appears in your feed
   try { log('[EDGE] raw state', JSON.stringify(s)); } catch {}
   const phaseEnd =
     s.phase_end_at || s.phaseEndAt || s.next_at || s.next_iso || s.base_iso || null;
@@ -282,7 +280,7 @@ async function syncState(){
   try{
     const s = normalize(await callEdge());
 
-    // NEW: capture previous marker BEFORE update (to detect flips)
+    // detect flips
     const __prev = serverPhaseEndISO;
 
     serverPhaseEndISO = s.phase_end_at; if (!serverPhaseEndISO && s.base_iso) serverPhaseEndISO = s.base_iso;
@@ -291,7 +289,7 @@ async function syncState(){
     paused = !!s.paused;
     lastSyncAt = Date.now();
 
-    // NEW: if round flipped → refresh the queue immediately
+    // when the round flips, re-render queue immediately
     if (__prev && serverPhaseEndISO && __prev !== serverPhaseEndISO) {
       try { await renderQueue(); } catch {}
     }
@@ -314,10 +312,10 @@ function loop(){
     if (sec<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
   } else if (serverPhaseEndISO) {
     const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
-    clockEl.textContent = String(Math.ceil(rem/1000));
+    const sec = Math.ceil(rem/1000);
+    clockEl.textContent = String(sec);
     if (rem<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
   } else {
-    // Ultimate fallback: local loop based on periodSec (so UI isn't frozen)
     const elapsed = Math.floor(((Date.now()% (periodSec*1000)))/1000);
     const sec = Math.max(0, periodSec - elapsed);
     clockEl.textContent = String(sec);
@@ -414,6 +412,18 @@ async function renderQueue(){
   }
 }
 
+/* ---------- NEW: Realtime queue watch (instant UI updates) ---------- */
+const queueChannel = supabase.channel('queue-watch')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'art_queue' }, (payload) => {
+    const oldS = payload.old?.status, newS = payload.new?.status;
+    // Re-render on any status change; pending/locked/used transitions will reflect immediately
+    if (oldS !== newS) { renderQueue().catch(()=>{}); }
+  })
+  .subscribe();
+
+// Clean up (optional)
+window.addEventListener('beforeunload', ()=> { try { supabase.removeChannel(queueChannel); } catch {} });
+
 /* ---------- Boot ---------- */
 (async()=>{
   paintAuth(await uid());
@@ -423,10 +433,10 @@ async function renderQueue(){
   await Promise.all([renderQueue(), syncState()]);
   loop();
 
-  // NEW: keep the queue UI in sync every 5s (covers when matchup consumes rows)
+  // Safety poll (kept)
   setInterval(()=> renderQueue().catch(()=>{}), 5000);
 
-  // NEW: when tab becomes visible again, refresh immediately
+  // Refresh on visibility regain (kept)
   document.addEventListener('visibilitychange', ()=>{
     if (document.visibilityState === 'visible') {
       renderQueue().catch(()=>{});
@@ -648,11 +658,9 @@ async function renderQueue(){
     markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
   };
 
-  // small banner
   (console.log||(()=>{}))('Debugger ready');
 })();
 </script>
 <!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
-```1
