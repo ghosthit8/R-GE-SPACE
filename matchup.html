@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (Queue-first + Storage fallback + 0s delete + prune)</title>
+  <title>Rage Space — Matchup (Queue-first + RPC + 0s finalize)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -29,7 +29,7 @@
     .winner b { color:#39ff14; }
     .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
     .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
-    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid #39ff14; color:#39ff14; padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
+    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
@@ -43,7 +43,7 @@
         <div class="state" id="tMeta">syncing…</div>
       </div>
       <div class="row">
-        <button id="forceQueue" class="btn ghost">Pull From Queue/Bucket Now</button>
+        <button id="forceQueue" class="btn ghost">Pull Now</button>
         <button id="resetPair" class="btn ghost">Reset Pair</button>
         <a class="backbtn" href="menu.html">← Menu</a>
         <a class="linkbtn" href="winners.html">Winners</a>
@@ -76,7 +76,7 @@
 
     <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
     <div class="hint">
-      Queue-first: pulls oldest <code>art_queue.status='pending'</code> rows (URLs or Storage). Fallback to bucket (recursive). Deletes used bucket files at 0s and prunes empty folders.
+      Queue-first (atomic claim) → fallback to bucket. At 0s: delete used bucket files and mark claimed queue rows as <code>used</code>. Safety cleanup on base flip.
     </div>
   </div>
 
@@ -92,9 +92,9 @@
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
-    // --- Storage (bucket) settings ---
+    // --- Storage ---
     const BUCKET = "art-uploads";
-    const UPLOAD_DIR = ""; // start at root; recursive scan will dive
+    const UPLOAD_DIR = ""; // recursive scan start
 
     // --- Local state / helpers ---
     const RSID_KEY = "rsid_v2";
@@ -105,9 +105,9 @@
     const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
 
     const PAIR_KEY   = (b) => `pair:${b}`;                // { redUrl, blueUrl, redPath?, bluePath?, redQueueId?, blueQueueId? }
-    const CLAIM_KEY  = (b) => `bucket_claimed:${b}`;      // "1" when we've chosen images for this round
-    const DELETE_KEY = (b) => `bucket_to_delete:${b}`;    // JSON [paths...] (only bucket files)
-    const ZERO_DELETE_DID = (b) => `zero_deleted:${b}`;   // flag so 0s-delete runs once per base
+    const CLAIM_KEY  = (b) => `bucket_claimed:${b}`;      // "1" when we've chosen images this round
+    const DELETE_KEY = (b) => `bucket_to_delete:${b}`;    // JSON [paths...] (bucket only)
+    const ZERO_DELETE_DID = (b) => `zero_deleted:${b}`;   // run once per base
 
     const loadPair  = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
     const savePair  = (b, p) => { if (p?.redUrl && p?.blueUrl) localStorage.setItem(PAIR_KEY(b), JSON.stringify(p)); };
@@ -125,20 +125,17 @@
     const overlay  = document.getElementById("overlay");
     const fullImg  = document.getElementById("fullImg");
     const btnClose = document.getElementById("closeFull");
-    document.getElementById('forceQueue').onclick = ()=> fetchState(true);
-    document.getElementById('resetPair').onclick = async ()=>{
-      if (!state?.base_iso) return;
-      clearPair(state.base_iso);
-      localStorage.removeItem(CLAIM_KEY(state.base_iso));
-      await fetchState(false);
-    };
+    const forceBtn = document.getElementById("forceQueue");
+    const resetBtn = document.getElementById("resetPair");
+
     btnClose.onclick = () => overlay.style.display = 'none';
     function openFull(which){ fullImg.src = which==='A'?imgA.src:imgB.src; overlay.style.display='flex'; }
     window.openFull = (w)=>{ openFull(w); };
 
     function setVoteButtons(enabled){ btnA.disabled = btnB.disabled = !enabled; }
+    btnA.onclick = () => !btnA.disabled && sendVote('red');
+    btnB.onclick = () => !btnB.disabled && sendVote('blue');
 
-    // --- Placeholder (used if no images) ---
     function tbdPlaceholder() {
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960">
         <rect width="100%" height="100%" fill="#000"/>
@@ -147,7 +144,6 @@
       return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
     }
 
-    // --- Voting via Edge Function (server handles rounds) ---
     async function sendVote(color){
       const res = await fetch(FUNCTION_URL, {
         method:'POST',
@@ -164,8 +160,6 @@
         cB.textContent = data.blue_count;
       }
     }
-    btnA.onclick = () => !btnA.disabled && sendVote('red');
-    btnB.onclick = () => !btnB.disabled && sendVote('blue');
 
     function showWinner(winner){
       if (!winner){ winnerText.textContent='No winner yet — first round in progress.'; return; }
@@ -175,83 +169,21 @@
       winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
     }
 
-    // --- Helpers for Storage URL detection ---
-    const storagePrefix = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
-    const isStorageUrl = (u) => typeof u === 'string' && u.startsWith(storagePrefix);
-    const pathFromPublicUrl = (u) => isStorageUrl(u) ? u.slice(storagePrefix.length) : null;
-
-    // --- Queue-first: fetch oldest 2 pending queue rows ---
-    async function listFromQueue(limit = 2) {
-      const { data, error } = await supabase
-        .from('art_queue')
-        .select('id,image_url,created_at')
-        .eq('status','pending')
-        .order('created_at', { ascending: true })
-        .limit(limit);
-      if (error) { console.warn('[QUEUE] list error', error); return []; }
-      return (data || []).map(r => ({
-        queueId: r.id,
-        url: r.image_url,
-        path: pathFromPublicUrl(r.image_url) // null for external URLs
-      }));
-    }
-
-    // Mark queue rows consumed (so they don’t re-appear)
-    async function consumeQueue(ids = []) {
-      if (!ids.length) return;
-      const { error } = await supabase
-        .from('art_queue')
-        .update({ status: 'used' })
-        .in('id', ids);
-      if (error) console.warn('[QUEUE] mark used error', error);
-      else console.log('[QUEUE] marked used', ids);
-    }
-
-    // --- Recursive bucket scan (fallback) ---
-    async function listTwoFromBucketRecursive() {
-      const exts = /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i;
-      const queue = [UPLOAD_DIR];
-      const found = []; // { path, updated_at }
-
-      while (queue.length) {
-        const dir = queue.shift();
-        const { data, error } = await supabase
-          .storage.from(BUCKET)
-          .list(dir, { limit: 100, offset: 0, sortBy: { column: "updated_at", order: "asc" } });
-        if (error) { console.warn("[STORAGE] list error", dir||"(root)", error); continue; }
-        for (const item of (data || [])) {
-          const path = (dir ? `${dir}/` : "") + item.name;
-          if (/\.[a-z0-9]+$/i.test(item.name)) {
-            found.push({ path, updated_at: item.updated_at || null });
-          } else {
-            queue.push(path);
-          }
-        }
-        if (found.length > 400) break; // safety cap
-      }
-      if (!found.length) return [];
-      found.sort((a,b) => new Date(a.updated_at||0) - new Date(b.updated_at||0)); // oldest first
-      return found.slice(0,2).map(f => ({ path: f.path, url: publicUrl(f.path) }));
-    }
-
+    // ---------- Storage helpers ----------
     function publicUrl(path){
       const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
       return data.publicUrl;
     }
-
     async function deletePaths(paths=[]){
       if (!paths.length) return;
       const { error } = await supabase.storage.from(BUCKET).remove(paths);
       if (error) console.warn('[STORAGE] delete error', error);
       else console.log('[STORAGE] deleted', paths);
     }
-
-    // Recursively delete empty folders
     async function deleteEmptyFolders(dir = "") {
       const { data, error } = await supabase.storage.from(BUCKET).list(dir, { limit: 100 });
       if (error) { console.warn("[STORAGE] list error while cleaning", dir || "(root)", error); return; }
       if (!data || !data.length) return;
-
       let sawFile = false;
       for (const item of data) {
         const path = dir ? `${dir}/${item.name}` : item.name;
@@ -276,15 +208,96 @@
         }
       }
     }
+    async function listTwoFromBucketRecursive() {
+      const queue = [UPLOAD_DIR];
+      const found = [];
+      while (queue.length) {
+        const dir = queue.shift();
+        const { data, error } = await supabase
+          .storage.from(BUCKET)
+          .list(dir, { limit: 100, offset: 0, sortBy: { column: "updated_at", order: "asc" } });
+        if (error) { console.warn("[STORAGE] list error", dir||"(root)", error); continue; }
+        for (const item of (data || [])) {
+          const path = (dir ? `${dir}/` : "") + item.name;
+          if (/\.[a-z0-9]+$/i.test(item.name)) found.push({ path, updated_at: item.updated_at || null, url: publicUrl(path) });
+          else queue.push(path);
+        }
+        if (found.length > 400) break;
+      }
+      if (!found.length) return [];
+      found.sort((a,b) => new Date(a.updated_at||0) - new Date(b.updated_at||0));
+      return found.slice(0,2);
+    }
 
-    // --- Round state ---
+    // ---------- Queue claim: RPC first, fallback to non-atomic ----------
+    async function claimTwoFromQueue() {
+      // Try RPC (requires you created public.claim_two_queue_items())
+      let rpcOk = false;
+      try {
+        const { data, error } = await supabase.rpc('claim_two_queue_items');
+        if (!error && Array.isArray(data) && data.length) {
+          rpcOk = true;
+          return data.map(r => ({
+            queueId: r.id,
+            url: r.image_url,
+            path: (()=>{
+              const prefix = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
+              return (typeof r.image_url === 'string' && r.image_url.startsWith(prefix))
+                ? r.image_url.slice(prefix.length) : null;
+            })()
+          }));
+        }
+        if (error) console.warn('[QUEUE] RPC error (will fallback)', error);
+      } catch (e) {
+        console.warn('[QUEUE] RPC threw (will fallback)', e);
+      }
+      // Fallback: non-atomic (best effort) select→lock
+      try {
+        const { data: cand, error: qErr } = await supabase
+          .from('art_queue')
+          .select('id,image_url,created_at,status')
+          .eq('status','pending')
+          .order('created_at', { ascending: true })
+          .limit(2);
+        if (qErr || !cand?.length) return [];
+        const ids = cand.map(r=>r.id);
+        // Try to lock them (set status='locked' where still pending)
+        const { error: uErr } = await supabase
+          .from('art_queue')
+          .update({ status: 'locked' })
+          .in('id', ids)
+          .eq('status','pending');
+        if (uErr) { console.warn('[QUEUE] fallback lock error', uErr); return []; }
+        // Re-read those rows to ensure we own them
+        const { data: locked } = await supabase.from('art_queue').select('id,image_url,status').in('id', ids);
+        const ours = (locked||[]).filter(r => r.status === 'locked');
+        if (ours.length < 2) return [];
+        return ours.slice(0,2).map(r=>({
+          queueId: r.id,
+          url: r.image_url,
+          path: (()=>{
+            const prefix = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
+            return (typeof r.image_url === 'string' && r.image_url.startsWith(prefix))
+              ? r.image_url.slice(prefix.length) : null;
+          })()
+        }));
+      } catch(e){ console.warn('[QUEUE] fallback claim failed', e); }
+      return [];
+    }
+    async function markQueueUsed(ids = []) {
+      if (!ids.length) return;
+      const { error } = await supabase.from('art_queue').update({ status: 'used' }).in('id', ids);
+      if (error) console.warn('[QUEUE] mark used error', error);
+      else console.log('[QUEUE] marked used', ids);
+    }
+
+    // ---------- Round state ----------
     let state = { ends_at:null, base_iso:null, red_count:0, blue_count:0, last_winner:null };
     let fetching = false;
 
     async function fetchState(forcePull=false){
       if (fetching) return; fetching = true;
       try{
-        // Get current timer state (server advances rounds)  4
         const res = await fetch(FUNCTION_URL);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'GET failed');
@@ -293,13 +306,19 @@
         const newRound = prevBase && prevBase !== data.base_iso;
         state = data;
 
-        // On base flip, backup delete from bucket (if 0s missed)
         if (newRound) {
+          // backup delete of bucket files from previous base
           const toDelete = JSON.parse(localStorage.getItem(DELETE_KEY(prevBase) || 'null') || 'null');
           if (Array.isArray(toDelete) && toDelete.length) {
             deletePaths(toDelete).catch(()=>{});
             deleteEmptyFolders().catch(()=>{});
           }
+          // backup: mark previously locked queue items as used
+          const lockedPrev = loadPair(prevBase);
+          const usedIds = [lockedPrev?.redQueueId, lockedPrev?.blueQueueId].filter(Boolean);
+          if (usedIds.length) await markQueueUsed(usedIds);
+
+          // local cleanup
           localStorage.removeItem(DELETE_KEY(prevBase));
           localStorage.removeItem(CLAIM_KEY(prevBase));
           localStorage.removeItem(ZERO_DELETE_DID(prevBase));
@@ -313,7 +332,7 @@
         // Use locked pair if present
         const locked = loadPair(state.base_iso);
         if (locked?.redUrl && locked?.blueUrl){
-          ({ redUrl, blueUrl, redPath=null, bluePath=null, redQueueId=null, blueQueueId=null } = locked);
+          redUrl = locked.redUrl; blueUrl = locked.blueUrl;
           redPath = locked.redPath || null; bluePath = locked.bluePath || null;
           redQueueId = locked.redQueueId || null; blueQueueId = locked.blueQueueId || null;
           console.log('[PAIR] using locked pair for', state.base_iso);
@@ -323,18 +342,15 @@
         const shouldPull = forcePull || newRound || (!alreadyClaimed && !locked);
 
         if (shouldPull){
-          // 1) Try queue first (covers pasted URLs + uploaded files)
-          const q = await listFromQueue(2);
-          let picks = [];
+          // 1) Atomic queue claim
+          const q = await claimTwoFromQueue();
           if (q.length >= 2) {
-            picks = q.slice(0,2);
-            redUrl = picks[0].url; blueUrl = picks[1].url;
-            redPath = picks[0].path; bluePath = picks[1].path; // might be null for external URLs
-            redQueueId = picks[0].queueId; blueQueueId = picks[1].queueId;
-            await consumeQueue([redQueueId, blueQueueId]).catch(()=>{});
+            redUrl = q[0].url; blueUrl = q[1].url;
+            redPath = q[0].path; bluePath = q[1].path; // null for external URLs
+            redQueueId = q[0].queueId; blueQueueId = q[1].queueId;
             console.log('[PAIR] locked from queue', { redQueueId, blueQueueId, redPath, bluePath });
           } else {
-            // 2) Fallback to bucket (recursive)
+            // 2) Fallback to bucket
             const b = await listTwoFromBucketRecursive();
             if (b.length >= 2) {
               redUrl = b[0].url; blueUrl = b[1].url;
@@ -345,16 +361,14 @@
             }
           }
 
-          // Lock + remember what to delete (bucket-only)
           if (redUrl && blueUrl) {
             localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
-            const toDel = [redPath, bluePath].filter(Boolean); // only bucket files
+            const toDel = [redPath, bluePath].filter(Boolean);
             if (toDel.length) localStorage.setItem(DELETE_KEY(state.base_iso), JSON.stringify(toDel));
             savePair(state.base_iso, { redUrl, blueUrl, redPath, bluePath, redQueueId, blueQueueId });
           }
         }
 
-        // Fall back to TBD if still missing
         if (!redUrl)  redUrl  = tbdPlaceholder();
         if (!blueUrl) blueUrl = tbdPlaceholder();
 
@@ -377,24 +391,43 @@
       const remain = new Date(state.ends_at).getTime() - Date.now();
       elRemain.textContent = (Math.max(0, remain)/1000).toFixed(1);
 
-      // Delete used bucket files at 0s (once per base). External URLs are skipped automatically.
+      // Finalize at 0s (once per base)
       if (remain <= 0 && state?.base_iso && !localStorage.getItem(ZERO_DELETE_DID(state.base_iso))) {
-        try {
-          const raw = localStorage.getItem(DELETE_KEY(state.base_iso));
-          const paths = raw ? JSON.parse(raw) : [];
-          if (Array.isArray(paths) && paths.length) {
-            deletePaths(paths).catch(()=>{});
-            deleteEmptyFolders().catch(()=>{});
-            console.log('[STORAGE] deleted at 0s', paths);
-          }
-        } catch(e){ console.warn('delete at 0s failed', e); }
-        localStorage.setItem(ZERO_DELETE_DID(state.base_iso), '1');
+        (async () => {
+          try {
+            // bucket delete
+            const raw = localStorage.getItem(DELETE_KEY(state.base_iso));
+            const paths = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(paths) && paths.length) {
+              await deletePaths(paths);
+              await deleteEmptyFolders();
+              console.log('[STORAGE] deleted at 0s', paths);
+            }
+            // queue rows -> used
+            const locked = loadPair(state.base_iso);
+            const usedIds = [locked?.redQueueId, locked?.blueQueueId].filter(Boolean);
+            if (usedIds.length) await markQueueUsed(usedIds);
+          } catch(e){ console.warn('finalize at 0s failed', e); }
+          localStorage.setItem(ZERO_DELETE_DID(state.base_iso), '1');
+        })();
       }
 
-      // Keep polling after 0 so we catch the server base flip
       if (remain <= -900) fetchState().catch(()=>{});
       requestAnimationFrame(tick);
     }
+
+    // Controls
+    document.getElementById('forceQueue').addEventListener('click', async ()=>{
+      if (!state?.base_iso) return;
+      localStorage.removeItem(CLAIM_KEY(state.base_iso));
+      clearPair(state.base_iso);
+      await fetchState(true);
+    });
+    document.getElementById('resetPair').addEventListener('click', async ()=>{
+      if (!state?.base_iso) return;
+      clearPair(state.base_iso);
+      await fetchState(false);
+    });
 
     // Boot
     setInterval(()=> fetchState().catch(()=>{}), 4000);
