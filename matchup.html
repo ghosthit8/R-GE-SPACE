@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (Storage-Only, recursive)</title>
+  <title>Rage Space — Matchup (Storage-Only, recursive + 0s delete)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -77,7 +77,7 @@
     <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
     <div class="hint">
       Timer auto-loops ~60s. Winner decided at 0 (random if tied). One vote per device per round.<br/>
-      Images are pulled from <b>Storage › art-uploads</b>, used once, then deleted when the next round starts.
+      Images are pulled from <b>Storage › art-uploads</b>, used once, then deleted at 0s (with a backup delete on next round).
     </div>
   </div>
 
@@ -95,9 +95,8 @@
 
     // --- Storage (bucket) settings ---
     const BUCKET = "art-uploads";
-    // If you keep files inside a folder (e.g. "10/"), set this (e.g. "10" or "2025").
-    // Otherwise leave empty string to start at the bucket root.
-    const UPLOAD_DIR = ""; // starting folder; recursive scan will go deeper
+    // Optional: start from a top-level folder like "2025"; recursion will go deeper.
+    const UPLOAD_DIR = "";
 
     // --- Local state / helpers ---
     const RSID_KEY = "rsid_v2";
@@ -110,6 +109,7 @@
     const PAIR_KEY   = (b) => `pair:${b}`;                // { redUrl, blueUrl, redPath, bluePath }
     const CLAIM_KEY  = (b) => `bucket_claimed:${b}`;      // "1" when we've chosen images for this round
     const DELETE_KEY = (b) => `bucket_to_delete:${b}`;    // JSON [paths...] to delete when round ends
+    const ZERO_DELETE_DID = (b) => `zero_deleted:${b}`;   // flag so 0s-delete runs once per base
 
     const loadPair  = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
     const savePair  = (b, p) => { if (p?.redUrl && p?.blueUrl) localStorage.setItem(PAIR_KEY(b), JSON.stringify(p)); };
@@ -134,7 +134,7 @@
 
     function setVoteButtons(enabled){ btnA.disabled = btnB.disabled = !enabled; }
 
-    // --- Placeholder when bucket is empty ---
+    // --- Placeholder (used if bucket empty) ---
     function tbdPlaceholder() {
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960">
         <rect width="100%" height="100%" fill="#000"/>
@@ -143,7 +143,7 @@
       return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
     }
 
-    // --- Voting via Edge Function (unchanged logic) ---
+    // --- Voting via Edge Function ---
     async function sendVote(color){
       const res = await fetch(FUNCTION_URL, {
         method:'POST',
@@ -171,47 +171,29 @@
       winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
     }
 
-    // --- NEW: recursively list images from all subfolders and take two oldest ---
+    // --- Recursive bucket scan (BFS) and pick two oldest files anywhere under UPLOAD_DIR ---
     async function listTwoFromBucketRecursive() {
       const exts = /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i;
-
-      // BFS queue of folders starting at UPLOAD_DIR ("" means root)
-      const queue = [UPLOAD_DIR];
-      const found = []; // { path, updated_at }
+      const queue = [UPLOAD_DIR];         // "" means bucket root
+      const found = [];                   // { path, updated_at }
 
       while (queue.length) {
         const dir = queue.shift();
         const { data, error } = await supabase
           .storage.from(BUCKET)
           .list(dir, { limit: 100, offset: 0, sortBy: { column: "updated_at", order: "asc" } });
-
-        if (error) {
-          console.warn("[STORAGE] list error", dir || "(root)", error);
-          continue;
-        }
-
+        if (error) { console.warn("[STORAGE] list error", dir||"(root)", error); continue; }
         for (const item of (data || [])) {
           const path = (dir ? `${dir}/` : "") + item.name;
-
-          // If it looks like a file (has an extension), keep it; otherwise assume folder
-          if (exts.test(item.name)) {
-            found.push({ path, updated_at: item.updated_at || null });
-          } else {
-            queue.push(path); // dive deeper
-          }
+          if (exts.test(item.name)) found.push({ path, updated_at: item.updated_at || null });
+          else queue.push(path); // assume folder; go deeper
         }
-
         if (found.length > 300) break; // safety cap
       }
 
       if (!found.length) return [];
-
-      // Oldest first to "drain" the incoming queue
-      found.sort((a, b) => new Date(a.updated_at || 0) - new Date(b.updated_at || 0));
-
-      const picks = found.slice(0, 2).map(f => ({ path: f.path }));
-      console.log("[STORAGE] recursive picks", picks);
-      return picks;
+      found.sort((a,b) => new Date(a.updated_at||0) - new Date(b.updated_at||0)); // oldest first
+      return found.slice(0,2).map(f => ({ path: f.path }));
     }
 
     function publicUrl(path){
@@ -226,7 +208,7 @@
       else console.log('[STORAGE] deleted', paths);
     }
 
-    // --- Round state machine ---
+    // --- Round state ---
     let state = { ends_at:null, base_iso:null, red_count:0, blue_count:0, last_winner:null };
     let fetching = false;
 
@@ -241,15 +223,16 @@
         const newRound = prevBase && prevBase !== data.base_iso;
         state = data;
 
-        // If we just crossed 0 → new base, delete files from previous base
+        // On base flip, do a backup delete of last round's files in case 0s delete missed
         if (newRound) {
           const toDelete = JSON.parse(localStorage.getItem(DELETE_KEY(prevBase) || 'null') || 'null');
           if (Array.isArray(toDelete) && toDelete.length) {
             deletePaths(toDelete).catch(()=>{});
-            localStorage.removeItem(DELETE_KEY(prevBase));
-            localStorage.removeItem(CLAIM_KEY(prevBase));
-            clearPair(prevBase);
           }
+          localStorage.removeItem(DELETE_KEY(prevBase));
+          localStorage.removeItem(CLAIM_KEY(prevBase));
+          localStorage.removeItem(ZERO_DELETE_DID(prevBase));
+          clearPair(prevBase);
           setVoteButtons(!hasVoted(state.base_iso));
         }
 
@@ -267,14 +250,13 @@
         const shouldPullFromBucket = forcePull || newRound || (!alreadyClaimed && !locked);
 
         if (shouldPullFromBucket){
-          const picks = await listTwoFromBucketRecursive(); // 🔁 recursive scan
+          const picks = await listTwoFromBucketRecursive();
           if (picks.length >= 2) {
-            const redPath = picks[0].path;
+            const redPath  = picks[0].path;
             const bluePath = picks[1].path;
-            redUrl = publicUrl(redPath);
+            redUrl  = publicUrl(redPath);
             blueUrl = publicUrl(bluePath);
-
-            // Lock immediately so the UI is stable even if delete later fails
+            // Lock and remember paths to delete
             localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
             savePair(state.base_iso, { redUrl, blueUrl, redPath, bluePath });
             localStorage.setItem(DELETE_KEY(state.base_iso), JSON.stringify([redPath, bluePath]));
@@ -284,16 +266,15 @@
           }
         }
 
-        // Fall back to TBD if still missing
         if (!redUrl)  redUrl  = tbdPlaceholder();
         if (!blueUrl) blueUrl = tbdPlaceholder();
 
         // Push to UI
-        document.getElementById('imgA').src = redUrl;
-        document.getElementById('imgB').src = blueUrl;
-        document.getElementById('countA').textContent = state.red_count;
-        document.getElementById('countB').textContent = state.blue_count;
-        document.getElementById('tMeta').textContent = `cycle: ${state.base_iso}`;
+        imgA.src = redUrl;
+        imgB.src = blueUrl;
+        cA.textContent = state.red_count;
+        cB.textContent = state.blue_count;
+        elMeta.textContent = `cycle: ${state.base_iso}`;
         showWinner(state.last_winner);
       }catch(e){
         console.error(e);
@@ -305,9 +286,22 @@
     function tick(){
       if (!state?.ends_at) return requestAnimationFrame(tick);
       const remain = new Date(state.ends_at).getTime() - Date.now();
-      document.getElementById('tRemain').textContent = (Math.max(0, remain)/1000).toFixed(1);
+      elRemain.textContent = (Math.max(0, remain)/1000).toFixed(1);
 
-      // When we’re ~0 and server flips base shortly after, keep polling
+      // 🔥 Delete the two used images exactly at 0s (once per base)
+      if (remain <= 0 && state?.base_iso && !localStorage.getItem(ZERO_DELETE_DID(state.base_iso))) {
+        try {
+          const raw = localStorage.getItem(DELETE_KEY(state.base_iso));
+          const paths = raw ? JSON.parse(raw) : [];
+          if (Array.isArray(paths) && paths.length) {
+            deletePaths(paths).catch(()=>{});
+            console.log('[STORAGE] deleted at 0s', paths);
+          }
+        } catch(e){ console.warn('delete at 0s failed', e); }
+        localStorage.setItem(ZERO_DELETE_DID(state.base_iso), '1');
+      }
+
+      // Keep polling after 0 so we catch the server base flip
       if (remain <= -900) fetchState().catch(()=>{});
       requestAnimationFrame(tick);
     }
