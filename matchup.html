@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (Queue-first + RPC + 0s finalize)</title>
+  <title>Rage Space — Matchup (Queue-first + Hybrid + 0s finalize)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -76,7 +76,7 @@
 
     <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
     <div class="hint">
-      Queue-first (atomic claim) → fallback to bucket. At 0s: delete used bucket files and mark claimed queue rows as <code>used</code>. Safety cleanup on base flip.
+      Hybrid picker: **prefer queue**, top-up from bucket if only one pending. At 0s delete used files, mark queue rows <code>used</code>, and prune empty folders.
     </div>
   </div>
 
@@ -208,10 +208,12 @@
         }
       }
     }
-    async function listTwoFromBucketRecursive() {
+
+    // Return up to N files (oldest first) from bucket recursively
+    async function listFromBucketRecursive(maxCount = 10) {
       const queue = [UPLOAD_DIR];
       const found = [];
-      while (queue.length) {
+      while (queue.length && found.length < maxCount) {
         const dir = queue.shift();
         const { data, error } = await supabase
           .storage.from(BUCKET)
@@ -219,25 +221,27 @@
         if (error) { console.warn("[STORAGE] list error", dir||"(root)", error); continue; }
         for (const item of (data || [])) {
           const path = (dir ? `${dir}/` : "") + item.name;
-          if (/\.[a-z0-9]+$/i.test(item.name)) found.push({ path, updated_at: item.updated_at || null, url: publicUrl(path) });
-          else queue.push(path);
+          if (/\.[a-z0-9]+$/i.test(item.name)) {
+            found.push({ path, updated_at: item.updated_at || null, url: publicUrl(path) });
+            if (found.length >= maxCount) break;
+          } else {
+            queue.push(path);
+          }
         }
-        if (found.length > 400) break;
       }
       if (!found.length) return [];
       found.sort((a,b) => new Date(a.updated_at||0) - new Date(b.updated_at||0));
-      return found.slice(0,2);
+      return found.slice(0, maxCount);
     }
 
     // ---------- Queue claim: RPC first, fallback to non-atomic ----------
+    // Returns 0..2 claimed queue rows (does NOT force 2)
     async function claimTwoFromQueue() {
-      // Try RPC (requires you created public.claim_two_queue_items())
-      let rpcOk = false;
+      // Try RPC (requires public.claim_two_queue_items)
       try {
         const { data, error } = await supabase.rpc('claim_two_queue_items');
         if (!error && Array.isArray(data) && data.length) {
-          rpcOk = true;
-          return data.map(r => ({
+          return data.slice(0,2).map(r => ({
             queueId: r.id,
             url: r.image_url,
             path: (()=>{
@@ -251,7 +255,7 @@
       } catch (e) {
         console.warn('[QUEUE] RPC threw (will fallback)', e);
       }
-      // Fallback: non-atomic (best effort) select→lock
+      // Fallback: best-effort lock
       try {
         const { data: cand, error: qErr } = await supabase
           .from('art_queue')
@@ -261,17 +265,14 @@
           .limit(2);
         if (qErr || !cand?.length) return [];
         const ids = cand.map(r=>r.id);
-        // Try to lock them (set status='locked' where still pending)
         const { error: uErr } = await supabase
           .from('art_queue')
           .update({ status: 'locked' })
           .in('id', ids)
           .eq('status','pending');
         if (uErr) { console.warn('[QUEUE] fallback lock error', uErr); return []; }
-        // Re-read those rows to ensure we own them
         const { data: locked } = await supabase.from('art_queue').select('id,image_url,status').in('id', ids);
         const ours = (locked||[]).filter(r => r.status === 'locked');
-        if (ours.length < 2) return [];
         return ours.slice(0,2).map(r=>({
           queueId: r.id,
           url: r.image_url,
@@ -284,6 +285,23 @@
       } catch(e){ console.warn('[QUEUE] fallback claim failed', e); }
       return [];
     }
+
+    // Prefer queue; if only 1, top-up from bucket (skip duplicates)
+    async function getTwoPreferQueue() {
+      const q = await claimTwoFromQueue();      // 0..2
+      if (q.length >= 2) return q.slice(0,2);
+      const need = 2 - q.length;
+      const bList = await listFromBucketRecursive(10);
+      const extras = [];
+      for (const b of bList) {
+        if (!q.some(x => x.path === b.path || x.url === b.url)) {
+          extras.push({ queueId: null, url: b.url, path: b.path });
+          if (extras.length === need) break;
+        }
+      }
+      return [...q, ...extras];
+    }
+
     async function markQueueUsed(ids = []) {
       if (!ids.length) return;
       const { error } = await supabase.from('art_queue').update({ status: 'used' }).in('id', ids);
@@ -342,23 +360,15 @@
         const shouldPull = forcePull || newRound || (!alreadyClaimed && !locked);
 
         if (shouldPull){
-          // 1) Atomic queue claim
-          const q = await claimTwoFromQueue();
-          if (q.length >= 2) {
-            redUrl = q[0].url; blueUrl = q[1].url;
-            redPath = q[0].path; bluePath = q[1].path; // null for external URLs
-            redQueueId = q[0].queueId; blueQueueId = q[1].queueId;
-            console.log('[PAIR] locked from queue', { redQueueId, blueQueueId, redPath, bluePath });
+          // Try to assemble a pair preferring queue; top-up from bucket if needed
+          const pair = await getTwoPreferQueue();
+          if (pair.length >= 2) {
+            redUrl = pair[0].url; blueUrl = pair[1].url;
+            redPath = pair[0].path || null; bluePath = pair[1].path || null;
+            redQueueId = pair[0].queueId || null; blueQueueId = pair[1].queueId || null;
+            console.log('[PAIR] locked hybrid', { redQueueId, blueQueueId, redPath, bluePath });
           } else {
-            // 2) Fallback to bucket
-            const b = await listTwoFromBucketRecursive();
-            if (b.length >= 2) {
-              redUrl = b[0].url; blueUrl = b[1].url;
-              redPath = b[0].path; bluePath = b[1].path;
-              console.log('[PAIR] locked from bucket', { redPath, bluePath });
-            } else {
-              console.log('[STORAGE] not enough images — using placeholders as needed');
-            }
+            console.log('[STORAGE] not enough images — using placeholders as needed');
           }
 
           if (redUrl && blueUrl) {
