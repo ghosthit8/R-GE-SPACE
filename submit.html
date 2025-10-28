@@ -395,7 +395,7 @@ async function renderQueue(){
     queueEmpty.style.display = 'none';
     if (queueCount) queueCount.textContent = `(${data.length})`;
     queueGrid.innerHTML = data.map((r,i)=>`
-      <div class="thumb" title="${r.image_url}">
+      <div class="thumb" data-id="${r.id}" title="${r.image_url}">
         <span class="idx">#${i+1}</span>
         <img src="${r.image_url}" alt="queued art ${i+1}"/>
       </div>
@@ -412,12 +412,44 @@ async function renderQueue(){
   }
 }
 
-/* ---------- NEW: Realtime queue watch (instant UI updates) ---------- */
+/* ---------- Realtime queue watch (instant remove on lock/use) ---------- */
 const queueChannel = supabase.channel('queue-watch')
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'art_queue' }, (payload) => {
-    const oldS = payload.old?.status, newS = payload.new?.status;
-    // Re-render on any status change; pending/locked/used transitions will reflect immediately
-    if (oldS !== newS) { renderQueue().catch(()=>{}); }
+  // remove item the moment it is brought into the tournament
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'art_queue' }, (payload) => {
+    const id = payload.new?.id;
+    const newS = payload.new?.status;
+    if (!id) return;
+    if (newS === 'locked' || newS === 'used') {
+      const el = queueGrid.querySelector(`[data-id="${id}"]`);
+      if (el) {
+        el.remove();
+        const count = queueGrid.children.length;
+        if (queueCount) queueCount.textContent = `(${count})`;
+        if (count === 0) queueEmpty.style.display = 'block';
+        console.log('[QUEUE] removed', id, '→', newS);
+      } else {
+        // fallback to re-render if element not found
+        renderQueue().catch(()=>{});
+      }
+    }
+  })
+  // if a new pending is inserted elsewhere, add it live (optional)
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'art_queue' }, (payload) => {
+    const row = payload.new;
+    if (row?.status !== 'pending') return;
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    div.dataset.id = row.id;
+    div.title = row.image_url;
+    div.innerHTML = `<span class="idx">#?</span><img src="${row.image_url}" alt="queued art"/>`;
+    if (queueGrid.children.length === 0) {
+      queueEmpty.style.display = 'none';
+      queueGrid.appendChild(div);
+    } else {
+      queueGrid.appendChild(div);
+    }
+    const count = queueGrid.children.length;
+    if (queueCount) queueCount.textContent = `(${count})`;
   })
   .subscribe();
 
