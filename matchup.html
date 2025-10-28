@@ -239,7 +239,10 @@
     async function claimTwoFromQueue() {
       // Try RPC (requires public.claim_two_queue_items)
       try {
-        const { data, error } = await supabase.rpc('claim_two_queue_items');
+        // ✨ pass base_iso so the server tags locks to the correct cycle
+        const { data, error } = await supabase.rpc('claim_two_queue_items', {
+          base_iso: (state && state.base_iso) || null
+        });
         if (!error && Array.isArray(data) && data.length) {
           return data.slice(0,2).map(r => ({
             queueId: r.id,
@@ -255,7 +258,7 @@
       } catch (e) {
         console.warn('[QUEUE] RPC threw (will fallback)', e);
       }
-      // Fallback: best-effort lock
+      // Fallback: best-effort lock (also writes cycle_key)
       try {
         const { data: cand, error: qErr } = await supabase
           .from('art_queue')
@@ -267,7 +270,7 @@
         const ids = cand.map(r=>r.id);
         const { error: uErr } = await supabase
           .from('art_queue')
-          .update({ status: 'locked' })
+          .update({ status: 'locked', cycle_key: (state && state.base_iso) || null })
           .in('id', ids)
           .eq('status','pending');
         if (uErr) { console.warn('[QUEUE] fallback lock error', uErr); return []; }
