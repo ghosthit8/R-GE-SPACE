@@ -401,10 +401,20 @@ async function renderQueue(){
       </div>
     `).join('');
 
-    // Image load logs (your style)
+    // Image load logs (your style) + 🔥 instant remove on 404s
     queueGrid.querySelectorAll('img').forEach(img=>{
       img.addEventListener('load', ()=> log('IMG: loaded  ', img.src));
-      img.addEventListener('error', ()=> console.warn('IMG: error   ', img.src));
+      img.addEventListener('error', ()=> {
+        console.warn('IMG: error   ', img.src);
+        const host = img.closest('[data-id], .thumb, .item');
+        if (host) {
+          host.remove();
+          const count = queueGrid.children.length;
+          if (queueCount) queueCount.textContent = `(${count})`;
+          if (count === 0) queueEmpty.style.display = 'block';
+          console.warn('[QUEUE] removed 404 image tile');
+        }
+      });
     });
   }catch(e){
     console.error(e);
