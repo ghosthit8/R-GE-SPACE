@@ -466,6 +466,21 @@ const queueChannel = supabase.channel('queue-watch')
 // Clean up (optional)
 window.addEventListener('beforeunload', ()=> { try { supabase.removeChannel(queueChannel); } catch {} });
 
+/* ---------- Remove from queue right when round begins ---------- */
+let __lastClock = null;
+function __watchRoundStart() {
+  const n = parseInt(clockEl.textContent, 10);
+  if (!isNaN(n)) {
+    if (__lastClock !== null && __lastClock <= 1 && n > __lastClock) {
+      console.log('[QUEUE] round start detected — refreshing queue');
+      renderQueue().catch(()=>{});
+    }
+    __lastClock = n;
+  }
+  requestAnimationFrame(__watchRoundStart);
+}
+__watchRoundStart();
+
 /* ---------- Boot ---------- */
 (async()=>{
   paintAuth(await uid());
