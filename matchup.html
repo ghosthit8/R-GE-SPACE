@@ -16,73 +16,74 @@
     .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
     .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
     .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
-    .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
+    .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,.7); color:#e5e7eb; border:1px solid #3a3f46; border-radius:10px; font-size:12px; padding:6px 8px; cursor:pointer; }
+    .fullscreenBtn:hover { box-shadow:0 0 8px rgba(57,255,20,.35); color:#39ff14; border-color:#39ff14; }
+    .vote { position:absolute; bottom:8px; right:8px; background:#0b0f14; border:1px solid #27323a; color:#39ff14; border-radius:12px; font-weight:700; padding:8px 12px; cursor:pointer; }
+    .vote[disabled] { opacity:.5; cursor:not-allowed; }
     .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid #20242a; }
     .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
     .counts { font-variant-numeric: tabular-nums; font-weight:700; }
-    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
-    .btn.ghost { color:#a0aec0; }
-    button.vote { padding:10px 14px; }
-    button.vote:disabled { opacity:.6; cursor:default; }
-    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
-    .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
-    .winner b { color:#39ff14; }
-    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
-    .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
-    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
+    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #27323a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; text-decoration:none; cursor:pointer; }
+    .btn:hover, .linkbtn:hover, .backbtn:hover { box-shadow:0 0 10px rgba(57,255,20,.25); color:#39ff14; border-color:#39ff14; }
+    .nav { display:flex; gap:8px; }
+    .winner { color:#39ff14; font-weight:700; }
+    #overlay { position:fixed; inset:0; background:rgba(0,0,0,.9); display:none; place-items:center; z-index:9999; }
+    #overlay img { max-width:95vw; max-height:92vh; display:block; border:1px solid #27323a; border-radius:14px; }
+    #closeFull { position:fixed; top:10px; right:10px; z-index:10000; }
+    .tools { display:flex; gap:6px; }
   </style>
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="wrap">
-    <h1>Rage Space — Matchup</h1>
-
     <div class="header">
-      <div class="row">
-        <div class="timer" id="tRemain">20.0</div>
-        <div class="state" id="tMeta">syncing…</div>
-      </div>
-      <div class="row">
-        <button id="forceQueue" class="btn ghost">Pull Now</button>
-        <button id="resetPair" class="btn ghost">Reset Pair</button>
-        <a class="backbtn" href="menu.html">← Menu</a>
-        <a class="linkbtn" href="winners.html">Winners</a>
+      <h1>Rage Space — Matchup</h1>
+      <div class="nav">
+        <a href="menu.html" class="btn backbtn">← Menu</a>
+        <a href="submit.html" class="btn linkbtn">Submit →</a>
       </div>
     </div>
 
-    <div class="card">
-      <div class="imgBox">
-        <img id="imgA" alt="Seed A" />
-        <button class="fullscreenBtn" onclick="openFull('A')">⤢</button>
+    <div class="row" style="gap:12px">
+      <div class="timer" id="tRemain">—</div>
+      <div class="state" id="tMeta">…</div>
+      <div class="tools">
+        <button id="forceQueue" class="btn">Force Queue</button>
+        <button id="resetPair" class="btn">Reset Pair</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="row" style="justify-content:space-between; padding:10px 12px">
+        <div class="label">Round</div>
+        <div id="stage" class="label" style="color:#fff; letter-spacing:.06em">R32</div>
+      </div>
+      <div class="row" style="gap:10px; padding:10px 12px">
+        <div class="imgBox" style="flex:1; min-width:0">
+          <img id="imgA" alt="Red seed"/>
+          <button class="fullscreenBtn" onclick="openFull('A')">Fullscreen</button>
+          <button id="btnA" class="vote">Vote Red</button>
+        </div>
+        <div class="imgBox" style="flex:1; min-width:0">
+          <img id="imgB" alt="Blue seed"/>
+          <button class="fullscreenBtn" onclick="openFull('B')">Fullscreen</button>
+          <button id="btnB" class="vote">Vote Blue</button>
+        </div>
       </div>
       <div class="bar">
-        <div class="label">Seed A</div>
-        <div class="counts" id="countA">0</div>
-        <button class="vote" id="btnA">Vote Seed A</button>
+        <div>
+          <span class="label">Red</span> <span class="counts" id="countA">0</span>
+        </div>
+        <div class="winner" id="winnerText">—</div>
+        <div>
+          <span class="label">Blue</span> <span class="counts" id="countB">0</span>
+        </div>
       </div>
-    </div>
-
-    <div class="card">
-      <div class="imgBox">
-        <img id="imgB" alt="Seed B" />
-        <button class="fullscreenBtn" onclick="openFull('B')">⤢</button>
-      </div>
-      <div class="bar">
-        <div class="label">Seed B</div>
-        <div class="counts" id="countB">0</div>
-        <button class="vote" id="btnB">Vote Seed B</button>
-      </div>
-    </div>
-
-    <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
-    <div class="hint">
-      Hybrid picker: **prefer queue**, top-up from bucket if only one pending. At 0s delete used files, mark queue rows <code>used</code>, and prune empty folders.
     </div>
   </div>
 
-  <div class="fullscreen-overlay" id="overlay">
-    <button id="closeFull">✕ Close</button>
-    <img id="fullImg" src="">
+  <div id="overlay">
+    <img id="fullImg" alt="Full image"/>
+    <button id="closeFull" class="btn">✕ Close</button>
   </div>
 
   <script>
@@ -144,6 +145,66 @@
       return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
     }
 
+    async function listAllFiles(dir = "") {
+      const out = [];
+      let cursor = dir;
+      for (let i=0;i<80;i++){
+        const { data, error } = await supabase.storage.from(BUCKET).list(cursor, { limit: 100 });
+        if (error) { console.warn("[STORAGE] list error", cursor || "(root)", error); break; }
+        if (!data || !data.length) break;
+        for (const entry of data) {
+          if (entry.name.endsWith('/') || entry.id?.endsWith('/')) {
+            const next = (cursor ? cursor + '/' : '') + (entry.name || entry.id);
+            const { data: sub, error: e2 } = await supabase.storage.from(BUCKET).list(next, { limit: 100 });
+            if (!e2 && sub && sub.length){
+              for (const s of sub){
+                if (!s.name.endsWith('/')) out.push((next ? next + '/' : '') + (s.name || s.id));
+              }
+            }
+          } else {
+            out.push((cursor ? cursor + '/' : '') + (entry.name || entry.id));
+          }
+        }
+        break; // shallow list (we use simple directory layout)
+      }
+      return out;
+    }
+
+    async function publicUrl(path){
+      const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      return data.publicUrl;
+    }
+    async function deletePaths(paths=[]){
+      if (!paths.length) return;
+      const { error } = await supabase.storage.from(BUCKET).remove(paths);
+      if (error) console.warn('[STORAGE] delete error', error);
+      else console.log('[STORAGE] deleted', paths);
+    }
+    async function deleteEmptyFolders(dir = "") {
+      const { data, error } = await supabase.storage.from(BUCKET).list(dir, { limit: 100 });
+      if (error) { console.warn("[STORAGE] list error while cleaning", dir || "(root)", error); return; }
+      if (!data || !data.length) return;
+      let sawFile = false;
+      for (const d of data) {
+        if (!d.name?.endsWith('/')) { sawFile = true; break; }
+      }
+      if (!sawFile && dir) {
+        // Supabase Storage doesn’t expose folder delete directly; skip
+      }
+    }
+
+    async function markQueueUsed(ids=[]){
+      if (!ids.length) return;
+      const { error } = await supabase.from('art_queue').update({ status:'used', used_at: new Date().toISOString() }).in('id', ids);
+      if (error) console.warn('[QUEUE] used update error', error);
+    }
+
+    async function claimFromQueue(base_iso){
+      const { data, error } = await supabase.rpc('claim_two_queue_items', { base_iso });
+      if (error) { console.warn('[QUEUE] claim RPC error', error); return []; }
+      return data || [];
+    }
+
     async function sendVote(color){
       const res = await fetch(FUNCTION_URL, {
         method:'POST',
@@ -164,156 +225,19 @@
     function showWinner(winner){
       if (!winner){ winnerText.textContent='No winner yet — first round in progress.'; return; }
       const by = winner.decided_by==='random_tie' ? 'random tie' : 'votes';
-      const name = winner.winner_color==='red' ? 'Seed A' : 'Seed B';
-      const score = `${winner.red_count}–${winner.blue_count}`;
-      winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
+      const name = winner.winner_color==='red' ? 
+        'Red' : 'Blue';
+      const r = winner.red_count ?? winner.seed_a_count ?? 0;
+      const b = winner.blue_count ?? winner.seed_b_count ?? 0;
+      winnerText.textContent = `${name} won by ${by} (${r}–${b})`;
     }
 
-    // ---------- Storage helpers ----------
-    function publicUrl(path){
-      const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-      return data.publicUrl;
-    }
-    async function deletePaths(paths=[]){
-      if (!paths.length) return;
-      const { error } = await supabase.storage.from(BUCKET).remove(paths);
-      if (error) console.warn('[STORAGE] delete error', error);
-      else console.log('[STORAGE] deleted', paths);
-    }
-    async function deleteEmptyFolders(dir = "") {
-      const { data, error } = await supabase.storage.from(BUCKET).list(dir, { limit: 100 });
-      if (error) { console.warn("[STORAGE] list error while cleaning", dir || "(root)", error); return; }
-      if (!data || !data.length) return;
-      let sawFile = false;
-      for (const item of data) {
-        const path = dir ? `${dir}/${item.name}` : item.name;
-        if (/\.[a-z0-9]+$/i.test(item.name)) {
-          sawFile = true;
-        } else {
-          await deleteEmptyFolders(path);
-          const { data: check } = await supabase.storage.from(BUCKET).list(path, { limit: 1 });
-          if (!check || check.length === 0) {
-            const { error: remErr } = await supabase.storage.from(BUCKET).remove([path]);
-            if (remErr) console.warn("[STORAGE] failed to remove empty folder", path, remErr);
-            else console.log("[STORAGE] removed empty folder", path);
-          }
-        }
-      }
-      if (!sawFile && dir) {
-        const { data: check2 } = await supabase.storage.from(BUCKET).list(dir, { limit: 1 });
-        if (!check2 || check2.length === 0) {
-          const { error: remErr } = await supabase.storage.from(BUCKET).remove([dir]);
-          if (remErr) console.warn("[STORAGE] failed to remove folder", dir, remErr);
-          else console.log("[STORAGE] removed empty folder", dir);
-        }
-      }
-    }
+    // initial placeholder to avoid flashing empty
+    imgA.src = tbdPlaceholder();
+    imgB.src = tbdPlaceholder();
 
-    // Return up to N files (oldest first) from bucket recursively
-    async function listFromBucketRecursive(maxCount = 10) {
-      const queue = [UPLOAD_DIR];
-      const found = [];
-      while (queue.length && found.length < maxCount) {
-        const dir = queue.shift();
-        const { data, error } = await supabase
-          .storage.from(BUCKET)
-          .list(dir, { limit: 100, offset: 0, sortBy: { column: "updated_at", order: "asc" } });
-        if (error) { console.warn("[STORAGE] list error", dir||"(root)", error); continue; }
-        for (const item of (data || [])) {
-          const path = (dir ? `${dir}/` : "") + item.name;
-          if (/\.[a-z0-9]+$/i.test(item.name)) {
-            found.push({ path, updated_at: item.updated_at || null, url: publicUrl(path) });
-            if (found.length >= maxCount) break;
-          } else {
-            queue.push(path);
-          }
-        }
-      }
-      if (!found.length) return [];
-      found.sort((a,b) => new Date(a.updated_at||0) - new Date(b.updated_at||0));
-      return found.slice(0, maxCount);
-    }
-
-    // ---------- Queue claim: RPC first, fallback to non-atomic ----------
-    // Returns 0..2 claimed queue rows (does NOT force 2)
-    async function claimTwoFromQueue() {
-      // Try RPC (requires public.claim_two_queue_items)
-      try {
-        // ✨ pass base_iso so the server tags locks to the correct cycle
-        const { data, error } = await supabase.rpc('claim_two_queue_items', {
-          base_iso: (state && state.base_iso) || null
-        });
-        if (!error && Array.isArray(data) && data.length) {
-          return data.slice(0,2).map(r => ({
-            queueId: r.id,
-            url: r.image_url,
-            path: (()=>{
-              const prefix = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
-              return (typeof r.image_url === 'string' && r.image_url.startsWith(prefix))
-                ? r.image_url.slice(prefix.length) : null;
-            })()
-          }));
-        }
-        if (error) console.warn('[QUEUE] RPC error (will fallback)', error);
-      } catch (e) {
-        console.warn('[QUEUE] RPC threw (will fallback)', e);
-      }
-      // Fallback: best-effort lock (also writes cycle_key)
-      try {
-        const { data: cand, error: qErr } = await supabase
-          .from('art_queue')
-          .select('id,image_url,created_at,status')
-          .eq('status','pending')
-          .order('created_at', { ascending: true })
-          .limit(2);
-        if (qErr || !cand?.length) return [];
-        const ids = cand.map(r=>r.id);
-        const { error: uErr } = await supabase
-          .from('art_queue')
-          .update({ status: 'locked', cycle_key: (state && state.base_iso) || null })
-          .in('id', ids)
-          .eq('status','pending');
-        if (uErr) { console.warn('[QUEUE] fallback lock error', uErr); return []; }
-        const { data: locked } = await supabase.from('art_queue').select('id,image_url,status').in('id', ids);
-        const ours = (locked||[]).filter(r => r.status === 'locked');
-        return ours.slice(0,2).map(r=>({
-          queueId: r.id,
-          url: r.image_url,
-          path: (()=>{
-            const prefix = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
-            return (typeof r.image_url === 'string' && r.image_url.startsWith(prefix))
-              ? r.image_url.slice(prefix.length) : null;
-          })()
-        }));
-      } catch(e){ console.warn('[QUEUE] fallback claim failed', e); }
-      return [];
-    }
-
-    // Prefer queue; if only 1, top-up from bucket (skip duplicates)
-    async function getTwoPreferQueue() {
-      const q = await claimTwoFromQueue();      // 0..2
-      if (q.length >= 2) return q.slice(0,2);
-      const need = 2 - q.length;
-      const bList = await listFromBucketRecursive(10);
-      const extras = [];
-      for (const b of bList) {
-        if (!q.some(x => x.path === b.path || x.url === b.url)) {
-          extras.push({ queueId: null, url: b.url, path: b.path });
-          if (extras.length === need) break;
-        }
-      }
-      return [...q, ...extras];
-    }
-
-    async function markQueueUsed(ids = []) {
-      if (!ids.length) return;
-      const { error } = await supabase.from('art_queue').update({ status: 'used' }).in('id', ids);
-      if (error) console.warn('[QUEUE] mark used error', error);
-      else console.log('[QUEUE] marked used', ids);
-    }
-
-    // ---------- Round state ----------
-    let state = { ends_at:null, base_iso:null, red_count:0, blue_count:0, last_winner:null };
+    // global state for GET loop
+    let state = { base_iso:null, ends_at:null, period_sec:60, red_url:'', blue_url:'', red_count:0, blue_count:0, last_winner:null };
     let fetching = false;
 
     async function fetchState(forcePull=false){
@@ -364,28 +288,46 @@
 
         if (shouldPull){
           // Try to assemble a pair preferring queue; top-up from bucket if needed
-          const pair = await getTwoPreferQueue();
-          if (pair.length >= 2) {
-            redUrl = pair[0].url; blueUrl = pair[1].url;
-            redPath = pair[0].path || null; bluePath = pair[1].path || null;
-            redQueueId = pair[0].queueId || null; blueQueueId = pair[1].queueId || null;
-            console.log('[PAIR] locked hybrid', { redQueueId, blueQueueId, redPath, bluePath });
-          } else {
-            console.log('[STORAGE] not enough images — using placeholders as needed');
+          try {
+            const claims = await claimFromQueue(state.base_iso);
+            const gotFromQueue = Array.isArray(claims) ? claims : [];
+            if (gotFromQueue.length){
+              const [a,b] = gotFromQueue;
+              redUrl = a?.image_url || redUrl; redQueueId = a?.id || redQueueId;
+              blueUrl = b?.image_url || blueUrl; blueQueueId = b?.id || blueQueueId;
+              console.log('[QUEUE] claimed', gotFromQueue.map(x=>x.id));
+            }
+          } catch(e){
+            console.warn('[QUEUE] claim error', e);
           }
 
-          if (redUrl && blueUrl) {
-            localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
-            const toDel = [redPath, bluePath].filter(Boolean);
-            if (toDel.length) localStorage.setItem(DELETE_KEY(state.base_iso), JSON.stringify(toDel));
-            savePair(state.base_iso, { redUrl, blueUrl, redPath, bluePath, redQueueId, blueQueueId });
+          // If any side missing, pull from bucket
+          if (!redUrl || !blueUrl) {
+            const files = await listAllFiles(UPLOAD_DIR);
+            // pick any two distinct
+            const picks = files.slice(0, 2);
+            const urls = await Promise.all(picks.map(p=>publicUrl(p)));
+            if (!redUrl) { redUrl = urls[0] || redUrl; redPath = picks[0] || redPath; }
+            if (!blueUrl){ blueUrl = urls[1] || blueUrl; bluePath = picks[1] || bluePath; }
+            if (redPath || bluePath) {
+              const pending = JSON.parse(localStorage.getItem(DELETE_KEY(state.base_iso) || 'null') || '[]');
+              const want = [...pending, ...[redPath, bluePath].filter(Boolean)];
+              localStorage.setItem(DELETE_KEY(state.base_iso), JSON.stringify(want));
+            }
           }
+
+          // Persist locked pair locally (for this base)
+          const pair = { redUrl:redUrl||tbdPlaceholder(), blueUrl:blueUrl||tbdPlaceholder(), redPath, bluePath, redQueueId, blueQueueId };
+          savePair(state.base_iso, pair);
+          localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
         }
 
-        if (!redUrl)  redUrl  = tbdPlaceholder();
-        if (!blueUrl) blueUrl = tbdPlaceholder();
+        // Paint
+        const p = loadPair(state.base_iso);
+        const rURL = p?.redUrl || state.red_url || tbdPlaceholder();
+        const bURL = p?.blueUrl || state.blue_url || tbdPlaceholder();
+        const redUrl = rURL; const blueUrl = bURL;
 
-        // Push to UI
         imgA.src = redUrl;
         imgB.src = blueUrl;
         cA.textContent = state.red_count;
@@ -417,22 +359,32 @@
               console.log('[STORAGE] deleted at 0s', paths);
             }
             // queue rows -> used
-            const locked = loadPair(state.base_iso);
-            const usedIds = [locked?.redQueueId, locked?.blueQueueId].filter(Boolean);
-            if (usedIds.length) await markQueueUsed(usedIds);
-          } catch(e){ console.warn('finalize at 0s failed', e); }
-          localStorage.setItem(ZERO_DELETE_DID(state.base_iso), '1');
+            const p = loadPair(state.base_iso);
+            const ids = [p?.redQueueId, p?.blueQueueId].filter(Boolean);
+            if (ids.length) { await markQueueUsed(ids); console.log('[QUEUE] used at 0s', ids); }
+
+            localStorage.setItem(ZERO_DELETE_DID(state.base_iso), '1');
+          } catch(e){ console.warn('[0s finalize error]', e); }
         })();
       }
 
-      if (remain <= -900) fetchState().catch(()=>{});
       requestAnimationFrame(tick);
     }
 
-    // Controls
-    document.getElementById('forceQueue').addEventListener('click', async ()=>{
+    // Force tools
+    forceBtn.addEventListener('click', async ()=>{
+      await fetchState(true);
+    });
+    resetBtn.addEventListener('click', async ()=>{
       if (!state?.base_iso) return;
+      const p = loadPair(state.base_iso);
+      if (p?.redQueueId || p?.blueQueueId) {
+        const ids = [p.redQueueId, p.blueQueueId].filter(Boolean);
+        await markQueueUsed(ids);
+      }
+      localStorage.removeItem(DELETE_KEY(state.base_iso));
       localStorage.removeItem(CLAIM_KEY(state.base_iso));
+      localStorage.removeItem(ZERO_DELETE_DID(state.base_iso));
       clearPair(state.base_iso);
       await fetchState(true);
     });
@@ -441,6 +393,32 @@
       clearPair(state.base_iso);
       await fetchState(false);
     });
+
+    // ---------- Realtime: keep matchup in lockstep with queue ----------
+    const queueChannel = supabase
+      .channel('matchup-sync')
+      .on('postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'art_queue', filter: 'status=in.(locked,used)' },
+          async (payload) => {
+            console.log('[SYNC] queue item', payload.new?.id, '→', payload.new?.status, '→ refresh matchup');
+            await fetchState(true).catch(()=>{});
+          })
+      .subscribe((status) => console.log('[Realtime] matchup-sync →', status));
+
+    // ---------- Round-flip instant refresh (detect 0 → period jump) ----------
+    let __lastRemain = null;
+    function __watchRoundFlip(){
+      const n = parseFloat(elRemain.textContent);
+      if (!isNaN(n)) {
+        if (__lastRemain !== null && __lastRemain <= 0.2 && n > __lastRemain + 0.5) {
+          console.log('[SYNC] round start detected — re-fetching');
+          fetchState(true).catch(()=>{});
+        }
+        __lastRemain = n;
+      }
+      requestAnimationFrame(__watchRoundFlip);
+    }
+    __watchRoundFlip();
 
     // Boot
     setInterval(()=> fetchState().catch(()=>{}), 4000);
