@@ -1,1 +1,450 @@
-https://maps.app.goo.gl/AtXGBFCpjUxci28o9
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rage Space — Matchup (Queue-first + Hybrid + 0s finalize)</title>
+  <style>
+    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
+    .wrap { max-width:700px; margin:0 auto; padding:16px 12px 28px; }
+    h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
+    .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
+    .state { color:var(--muted); font-size:12px; }
+    .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
+    .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
+    .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
+    .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
+    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid #20242a; }
+    .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
+    .counts { font-variant-numeric: tabular-nums; font-weight:700; }
+    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
+    .btn.ghost { color:#a0aec0; }
+    button.vote { padding:10px 14px; }
+    button.vote:disabled { opacity:.6; cursor:default; }
+    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
+    .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
+    .winner b { color:#39ff14; }
+    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
+    .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
+    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
+  </style>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Rage Space — Matchup</h1>
+
+    <div class="header">
+      <div class="row">
+        <div class="timer" id="tRemain">20.0</div>
+        <div class="state" id="tMeta">syncing…</div>
+      </div>
+      <div class="row">
+        <button id="forceQueue" class="btn ghost">Pull Now</button>
+        <button id="resetPair" class="btn ghost">Reset Pair</button>
+        <a class="backbtn" href="menu.html">← Menu</a>
+        <a class="linkbtn" href="winners.html">Winners</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="imgBox">
+        <img id="imgA" alt="Seed A" />
+        <button class="fullscreenBtn" onclick="openFull('A')">⤢</button>
+      </div>
+      <div class="bar">
+        <div class="label">Seed A</div>
+        <div class="counts" id="countA">0</div>
+        <button class="vote" id="btnA">Vote Seed A</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="imgBox">
+        <img id="imgB" alt="Seed B" />
+        <button class="fullscreenBtn" onclick="openFull('B')">⤢</button>
+      </div>
+      <div class="bar">
+        <div class="label">Seed B</div>
+        <div class="counts" id="countB">0</div>
+        <button class="vote" id="btnB">Vote Seed B</button>
+      </div>
+    </div>
+
+    <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
+    <div class="hint">
+      Hybrid picker: **prefer queue**, top-up from bucket if only one pending. At 0s delete used files, mark queue rows <code>used</code>, and prune empty folders.
+    </div>
+  </div>
+
+  <div class="fullscreen-overlay" id="overlay">
+    <button id="closeFull">✕ Close</button>
+    <img id="fullImg" src="">
+  </div>
+
+  <script>
+    // --- Supabase config ---
+    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
+
+    // --- Storage ---
+    const BUCKET = "art-uploads";
+    const UPLOAD_DIR = ""; // recursive scan start
+
+    // --- Local state / helpers ---
+    const RSID_KEY = "rsid_v2";
+    let RSID = localStorage.getItem(RSID_KEY);
+    if (!RSID) { RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
+    const votedKey = (b) => `voted:${b}`;
+    const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
+    const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
+
+    const PAIR_KEY   = (b) => `pair:${b}`;                // { redUrl, blueUrl, redPath?, bluePath?, redQueueId?, blueQueueId? }
+    const CLAIM_KEY  = (b) => `bucket_claimed:${b}`;      // "1" when we've chosen images this round
+    const DELETE_KEY = (b) => `bucket_to_delete:${b}`;    // JSON [paths...] (bucket only)
+    const ZERO_DELETE_DID = (b) => `zero_deleted:${b}`;   // run once per base
+
+    const loadPair  = (b) => { try { return JSON.parse(localStorage.getItem(PAIR_KEY(b))||"null"); } catch { return null; } };
+    const savePair  = (b, p) => { if (p?.redUrl && p?.blueUrl) localStorage.setItem(PAIR_KEY(b), JSON.stringify(p)); };
+    const clearPair = (b) => localStorage.removeItem(PAIR_KEY(b));
+
+    const elRemain = document.getElementById("tRemain");
+    const elMeta   = document.getElementById("tMeta");
+    const imgA     = document.getElementById("imgA");
+    const imgB     = document.getElementById("imgB");
+    const cA       = document.getElementById("countA");
+    const cB       = document.getElementById("countB");
+    const btnA     = document.getElementById("btnA");
+    const btnB     = document.getElementById("btnB");
+    const winnerText = document.getElementById("winnerText");
+    const overlay  = document.getElementById("overlay");
+    const fullImg  = document.getElementById("fullImg");
+    const btnClose = document.getElementById("closeFull");
+    const forceBtn = document.getElementById("forceQueue");
+    const resetBtn = document.getElementById("resetPair");
+
+    btnClose.onclick = () => overlay.style.display = 'none';
+    function openFull(which){ fullImg.src = which==='A'?imgA.src:imgB.src; overlay.style.display='flex'; }
+    window.openFull = (w)=>{ openFull(w); };
+
+    function setVoteButtons(enabled){ btnA.disabled = btnB.disabled = !enabled; }
+    btnA.onclick = () => !btnA.disabled && sendVote('red');
+    btnB.onclick = () => !btnB.disabled && sendVote('blue');
+
+    function tbdPlaceholder() {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960">
+        <rect width="100%" height="100%" fill="#000"/>
+        <text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace" text-anchor="middle" dominant-baseline="middle">? tbd</text>
+      </svg>`;
+      return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    }
+
+    async function sendVote(color){
+      const res = await fetch(FUNCTION_URL, {
+        method:'POST',
+        headers:{ 'content-type':'application/json', 'x-rsid': RSID },
+        body: JSON.stringify({ color })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'vote failed');
+      if (data.ignored && data.reason==='already_voted') return setVoteButtons(false);
+      if (!data.ignored){
+        markVoted(state.base_iso);
+        setVoteButtons(false);
+        cA.textContent = data.red_count;
+        cB.textContent = data.blue_count;
+      }
+    }
+
+    function showWinner(winner){
+      if (!winner){ winnerText.textContent='No winner yet — first round in progress.'; return; }
+      const by = winner.decided_by==='random_tie' ? 'random tie' : 'votes';
+      const name = winner.winner_color==='red' ? 'Seed A' : 'Seed B';
+      const score = `${winner.red_count}–${winner.blue_count}`;
+      winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
+    }
+
+    // ---------- Storage helpers ----------
+    function publicUrl(path){
+      const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+      return data.publicUrl;
+    }
+    async function deletePaths(paths=[]){
+      if (!paths.length) return;
+      const { error } = await supabase.storage.from(BUCKET).remove(paths);
+      if (error) console.warn('[STORAGE] delete error', error);
+      else console.log('[STORAGE] deleted', paths);
+    }
+    async function deleteEmptyFolders(dir = "") {
+      const { data, error } = await supabase.storage.from(BUCKET).list(dir, { limit: 100 });
+      if (error) { console.warn("[STORAGE] list error while cleaning", dir || "(root)", error); return; }
+      if (!data || !data.length) return;
+      let sawFile = false;
+      for (const item of data) {
+        const path = dir ? `${dir}/${item.name}` : item.name;
+        if (/\.[a-z0-9]+$/i.test(item.name)) {
+          sawFile = true;
+        } else {
+          await deleteEmptyFolders(path);
+          const { data: check } = await supabase.storage.from(BUCKET).list(path, { limit: 1 });
+          if (!check || check.length === 0) {
+            const { error: remErr } = await supabase.storage.from(BUCKET).remove([path]);
+            if (remErr) console.warn("[STORAGE] failed to remove empty folder", path, remErr);
+            else console.log("[STORAGE] removed empty folder", path);
+          }
+        }
+      }
+      if (!sawFile && dir) {
+        const { data: check2 } = await supabase.storage.from(BUCKET).list(dir, { limit: 1 });
+        if (!check2 || check2.length === 0) {
+          const { error: remErr } = await supabase.storage.from(BUCKET).remove([dir]);
+          if (remErr) console.warn("[STORAGE] failed to remove folder", dir, remErr);
+          else console.log("[STORAGE] removed empty folder", dir);
+        }
+      }
+    }
+
+    // Return up to N files (oldest first) from bucket recursively
+    async function listFromBucketRecursive(maxCount = 10) {
+      const queue = [UPLOAD_DIR];
+      const found = [];
+      while (queue.length && found.length < maxCount) {
+        const dir = queue.shift();
+        const { data, error } = await supabase
+          .storage.from(BUCKET)
+          .list(dir, { limit: 100, offset: 0, sortBy: { column: "updated_at", order: "asc" } });
+        if (error) { console.warn("[STORAGE] list error", dir||"(root)", error); continue; }
+        for (const item of (data || [])) {
+          const path = (dir ? `${dir}/` : "") + item.name;
+          if (/\.[a-z0-9]+$/i.test(item.name)) {
+            found.push({ path, updated_at: item.updated_at || null, url: publicUrl(path) });
+            if (found.length >= maxCount) break;
+          } else {
+            queue.push(path);
+          }
+        }
+      }
+      if (!found.length) return [];
+      found.sort((a,b) => new Date(a.updated_at||0) - new Date(b.updated_at||0));
+      return found.slice(0, maxCount);
+    }
+
+    // ---------- Queue claim: RPC first, fallback to non-atomic ----------
+    // Returns 0..2 claimed queue rows (does NOT force 2)
+    async function claimTwoFromQueue() {
+      // Try RPC (requires public.claim_two_queue_items)
+      try {
+        // ✨ pass base_iso so the server tags locks to the correct cycle
+        const { data, error } = await supabase.rpc('claim_two_queue_items', {
+          base_iso: (state && state.base_iso) || null
+        });
+        if (!error && Array.isArray(data) && data.length) {
+          return data.slice(0,2).map(r => ({
+            queueId: r.id,
+            url: r.image_url,
+            path: (()=>{
+              const prefix = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
+              return (typeof r.image_url === 'string' && r.image_url.startsWith(prefix))
+                ? r.image_url.slice(prefix.length) : null;
+            })()
+          }));
+        }
+        if (error) console.warn('[QUEUE] RPC error (will fallback)', error);
+      } catch (e) {
+        console.warn('[QUEUE] RPC threw (will fallback)', e);
+      }
+      // Fallback: best-effort lock (also writes cycle_key)
+      try {
+        const { data: cand, error: qErr } = await supabase
+          .from('art_queue')
+          .select('id,image_url,created_at,status')
+          .eq('status','pending')
+          .order('created_at', { ascending: true })
+          .limit(2);
+        if (qErr || !cand?.length) return [];
+        const ids = cand.map(r=>r.id);
+        const { error: uErr } = await supabase
+          .from('art_queue')
+          .update({ status: 'locked', cycle_key: (state && state.base_iso) || null })
+          .in('id', ids)
+          .eq('status','pending');
+        if (uErr) { console.warn('[QUEUE] fallback lock error', uErr); return []; }
+        const { data: locked } = await supabase.from('art_queue').select('id,image_url,status').in('id', ids);
+        const ours = (locked||[]).filter(r => r.status === 'locked');
+        return ours.slice(0,2).map(r=>({
+          queueId: r.id,
+          url: r.image_url,
+          path: (()=>{
+            const prefix = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
+            return (typeof r.image_url === 'string' && r.image_url.startsWith(prefix))
+              ? r.image_url.slice(prefix.length) : null;
+          })()
+        }));
+      } catch(e){ console.warn('[QUEUE] fallback claim failed', e); }
+      return [];
+    }
+
+    // Prefer queue; if only 1, top-up from bucket (skip duplicates)
+    async function getTwoPreferQueue() {
+      const q = await claimTwoFromQueue();      // 0..2
+      if (q.length >= 2) return q.slice(0,2);
+      const need = 2 - q.length;
+      const bList = await listFromBucketRecursive(10);
+      const extras = [];
+      for (const b of bList) {
+        if (!q.some(x => x.path === b.path || x.url === b.url)) {
+          extras.push({ queueId: null, url: b.url, path: b.path });
+          if (extras.length === need) break;
+        }
+      }
+      return [...q, ...extras];
+    }
+
+    async function markQueueUsed(ids = []) {
+      if (!ids.length) return;
+      const { error } = await supabase.from('art_queue').update({ status: 'used' }).in('id', ids);
+      if (error) console.warn('[QUEUE] mark used error', error);
+      else console.log('[QUEUE] marked used', ids);
+    }
+
+    // ---------- Round state ----------
+    let state = { ends_at:null, base_iso:null, red_count:0, blue_count:0, last_winner:null };
+    let fetching = false;
+
+    async function fetchState(forcePull=false){
+      if (fetching) return; fetching = true;
+      try{
+        const res = await fetch(FUNCTION_URL);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'GET failed');
+
+        const prevBase = state.base_iso;
+        const newRound = prevBase && prevBase !== data.base_iso;
+        state = data;
+
+        if (newRound) {
+          // backup delete of bucket files from previous base
+          const toDelete = JSON.parse(localStorage.getItem(DELETE_KEY(prevBase) || 'null') || 'null');
+          if (Array.isArray(toDelete) && toDelete.length) {
+            deletePaths(toDelete).catch(()=>{});
+            deleteEmptyFolders().catch(()=>{});
+          }
+          // backup: mark previously locked queue items as used
+          const lockedPrev = loadPair(prevBase);
+          const usedIds = [lockedPrev?.redQueueId, lockedPrev?.blueQueueId].filter(Boolean);
+          if (usedIds.length) await markQueueUsed(usedIds);
+
+          // local cleanup
+          localStorage.removeItem(DELETE_KEY(prevBase));
+          localStorage.removeItem(CLAIM_KEY(prevBase));
+          localStorage.removeItem(ZERO_DELETE_DID(prevBase));
+          clearPair(prevBase);
+          setVoteButtons(!hasVoted(state.base_iso));
+        }
+
+        // Determine images for this round
+        let redUrl, blueUrl, redPath=null, bluePath=null, redQueueId=null, blueQueueId=null;
+
+        // Use locked pair if present
+        const locked = loadPair(state.base_iso);
+        if (locked?.redUrl && locked?.blueUrl){
+          redUrl = locked.redUrl; blueUrl = locked.blueUrl;
+          redPath = locked.redPath || null; bluePath = locked.bluePath || null;
+          redQueueId = locked.redQueueId || null; blueQueueId = locked.blueQueueId || null;
+          console.log('[PAIR] using locked pair for', state.base_iso);
+        }
+
+        const alreadyClaimed = !!localStorage.getItem(CLAIM_KEY(state.base_iso));
+        const shouldPull = forcePull || newRound || (!alreadyClaimed && !locked);
+
+        if (shouldPull){
+          // Try to assemble a pair preferring queue; top-up from bucket if needed
+          const pair = await getTwoPreferQueue();
+          if (pair.length >= 2) {
+            redUrl = pair[0].url; blueUrl = pair[1].url;
+            redPath = pair[0].path || null; bluePath = pair[1].path || null;
+            redQueueId = pair[0].queueId || null; blueQueueId = pair[1].queueId || null;
+            console.log('[PAIR] locked hybrid', { redQueueId, blueQueueId, redPath, bluePath });
+          } else {
+            console.log('[STORAGE] not enough images — using placeholders as needed');
+          }
+
+          if (redUrl && blueUrl) {
+            localStorage.setItem(CLAIM_KEY(state.base_iso), '1');
+            const toDel = [redPath, bluePath].filter(Boolean);
+            if (toDel.length) localStorage.setItem(DELETE_KEY(state.base_iso), JSON.stringify(toDel));
+            savePair(state.base_iso, { redUrl, blueUrl, redPath, bluePath, redQueueId, blueQueueId });
+          }
+        }
+
+        if (!redUrl)  redUrl  = tbdPlaceholder();
+        if (!blueUrl) blueUrl = tbdPlaceholder();
+
+        // Push to UI
+        imgA.src = redUrl;
+        imgB.src = blueUrl;
+        cA.textContent = state.red_count;
+        cB.textContent = state.blue_count;
+        elMeta.textContent = `cycle: ${state.base_iso}`;
+        showWinner(state.last_winner);
+      }catch(e){
+        console.error(e);
+      }finally{
+        fetching = false;
+      }
+    }
+
+    function tick(){
+      if (!state?.ends_at) return requestAnimationFrame(tick);
+      const remain = new Date(state.ends_at).getTime() - Date.now();
+      elRemain.textContent = (Math.max(0, remain)/1000).toFixed(1);
+
+      // Finalize at 0s (once per base)
+      if (remain <= 0 && state?.base_iso && !localStorage.getItem(ZERO_DELETE_DID(state.base_iso))) {
+        (async () => {
+          try {
+            // bucket delete
+            const raw = localStorage.getItem(DELETE_KEY(state.base_iso));
+            const paths = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(paths) && paths.length) {
+              await deletePaths(paths);
+              await deleteEmptyFolders();
+              console.log('[STORAGE] deleted at 0s', paths);
+            }
+            // queue rows -> used
+            const locked = loadPair(state.base_iso);
+            const usedIds = [locked?.redQueueId, locked?.blueQueueId].filter(Boolean);
+            if (usedIds.length) await markQueueUsed(usedIds);
+          } catch(e){ console.warn('finalize at 0s failed', e); }
+          localStorage.setItem(ZERO_DELETE_DID(state.base_iso), '1');
+        })();
+      }
+
+      if (remain <= -900) fetchState().catch(()=>{});
+      requestAnimationFrame(tick);
+    }
+
+    // Controls
+    document.getElementById('forceQueue').addEventListener('click', async ()=>{
+      if (!state?.base_iso) return;
+      localStorage.removeItem(CLAIM_KEY(state.base_iso));
+      clearPair(state.base_iso);
+      await fetchState(true);
+    });
+    document.getElementById('resetPair').addEventListener('click', async ()=>{
+      if (!state?.base_iso) return;
+      clearPair(state.base_iso);
+      await fetchState(false);
+    });
+
+    // Boot
+    setInterval(()=> fetchState().catch(()=>{}), 4000);
+    (async()=>{ await fetchState(); tick(); })();
+  </script>
+</body>
+</html>
