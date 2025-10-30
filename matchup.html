@@ -90,28 +90,7 @@
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    
-
-// ---- Trim noisy console logs (toggleable) ----
-window.DEBUG_LOGS = false;
-(function(){
-  const __origLog = console.log.bind(console);
-  console.log = (...args) => {
-    const s = args && args[0] ? String(args[0]) : '';
-    const noisy =
-      s.includes('TIMER: rAF') ||
-      s.includes('CLOCK:') ||
-      s.includes('TIMER: interval') ||
-      s.includes('EDGE: body') ||
-      s.includes('[rAF]') ||
-      s.includes('[CLOCK]');
-    if (noisy && !window.DEBUG_LOGS) return;
-    __origLog(...args);
-  };
-})();
-// ----------------------------------------------
-
-const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
+    const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
     // --- Storage ---
     const BUCKET = "art-uploads";
@@ -427,22 +406,7 @@ const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
       // Finalize at 0s (once per base)
       if (remain <= 0 && state?.base_iso && !localStorage.getItem(ZERO_DELETE_DID(state.base_iso))) {
-        
-
-// ---------- Realtime: refresh when Edge writes new seed URLs to cycles_v2 ----------
-const cyclesChannel = (window.supabase || supabase)
-  .channel('cycles-v2-live')
-  .on(
-    'postgres_changes',
-    { event: 'UPDATE', schema: 'public', table: 'cycles_v2' },
-    async (_payload) => {
-      console.log('[SYNC] cycles_v2 updated → refresh matchup');
-      await fetchState(true).catch(()=>{});
-    }
-  )
-  .subscribe((status) => console.log('[Realtime] cycles-v2-live →', status));
-
-(async () => {
+        (async () => {
           try {
             // bucket delete
             const raw = localStorage.getItem(DELETE_KEY(state.base_iso));
