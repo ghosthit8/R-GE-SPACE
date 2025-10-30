@@ -7,7 +7,7 @@
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
-    .wrap { max-width:700px; margin:0 auto; padding:16px 12px 28px; }
+    .wrap { max-width:700px; margin:0 auto; padding:16px 12px 88px; }
     h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
     .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
@@ -31,6 +31,7 @@
     .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .splitTitle { font-size:12px; opacity:.6; margin-top:4px; }
+    .debugbox { position:fixed; left:0; right:0; bottom:0; background:rgba(0,0,0,.75); color:#9ca3af; font-size:11px; padding:6px 10px; border-top:1px solid #111; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
@@ -115,6 +116,8 @@
     <img id="fullImg" src="">
   </div>
 
+  <div class="debugbox" id="debugBox">debug: idle…</div>
+
   <script>
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
@@ -146,6 +149,7 @@
     const overlay  = document.getElementById("overlay");
     const fullImg  = document.getElementById("fullImg");
     const btnClose = document.getElementById("closeFull");
+    const dbg      = document.getElementById("debugBox");
 
     const forceBtn = document.getElementById("forceQueue");
     const resetBtn = document.getElementById("resetPair");
@@ -186,26 +190,32 @@
     let fetching = false;
 
     async function sendVote(color, side){
-      const res = await fetch(FUNCTION_URL, {
-        method:'POST',
-        headers:{ 'content-type':'application/json', 'x-rsid': RSID },
-        body: JSON.stringify({ color, side })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'vote failed');
-      if (!data.ignored) {
-        // update counts from server
-        cA.textContent = data.seed_a_count;
-        cB.textContent = data.seed_b_count;
-        cC.textContent = data.seed_c_count;
-        cD.textContent = data.seed_d_count;
+      try {
+        const res = await fetch(FUNCTION_URL, {
+          method:'POST',
+          headers:{ 'content-type':'application/json', 'x-rsid': RSID },
+          body: JSON.stringify({ color, side })
+        });
+        const data = await res.json();
+        console.log("[VOTE RES]", data);
+        if (!res.ok) throw new Error(data.error || 'vote failed');
+        if (!data.ignored) {
+          cA.textContent = data.seed_a_count;
+          cB.textContent = data.seed_b_count;
+          cC.textContent = data.seed_c_count;
+          cD.textContent = data.seed_d_count;
+        }
+        dbg.textContent = "debug: vote ok ("+color+"/"+side+")";
+      } catch (err) {
+        console.error(err);
+        dbg.textContent = "debug: vote error → " + err.message;
       }
     }
 
-    btnA.onclick = () => sendVote('red', 'ab').catch(console.error);
-    btnB.onclick = () => sendVote('blue', 'ab').catch(console.error);
-    btnC.onclick = () => sendVote('red', 'cd').catch(console.error);
-    btnD.onclick = () => sendVote('blue', 'cd').catch(console.error);
+    btnA.onclick = () => sendVote('red', 'ab');
+    btnB.onclick = () => sendVote('blue', 'ab');
+    btnC.onclick = () => sendVote('red', 'cd');
+    btnD.onclick = () => sendVote('blue', 'cd');
 
     async function fetchState(force=false){
       if (fetching) return;
@@ -213,6 +223,7 @@
       try{
         const res = await fetch(FUNCTION_URL);
         const data = await res.json();
+        console.log("[EDGE GET]", data);
         if (!res.ok) throw new Error(data.error || 'GET failed');
 
         const prevBase = state.base_iso;
@@ -220,10 +231,11 @@
 
         state = data;
 
-        imgA.src = data.seed_a_url || placeholder('A');
-        imgB.src = data.seed_b_url || placeholder('B');
-        imgC.src = data.seed_c_url || placeholder('C');
-        imgD.src = data.seed_d_url || placeholder('D');
+        // ====== IMAGE FALLBACKS ======
+        imgA.src = data.seed_a_url && data.seed_a_url !== "" ? data.seed_a_url : placeholder('A');
+        imgB.src = data.seed_b_url && data.seed_b_url !== "" ? data.seed_b_url : placeholder('B');
+        imgC.src = data.seed_c_url && data.seed_c_url !== "" ? data.seed_c_url : placeholder('C');
+        imgD.src = data.seed_d_url && data.seed_d_url !== "" ? data.seed_d_url : placeholder('D');
 
         cA.textContent = data.seed_a_count ?? 0;
         cB.textContent = data.seed_b_count ?? 0;
@@ -232,7 +244,6 @@
 
         elMeta.textContent = `cycle: ${data.base_iso}`;
 
-        // if mid already done, show that in the UI
         if (data.mid_done) {
           winnerText.textContent = 'Semis decided — final at 0s.';
         } else {
@@ -240,11 +251,18 @@
         }
 
         if (newRound) {
-          // re-enable buttons
           btnA.disabled = btnB.disabled = btnC.disabled = btnD.disabled = false;
         }
+
+        dbg.textContent = "debug: ok " + new Date().toLocaleTimeString();
       }catch(e){
         console.error(e);
+        dbg.textContent = "debug: GET error → " + e.message;
+        // show placeholders so UI is not blank
+        imgA.src = placeholder('A');
+        imgB.src = placeholder('B');
+        imgC.src = placeholder('C');
+        imgD.src = placeholder('D');
       }finally{
         fetching = false;
       }
@@ -259,7 +277,6 @@
       const halfMs = (state.period_sec || 60) * 1000 / 2;
 
       if (ms <= halfMs + 200 && !state.mid_done) {
-        // server should soon run mid; we can pre-emptively tell the user
         winnerText.textContent = 'Semis about to be decided…';
       }
 
@@ -273,23 +290,17 @@
     forceBtn.addEventListener('click', ()=> fetchState(true));
     resetBtn.addEventListener('click', ()=> fetchState(true));
 
-    // realtime refresh (like your old file) — listen to cycles_v2 updates
-    const cyclesChannel = supabase
+    // live updates
+    supabase
       .channel('cycles-v2-live')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'cycles_v2' },
-        async (_payload) => { await fetchState(true); }
-      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cycles_v2' },
+        async () => { await fetchState(true); })
       .subscribe();
 
-    const queueChannel = supabase
+    supabase
       .channel('matchup-sync')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'art_queue', filter: 'status=in.(locked,used)' },
-        async (_payload) => { await fetchState(true); }
-      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'art_queue', filter: 'status=in.(locked,used)' },
+        async () => { await fetchState(true); })
       .subscribe();
 
     fetchState(true).then(()=>tick());
