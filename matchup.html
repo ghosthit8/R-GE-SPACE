@@ -204,7 +204,7 @@
         if (!check2 || check2.length === 0) {
           const { error: remErr } = await supabase.storage.from(BUCKET).remove([dir]);
           if (remErr) console.warn("[STORAGE] failed to remove folder", dir, remErr);
-          else console.log("[STORAGE] removed folder", dir);
+          else console.log("[STORAGE] removed empty folder", dir);
         }
       }
     }
@@ -441,38 +441,6 @@
       clearPair(state.base_iso);
       await fetchState(false);
     });
-
-    /* =========================
-       🔁 REALTIME + FLIP WATCH
-       ========================= */
-
-    // A) Realtime: refresh instantly when queue rows become locked/used
-    const queueChannel = supabase
-      .channel('matchup-sync')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'art_queue', filter: 'status=in.(locked,used)' },
-        async (payload) => {
-          console.log('[SYNC] queue item', payload.new?.id, '→', payload.new?.status, '→ refresh matchup');
-          await fetchState(true).catch(()=>{});
-        }
-      )
-      .subscribe((status) => console.log('[Realtime] matchup-sync →', status));
-
-    // B) Round-flip: when the visible clock jumps from ~0 back up, refetch immediately
-    let __lastRemain = null;
-    function __watchRoundFlip(){
-      const n = parseFloat(elRemain.textContent);
-      if (!isNaN(n)) {
-        if (__lastRemain !== null && __lastRemain <= 0.2 && n > __lastRemain + 0.5) {
-          console.log('[SYNC] round start detected — re-fetching');
-          fetchState(true).catch(()=>{});
-        }
-        __lastRemain = n;
-      }
-      requestAnimationFrame(__watchRoundFlip);
-    }
-    __watchRoundFlip();
 
     // Boot
     setInterval(()=> fetchState().catch(()=>{}), 4000);
