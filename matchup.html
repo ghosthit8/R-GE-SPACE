@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (server-owned)</title>
+  <title>Rage Space — Matchup (4-up)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -24,22 +24,23 @@
     .btn.ghost { color:#a0aec0; }
     button.vote { padding:10px 14px; }
     button.vote:disabled { opacity:.6; cursor:default; }
-    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
     .winner b { color:#39ff14; }
     .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
     .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
     .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
+    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
+    .splitTitle { font-size:12px; opacity:.6; margin-top:4px; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="wrap">
-    <h1>Rage Space — Matchup</h1>
+    <h1>Rage Space — Matchup (4-up)</h1>
 
     <div class="header">
       <div class="row">
-        <div class="timer" id="tRemain">20.0</div>
+        <div class="timer" id="tRemain">60.0</div>
         <div class="state" id="tMeta">syncing…</div>
       </div>
       <div class="row">
@@ -50,33 +51,62 @@
       </div>
     </div>
 
-    <div class="card">
+    <!-- SEMI A/B -->
+    <div class="splitTitle">Semi 1: A vs B</div>
+    <div class="card" id="cardAB">
       <div class="imgBox">
-        <img id="imgA" alt="Seed A" />
+        <img id="imgA" alt="Seed A">
         <button class="fullscreenBtn" onclick="openFull('A')">⤢</button>
       </div>
       <div class="bar">
         <div class="label">Seed A</div>
         <div class="counts" id="countA">0</div>
-        <button class="vote" id="btnA">Vote Seed A</button>
+        <button class="vote" id="btnA">Vote A</button>
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="cardBB">
       <div class="imgBox">
-        <img id="imgB" alt="Seed B" />
+        <img id="imgB" alt="Seed B">
         <button class="fullscreenBtn" onclick="openFull('B')">⤢</button>
       </div>
       <div class="bar">
         <div class="label">Seed B</div>
         <div class="counts" id="countB">0</div>
-        <button class="vote" id="btnB">Vote Seed B</button>
+        <button class="vote" id="btnB">Vote B</button>
       </div>
     </div>
 
-    <div class="winner" id="winnerText">No winner yet — first round in progress.</div>
+    <!-- SEMI C/D -->
+    <div class="splitTitle">Semi 2: C vs D</div>
+    <div class="card" id="cardCD">
+      <div class="imgBox">
+        <img id="imgC" alt="Seed C">
+        <button class="fullscreenBtn" onclick="openFull('C')">⤢</button>
+      </div>
+      <div class="bar">
+        <div class="label">Seed C</div>
+        <div class="counts" id="countC">0</div>
+        <button class="vote" id="btnC">Vote C</button>
+      </div>
+    </div>
+
+    <div class="card" id="cardDD">
+      <div class="imgBox">
+        <img id="imgD" alt="Seed D">
+        <button class="fullscreenBtn" onclick="openFull('D')">⤢</button>
+      </div>
+      <div class="bar">
+        <div class="label">Seed D</div>
+        <div class="counts" id="countD">0</div>
+        <button class="vote" id="btnD">Vote D</button>
+      </div>
+    </div>
+
+    <div class="winner" id="winnerText">No winner yet — semis running.</div>
     <div class="hint">
-      Server-owned images: Edge picks 2, writes to <code>cycles_v2</code>. Matchup only shows those 2.
+      4 images per round. At ~30s the server decides 2 semifinal winners and logs them.
+      At 0s the server decides the final and logs it (same endpoint as before).
     </div>
   </div>
 
@@ -86,105 +116,96 @@
   </div>
 
   <script>
-    // --- Supabase config ---
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // ---- Trim noisy console logs (toggleable) ----
-    window.DEBUG_LOGS = false;
-    (function(){
-      const __origLog = console.log.bind(console);
-      console.log = (...args) => {
-        const s = args && args[0] ? String(args[0]) : '';
-        const noisy =
-          s.includes('TIMER: rAF') ||
-          s.includes('CLOCK:') ||
-          s.includes('TIMER: interval') ||
-          s.includes('EDGE: body') ||
-          s.includes('[rAF]') ||
-          s.includes('[CLOCK]');
-        if (noisy && !window.DEBUG_LOGS) return;
-        __origLog(...args);
-      };
-    })();
-    // ----------------------------------------------
-
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
-    // --- Local state / helpers ---
     const RSID_KEY = "rsid_v2";
     let RSID = localStorage.getItem(RSID_KEY);
     if (!RSID) {
       RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now());
       localStorage.setItem(RSID_KEY, RSID);
     }
-    const votedKey = (b) => `voted:${b}`;
-    const hasVoted = (b) => localStorage.getItem(votedKey(b)) === "1";
-    const markVoted = (b) => localStorage.setItem(votedKey(b), "1");
 
     const elRemain = document.getElementById("tRemain");
     const elMeta   = document.getElementById("tMeta");
     const imgA     = document.getElementById("imgA");
     const imgB     = document.getElementById("imgB");
+    const imgC     = document.getElementById("imgC");
+    const imgD     = document.getElementById("imgD");
     const cA       = document.getElementById("countA");
     const cB       = document.getElementById("countB");
+    const cC       = document.getElementById("countC");
+    const cD       = document.getElementById("countD");
     const btnA     = document.getElementById("btnA");
     const btnB     = document.getElementById("btnB");
+    const btnC     = document.getElementById("btnC");
+    const btnD     = document.getElementById("btnD");
     const winnerText = document.getElementById("winnerText");
     const overlay  = document.getElementById("overlay");
     const fullImg  = document.getElementById("fullImg");
     const btnClose = document.getElementById("closeFull");
+
     const forceBtn = document.getElementById("forceQueue");
     const resetBtn = document.getElementById("resetPair");
 
     btnClose.onclick = () => overlay.style.display = 'none';
-    function openFull(which){ fullImg.src = which==='A'?imgA.src:imgB.src; overlay.style.display='flex'; }
-    window.openFull = (w)=>{ openFull(w); };
+    window.openFull = (which) => {
+      if (which === 'A') fullImg.src = imgA.src;
+      else if (which === 'B') fullImg.src = imgB.src;
+      else if (which === 'C') fullImg.src = imgC.src;
+      else fullImg.src = imgD.src;
+      overlay.style.display = 'flex';
+    };
 
-    function setVoteButtons(enabled){ btnA.disabled = btnB.disabled = !enabled; }
-    btnA.onclick = () => !btnA.disabled && sendVote('red');
-    btnB.onclick = () => !btnB.disabled && sendVote('blue');
-
-    function tbdPlaceholder() {
+    function placeholder(letter){
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960">
         <rect width="100%" height="100%" fill="#000"/>
-        <text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace" text-anchor="middle" dominant-baseline="middle">? tbd</text>
+        <text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace" text-anchor="middle" dominant-baseline="middle">${letter}</text>
       </svg>`;
       return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
     }
 
-    async function sendVote(color){
+    let state = {
+      base_iso: null,
+      ends_at: null,
+      period_sec: 60,
+      seed_a_url: null,
+      seed_b_url: null,
+      seed_c_url: null,
+      seed_d_url: null,
+      seed_a_count: 0,
+      seed_b_count: 0,
+      seed_c_count: 0,
+      seed_d_count: 0,
+      mid_done: false,
+      mid_winner_1_url: null,
+      mid_winner_2_url: null,
+    };
+    let fetching = false;
+
+    async function sendVote(color, side){
       const res = await fetch(FUNCTION_URL, {
         method:'POST',
         headers:{ 'content-type':'application/json', 'x-rsid': RSID },
-        body: JSON.stringify({ color })
+        body: JSON.stringify({ color, side })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'vote failed');
-      if (data.ignored && data.reason==='already_voted') return setVoteButtons(false);
-      if (!data.ignored){
-        markVoted(state.base_iso);
-        setVoteButtons(false);
-        cA.textContent = data.red_count;
-        cB.textContent = data.blue_count;
+      if (!data.ignored) {
+        // update counts from server
+        cA.textContent = data.seed_a_count;
+        cB.textContent = data.seed_b_count;
+        cC.textContent = data.seed_c_count;
+        cD.textContent = data.seed_d_count;
       }
     }
 
-    function showWinner(winner){
-      if (!winner){
-        winnerText.textContent='No winner yet — first round in progress.';
-        return;
-      }
-      const by = winner.decided_by==='random_tie' ? 'random tie' : 'votes';
-      const name = winner.winner_color==='red' ? 'Seed A' : 'Seed B';
-      const score = `${winner.red_count}–${winner.blue_count}`;
-      winnerText.innerHTML = `Last winner: <b>${name}</b> (${by}, ${score})`;
-    }
-
-    // ---------- Round state ----------
-    let state = { ends_at:null, base_iso:null, red_count:0, blue_count:0, last_winner:null };
-    let fetching = false;
+    btnA.onclick = () => sendVote('red', 'ab').catch(console.error);
+    btnB.onclick = () => sendVote('blue', 'ab').catch(console.error);
+    btnC.onclick = () => sendVote('red', 'cd').catch(console.error);
+    btnD.onclick = () => sendVote('blue', 'cd').catch(console.error);
 
     async function fetchState(force=false){
       if (fetching) return;
@@ -199,20 +220,28 @@
 
         state = data;
 
-        // Just trust the server
-        const redUrl  = data.seed_a_url || data.red_url  || tbdPlaceholder();
-        const blueUrl = data.seed_b_url || data.blue_url || tbdPlaceholder();
+        imgA.src = data.seed_a_url || placeholder('A');
+        imgB.src = data.seed_b_url || placeholder('B');
+        imgC.src = data.seed_c_url || placeholder('C');
+        imgD.src = data.seed_d_url || placeholder('D');
 
-        imgA.src = redUrl;
-        imgB.src = blueUrl;
-        cA.textContent = data.seed_a_count ?? data.red_count ?? 0;
-        cB.textContent = data.seed_b_count ?? data.blue_count ?? 0;
+        cA.textContent = data.seed_a_count ?? 0;
+        cB.textContent = data.seed_b_count ?? 0;
+        cC.textContent = data.seed_c_count ?? 0;
+        cD.textContent = data.seed_d_count ?? 0;
+
         elMeta.textContent = `cycle: ${data.base_iso}`;
-        showWinner(data.last_winner);
+
+        // if mid already done, show that in the UI
+        if (data.mid_done) {
+          winnerText.textContent = 'Semis decided — final at 0s.';
+        } else {
+          winnerText.textContent = 'Semis running…';
+        }
 
         if (newRound) {
-          // unlock votes for new round
-          setVoteButtons(!hasVoted(data.base_iso));
+          // re-enable buttons
+          btnA.disabled = btnB.disabled = btnC.disabled = btnD.disabled = false;
         }
       }catch(e){
         console.error(e);
@@ -224,71 +253,46 @@
     function tick(){
       if (!state?.ends_at) return requestAnimationFrame(tick);
       const remain = new Date(state.ends_at).getTime() - Date.now();
-      elRemain.textContent = (Math.max(0, remain)/1000).toFixed(1);
+      const ms = Math.max(0, remain);
+      elRemain.textContent = (ms/1000).toFixed(1);
 
-      if (remain <= -900) {
+      const halfMs = (state.period_sec || 60) * 1000 / 2;
+
+      if (ms <= halfMs + 200 && !state.mid_done) {
+        // server should soon run mid; we can pre-emptively tell the user
+        winnerText.textContent = 'Semis about to be decided…';
+      }
+
+      if (ms <= -900) {
         fetchState().catch(()=>{});
       }
+
       requestAnimationFrame(tick);
     }
 
-    // Controls
-    document.getElementById('forceQueue').addEventListener('click', async ()=>{
-      await fetchState(true);
-    });
-    document.getElementById('resetPair').addEventListener('click', async ()=>{
-      // now reset = just re-fetch from server
-      await fetchState(true);
-    });
+    forceBtn.addEventListener('click', ()=> fetchState(true));
+    resetBtn.addEventListener('click', ()=> fetchState(true));
 
-    /* =========================
-       🔁 REALTIME + FLIP WATCH
-       ========================= */
-
-    // A) Realtime: refresh instantly when queue rows change (used/locked)
-    const queueChannel = supabase
-      .channel('matchup-sync')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'art_queue', filter: 'status=in.(locked,used)' },
-        async (payload) => {
-          console.log('[SYNC] queue item', payload.new?.id, '→', payload.new?.status, '→ refresh matchup');
-          await fetchState(true).catch(()=>{});
-        }
-      )
-      .subscribe((status) => console.log('[Realtime] matchup-sync →', status));
-
-    // B) Realtime: refresh when Edge writes new seed URLs to cycles_v2
+    // realtime refresh (like your old file) — listen to cycles_v2 updates
     const cyclesChannel = supabase
       .channel('cycles-v2-live')
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'cycles_v2' },
-        async (_payload) => {
-          console.log('[SYNC] cycles_v2 updated → refresh matchup');
-          await fetchState(true).catch(()=>{});
-        }
+        async (_payload) => { await fetchState(true); }
       )
-      .subscribe((status) => console.log('[Realtime] cycles-v2-live →', status));
+      .subscribe();
 
-    // C) Round-flip watcher — if timer jumps up, fetch
-    let __lastRemain = null;
-    function __watchRoundFlip(){
-      const n = parseFloat(elRemain.textContent);
-      if (!isNaN(n)) {
-        if (__lastRemain !== null && __lastRemain <= 0.2 && n > __lastRemain + 0.5) {
-          console.log('[SYNC] round start detected — re-fetching');
-          fetchState(true).catch(()=>{});
-        }
-        __lastRemain = n;
-      }
-      requestAnimationFrame(__watchRoundFlip);
-    }
-    __watchRoundFlip();
+    const queueChannel = supabase
+      .channel('matchup-sync')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'art_queue', filter: 'status=in.(locked,used)' },
+        async (_payload) => { await fetchState(true); }
+      )
+      .subscribe();
 
-    // Boot
-    setInterval(()=> fetchState().catch(()=>{}), 4000);
-    (async()=>{ await fetchState(); tick(); })();
+    fetchState(true).then(()=>tick());
   </script>
 </body>
 </html>
