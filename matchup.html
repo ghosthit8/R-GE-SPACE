@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (4-up)</title>
+  <title>Rage Space — Matchup (4-up, 2-up view)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -13,6 +13,8 @@
     .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
     .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
     .state { color:var(--muted); font-size:12px; }
+
+    /* main match (2 cards stacked) */
     .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
     .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
     .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
@@ -24,20 +26,32 @@
     .btn.ghost { color:#a0aec0; }
     button.vote { padding:10px 14px; }
     button.vote:disabled { opacity:.6; cursor:default; }
+
+    /* thumbnails bar */
+    .thumbs-wrap { margin-top:16px; }
+    .thumbs-title { font-size:12px; opacity:.6; margin-bottom:6px; }
+    .thumbs { display:flex; gap:10px; flex-wrap:wrap; }
+    .thumb { width:110px; border:1px solid #20242a; border-radius:12px; overflow:hidden; background:#0f1318; cursor:pointer; }
+    .thumb.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(57,255,20,.3); }
+    .thumb-img { width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
+    .thumb-img img { width:100%; height:100%; object-fit:cover; }
+    .thumb-label { padding:4px 6px 6px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
+    .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
+
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
     .winner b { color:#39ff14; }
+
     .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
     .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
     .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
-    .splitTitle { font-size:12px; opacity:.6; margin-top:4px; }
     .debugbox { position:fixed; left:0; right:0; bottom:0; background:rgba(0,0,0,.75); color:#9ca3af; font-size:11px; padding:6px 10px; border-top:1px solid #111; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="wrap">
-    <h1>Rage Space — Matchup (4-up)</h1>
+    <h1>Rage Space — Matchup (4-up, 2-up view)</h1>
 
     <div class="header">
       <div class="row">
@@ -52,62 +66,55 @@
       </div>
     </div>
 
-    <!-- SEMI A/B -->
-    <div class="splitTitle">Semi 1: A vs B</div>
-    <div class="card" id="cardAB">
+    <!-- ACTIVE MATCH (two big cards) -->
+    <div class="card" id="activeTop">
       <div class="imgBox">
-        <img id="imgA" alt="Seed A">
-        <button class="fullscreenBtn" onclick="openFull('A')">⤢</button>
+        <img id="imgActive1" alt="Active seed 1">
+        <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
       </div>
       <div class="bar">
-        <div class="label">Seed A</div>
-        <div class="counts" id="countA">0</div>
-        <button class="vote" id="btnA">Vote A</button>
+        <div class="label" id="labelActive1">Seed A</div>
+        <div class="counts" id="countActive1">0</div>
+        <button class="vote" id="btnActive1">Vote</button>
       </div>
     </div>
 
-    <div class="card" id="cardBB">
+    <div class="card" id="activeBottom">
       <div class="imgBox">
-        <img id="imgB" alt="Seed B">
-        <button class="fullscreenBtn" onclick="openFull('B')">⤢</button>
+        <img id="imgActive2" alt="Active seed 2">
+        <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
       </div>
       <div class="bar">
-        <div class="label">Seed B</div>
-        <div class="counts" id="countB">0</div>
-        <button class="vote" id="btnB">Vote B</button>
+        <div class="label" id="labelActive2">Seed B</div>
+        <div class="counts" id="countActive2">0</div>
+        <button class="vote" id="btnActive2">Vote</button>
       </div>
     </div>
 
-    <!-- SEMI C/D -->
-    <div class="splitTitle">Semi 2: C vs D</div>
-    <div class="card" id="cardCD">
-      <div class="imgBox">
-        <img id="imgC" alt="Seed C">
-        <button class="fullscreenBtn" onclick="openFull('C')">⤢</button>
-      </div>
-      <div class="bar">
-        <div class="label">Seed C</div>
-        <div class="counts" id="countC">0</div>
-        <button class="vote" id="btnC">Vote C</button>
-      </div>
-    </div>
-
-    <div class="card" id="cardDD">
-      <div class="imgBox">
-        <img id="imgD" alt="Seed D">
-        <button class="fullscreenBtn" onclick="openFull('D')">⤢</button>
-      </div>
-      <div class="bar">
-        <div class="label">Seed D</div>
-        <div class="counts" id="countD">0</div>
-        <button class="vote" id="btnD">Vote D</button>
+    <!-- OTHER MATCH AS THUMBNAILS -->
+    <div class="thumbs-wrap">
+      <div class="thumbs-title">Other round</div>
+      <div class="thumbs">
+        <div class="thumb" id="thumbAB">
+          <div class="thumb-img"><img id="thumbABimg" alt="A vs B"></div>
+          <div class="thumb-label">
+            <span>A vs B</span>
+            <span class="thumb-count" id="thumbABcount">0-0</span>
+          </div>
+        </div>
+        <div class="thumb" id="thumbCD">
+          <div class="thumb-img"><img id="thumbCDimg" alt="C vs D"></div>
+          <div class="thumb-label">
+            <span>C vs D</span>
+            <span class="thumb-count" id="thumbCDcount">0-0</span>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="winner" id="winnerText">No winner yet — semis running.</div>
     <div class="hint">
-      4 images per round. At ~30s the server decides 2 semifinal winners and logs them.
-      At 0s the server decides the final and logs it (same endpoint as before).
+      4 images per round. We only show one 1v1 at a time. Tap the thumbnails to switch which 1v1 is the main one. At ~30s the backend locks semis, at 0s it writes the final.
     </div>
   </div>
 
@@ -131,37 +138,35 @@
       localStorage.setItem(RSID_KEY, RSID);
     }
 
+    // DOM
     const elRemain = document.getElementById("tRemain");
     const elMeta   = document.getElementById("tMeta");
-    const imgA     = document.getElementById("imgA");
-    const imgB     = document.getElementById("imgB");
-    const imgC     = document.getElementById("imgC");
-    const imgD     = document.getElementById("imgD");
-    const cA       = document.getElementById("countA");
-    const cB       = document.getElementById("countB");
-    const cC       = document.getElementById("countC");
-    const cD       = document.getElementById("countD");
-    const btnA     = document.getElementById("btnA");
-    const btnB     = document.getElementById("btnB");
-    const btnC     = document.getElementById("btnC");
-    const btnD     = document.getElementById("btnD");
+    const dbg      = document.getElementById("debugBox");
     const winnerText = document.getElementById("winnerText");
+
+    const imgActive1 = document.getElementById("imgActive1");
+    const imgActive2 = document.getElementById("imgActive2");
+    const labelActive1 = document.getElementById("labelActive1");
+    const labelActive2 = document.getElementById("labelActive2");
+    const countActive1 = document.getElementById("countActive1");
+    const countActive2 = document.getElementById("countActive2");
+    const btnActive1 = document.getElementById("btnActive1");
+    const btnActive2 = document.getElementById("btnActive2");
+
+    const thumbAB = document.getElementById("thumbAB");
+    const thumbABimg = document.getElementById("thumbABimg");
+    const thumbABcount = document.getElementById("thumbABcount");
+    const thumbCD = document.getElementById("thumbCD");
+    const thumbCDimg = document.getElementById("thumbCDimg");
+    const thumbCDcount = document.getElementById("thumbCDcount");
+
     const overlay  = document.getElementById("overlay");
     const fullImg  = document.getElementById("fullImg");
     const btnClose = document.getElementById("closeFull");
-    const dbg      = document.getElementById("debugBox");
+    btnClose.onclick = () => overlay.style.display = 'none';
 
     const forceBtn = document.getElementById("forceQueue");
     const resetBtn = document.getElementById("resetPair");
-
-    btnClose.onclick = () => overlay.style.display = 'none';
-    window.openFull = (which) => {
-      if (which === 'A') fullImg.src = imgA.src;
-      else if (which === 'B') fullImg.src = imgB.src;
-      else if (which === 'C') fullImg.src = imgC.src;
-      else fullImg.src = imgD.src;
-      overlay.style.display = 'flex';
-    };
 
     function placeholder(letter){
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960">
@@ -189,7 +194,56 @@
     };
     let fetching = false;
 
-    async function sendVote(color, side){
+    // which match is shown big: "ab" or "cd"
+    let activeMatch = "ab";
+
+    function renderActive(){
+      if (activeMatch === "ab") {
+        imgActive1.src = state.seed_a_url || placeholder("A");
+        imgActive2.src = state.seed_b_url || placeholder("B");
+        labelActive1.textContent = "Seed A";
+        labelActive2.textContent = "Seed B";
+        countActive1.textContent = state.seed_a_count ?? 0;
+        countActive2.textContent = state.seed_b_count ?? 0;
+        thumbAB.classList.add("active");
+        thumbCD.classList.remove("active");
+      } else {
+        imgActive1.src = state.seed_c_url || placeholder("C");
+        imgActive2.src = state.seed_d_url || placeholder("D");
+        labelActive1.textContent = "Seed C";
+        labelActive2.textContent = "Seed D";
+        countActive1.textContent = state.seed_c_count ?? 0;
+        countActive2.textContent = state.seed_d_count ?? 0;
+        thumbCD.classList.add("active");
+        thumbAB.classList.remove("active");
+      }
+
+      // update thumb images + counts no matter what
+      thumbABimg.src = state.seed_a_url || placeholder("A");
+      thumbABcount.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
+      thumbCDimg.src = state.seed_c_url || placeholder("C");
+      thumbCDcount.textContent = (state.seed_c_count ?? 0) + "-" + (state.seed_d_count ?? 0);
+    }
+
+    window.openFull = (which) => {
+      if (which === 'active1') fullImg.src = imgActive1.src;
+      else fullImg.src = imgActive2.src;
+      overlay.style.display = 'flex';
+    };
+
+    thumbAB.addEventListener("click", () => {
+      activeMatch = "ab";
+      renderActive();
+    });
+    thumbCD.addEventListener("click", () => {
+      activeMatch = "cd";
+      renderActive();
+    });
+
+    async function sendVote(whichSide){
+      // whichSide is "left" or "right" in CURRENT active match
+      const side = activeMatch; // 'ab' or 'cd'
+      const color = whichSide === "right" ? "blue" : "red";
       try {
         const res = await fetch(FUNCTION_URL, {
           method:'POST',
@@ -199,12 +253,14 @@
         const data = await res.json();
         console.log("[VOTE RES]", data);
         if (!res.ok) throw new Error(data.error || 'vote failed');
-        if (!data.ignored) {
-          cA.textContent = data.seed_a_count;
-          cB.textContent = data.seed_b_count;
-          cC.textContent = data.seed_c_count;
-          cD.textContent = data.seed_d_count;
-        }
+
+        // update counts
+        state.seed_a_count = data.seed_a_count ?? state.seed_a_count;
+        state.seed_b_count = data.seed_b_count ?? state.seed_b_count;
+        state.seed_c_count = data.seed_c_count ?? state.seed_c_count;
+        state.seed_d_count = data.seed_d_count ?? state.seed_d_count;
+
+        renderActive();
         dbg.textContent = "debug: vote ok ("+color+"/"+side+")";
       } catch (err) {
         console.error(err);
@@ -212,10 +268,8 @@
       }
     }
 
-    btnA.onclick = () => sendVote('red', 'ab');
-    btnB.onclick = () => sendVote('blue', 'ab');
-    btnC.onclick = () => sendVote('red', 'cd');
-    btnD.onclick = () => sendVote('blue', 'cd');
+    btnActive1.onclick = () => sendVote("left");
+    btnActive2.onclick = () => sendVote("right");
 
     async function fetchState(force=false){
       if (fetching) return;
@@ -224,23 +278,12 @@
         const res = await fetch(FUNCTION_URL);
         const data = await res.json();
         console.log("[EDGE GET]", data);
-        if (!res.ok) throw new Error(data.error || 'GET failed');
+        if (!res.ok) throw new Error(data.error || JSON.stringify(data));
 
         const prevBase = state.base_iso;
         const newRound = prevBase && prevBase !== data.base_iso;
 
         state = data;
-
-        // ====== IMAGE FALLBACKS ======
-        imgA.src = data.seed_a_url && data.seed_a_url !== "" ? data.seed_a_url : placeholder('A');
-        imgB.src = data.seed_b_url && data.seed_b_url !== "" ? data.seed_b_url : placeholder('B');
-        imgC.src = data.seed_c_url && data.seed_c_url !== "" ? data.seed_c_url : placeholder('C');
-        imgD.src = data.seed_d_url && data.seed_d_url !== "" ? data.seed_d_url : placeholder('D');
-
-        cA.textContent = data.seed_a_count ?? 0;
-        cB.textContent = data.seed_b_count ?? 0;
-        cC.textContent = data.seed_c_count ?? 0;
-        cD.textContent = data.seed_d_count ?? 0;
 
         elMeta.textContent = `cycle: ${data.base_iso}`;
 
@@ -250,19 +293,20 @@
           winnerText.textContent = 'Semis running…';
         }
 
+        renderActive();
+
         if (newRound) {
-          btnA.disabled = btnB.disabled = btnC.disabled = btnD.disabled = false;
+          // when a new round starts, always default to AB on top
+          activeMatch = "ab";
+          renderActive();
         }
 
         dbg.textContent = "debug: ok " + new Date().toLocaleTimeString();
       }catch(e){
         console.error(e);
-        dbg.textContent = "debug: GET error → " + e.message;
+        dbg.textContent = "debug: GET error → " + (e.message || JSON.stringify(e));
         // show placeholders so UI is not blank
-        imgA.src = placeholder('A');
-        imgB.src = placeholder('B');
-        imgC.src = placeholder('C');
-        imgD.src = placeholder('D');
+        renderActive();
       }finally{
         fetching = false;
       }
