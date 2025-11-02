@@ -53,6 +53,8 @@
     .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .debugbox { position:fixed; left:0; right:0; bottom:0; background:rgba(0,0,0,.75); color:#9ca3af; font-size:11px; padding:6px 10px; border-top:1px solid #111; }
+    /* hide final thumb by default, show via JS */
+    #thumbFinal { display:none; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
@@ -73,7 +75,7 @@
       </div>
     </div>
 
-    <!-- ACTIVE MATCH -->
+    <!-- ACTIVE MATCH AREA -->
     <div class="card" id="activeTop">
       <div class="imgBox">
         <img id="imgActive1" alt="Active seed 1">
@@ -98,7 +100,7 @@
       </div>
     </div>
 
-    <!-- OTHER MATCH AS THUMBNAILS -->
+    <!-- OTHER MATCHES -->
     <div class="thumbs-wrap">
       <div class="thumbs-title">Other round</div>
       <div class="thumbs">
@@ -116,12 +118,20 @@
             <span class="thumb-count" id="thumbCDcount">0-0</span>
           </div>
         </div>
+        <!-- NEW: final thumb -->
+        <div class="thumb" id="thumbFinal">
+          <div class="thumb-img"><img id="thumbFinalImg" alt="Final"></div>
+          <div class="thumb-label">
+            <span>Final</span>
+            <span class="thumb-count" id="thumbFinalCount">0-0</span>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="winner" id="winnerText">No winner yet — semis running.</div>
 
-    <!-- FINAL BOX -->
+    <!-- FINAL BOX (display only) -->
     <div class="card final-card" id="finalCard">
       <div class="bar">
         <div class="label">Final</div>
@@ -189,6 +199,9 @@
     const thumbCD = document.getElementById("thumbCD");
     const thumbCDimg = document.getElementById("thumbCDimg");
     const thumbCDcount = document.getElementById("thumbCDcount");
+    const thumbFinal = document.getElementById("thumbFinal");
+    const thumbFinalImg = document.getElementById("thumbFinalImg");
+    const thumbFinalCount = document.getElementById("thumbFinalCount");
 
     const finalImg1 = document.getElementById("finalImg1");
     const finalImg2 = document.getElementById("finalImg2");
@@ -227,23 +240,28 @@
       mid_winner_2_url: null,
     };
 
-    // NEW: trigger flags + poll timestamp
+    // triggers
     let semiTriggered = false;
     let finalTriggered = false;
     let lastSemiPoll = 0;
 
     let fetching = false;
-    let activeMatch = "ab";
+    let activeMatch = "ab"; // "ab" | "cd" | "final"
 
     function renderFinal() {
       if (!state.mid_done) {
         finalImg1.src = placeholder("?");
         finalImg2.src = placeholder("?");
         finalFooter.textContent = "Waiting for semis…";
+        // hide final thumb
+        thumbFinal.style.display = "none";
         return;
       }
       finalImg1.src = state.mid_winner_1_url || placeholder("?");
       finalImg2.src = state.mid_winner_2_url || placeholder("?");
+      thumbFinalImg.src = state.mid_winner_1_url || placeholder("?");
+      thumbFinalCount.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
+      thumbFinal.style.display = "block";
       if (state.mid_winner_1_url && state.mid_winner_2_url) {
         finalFooter.textContent = "Final is ready — will be decided at 0s.";
       } else {
@@ -261,7 +279,8 @@
         countActive2.textContent = state.seed_b_count ?? 0;
         thumbAB.classList.add("active");
         thumbCD.classList.remove("active");
-      } else {
+        thumbFinal.classList.remove("active");
+      } else if (activeMatch === "cd") {
         imgActive1.src = state.seed_c_url || placeholder("C");
         imgActive2.src = state.seed_d_url || placeholder("D");
         labelActive1.textContent = "Seed C";
@@ -270,8 +289,21 @@
         countActive2.textContent = state.seed_d_count ?? 0;
         thumbCD.classList.add("active");
         thumbAB.classList.remove("active");
+        thumbFinal.classList.remove("active");
+      } else {
+        // FINAL VIEW — note: counts come from A/B because edge final uses those
+        imgActive1.src = state.mid_winner_1_url || placeholder("?");
+        imgActive2.src = state.mid_winner_2_url || placeholder("?");
+        labelActive1.textContent = "Final — slot 1";
+        labelActive2.textContent = "Final — slot 2";
+        countActive1.textContent = state.seed_a_count ?? 0;
+        countActive2.textContent = state.seed_b_count ?? 0;
+        thumbFinal.classList.add("active");
+        thumbAB.classList.remove("active");
+        thumbCD.classList.remove("active");
       }
 
+      // thumbs always show semis
       thumbABimg.src = state.seed_a_url || placeholder("A");
       thumbABcount.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
       thumbCDimg.src = state.seed_c_url || placeholder("C");
@@ -294,12 +326,21 @@
       activeMatch = "cd";
       renderActive();
     });
+    thumbFinal.addEventListener("click", () => {
+      if (!state.mid_done) return;
+      activeMatch = "final";
+      renderActive();
+    });
 
     async function sendVote(whichSide){
-      const side = activeMatch;
+      let side = activeMatch;
       const color = whichSide === "right" ? "blue" : "red";
 
-      // make rsid unique per cycle + per match (ab / cd)
+      // final still writes to A/B counts on the server
+      if (side === "final") {
+        side = "ab";
+      }
+
       const voterId = `${RSID}-${state.base_iso || "noiso"}-${side}`;
 
       try {
@@ -343,7 +384,6 @@
       try{
         const res = await fetch(FUNCTION_URL);
         const data = await res.json();
-        console.log("[EDGE GET]", data);
         if (!res.ok) throw new Error(data.error || JSON.stringify(data));
 
         const prevBase = state.base_iso;
@@ -358,7 +398,6 @@
           winnerText.textContent = 'Semis running…';
         }
 
-        // new round → reset triggers
         if (newRound) {
           activeMatch = "ab";
           semiTriggered = false;
@@ -385,12 +424,11 @@
 
       const halfMs = (state.period_sec || 60) * 1000 / 2;
 
-      // show approaching message
       if (ms <= halfMs + 200 && !state.mid_done) {
         winnerText.textContent = 'Semis about to be decided…';
       }
 
-      // ✅ at/after 30s: keep polling every ~1.5s until server says mid_done
+      // keep polling around 30s until server flips mid_done
       if (ms <= halfMs && !state.mid_done) {
         const now = Date.now();
         if (!semiTriggered || now - lastSemiPoll > 1500) {
@@ -412,7 +450,7 @@
         }
       }
 
-      // at 0s: pull again to catch final
+      // 0s → sync for final
       if (ms <= 0 && state.mid_done && !finalTriggered) {
         finalTriggered = true;
         fetch(FUNCTION_URL)
@@ -427,7 +465,6 @@
           });
       }
 
-      // safety pull a bit after 0
       if (ms <= -900) {
         fetchState().catch(()=>{});
       }
