@@ -374,73 +374,65 @@
         fetching = false;
       }
     }
+  // ... everything above stays the same ...
 
-    function tick(){
-      if (!state?.ends_at) return requestAnimationFrame(tick);
-      const remain = new Date(state.ends_at).getTime() - Date.now();
-      const ms = Math.max(0, remain);
-      elRemain.textContent = (ms/1000).toFixed(1);
+  function tick(){
+    if (!state?.ends_at) return requestAnimationFrame(tick);
+    const remain = new Date(state.ends_at).getTime() - Date.now();
+    const ms = Math.max(0, remain);
+    elRemain.textContent = (ms/1000).toFixed(1);
 
-      const halfMs = (state.period_sec || 60) * 1000 / 2;
+    const halfMs = (state.period_sec || 60) * 1000 / 2;
 
-      // show approaching message
-      if (ms <= halfMs + 200 && !state.mid_done) {
-        winnerText.textContent = 'Semis about to be decided…';
-      }
-
-      // 👇 NEW: at 30s → tell edge function to decide semis
-      if (ms <= halfMs && !state.mid_done && !semiTriggered) {
-        semiTriggered = true;
-        fetch(`${FUNCTION_URL}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "decide_semis" })
-        }).then(() => {
-          dbg.textContent = "debug: semi finals decided at 30s";
-        }).catch(err => {
-          dbg.textContent = "debug: semi decide error → " + err.message;
-        });
-      }
-
-      // 👇 NEW: at 0s → tell edge function to decide final (only if semis are already done)
-      if (ms <= 0 && state.mid_done && !finalTriggered) {
-        finalTriggered = true;
-        fetch(`${FUNCTION_URL}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "decide_final" })
-        }).then(() => {
-          dbg.textContent = "debug: final decided at 0s";
-        }).catch(err => {
-          dbg.textContent = "debug: final decide error → " + err.message;
-        });
-      }
-
-      // pull fresh state a little after 0
-      if (ms <= -900) {
-        fetchState().catch(()=>{});
-      }
-
-      requestAnimationFrame(tick);
+    // show approaching message
+    if (ms <= halfMs + 200 && !state.mid_done) {
+      winnerText.textContent = 'Semis about to be decided…';
     }
 
-    forceBtn.addEventListener('click', ()=> fetchState(true));
-    resetBtn.addEventListener('click', ()=> fetchState(true));
+    // ✅ OPTION 1: at ~30s just GET — server auto-runs runMidRound()
+    if (ms <= halfMs && !state.mid_done && !semiTriggered) {
+      semiTriggered = true;
+      fetch(FUNCTION_URL)
+        .then(r => r.json())
+        .then(data => {
+          // update local state with what server actually decided
+          state = data;
+          if (data.mid_done) {
+            winnerText.textContent = 'Semis decided — final at 0s.';
+          }
+          renderActive();
+          dbg.textContent = "debug: semi forced via GET @ 30s";
+        })
+        .catch(err => {
+          dbg.textContent = "debug: semi GET error → " + err.message;
+        });
+    }
 
-    supabase
-      .channel('cycles-v2-live')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cycles_v2' },
-        async () => { await fetchState(true); })
-      .subscribe();
+    // you can keep the final-at-0s part using GET too if you want:
+    if (ms <= 0 && state.mid_done && !finalTriggered) {
+      finalTriggered = true;
+      fetch(FUNCTION_URL)
+        .then(r => r.json())
+        .then(data => {
+          state = data;
+          renderActive();
+          dbg.textContent = "debug: final synced at 0s";
+        })
+        .catch(err => {
+          dbg.textContent = "debug: final GET error → " + err.message;
+        });
+    }
 
-    supabase
-      .channel('matchup-sync')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'art_queue', filter: 'status=in.(locked,used)' },
-        async () => { await fetchState(true); })
-      .subscribe();
+    // pull fresh state a little after 0
+    if (ms <= -900) {
+      fetchState().catch(()=>{});
+    }
 
-    fetchState(true).then(()=>tick());
-  </script>
+    requestAnimationFrame(tick);
+  }
+
+  // ... rest of your script stays the same ...
+</script>
   <!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
 <script>
 (function () {
