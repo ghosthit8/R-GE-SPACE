@@ -37,9 +37,7 @@
     .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
 
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
-    .winner b { color:#39ff14; }
 
-    /* FINAL BOX */
     .final-card { margin-top:14px; }
     .final-inner { display:flex; gap:12px; flex-wrap:wrap; padding:12px; }
     .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed #20242a; border-radius:10px; padding:8px; text-align:center; }
@@ -53,7 +51,6 @@
     .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .debugbox { position:fixed; left:0; right:0; bottom:0; background:rgba(0,0,0,.75); color:#9ca3af; font-size:11px; padding:6px 10px; border-top:1px solid #111; }
-    /* hide final thumb by default, show via JS */
     #thumbFinal { display:none; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -75,10 +72,10 @@
       </div>
     </div>
 
-    <!-- ACTIVE MATCH AREA -->
-    <div class="card" id="activeTop">
+    <!-- active top -->
+    <div class="card">
       <div class="imgBox">
-        <img id="imgActive1" alt="Active seed 1">
+        <img id="imgActive1" alt="Active 1">
         <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
       </div>
       <div class="bar">
@@ -88,9 +85,10 @@
       </div>
     </div>
 
-    <div class="card" id="activeBottom">
+    <!-- active bottom -->
+    <div class="card">
       <div class="imgBox">
-        <img id="imgActive2" alt="Active seed 2">
+        <img id="imgActive2" alt="Active 2">
         <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
       </div>
       <div class="bar">
@@ -100,7 +98,7 @@
       </div>
     </div>
 
-    <!-- OTHER MATCHES -->
+    <!-- thumbs -->
     <div class="thumbs-wrap">
       <div class="thumbs-title">Other round</div>
       <div class="thumbs">
@@ -118,7 +116,6 @@
             <span class="thumb-count" id="thumbCDcount">0-0</span>
           </div>
         </div>
-        <!-- NEW: final thumb -->
         <div class="thumb" id="thumbFinal">
           <div class="thumb-img"><img id="thumbFinalImg" alt="Final"></div>
           <div class="thumb-label">
@@ -129,10 +126,10 @@
       </div>
     </div>
 
-    <div class="winner" id="winnerText">No winner yet — semis running.</div>
+    <div class="winner" id="winnerText">Semis running…</div>
 
-    <!-- FINAL BOX (display only) -->
-    <div class="card final-card" id="finalCard">
+    <!-- final display -->
+    <div class="card final-card">
       <div class="bar">
         <div class="label">Final</div>
         <div style="font-size:12px;color:#a1a1a1;">Decides at 0s</div>
@@ -140,15 +137,11 @@
       <div class="final-inner">
         <div class="final-slot">
           <span class="label">Winner of A vs B</span>
-          <div class="thumb-final">
-            <img id="finalImg1" alt="Final slot 1">
-          </div>
+          <div class="thumb-final"><img id="finalImg1" alt="final 1"></div>
         </div>
         <div class="final-slot">
           <span class="label">Winner of C vs D</span>
-          <div class="thumb-final">
-            <img id="finalImg2" alt="Final slot 2">
-          </div>
+          <div class="thumb-final"><img id="finalImg2" alt="final 2"></div>
         </div>
       </div>
       <div class="final-footer" id="finalFooter">Waiting for semis…</div>
@@ -209,17 +202,13 @@
 
     const overlay  = document.getElementById("overlay");
     const fullImg  = document.getElementById("fullImg");
-    const btnClose = document.getElementById("closeFull");
-    btnClose.onclick = () => overlay.style.display = 'none';
+    document.getElementById("closeFull").onclick = () => overlay.style.display = 'none';
 
     const forceBtn = document.getElementById("forceQueue");
     const resetBtn = document.getElementById("resetPair");
 
     function placeholder(letter){
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960">
-        <rect width="100%" height="100%" fill="#000"/>
-        <text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace" text-anchor="middle" dominant-baseline="middle">${letter}</text>
-      </svg>`;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960"><rect width="100%" height="100%" fill="#000"/><text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace" text-anchor="middle" dominant-baseline="middle">${letter}</text></svg>`;
       return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
     }
 
@@ -244,29 +233,25 @@
     let semiTriggered = false;
     let finalTriggered = false;
     let lastSemiPoll = 0;
-
     let fetching = false;
-    let activeMatch = "ab"; // "ab" | "cd" | "final"
 
-    function renderFinal() {
+    // "ab" | "cd" | "final"
+    let activeMatch = "ab";
+
+    function renderFinal(){
       if (!state.mid_done) {
         finalImg1.src = placeholder("?");
         finalImg2.src = placeholder("?");
         finalFooter.textContent = "Waiting for semis…";
-        // hide final thumb
         thumbFinal.style.display = "none";
         return;
       }
       finalImg1.src = state.mid_winner_1_url || placeholder("?");
       finalImg2.src = state.mid_winner_2_url || placeholder("?");
+      finalFooter.textContent = "Final is ready — will be decided at 0s.";
+      thumbFinal.style.display = "block";
       thumbFinalImg.src = state.mid_winner_1_url || placeholder("?");
       thumbFinalCount.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
-      thumbFinal.style.display = "block";
-      if (state.mid_winner_1_url && state.mid_winner_2_url) {
-        finalFooter.textContent = "Final is ready — will be decided at 0s.";
-      } else {
-        finalFooter.textContent = "Semis partly done — waiting for other semi…";
-      }
     }
 
     function renderActive(){
@@ -291,7 +276,7 @@
         thumbAB.classList.remove("active");
         thumbFinal.classList.remove("active");
       } else {
-        // FINAL VIEW — note: counts come from A/B because edge final uses those
+        // final view — counts now come straight from server (because we zeroed in edge)
         imgActive1.src = state.mid_winner_1_url || placeholder("?");
         imgActive2.src = state.mid_winner_2_url || placeholder("?");
         labelActive1.textContent = "Final — slot 1";
@@ -303,7 +288,7 @@
         thumbCD.classList.remove("active");
       }
 
-      // thumbs always show semis
+      // update thumbs for semis
       thumbABimg.src = state.seed_a_url || placeholder("A");
       thumbABcount.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
       thumbCDimg.src = state.seed_c_url || placeholder("C");
@@ -318,50 +303,40 @@
       overlay.style.display = 'flex';
     };
 
-    thumbAB.addEventListener("click", () => {
-      activeMatch = "ab";
-      renderActive();
-    });
-    thumbCD.addEventListener("click", () => {
-      activeMatch = "cd";
-      renderActive();
-    });
-    thumbFinal.addEventListener("click", () => {
+    thumbAB.onclick = () => { activeMatch = "ab"; renderActive(); };
+    thumbCD.onclick = () => { activeMatch = "cd"; renderActive(); };
+    thumbFinal.onclick = () => {
       if (!state.mid_done) return;
       activeMatch = "final";
       renderActive();
-    });
+    };
 
     async function sendVote(whichSide){
       let side = activeMatch;
       const color = whichSide === "right" ? "blue" : "red";
 
-      // final still writes to A/B counts on the server
-      if (side === "final") {
-        side = "ab";
-      }
+      // final still writes to A/B on the backend
+      if (side === "final") side = "ab";
 
       const voterId = `${RSID}-${state.base_iso || "noiso"}-${side}`;
 
       try {
         const res = await fetch(FUNCTION_URL, {
           method:'POST',
-          headers:{ 
-            'content-type':'application/json', 
-            'x-rsid': voterId 
+          headers:{
+            'content-type':'application/json',
+            'x-rsid': voterId
           },
           body: JSON.stringify({ color, side })
         });
         const data = await res.json();
-        console.log("[VOTE RES]", data);
-
         if (data.ignored && data.reason === "already_voted_this_match") {
           dbg.textContent = "debug: already voted on " + side;
           return;
         }
-
         if (!res.ok) throw new Error(data.error || "vote failed");
 
+        // update from server
         state.seed_a_count = data.seed_a_count ?? state.seed_a_count;
         state.seed_b_count = data.seed_b_count ?? state.seed_b_count;
         state.seed_c_count = data.seed_c_count ?? state.seed_c_count;
@@ -370,7 +345,6 @@
         await fetchState(true);
         dbg.textContent = "debug: vote ok ("+color+"/"+side+")";
       } catch (err) {
-        console.error(err);
         dbg.textContent = "debug: vote error → " + err.message;
       }
     }
@@ -381,7 +355,7 @@
     async function fetchState(force=false){
       if (fetching) return;
       fetching = true;
-      try{
+      try {
         const res = await fetch(FUNCTION_URL);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || JSON.stringify(data));
@@ -407,11 +381,10 @@
 
         renderActive();
         dbg.textContent = "debug: ok " + new Date().toLocaleTimeString();
-      }catch(e){
-        console.error(e);
-        dbg.textContent = "debug: GET error → " + (e.message || JSON.stringify(e));
+      } catch (err) {
+        dbg.textContent = "debug: GET error → " + err.message;
         renderActive();
-      }finally{
+      } finally {
         fetching = false;
       }
     }
@@ -428,7 +401,7 @@
         winnerText.textContent = 'Semis about to be decided…';
       }
 
-      // keep polling around 30s until server flips mid_done
+      // keep pinging around 30s until server flips
       if (ms <= halfMs && !state.mid_done) {
         const now = Date.now();
         if (!semiTriggered || now - lastSemiPoll > 1500) {
@@ -450,7 +423,7 @@
         }
       }
 
-      // 0s → sync for final
+      // 0s → final
       if (ms <= 0 && state.mid_done && !finalTriggered) {
         finalTriggered = true;
         fetch(FUNCTION_URL)
@@ -472,18 +445,12 @@
       requestAnimationFrame(tick);
     }
 
-    forceBtn.addEventListener('click', ()=> fetchState(true));
-    resetBtn.addEventListener('click', ()=> fetchState(true));
+    forceBtn.onclick = () => fetchState(true);
+    resetBtn.onclick = () => fetchState(true);
 
-    supabase
-      .channel('cycles-v2-live')
+    // realtime
+    supabase.channel('cycles-v2-live')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cycles_v2' },
-        async () => { await fetchState(true); })
-      .subscribe();
-
-    supabase
-      .channel('matchup-sync')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'art_queue', filter: 'status=in.(locked,used)' },
         async () => { await fetchState(true); })
       .subscribe();
 
