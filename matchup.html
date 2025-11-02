@@ -121,7 +121,7 @@
 
     <div class="winner" id="winnerText">No winner yet — semis running.</div>
 
-    <!-- FINAL BOX (not thumbnails, just viewable slots) -->
+    <!-- FINAL BOX -->
     <div class="card final-card" id="finalCard">
       <div class="bar">
         <div class="label">Final</div>
@@ -292,10 +292,17 @@
     async function sendVote(whichSide){
       const side = activeMatch;
       const color = whichSide === "right" ? "blue" : "red";
+
+      // 👇 NEW: make rsid unique per cycle + per match (ab / cd)
+      const voterId = `${RSID}-${state.base_iso || "noiso"}-${side}`;
+
       try {
         const res = await fetch(FUNCTION_URL, {
           method:'POST',
-          headers:{ 'content-type':'application/json', 'x-rsid': RSID },
+          headers:{ 
+            'content-type':'application/json', 
+            'x-rsid': voterId 
+          },
           body: JSON.stringify({ color, side })
         });
         const data = await res.json();
@@ -313,7 +320,6 @@
         state.seed_c_count = data.seed_c_count ?? state.seed_c_count;
         state.seed_d_count = data.seed_d_count ?? state.seed_d_count;
 
-        // this will also refresh final if mid was just decided
         await fetchState(true);
         dbg.textContent = "debug: vote ok ("+color+"/"+side+")";
       } catch (err) {
