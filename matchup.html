@@ -341,8 +341,7 @@
         side = "ab";
       }
 
-      // *** FIX: include phase in the token so final != semi ***
-      const voterId = `${RSID}-${state.base_iso || "noiso"}-${side}-${state.mid_done ? "final" : "semi"}`; /* FIX */
+      const voterId = `${RSID}-${state.base_iso || "noiso"}-${side}`;
 
       try {
         const res = await fetch(FUNCTION_URL, {
@@ -357,11 +356,12 @@
 /* FINAL COUNTS PATCH */
 try {
   if (data && data.ok && !data.ignored && data.phase === 'final') {
+    // Use server counts to update UI immediately
     if (typeof data.seed_a_count === 'number') {
-      document.querySelector('[data-final-slot="1"] .score')?.textContent = data.seed_a_count;
+      document.querySelector('[data-final-slot="1"] .score').textContent = data.seed_a_count;
     }
     if (typeof data.seed_b_count === 'number') {
-      document.querySelector('[data-final-slot="2"] .score')?.textContent = data.seed_b_count;
+      document.querySelector('[data-final-slot="2"] .score').textContent = data.seed_b_count;
     }
   }
 } catch (e) { console.log('final count patch err', e); }
