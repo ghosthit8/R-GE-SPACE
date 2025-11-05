@@ -341,7 +341,8 @@
         side = "ab";
       }
 
-      const voterId = `${RSID}-${state.base_iso || "noiso"}-${side}`;
+      // *** FIX: add phase to token so Final vote ≠ Semi vote ***
+      const voterId = `${RSID}-${state.base_iso || "noiso"}-${side}-${state.mid_done ? "final" : "semi"}`; /* FIX */
 
       try {
         const res = await fetch(FUNCTION_URL, {
