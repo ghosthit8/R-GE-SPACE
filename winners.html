@@ -110,8 +110,8 @@
       }
     }
 
-    // ----- PATCHED: derive label + pill from original seed (A/C = left/red; B/D = right/blue)
-    function render(rows, caughtUp=0){
+    // Uses original seed letter for label & pill (A/C = left/red, B/D = right/blue)
+    function render(rows){
       if(!rows || rows.length===0){
         tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
         return;
@@ -128,7 +128,7 @@
 
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count}–${r.blue_count}`;
-        const img = r.image_url || r.winner_url || ''; // fallback
+        const img = r.image_url || r.winner_url || '';
         const thumb = img
           ? `<img src="${img}" class="thumb" onclick="openFull('${img}')">`
           : `<span style="color:#666;">—</span>`;
@@ -150,9 +150,13 @@
       metaEl.textContent = 'Loading…';
       const res = await fetch(FUNCTION_URL + "?winners=1&limit=200");
       const data = await res.json();
-      render(data.winners || [], data.caught_up ?? 0);
-      const total = data.winners?.length || 0;
-      metaEl.textContent = `Showing ${total} winners • newest is #${total} at top • #1 at bottom • caught up: ${data.caught_up ?? 0}`;
+
+      // Show ONLY finals (base_iso without ::semi)
+      const finals = (data.winners || []).filter(w => !(w.base_iso || "").includes("::semi"));
+
+      render(finals);
+      const total = finals.length;
+      metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom`;
     }
 
     async function clearData(){
