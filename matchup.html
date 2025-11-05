@@ -242,7 +242,7 @@
 
     // triggers
     let semiTriggered = false;
-       let finalTriggered = false;
+    let finalTriggered = false;
     let lastSemiPoll = 0;
 
     let fetching = false;
@@ -291,7 +291,7 @@
         thumbAB.classList.remove("active");
         thumbFinal.classList.remove("active");
       } else {
-        // FINAL VIEW — counts come from A/B after mid-cut
+        // FINAL VIEW — note: counts come from A/B because edge final uses those
         imgActive1.src = state.mid_winner_1_url || placeholder("?");
         imgActive2.src = state.mid_winner_2_url || placeholder("?");
         labelActive1.textContent = "Final — slot 1";
@@ -337,10 +337,11 @@
       const color = whichSide === "right" ? "blue" : "red";
 
       // final still writes to A/B counts on the server
-      if (side === "final") side = "ab";
+      if (side === "final") {
+        side = "ab";
+      }
 
-      // *** FIX: add phase into the token so Final != Semi ***
-      const voterId = `${RSID}-${state.base_iso || "noiso"}-${side}-${state.mid_done ? "final" : "semi"}`;
+      const voterId = `${RSID}-${state.base_iso || "noiso"}-${side}`;
 
       try {
         const res = await fetch(FUNCTION_URL, {
@@ -352,14 +353,18 @@
           body: JSON.stringify({ color, side })
         });
         const data = await res.json();
-
-        /* FINAL COUNTS PATCH (defensive: won't throw if element missing) */
-        try {
-          if (data && data.ok && !data.ignored && data.phase === 'final') {
-            document.querySelector('[data-final-slot="1"] .score')?.textContent = String(data.seed_a_count ?? '');
-            document.querySelector('[data-final-slot="2"] .score')?.textContent = String(data.seed_b_count ?? '');
-          }
-        } catch {}
+/* FINAL COUNTS PATCH */
+try {
+  if (data && data.ok && !data.ignored && data.phase === 'final') {
+    // Use server counts to update UI immediately
+    if (typeof data.seed_a_count === 'number') {
+      document.querySelector('[data-final-slot="1"] .score').textContent = data.seed_a_count;
+    }
+    if (typeof data.seed_b_count === 'number') {
+      document.querySelector('[data-final-slot="2"] .score').textContent = data.seed_b_count;
+    }
+  }
+} catch (e) { console.log('final count patch err', e); }
 
         console.log("[VOTE RES]", data);
 
