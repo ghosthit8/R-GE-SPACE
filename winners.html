@@ -110,6 +110,7 @@
       }
     }
 
+    // PATCHED: show Seed A/B/C/D using winner_seed from API, with color pill styling
     function render(rows, caughtUp=0){
       if(!rows || rows.length===0){
         tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
@@ -118,15 +119,22 @@
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
-        const pill = r.winner_color === 'red'
-          ? `<span class="pillA">Seed A</span>`
-          : `<span class="pillB">Seed B</span>`;
+
+        // Prefer original seed letter from backend (a/b/c/d). Fallback to color → A/B.
+        const seedLabel = r.winner_seed
+          ? `Seed ${String(r.winner_seed).toUpperCase()}`
+          : (r.winner_color === 'red' ? 'Seed A' : 'Seed B');
+
+        const pillClass = r.winner_color === 'red' ? 'pillA' : 'pillB';
+        const pill = `<span class="${pillClass}">${seedLabel}</span>`;
+
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count}–${r.blue_count}`;
         const img = r.image_url || r.winner_url || ''; // fallback
         const thumb = img
           ? `<img src="${img}" class="thumb" onclick="openFull('${img}')">`
           : `<span style="color:#666;">—</span>`;
+
         return `
           <tr>
             <td>${n}</td>
