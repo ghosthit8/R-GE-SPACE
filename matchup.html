@@ -221,51 +221,26 @@
       mid_done: false, mid_winner_1_url: null, mid_winner_2_url: null,
     };
 
-    // ---------- VOTE MEMORY (unchanged) ----------
+    // ---------- VOTE MEMORY ----------
     const VOTE_MEMORY_KEY = "rs_vote_memory_v2";
     function readMem(baseIso){ try { return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")[baseIso]||{}; } catch { return {}; } }
     function writeMem(baseIso,key,val){ const all = (()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}");}catch{return {};}})(); all[baseIso]=Object.assign({},all[baseIso]||{}, {[key]:val}); localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
     function pruneVoteMem(keep){ const all = (()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}");}catch{return {};}})(); for(const k of Object.keys(all)) if(k!==keep) delete all[k]; localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
     function phaseKeyFor(active){ if (state.mid_done) return "ab_final"; const g = active==="cd" ? "cd" : "ab"; return `${g}_semi`; }
-    function applyVoteMemory(){
-      const mem = readMem(state.base_iso||"");
-      const key = phaseKeyFor(activeMatch);
-      const picked = mem[key];
-      const baseLA1 = (activeMatch==="cd")?"Seed C":(activeMatch==="final"?"Final — slot 1":"Seed A");
-      const baseLA2 = (activeMatch==="cd")?"Seed D":(activeMatch==="final"?"Final — slot 2":"Seed B");
-      labelActive1.textContent = baseLA1 + (picked==="red" ?" • you voted":"");
-      labelActive2.textContent = baseLA2 + (picked==="blue"?" • you voted":"");
-      const already = picked==="red" || picked==="blue";
-      btnActive1.disabled = already;
-      btnActive2.disabled = already;
-    }
 
-    // ---------- SEMI SNAPSHOT (new/updated) ----------
+    // ---------- SEMI SNAPSHOT ----------
     const SEMI_SNAPSHOT_KEY = "rs_semi_snapshot_v2";
     function readSnap(baseIso){ try { return JSON.parse(localStorage.getItem(SEMI_SNAPSHOT_KEY)||"{}")[baseIso]||null; } catch { return null; } }
     function writeSnap(baseIso, snap){ const all = (()=>{try{return JSON.parse(localStorage.getItem(SEMI_SNAPSHOT_KEY)||"{}");}catch{return {};}})(); all[baseIso]=snap; localStorage.setItem(SEMI_SNAPSHOT_KEY, JSON.stringify(all)); }
     function pruneSnap(keep){ const all = (()=>{try{return JSON.parse(localStorage.getItem(SEMI_SNAPSHOT_KEY)||"{}");}catch{return {};}})(); for(const k of Object.keys(all)) if(k!==keep) delete all[k]; localStorage.setItem(SEMI_SNAPSHOT_KEY, JSON.stringify(all)); }
 
-    // ✅ Always refresh snapshot on every fetch BEFORE mid-cut (prevents stale 0-0)
     function ensureSemiSnapshot(){
       if (!state.base_iso || state.mid_done) return;
-
       const existing = readSnap(state.base_iso) || { ab:{}, cd:{} };
       const next = {
-        ab: {
-          a_url: state.seed_a_url,
-          b_url: state.seed_b_url,
-          a_count: state.seed_a_count,
-          b_count: state.seed_b_count,
-        },
-        cd: {
-          c_url: state.seed_c_url,
-          d_url: state.seed_d_url,
-          c_count: state.seed_c_count,
-          d_count: state.seed_d_count,
-        }
+        ab: { a_url: state.seed_a_url, b_url: state.seed_b_url, a_count: state.seed_a_count, b_count: state.seed_b_count },
+        cd: { c_url: state.seed_c_url, d_url: state.seed_d_url, c_count: state.seed_c_count, d_count: state.seed_d_count }
       };
-
       const changed =
         !existing.ab ||
         existing.ab.a_url !== next.ab.a_url ||
@@ -277,29 +252,21 @@
         existing.cd.d_url !== next.cd.d_url ||
         existing.cd.c_count !== next.cd.c_count ||
         existing.cd.d_count !== next.cd.d_count;
-
       if (changed) writeSnap(state.base_iso, next);
     }
 
-    // ✅ Winners fallback when snapshot missing OR still 0-0 after mid-cut
     async function recoverSemisFromWinners(){
       if (!state.base_iso || !state.mid_done) return;
-
       const snap = readSnap(state.base_iso);
       const zeroAB = !snap || ((snap.ab?.a_count ?? 0) === 0 && (snap.ab?.b_count ?? 0) === 0);
       const zeroCD = !snap || ((snap.cd?.c_count ?? 0) === 0 && (snap.cd?.d_count ?? 0) === 0);
-
-      if (snap && !zeroAB && !zeroCD) return; // already have good counts
-
+      if (snap && !zeroAB && !zeroCD) return;
       try {
         const res = await fetch(`${FUNCTION_URL}?winners=1&limit=50`);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "winners fetch failed");
-
         const list = Array.isArray(data.winners) ? data.winners : [];
         const s1 = list.find(w => w.base_iso === state.base_iso + "::semi1");
         const s2 = list.find(w => w.base_iso === state.base_iso + "::semi2");
-
         const next = {
           ab: {
             a_url: (snap?.ab?.a_url) || state.seed_a_url || state.mid_winner_1_url || placeholder("?"),
@@ -314,14 +281,53 @@
             d_count: s2?.blue_count ?? snap?.cd?.d_count ?? 0,
           }
         };
-
         writeSnap(state.base_iso, next);
         renderActive();
       } catch (e) {
         console.log("recoverSemisFromWinners error", e);
       }
     }
-    // ------------------------------------------
+
+    // ---------- FINAL LABELS (NEW) ----------
+    function computeFinalLabels(){
+      const snap = readSnap(state.base_iso || "");
+      let left = "Final — slot 1";
+      let right = "Final — slot 2";
+      if (snap) {
+        if (state.mid_winner_1_url) {
+          if (snap.ab?.a_url && state.mid_winner_1_url === snap.ab.a_url) left = "Seed A";
+          else if (snap.ab?.b_url && state.mid_winner_1_url === snap.ab.b_url) left = "Seed B";
+        }
+        if (state.mid_winner_2_url) {
+          if (snap.cd?.c_url && state.mid_winner_2_url === snap.cd.c_url) right = "Seed C";
+          else if (snap.cd?.d_url && state.mid_winner_2_url === snap.cd.d_url) right = "Seed D";
+        }
+      }
+      return { left, right };
+    }
+
+    // ---------- APPLY VOTE MEMORY (PATCHED for Final labels) ----------
+    function applyVoteMemory(){
+      const mem = readMem(state.base_iso||"");
+      const key = phaseKeyFor(activeMatch);
+
+      if (activeMatch === "final") {
+        const { left, right } = computeFinalLabels();
+        const picked = mem[key];
+        labelActive1.textContent = left  + (picked==="red"  ? " • you voted" : "");
+        labelActive2.textContent = right + (picked==="blue" ? " • you voted" : "");
+      } else {
+        const baseLA1 = (activeMatch==="cd")?"Seed C":"Seed A";
+        const baseLA2 = (activeMatch==="cd")?"Seed D":"Seed B";
+        const picked = mem[key];
+        labelActive1.textContent = baseLA1 + (picked==="red" ?" • you voted":"");
+        labelActive2.textContent = baseLA2 + (picked==="blue"?" • you voted":"");
+      }
+
+      const already = (mem[key] === "red" || mem[key] === "blue");
+      btnActive1.disabled = already;
+      btnActive2.disabled = already;
+    }
 
     // triggers
     let semiTriggered = false, finalTriggered = false, lastSemiPoll = 0;
@@ -371,8 +377,9 @@
         // FINAL view — counts come from A/B after mid-cut (server resets to 0-0)
         imgActive1.src = state.mid_winner_1_url || placeholder("?");
         imgActive2.src = state.mid_winner_2_url || placeholder("?");
-        labelActive1.textContent = "Final — slot 1";
-        labelActive2.textContent = "Final — slot 2";
+        const fl = computeFinalLabels();
+        labelActive1.textContent = fl.left;
+        labelActive2.textContent = fl.right;
         countActive1.textContent = state.seed_a_count ?? 0;
         countActive2.textContent = state.seed_b_count ?? 0;
         thumbFinal.classList.add("active"); thumbAB.classList.remove("active"); thumbCD.classList.remove("active");
@@ -462,11 +469,9 @@
           pruneVoteMem(data.base_iso); pruneSnap(data.base_iso);
         }
 
-        // Save/refresh semis *before* mid-cut; recover from winners *after* mid-cut
         ensureSemiSnapshot();
         if (state.mid_done) recoverSemisFromWinners();
 
-        // Extra guard: if snapshot exists but is 0-0 after mid-cut, force winners recovery now
         if (state.mid_done) {
           const snap = readSnap(state.base_iso);
           if (snap &&
@@ -496,7 +501,6 @@
 
       if (ms <= halfMs + 200 && !state.mid_done) winnerText.textContent = 'Semis about to be decided…';
 
-      // keep polling around 30s until server flips mid_done
       if (ms <= halfMs && !state.mid_done) {
         const now = Date.now();
         if (!semiTriggered || now - lastSemiPoll > 1500) {
