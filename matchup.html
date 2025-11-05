@@ -118,7 +118,7 @@
             <span class="thumb-count" id="thumbCDcount">0-0</span>
           </div>
         </div>
-        <!-- NEW: final thumb -->
+        <!-- FINAL thumb -->
         <div class="thumb" id="thumbFinal">
           <div class="thumb-img"><img id="thumbFinalImg" alt="Final"></div>
           <div class="thumb-label">
@@ -248,12 +248,52 @@
     let fetching = false;
     let activeMatch = "ab"; // "ab" | "cd" | "final"
 
+    // ------- VOTE MEMORY (localStorage) -------
+    const VOTE_MEMORY_KEY = "rs_vote_memory_v2";
+    function readMem(baseIso){
+      try { return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY) || "{}")[baseIso] || {}; }
+      catch { return {}; }
+    }
+    function writeMem(baseIso, key, value){
+      const all = (()=>{ try { return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY) || "{}"); } catch { return {}; }})();
+      all[baseIso] = Object.assign({}, all[baseIso] || {}, { [key]: value });
+      localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all));
+    }
+    function pruneMem(keepBase){
+      const all = (()=>{ try { return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY) || "{}"); } catch { return {}; }})();
+      for (const k of Object.keys(all)) if (k !== keepBase) delete all[k];
+      localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all));
+    }
+    function phaseKeyFor(currentActive){
+      // matches server tokenSide logic
+      if (state.mid_done) return "ab_final";
+      const group = currentActive === "cd" ? "cd" : "ab";
+      return `${group}_semi`;
+    }
+    function applyVoteMemory(){
+      const mem = readMem(state.base_iso || "");
+      const key = phaseKeyFor(activeMatch);
+      const picked = mem[key]; // "red" | "blue" | undefined
+
+      // reset labels
+      const baseLA1 = (activeMatch === "cd") ? "Seed C" : (activeMatch === "final" ? "Final — slot 1" : "Seed A");
+      const baseLA2 = (activeMatch === "cd") ? "Seed D" : (activeMatch === "final" ? "Final — slot 2" : "Seed B");
+
+      labelActive1.textContent = baseLA1 + (picked === "red"  ? " • you voted" : "");
+      labelActive2.textContent = baseLA2 + (picked === "blue" ? " • you voted" : "");
+
+      // disable both buttons if already voted in this match
+      const already = picked === "red" || picked === "blue";
+      btnActive1.disabled = already;
+      btnActive2.disabled = already;
+    }
+    // ------------------------------------------
+
     function renderFinal() {
       if (!state.mid_done) {
         finalImg1.src = placeholder("?");
         finalImg2.src = placeholder("?");
         finalFooter.textContent = "Waiting for semis…";
-        // hide final thumb
         thumbFinal.style.display = "none";
         return;
       }
@@ -262,11 +302,9 @@
       thumbFinalImg.src = state.mid_winner_1_url || placeholder("?");
       thumbFinalCount.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
       thumbFinal.style.display = "block";
-      if (state.mid_winner_1_url && state.mid_winner_2_url) {
-        finalFooter.textContent = "Final is ready — will be decided at 0s.";
-      } else {
-        finalFooter.textContent = "Semis partly done — waiting for other semi…";
-      }
+      finalFooter.textContent = (state.mid_winner_1_url && state.mid_winner_2_url)
+        ? "Final is ready — will be decided at 0s."
+        : "Semis partly done — waiting for other semi…";
     }
 
     function renderActive(){
@@ -291,7 +329,6 @@
         thumbAB.classList.remove("active");
         thumbFinal.classList.remove("active");
       } else {
-        // FINAL VIEW — note: counts come from A/B because edge final uses those
         imgActive1.src = state.mid_winner_1_url || placeholder("?");
         imgActive2.src = state.mid_winner_2_url || placeholder("?");
         labelActive1.textContent = "Final — slot 1";
@@ -310,6 +347,7 @@
       thumbCDcount.textContent = (state.seed_c_count ?? 0) + "-" + (state.seed_d_count ?? 0);
 
       renderFinal();
+      applyVoteMemory(); // ← reflect stored choice & disable if needed
     }
 
     window.openFull = (which) => {
@@ -318,59 +356,37 @@
       overlay.style.display = 'flex';
     };
 
-    thumbAB.addEventListener("click", () => {
-      activeMatch = "ab";
-      renderActive();
-    });
-    thumbCD.addEventListener("click", () => {
-      activeMatch = "cd";
-      renderActive();
-    });
-    thumbFinal.addEventListener("click", () => {
-      if (!state.mid_done) return;
-      activeMatch = "final";
-      renderActive();
-    });
+    thumbAB.addEventListener("click", () => { activeMatch = "ab"; renderActive(); });
+    thumbCD.addEventListener("click", () => { activeMatch = "cd"; renderActive(); });
+    thumbFinal.addEventListener("click", () => { if (!state.mid_done) return; activeMatch = "final"; renderActive(); });
 
     async function sendVote(whichSide){
       let side = activeMatch;
       const color = whichSide === "right" ? "blue" : "red";
+      if (side === "final") side = "ab"; // final writes to A/B on server
 
-      // final still writes to A/B counts on the server
-      if (side === "final") {
-        side = "ab";
-      }
+      // include phase in the token so final ≠ semi
+      const voterId = `${RSID}-${state.base_iso || "noiso"}-${side}-${state.mid_done ? "final" : "semi"}`;
 
-      // *** FIX: add phase to token so Final vote ≠ Semi vote ***
-      const voterId = `${RSID}-${state.base_iso || "noiso"}-${side}-${state.mid_done ? "final" : "semi"}`; /* FIX */
+      // local phase key for memory (align with server)
+      const tokenSide = state.mid_done ? "ab_final" : `${side === "cd" ? "cd" : "ab"}_semi`;
 
       try {
         const res = await fetch(FUNCTION_URL, {
           method:'POST',
-          headers:{ 
-            'content-type':'application/json', 
-            'x-rsid': voterId 
-          },
+          headers:{ 'content-type':'application/json', 'x-rsid': voterId },
           body: JSON.stringify({ color, side })
         });
         const data = await res.json();
-/* FINAL COUNTS PATCH */
-try {
-  if (data && data.ok && !data.ignored && data.phase === 'final') {
-    // Use server counts to update UI immediately
-    if (typeof data.seed_a_count === 'number') {
-      document.querySelector('[data-final-slot="1"] .score').textContent = data.seed_a_count;
-    }
-    if (typeof data.seed_b_count === 'number') {
-      document.querySelector('[data-final-slot="2"] .score').textContent = data.seed_b_count;
-    }
-  }
-} catch (e) { console.log('final count patch err', e); }
 
-        console.log("[VOTE RES]", data);
+        // Record memory on success OR duplicate-warning (already voted)
+        if ((res.ok && !data.ignored) || (data?.ignored && data?.reason === "already_voted_this_match")) {
+          writeMem(state.base_iso || "", tokenSide, color);
+        }
 
         if (data.ignored && data.reason === "already_voted_this_match") {
           dbg.textContent = "debug: already voted on " + side;
+          applyVoteMemory();
           return;
         }
 
@@ -386,6 +402,8 @@ try {
       } catch (err) {
         console.error(err);
         dbg.textContent = "debug: vote error → " + err.message;
+      } finally {
+        applyVoteMemory();
       }
     }
 
@@ -406,17 +424,15 @@ try {
         state = data;
         elMeta.textContent = `cycle: ${data.base_iso}`;
 
-        if (data.mid_done) {
-          winnerText.textContent = 'Semis decided — final at 0s.';
-        } else {
-          winnerText.textContent = 'Semis running…';
-        }
+        if (data.mid_done) winnerText.textContent = 'Semis decided — final at 0s.';
+        else winnerText.textContent = 'Semis running…';
 
         if (newRound) {
           activeMatch = "ab";
           semiTriggered = false;
           finalTriggered = false;
           lastSemiPoll = 0;
+          pruneMem(data.base_iso); // keep only current round’s memory
         }
 
         renderActive();
