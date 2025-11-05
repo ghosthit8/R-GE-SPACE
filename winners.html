@@ -110,7 +110,7 @@
       }
     }
 
-    // PATCHED: show Seed A/B/C/D using winner_seed from API, with color pill styling
+    // ----- PATCHED: derive label + pill from original seed (A/C = left/red; B/D = right/blue)
     function render(rows, caughtUp=0){
       if(!rows || rows.length===0){
         tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
@@ -120,12 +120,10 @@
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
 
-        // Prefer original seed letter from backend (a/b/c/d). Fallback to color → A/B.
-        const seedLabel = r.winner_seed
-          ? `Seed ${String(r.winner_seed).toUpperCase()}`
-          : (r.winner_color === 'red' ? 'Seed A' : 'Seed B');
-
-        const pillClass = r.winner_color === 'red' ? 'pillA' : 'pillB';
+        const seed = (r.winner_seed || "").toLowerCase();
+        const isLeft = seed === "a" || seed === "c";
+        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
+        const pillClass = isLeft ? "pillA" : "pillB";
         const pill = `<span class="${pillClass}">${seedLabel}</span>`;
 
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
