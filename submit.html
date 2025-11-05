@@ -62,6 +62,18 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
   opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
 }
 .toast.show{opacity:1; transform:translateX(-50%) translateY(-4px)}
+
+/* Drop zone */
+.drop{
+  border:1px dashed var(--border); border-radius:14px; padding:14px; text-align:center;
+  background:rgba(57,255,20,.03);
+}
+.drop.drag{background:rgba(57,255,20,.08)}
+.preview{
+  margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+}
+.preview img{max-height:120px; border-radius:10px; border:1px solid var(--border)}
+.authRow{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
 </style>
 </head>
 <body>
@@ -74,14 +86,27 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       </div>
     </div>
 
+    <!-- Auth quick panel -->
+    <div class="card" style="margin-top:12px">
+      <div class="authRow">
+        <input id="emailInput" class="input" placeholder="email@you.com (for magic link)" style="max-width:260px">
+        <button id="btnMagic" class="btn">Send magic link</button>
+        <button id="btnSignOut" class="btn ghost">Sign out</button>
+        <span id="authMsg" class="small mono"></span>
+      </div>
+    </div>
+
     <!-- Minimal uploader -->
     <div class="card" style="margin-top:16px">
-      <div id="pickZone">
+      <div id="pickZone" class="drop">
         <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
-        <div id="fileName" class="small">jpg / png / webp — 10MB max</div>
+        <div id="fileName" class="small">jpg / png / webp — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
         <input id="fileInput" type="file" accept="image/*" class="hidden">
         <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
-        <div class="small mono" id="previewHint"></div>
+        <div class="preview">
+          <img id="imgPreview" alt="" class="hidden">
+          <div class="small mono" id="previewHint"></div>
+        </div>
       </div>
 
       <hr class="sep">
@@ -142,11 +167,18 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const authBadge = document.getElementById('authBadge');
 const toastEl = document.getElementById('toast');
 
+const emailInput = document.getElementById('emailInput');
+const btnMagic = document.getElementById('btnMagic');
+const btnSignOut = document.getElementById('btnSignOut');
+const authMsg = document.getElementById('authMsg');
+
+const pickZone = document.getElementById('pickZone');
 const btnPick = document.getElementById('btnPick');
 const fileInput = document.getElementById('fileInput');
 const urlInput = document.getElementById('urlInput');
 const fileName = document.getElementById('fileName');
 const previewHint = document.getElementById('previewHint');
+const imgPreview = document.getElementById('imgPreview');
 
 const consent = document.getElementById('consent');
 const btnSubmit = document.getElementById('btnSubmit');
@@ -170,8 +202,14 @@ const iso = (d)=> new Date(d).toISOString().replace(/\.\d{3}Z$/,'Z');
 function toast(msg, ms=1600){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
 function bytesToMB(n){ return (n/(1024*1024)).toFixed(2); }
 const varGreen = ()=> getComputedStyle(document.documentElement).getPropertyValue('--green') || '#39ff14';
+function show(el){ el.classList.remove('hidden'); }
+function hide(el){ el.classList.add('hidden'); }
+function setPreview(src){
+  if (src){ imgPreview.src = src; show(imgPreview); }
+  else { imgPreview.removeAttribute('src'); hide(imgPreview); }
+}
 
-/* ---------- Auth badge ---------- */
+/* ---------- Auth helpers ---------- */
 async function uid(){
   const { data:{session} } = await supabase.auth.getSession();
   return session?.user?.id || null;
@@ -180,6 +218,19 @@ function paintAuth(id){
   if (id){ authBadge.textContent='logged in'; authBadge.style.color=varGreen(); }
   else   { authBadge.textContent='not logged in'; authBadge.style.color='#ff6b6b'; authBadge.style.borderColor='#3b1616'; }
 }
+btnMagic.addEventListener('click', async ()=>{
+  const email = (emailInput.value||'').trim();
+  if (!email) return toast('Enter email first');
+  authMsg.textContent = 'Sending link…';
+  const { error } = await supabase.auth.signInWithOtp({ email, options:{ emailRedirectTo: window.location.href } });
+  if (error){ authMsg.textContent = 'Error sending link'; console.error(error); toast('Magic link failed'); }
+  else { authMsg.textContent = 'Check your email for the link.'; toast('Magic link sent'); }
+});
+btnSignOut.addEventListener('click', async ()=>{
+  await supabase.auth.signOut();
+  paintAuth(null);
+  toast('Signed out');
+});
 
 /* ---------- Pick flow (file or URL) ---------- */
 let picked = { file:null, url:'' };
@@ -201,26 +252,96 @@ fileInput.addEventListener('change', ()=>{
   picked.file = f; picked.url = '';
   urlInput.value = ''; urlInput.classList.add('hidden');
   fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
+  setPreview(URL.createObjectURL(f));
   previewHint.textContent = 'Ready to upload';
 });
 
 urlInput.addEventListener('input', ()=>{
   picked.url = urlInput.value.trim();
-  if (picked.url) { picked.file = null; fileInput.value=''; fileName.textContent = 'Using pasted URL'; previewHint.textContent = picked.url; }
-  else { previewHint.textContent=''; }
+  if (picked.url) {
+    picked.file = null; fileInput.value='';
+    fileName.textContent = 'Using pasted URL';
+    previewHint.textContent = picked.url;
+    // quick sanity check for image URL
+    const im = new Image();
+    im.onload = ()=> setPreview(picked.url);
+    im.onerror = ()=> { setPreview(''); toast('URL is not an image'); };
+    im.src = picked.url;
+  } else {
+    previewHint.textContent='';
+    setPreview('');
+  }
+});
+
+/* Drag & Drop */
+['dragenter','dragover'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.remove('drag');}));
+pickZone.addEventListener('drop', (e)=>{
+  const f = e.dataTransfer?.files?.[0];
+  if (!f) return;
+  if (!f.type.startsWith('image/')) return toast('File must be an image');
+  if (f.size > 10*1024*1024) return toast('Max 10MB');
+  picked.file = f; picked.url='';
+  fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
+  setPreview(URL.createObjectURL(f));
+  previewHint.textContent = 'Ready to upload (dropped)';
+});
+
+/* Paste support (clipboard image or URL text) */
+window.addEventListener('paste', (e)=>{
+  try{
+    const items = e.clipboardData?.items || [];
+    for (const it of items){
+      if (it.kind === 'file'){
+        const f = it.getAsFile();
+        if (f && f.type.startsWith('image/')){
+          if (f.size > 10*1024*1024) { toast('Max 10MB'); return; }
+          picked.file = f; picked.url='';
+          fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+          fileName.textContent = `${f.name||'pasted-image'} — ${bytesToMB(f.size)} MB`;
+          setPreview(URL.createObjectURL(f));
+          previewHint.textContent = 'Ready to upload (pasted image)';
+          return;
+        }
+      } else if (it.kind === 'string'){
+        it.getAsString((txt)=>{
+          const s = (txt||'').trim();
+          if (/^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i.test(s)){
+            picked.url = s; picked.file = null;
+            urlInput.value = s; urlInput.classList.remove('hidden');
+            fileInput.value = '';
+            fileName.textContent = 'Using pasted URL';
+            setPreview(s);
+            previewHint.textContent = s;
+          }
+        });
+      }
+    }
+  }catch{}
 });
 
 /* ---------- Upload helper ---------- */
-async function uploadToStorage(uid, file){
+async function uploadToStorage(userId, file){
   const d=new Date();
-  const path = `${uid}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${crypto.randomUUID()}-${file.name}`;
+  const path = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${crypto.randomUUID()}-${file.name}`;
   const t0=performance.now();
   const { data, error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl:'3600', upsert:false });
   const dt=(performance.now()-t0).toFixed(0);
   if (error) throw error;
-  const { data:{publicUrl} } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
-  log('IMG: uploaded ', publicUrl, `(${dt}ms)`);
-  return publicUrl;
+
+  // Public URL first; if that fails to load later, fall back to signed URL
+  const { data:pub } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
+  let url = pub?.publicUrl || null;
+
+  // Optional quick HEAD check — browsers limit CORS, so we’ll also offer a signed URL fallback unconditionally
+  try{
+    const { data:signed } = await supabase.storage.from(BUCKET).createSignedUrl(data.path, 60*60*24*7); // 7 days
+    if (signed?.signedUrl) url = url || signed.signedUrl;
+  }catch(e){ /* ignore if bucket is public and signed not needed */ }
+
+  log('IMG: uploaded ', url, `(${dt}ms)`);
+  return url;
 }
 
 /* ---------- Edge call + timer normalize ---------- */
@@ -279,8 +400,6 @@ function computeStage(){ return 'R32'; } // leave as-is for now
 async function syncState(){
   try{
     const s = normalize(await callEdge());
-
-    // detect flips
     const __prev = serverPhaseEndISO;
 
     serverPhaseEndISO = s.phase_end_at; if (!serverPhaseEndISO && s.base_iso) serverPhaseEndISO = s.base_iso;
@@ -289,7 +408,6 @@ async function syncState(){
     paused = !!s.paused;
     lastSyncAt = Date.now();
 
-    // when the round flips, re-render queue immediately
     if (__prev && serverPhaseEndISO && __prev !== serverPhaseEndISO) {
       try { await renderQueue(); } catch {}
     }
@@ -302,7 +420,7 @@ async function syncState(){
   }
 }
 
-/* ---------- Render loop (prefers remainingSec) ---------- */
+/* ---------- Render loop ---------- */
 let raf;
 function loop(){
   if (typeof remainingSec === 'number') {
@@ -337,7 +455,7 @@ btnSubmit.addEventListener('click', async ()=>{
   if (!id) return toast('Log in to submit');
   if (!consent.checked) return toast('Please consent to the rules');
 
-  let finalUrl = picked.url;
+  let finalUrl = (picked.url||'').trim();
   try{
     if (picked.file){
       toast('Uploading…');
@@ -354,6 +472,7 @@ btnSubmit.addEventListener('click', async ()=>{
     fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
     fileName.textContent = 'jpg / png / webp — 10MB max';
     previewHint.textContent = '';
+    setPreview('');
     consent.checked = false;
 
     toast('✅ Art queued for next round');
@@ -401,7 +520,7 @@ async function renderQueue(){
       </div>
     `).join('');
 
-    // Image load logs (your style) + 🔥 instant remove on 404s
+    // Image load logs + 404 cleanup
     queueGrid.querySelectorAll('img').forEach(img=>{
       img.addEventListener('load', ()=> log('IMG: loaded  ', img.src));
       img.addEventListener('error', ()=> {
@@ -422,9 +541,8 @@ async function renderQueue(){
   }
 }
 
-/* ---------- Realtime queue watch (instant remove on lock/use) ---------- */
+/* ---------- Realtime queue watch ---------- */
 const queueChannel = supabase.channel('queue-watch')
-  // remove item the moment it is brought into the tournament
   .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'art_queue' }, (payload) => {
     const id = payload.new?.id;
     const newS = payload.new?.status;
@@ -438,12 +556,10 @@ const queueChannel = supabase.channel('queue-watch')
         if (count === 0) queueEmpty.style.display = 'block';
         console.log('[QUEUE] removed', id, '→', newS);
       } else {
-        // fallback to re-render if element not found
         renderQueue().catch(()=>{});
       }
     }
   })
-  // if a new pending is inserted elsewhere, add it live (optional)
   .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'art_queue' }, (payload) => {
     const row = payload.new;
     if (row?.status !== 'pending') return;
@@ -463,10 +579,10 @@ const queueChannel = supabase.channel('queue-watch')
   })
   .subscribe();
 
-// Clean up (optional)
+// Clean up
 window.addEventListener('beforeunload', ()=> { try { supabase.removeChannel(queueChannel); } catch {} });
 
-/* ---------- Remove from queue right when round begins ---------- */
+/* ---------- Round start watch ---------- */
 let __lastClock = null;
 function __watchRoundStart() {
   const n = parseInt(clockEl.textContent, 10);
@@ -502,13 +618,13 @@ __watchRoundStart();
   });
 })();
 </script>
+
 <!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
 <script>
 (function () {
   const MAX_LINES = 2000;
   const EDGE_MATCH = /\/functions\/v1\/global-timer/;
 
-  // --- create floating button OUTSIDE the hidden panel ---
   const floatBtn = document.createElement('button');
   floatBtn.id = 'dbgFloatingBtn';
   floatBtn.textContent = '🐛 Debug';
@@ -520,7 +636,6 @@ __watchRoundStart();
   `;
   document.body.appendChild(floatBtn);
 
-  // --- panel wrapper (starts hidden) ---
   const wrap = document.createElement('div');
   wrap.id = 'dbg';
   wrap.style.cssText = `
@@ -555,12 +670,10 @@ __watchRoundStart();
   wrap.appendChild(bar); wrap.appendChild(list);
   document.body.appendChild(wrap);
 
-  // button wiring
   function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
   floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
   bar.querySelector('#dbgClose').onclick = () => showDbg(false);
 
-  // controls
   const filterSel  = bar.querySelector('#dbgFilter');
   const recordChk  = bar.querySelector('#dbgRecord');
   bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
@@ -571,7 +684,6 @@ __watchRoundStart();
     a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
   };
 
-  // ring buffer + rendering
   let buffer = [];
   function push(kind, msg, extra) {
     if (!recordChk.checked) return;
@@ -599,7 +711,6 @@ __watchRoundStart();
   }
   filterSel.onchange = render;
 
-  // console hooks
   const _log = console.log, _warn = console.warn, _err = console.error;
   console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
   console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
@@ -608,20 +719,20 @@ __watchRoundStart();
   window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
   window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
 
-  // visibility & UI observers
   document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
   const q = (id) => document.getElementById(id);
 
   function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
+    const el = q(id); if (el) {
+      let last = el.textContent;
+      const mo = new MutationObserver(() => {
+        if (el.textContent !== last) {
+          last = el.textContent;
+          push(kind, `${id} → ${last}`);
+        }
+      });
+      mo.observe(el, {childList:true, characterData:true, subtree:true});
+    }
   }
   observeText('phaseKey', 'STAGE');
   observeText('state', 'STAGE');
@@ -640,7 +751,6 @@ __watchRoundStart();
     mo.observe(el, {childList:true, characterData:true, subtree:true});
   })();
 
-  // fetch tracer
   const _fetch = window.fetch.bind(window);
   window.fetch = async function(url, opts = {}) {
     const start = performance.now();
@@ -659,7 +769,6 @@ __watchRoundStart();
     }
   };
 
-  // timers & rAF
   const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
   const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
   const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
@@ -680,7 +789,6 @@ __watchRoundStart();
   };
   window.cancelAnimationFrame = function(id){ _caf(id); };
 
-  // image load tracing
   function hookImg(img){
     if (!img || img.__dbgHooked) return;
     img.__dbgHooked = true;
@@ -696,7 +804,6 @@ __watchRoundStart();
   });
   imgObs.observe(document.documentElement, {childList:true, subtree:true});
 
-  // bracket observer
   const brows = document.getElementById('brows');
   if (brows) {
     const mo = new MutationObserver((ms)=>{
@@ -707,7 +814,6 @@ __watchRoundStart();
     mo.observe(brows, {childList:true, subtree:false});
   }
 
-  // public helpers
   window.RageDebug = {
     log: (k, m) => push(k||'LOG', m||''),
     markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
