@@ -36,6 +36,9 @@
     .thumb-label { padding:4px 6px 6px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
     .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
 
+    <style>
+    </style>
+
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
     .winner b { color:#39ff14; }
 
@@ -239,53 +242,76 @@
       btnActive1.disabled = already;
       btnActive2.disabled = already;
     }
-    // ---------- SEMI SNAPSHOT (new) ----------
+
+    // ---------- SEMI SNAPSHOT (keyed by base_iso) ----------
     const SEMI_SNAPSHOT_KEY = "rs_semi_snapshot_v2";
     function readSnap(baseIso){ try { return JSON.parse(localStorage.getItem(SEMI_SNAPSHOT_KEY)||"{}")[baseIso]||null; } catch { return null; } }
     function writeSnap(baseIso, snap){ const all = (()=>{try{return JSON.parse(localStorage.getItem(SEMI_SNAPSHOT_KEY)||"{}");}catch{return {};}})(); all[baseIso]=snap; localStorage.setItem(SEMI_SNAPSHOT_KEY, JSON.stringify(all)); }
     function pruneSnap(keep){ const all = (()=>{try{return JSON.parse(localStorage.getItem(SEMI_SNAPSHOT_KEY)||"{}");}catch{return {};}})(); for(const k of Object.keys(all)) if(k!==keep) delete all[k]; localStorage.setItem(SEMI_SNAPSHOT_KEY, JSON.stringify(all)); }
 
-    // Capture pre-mid semis exactly once per cycle
+    // ✅ Always refresh snapshot on every fetch before mid-cut (so counts aren’t stale)
     function ensureSemiSnapshot(){
       if (!state.base_iso || state.mid_done) return;
-      const have = readSnap(state.base_iso);
-      if (have) return;
-      writeSnap(state.base_iso, {
-        ab: { a_url: state.seed_a_url, b_url: state.seed_b_url,
-              a_count: state.seed_a_count, b_count: state.seed_b_count },
-        cd: { c_url: state.seed_c_url, d_url: state.seed_d_url,
-              c_count: state.seed_c_count, d_count: state.seed_d_count },
-      });
+
+      const existing = readSnap(state.base_iso) || { ab:{}, cd:{} };
+      const next = {
+        ab: { a_url: state.seed_a_url, b_url: state.seed_b_url, a_count: state.seed_a_count, b_count: state.seed_b_count },
+        cd: { c_url: state.seed_c_url, d_url: state.seed_d_url, c_count: state.seed_c_count, d_count: state.seed_d_count },
+      };
+
+      const changed =
+        !existing.ab ||
+        existing.ab.a_url !== next.ab.a_url ||
+        existing.ab.b_url !== next.ab.b_url ||
+        existing.ab.a_count !== next.ab.a_count ||
+        existing.ab.b_count !== next.ab.b_count ||
+        existing.cd.c_url !== next.cd.c_url ||
+        existing.cd.d_url !== next.cd.d_url ||
+        existing.cd.c_count !== next.cd.c_count ||
+        existing.cd.d_count !== next.cd.d_count;
+
+      if (changed) writeSnap(state.base_iso, next);
     }
 
-    // Fallback: if page loads after mid-cut, recover semi COUNTS from winners API
+    // ✅ Winners fallback if snapshot is missing OR still 0-0 after mid-cut
     async function recoverSemisFromWinners(){
       if (!state.base_iso || !state.mid_done) return;
-      if (readSnap(state.base_iso)) return;
+
+      const snap = readSnap(state.base_iso);
+      const snapIsZero =
+        !!snap &&
+        ( ( (snap.ab?.a_count ?? 0) === 0 && (snap.ab?.b_count ?? 0) === 0 ) &&
+          ( (snap.cd?.c_count ?? 0) === 0 && (snap.cd?.d_count ?? 0) === 0 ) );
+
+      // Skip only if we already have non-zero snapshot data
+      if (snap && !snapIsZero) return;
+
       try {
-        const res = await fetch(`${FUNCTION_URL}?winners=1&limit=20`);
+        const res = await fetch(`${FUNCTION_URL}?winners=1&limit=50`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error||"winners fetch failed");
-        const list = Array.isArray(data.winners)? data.winners: [];
+        const list = Array.isArray(data.winners) ? data.winners : [];
+
         const s1 = list.find(w => w.base_iso === state.base_iso + "::semi1");
         const s2 = list.find(w => w.base_iso === state.base_iso + "::semi2");
-        if (s1 || s2) {
-          writeSnap(state.base_iso, {
-            ab: {
-              a_url: state.mid_winner_1_url || placeholder("?"), // winner image is all we know for sure
-              b_url: placeholder("?"),
-              a_count: s1?.red_count ?? 0,
-              b_count: s1?.blue_count ?? 0
-            },
-            cd: {
-              c_url: state.mid_winner_2_url || placeholder("?"),
-              d_url: placeholder("?"),
-              c_count: s2?.red_count ?? 0,
-              d_count: s2?.blue_count ?? 0
-            }
-          });
-          renderActive(); // re-render with recovered counts
-        }
+
+        const next = {
+          ab: {
+            a_url: (snap?.ab?.a_url) || state.seed_a_url || state.mid_winner_1_url || placeholder("?"),
+            b_url: (snap?.ab?.b_url) || state.seed_b_url || placeholder("?"),
+            a_count: s1?.red_count  ?? snap?.ab?.a_count ?? 0,
+            b_count: s1?.blue_count ?? snap?.ab?.b_count ?? 0,
+          },
+          cd: {
+            c_url: (snap?.cd?.c_url) || state.seed_c_url || state.mid_winner_2_url || placeholder("?"),
+            d_url: (snap?.cd?.d_url) || state.seed_d_url || placeholder("?"),
+            c_count: s2?.red_count  ?? snap?.cd?.c_count ?? 0,
+            d_count: s2?.blue_count ?? snap?.cd?.d_count ?? 0,
+          }
+        };
+
+        writeSnap(state.base_iso, next);
+        renderActive();
       } catch(e){ console.log("recoverSemisFromWinners error", e); }
     }
     // ------------------------------------------
@@ -429,7 +455,7 @@
           pruneVoteMem(data.base_iso); pruneSnap(data.base_iso);
         }
 
-        // Save semis *before* mid-cut; or recover if we missed it
+        // Save/refresh semis *before* mid-cut; then recover if needed after mid-cut
         ensureSemiSnapshot();
         if (state.mid_done) recoverSemisFromWinners();
 
@@ -443,6 +469,11 @@
         fetching = false;
       }
     }
+
+    // triggers
+    let semiTriggered = false, finalTriggered = false, lastSemiPoll = 0;
+    let fetching = false;
+    let activeMatch = "ab"; // "ab" | "cd" | "final"
 
     function tick(){
       if (!state?.ends_at) return requestAnimationFrame(tick);
@@ -477,6 +508,9 @@
 
       requestAnimationFrame(tick);
     }
+
+    const forceBtn = document.getElementById("forceQueue");
+    const resetBtn = document.getElementById("resetPair");
 
     forceBtn.addEventListener('click', ()=> fetchState(true));
     resetBtn.addEventListener('click', ()=> fetchState(true));
