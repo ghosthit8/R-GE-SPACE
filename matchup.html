@@ -435,19 +435,19 @@
       const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
       elRemain.textContent = (ms/1000).toFixed(1);
 
-      const total = (state.period_sec||90)*1000;
-      const to60 = total - 60_000, to30 = total - 30_000;
+      // explicit thresholds to match edge function
+      const LOCK_Q_MS = 60_000, LOCK_S_MS = 30_000;
 
-      // pre-locks messages
-      if (ms <= (total - to60) + 250 && !state.mid1_done) winnerText.textContent = 'Quarters about to lock…';
-      if (ms <= (total - to30) + 250 && state.mid1_done && !state.mid2_done) winnerText.textContent = 'Semis about to lock…';
+      // cue text near the cuts
+      if (ms <= LOCK_Q_MS + 250 && !state.mid1_done) winnerText.textContent = 'Quarters just locked — semis live.';
+      if (ms <= LOCK_S_MS + 250 && state.mid1_done && !state.mid2_done) winnerText.textContent = 'Semis just locked — final live.';
 
       const now = Date.now();
-      // sync just after each cut
-      if (ms <= total - to60 && !state.mid1_done && (!semiPhase1Synced || now-lastPhasePoll>1500)) {
+      // resync exactly after each cut
+      if (ms <= LOCK_Q_MS && !state.mid1_done && (!semiPhase1Synced || now-lastPhasePoll>1500)) {
         semiPhase1Synced=true; lastPhasePoll=now; fetchState(true);
       }
-      if (ms <= total - to30 && state.mid1_done && !state.mid2_done && (!semiPhase2Synced || now-lastPhasePoll>1500)) {
+      if (ms <= LOCK_S_MS && state.mid1_done && !state.mid2_done && (!semiPhase2Synced || now-lastPhasePoll>1500)) {
         semiPhase2Synced=true; lastPhasePoll=now; fetchState(true);
       }
       if (ms <= 0 && state.mid2_done && !finalSynced) {
