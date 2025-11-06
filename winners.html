@@ -11,7 +11,8 @@
     h1 { margin:0 0 10px; font-size:20px; font-weight:800; letter-spacing:.5px; }
     .top { display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; }
     a.btn, button.btn { text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:#131920; color:var(--fg); font-weight:700; cursor:pointer; }
-    .meta { color:var(--muted); font-size:12px; margin-bottom:8px; }
+    .meta { color:var(--muted); font-size:12px; margin-bottom:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .tz { padding:2px 8px; border-radius:999px; background:#0b1220; border:1px solid #1a2636; color:#cbd5e1; font-weight:700; font-size:11px; letter-spacing:.06em; }
     .card { border:1px solid var(--line); background:var(--card); border-radius:14px; overflow:hidden; }
     .table-wrap { overflow-x:auto; }
     table { width:100%; border-collapse:collapse; font-size:14px; table-layout:auto; }
@@ -24,15 +25,9 @@
     .cycle { word-break:break-all; color:#cbd5e1; opacity:.9; }
     .thumb { width:42px; height:42px; object-fit:cover; border-radius:6px; border:1px solid var(--line); cursor:pointer; transition:transform .15s; }
     .thumb:hover { transform:scale(1.08); }
-    .fullscreen-overlay {
-      display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9);
-      justify-content:center; align-items:center; z-index:9999;
-    }
+    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); justify-content:center; align-items:center; z-index:9999; }
     .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
-    .fullscreen-overlay button {
-      position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent);
-      color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer;
-    }
+    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
     @media (max-width:520px){ th.cycle,td.cycle{display:none;} th,td{padding:8px 10px;} table{font-size:13px;} }
   </style>
 </head>
@@ -47,7 +42,10 @@
       </div>
     </div>
 
-    <div class="meta" id="meta">Loading…</div>
+    <div class="meta" id="meta">
+      Loading…
+      <span class="tz" id="tzBadge"></span>
+    </div>
 
     <div class="card">
       <div class="table-wrap">
@@ -80,12 +78,21 @@
     const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
     const ADMIN_KEY = "Inklink88!";
     const metaEl = document.getElementById('meta');
+    const tzBadge = document.getElementById('tzBadge');
     const tbody  = document.getElementById('body');
     const overlay = document.getElementById('overlay');
     const fullImg = document.getElementById('fullImg');
     const btnRefresh = document.getElementById('refresh');
     const btnClear   = document.getElementById('clear');
     const btnClose   = document.getElementById('closeFull');
+
+    // show local timezone abbrev
+    try {
+      const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
+      const parts = fmt.formatToParts(new Date());
+      const tz = parts.find(p => p.type === "timeZoneName")?.value || "";
+      tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
+    } catch { tzBadge.textContent = "Local time"; }
 
     btnClose.onclick = () => overlay.style.display = 'none';
 
@@ -94,9 +101,23 @@
       overlay.style.display = 'flex';
     }
 
-    function fmtTime(iso) {
+    // Parse a timestamp robustly:
+    //  - If it already includes 'Z' or an explicit offset, trust it.
+    //  - If it has no timezone info, assume UTC.
+    function parseWhen(isoish){
+      if (!isoish) return NaN;
+      const s = String(isoish);
+      const hasZone = /Z|[+-]\d{2}:\d{2}$/.test(s);
+      const candidate = hasZone ? s : (s.replace(" ", "T") + "Z");
+      const t = Date.parse(candidate);
+      return isNaN(t) ? Date.parse(s) : t;
+    }
+
+    function fmtTime(isoish) {
+      const t = parseWhen(isoish);
+      if (isNaN(t)) return String(isoish);
       try {
-        return new Date(iso).toLocaleString(undefined, {
+        return new Date(t).toLocaleString(undefined, {
           hour12: true,
           hour: "numeric",
           minute: "2-digit",
@@ -106,7 +127,7 @@
           year: "numeric"
         });
       } catch {
-        return iso;
+        return new Date(t).toString();
       }
     }
 
@@ -147,21 +168,27 @@
     }
 
     async function load(){
-      metaEl.textContent = 'Loading…';
+      metaEl.firstChild.nodeValue = 'Loading… '; // keep tz badge
       const res = await fetch(FUNCTION_URL + "?winners=1&limit=200");
       const data = await res.json();
 
+      // Support both shapes {winners:[...]} or raw array
+      const all = Array.isArray(data) ? data : (data.winners || []);
+
       // Show ONLY finals (base_iso without ::semi)
-      const finals = (data.winners || []).filter(w => !(w.base_iso || "").includes("::semi"));
+      const finals = (all || []).filter(w => !(w.base_iso || "").includes("::semi"));
+
+      // Sort by decided_at (newest first) using robust UTC-aware parser
+      finals.sort((a,b) => parseWhen(b.decided_at) - parseWhen(a.decided_at));
 
       render(finals);
       const total = finals.length;
-      metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom`;
+      metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `;
     }
 
     async function clearData(){
       if(!confirm("⚠️ Permanently delete all winner data?")) return;
-      metaEl.textContent = 'Clearing data…';
+      metaEl.firstChild.nodeValue = 'Clearing data… ';
       const res = await fetch(FUNCTION_URL + "?clear=1", {
         method:"DELETE",
         headers:{ "x-admin-key": ADMIN_KEY }
