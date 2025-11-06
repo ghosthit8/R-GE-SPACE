@@ -147,17 +147,11 @@
   <div class="debugbox" id="debugBox">debug: idle…</div>
 
   <script>
-    // === config ===
+    // === config (unchanged) ===
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
-
-    // 🔐 Edge Function auth headers (required on GET + POST)
-    const FN_HEADERS = {
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-    };
 
     const RSID_KEY = "rsid_v2";
     let RSID = localStorage.getItem(RSID_KEY);
@@ -213,11 +207,13 @@
     // ---------- STATE ----------
     let state = {
       base_iso:null, ends_at:null, period_sec:90,
+      // live lanes mirror the backend (A..H used for quarters; A/B then finalists later)
       seed_a_url:null, seed_b_url:null, seed_c_url:null, seed_d_url:null,
       seed_e_url:null, seed_f_url:null, seed_g_url:null, seed_h_url:null,
       seed_a_count:0, seed_b_count:0, seed_c_count:0, seed_d_count:0,
       seed_e_count:0, seed_f_count:0, seed_g_count:0, seed_h_count:0,
       mid1_done:false, mid2_done:false,
+      // snapshots
       q1_a_url:null, q1_b_url:null, q1_a_count:0, q1_b_count:0,
       q2_c_url:null, q2_d_url:null, q2_c_count:0, q2_d_count:0,
       q3_e_url:null, q3_f_url:null, q3_e_count:0, q3_f_count:0,
@@ -242,16 +238,14 @@
       o.box.addEventListener('click', ()=>{ activeMatch = k; renderActive(); });
     });
 
-    // ✅ persist vote (POST to edge function) + optimistic UI
-    async function vote(side){
+    // ✅ persist vote (POST to edge function) + keep optimistic UI
+    async function vote(side){ // "red" (left) or "blue" (right)
       const baseIso = state.base_iso || "";
       const mem = readMem(baseIso);
       const key = phaseKeyFor(activeMatch);
+      if (mem[key]) return; // already voted this match in this cycle
 
-      // gate by phase liveness to avoid 409s
-      if (!phaseIsLive(activeMatch)) return;
-      if (mem[key]) return; // already voted on this device
-
+      // optimistic bump on the correct live counters
       const up = {};
       if (activeMatch==="q1") up[side==="red"?"seed_a_count":"seed_b_count"] = (side==="red"?state.seed_a_count:state.seed_b_count)+1;
       else if (activeMatch==="q2") up[side==="red"?"seed_c_count":"seed_d_count"] = (side==="red"?state.seed_c_count:state.seed_d_count)+1;
@@ -261,45 +255,34 @@
       else if (activeMatch==="s2") up[side==="red"?"seed_c_count":"seed_d_count"] = (side==="red"?state.seed_c_count:state.seed_d_count)+1;
       else if (activeMatch==="final") up[side==="red"?"seed_a_count":"seed_b_count"] = (side==="red"?state.seed_a_count:state.seed_b_count)+1;
 
-      Object.assign(state, up);
+      Object.assign(state, up); // optimistic
       renderActive();
 
+      // server write
       try {
         const res = await fetch(FUNCTION_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-rsid": RSID,
-            ...FN_HEADERS
-          },
+          headers: { "Content-Type": "application/json", "x-rsid": RSID },
           body: JSON.stringify({ phase: activeMatch, side: side === "red" ? "left" : "right" })
         });
         if (!res.ok) {
-          await fetchState(true);
+          await fetchState(true); // rollback to server truth
           const msg = await res.json().catch(()=>({error:"vote_failed"}));
           dbg.textContent = "debug: vote error → " + (msg.error || res.status);
           return;
         }
         const serverState = await res.json();
-        state = serverState;
-        writeMem(baseIso, key, side);
+        state = serverState;                 // trust source of truth
+        writeMem(baseIso, key, side);        // prevent double vote on this device
         renderActive();
       } catch (e) {
-        await fetchState(true);
+        await fetchState(true);              // rollback on network error
         dbg.textContent = "debug: vote network error → " + (e.message || e);
       }
     }
 
     btnActive1.onclick = ()=> vote("red");
     btnActive2.onclick = ()=> vote("blue");
-
-    // ---------- PHASE HELPERS ----------
-    function phaseIsLive(tag){
-      if (tag==="q1"||tag==="q2"||tag==="q3"||tag==="q4") return !state.mid1_done;
-      if (tag==="s1"||tag==="s2") return state.mid1_done && !state.mid2_done;
-      if (tag==="final")         return state.mid2_done;
-      return false;
-    }
 
     // ---------- RENDER ----------
     function setThumb(th, leftUrl, rightUrl, leftCount, rightCount, labelFallback="?"){
@@ -313,6 +296,8 @@
     function renderFinalBox(){
       finalImg1.src = state.mid_winner_1_url || placeholder("?");
       finalImg2.src = state.mid_winner_2_url || placeholder("?");
+      finalLeftLabel.textContent  = "Winner of Semi 1";
+      finalRightLabel.textContent = "Winner of Semi 2";
       if (state.mid2_done) finalFooter.textContent = "Final is live — decides at 0s.";
       else if (state.mid1_done) finalFooter.textContent = "Semis live — final soon.";
       else finalFooter.textContent = "Waiting for quarters…";
@@ -345,27 +330,23 @@
       setThumb(thumbs.q3, q3L, q3R, q3LC, q3RC, "E");
       setThumb(thumbs.q4, q4L, q4R, q4LC, q4RC, "G");
 
-      // --- Semis thumb counts/images by phase ---
-      if (!state.mid1_done) {
-        setThumb(thumbs.s1, null, null, 0, 0, "S1");
-        setThumb(thumbs.s2, null, null, 0, 0, "S2");
-      } else if (!state.mid2_done) {
-        setThumb(thumbs.s1, state.semi_1_left_url || state.seed_a_url,  state.semi_1_right_url || state.seed_b_url, state.seed_a_count, state.seed_b_count, "S1");
-        setThumb(thumbs.s2, state.semi_2_left_url || state.seed_c_url,  state.semi_2_right_url || state.seed_d_url, state.seed_c_count, state.seed_d_count, "S2");
-      } else {
-        setThumb(thumbs.s1, state.semi_1_left_url,  state.semi_1_right_url,  state.semi_1_left_count,  state.semi_1_right_count, "S1");
-        setThumb(thumbs.s2, state.semi_2_left_url,  state.semi_2_right_url,  state.semi_2_left_count,  state.semi_2_right_count, "S2");
-      }
+      // semis: pre-mid2 still in seed lanes; post-mid2 freeze counts from semi_*_count
+      const s1L = state.semi_1_left_url  || state.seed_a_url;
+      const s1R = state.semi_1_right_url || state.seed_b_url;
+      const s1LC = state.mid2_done ? state.semi_1_left_count : state.seed_a_count;
+      const s1RC = state.mid2_done ? state.semi_1_right_count: state.seed_b_count;
 
-      // --- Final thumb counts by phase ---
-      if (!state.mid2_done) {
-        thumbs.final.img.src = placeholder("F");
-        thumbs.final.count.textContent = "0-0";
-      } else {
-        thumbs.final.img.src = state.mid_winner_1_url || state.mid_winner_2_url || placeholder("F");
-        thumbs.final.count.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
-      }
+      const s2L = state.semi_2_left_url  || state.seed_c_url;
+      const s2R = state.semi_2_right_url || state.seed_d_url;
+      const s2LC = state.mid2_done ? state.semi_2_left_count : state.seed_c_count;
+      const s2RC = state.mid2_done ? state.semi_2_right_count: state.seed_d_count;
 
+      setThumb(thumbs.s1, s1L, s1R, s1LC, s1RC, "S1");
+      setThumb(thumbs.s2, s2L, s2R, s2LC, s2RC, "S2");
+
+      // final thumb uses finalists + live final counts
+      thumbs.final.img.src = state.mid_winner_1_url || state.mid_winner_2_url || placeholder("F");
+      thumbs.final.count.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
       markActive();
     }
 
@@ -405,45 +386,36 @@
         rightCt=state.mid1_done? (state.q4_h_count??0) : (state.seed_h_count??0);
       }
       else if (activeMatch==="s1"){ leftLabel="Semi 1 — Left"; rightLabel="Semi 1 — Right";
-        if (!state.mid1_done){ leftImg=placeholder("?"); rightImg=placeholder("?"); leftCt=0; rightCt=0; }
-        else if (!state.mid2_done){ leftImg=state.semi_1_left_url||state.seed_a_url||placeholder("?"); rightImg=state.semi_1_right_url||state.seed_b_url||placeholder("?"); leftCt=state.seed_a_count??0; rightCt=state.seed_b_count??0; }
-        else { leftImg=state.semi_1_left_url||placeholder("?"); rightImg=state.semi_1_right_url||placeholder("?"); leftCt=state.semi_1_left_count??0; rightCt=state.semi_1_right_count??0; }
+        leftImg = state.semi_1_left_url  || state.seed_a_url || placeholder("?");
+        rightImg= state.semi_1_right_url || state.seed_b_url || placeholder("?");
+        leftCt  = state.seed_a_count ?? 0; rightCt = state.seed_b_count ?? 0;
       }
       else if (activeMatch==="s2"){ leftLabel="Semi 2 — Left"; rightLabel="Semi 2 — Right";
-        if (!state.mid1_done){ leftImg=placeholder("?"); rightImg=placeholder("?"); leftCt=0; rightCt=0; }
-        else if (!state.mid2_done){ leftImg=state.semi_2_left_url||state.seed_c_url||placeholder("?"); rightImg=state.semi_2_right_url||state.seed_d_url||placeholder("?"); leftCt=state.seed_c_count??0; rightCt=state.seed_d_count??0; }
-        else { leftImg=state.semi_2_left_url||placeholder("?"); rightImg=state.semi_2_right_url||placeholder("?"); leftCt=state.semi_2_left_count??0; rightCt=state.semi_2_right_count??0; }
+        leftImg = state.semi_2_left_url  || state.seed_c_url || placeholder("?");
+        rightImg= state.semi_2_right_url || state.seed_d_url || placeholder("?");
+        leftCt  = state.seed_c_count ?? 0; rightCt = state.seed_d_count ?? 0;
       }
       else { // final
         leftLabel="Final — Left"; rightLabel="Final — Right";
-        if (!state.mid2_done){ leftImg=placeholder("?"); rightImg=placeholder("?"); leftCt=0; rightCt=0; }
-        else { leftImg=state.mid_winner_1_url||placeholder("?"); rightImg=state.mid_winner_2_url||placeholder("?"); leftCt=state.seed_a_count??0; rightCt=state.seed_b_count??0; }
+        leftImg = state.mid_winner_1_url || placeholder("?");
+        rightImg= state.mid_winner_2_url || placeholder("?");
+        leftCt  = state.seed_a_count ?? 0; rightCt = state.seed_b_count ?? 0;
       }
 
       imgActive1.src = leftImg; imgActive2.src = rightImg;
       labelActive1.textContent = leftLabel; labelActive2.textContent = rightLabel;
       countActive1.textContent = leftCt; countActive2.textContent = rightCt;
 
-      // enable Vote only when phase is live (and not already voted)
-      const mem = readMem(state.base_iso||""); const key = phaseKeyFor(activeMatch);
-      const already = !!mem[key];
-      const live = phaseIsLive(activeMatch);
-      btnActive1.disabled = already || !live;
-      btnActive2.disabled = already || !live;
-      if (already && mem[key]==="red")  labelActive1.textContent += " • you voted";
-      if (already && mem[key]==="blue") labelActive2.textContent += " • you voted";
+      const picked = mem[key];
+      btnActive1.disabled = !!picked; btnActive2.disabled = !!picked;
+      if (picked==="red")   labelActive1.textContent += " • you voted";
+      if (picked==="blue")  labelActive2.textContent += " • you voted";
     }
 
     // ---------- NET ----------
     async function fetchState(force=false){
       try {
-        dbg.textContent = "debug: fetching…";
-        const res = await fetch(FUNCTION_URL, { headers: { ...FN_HEADERS } });
-        if (!res.ok) {
-          const msg = await res.text().catch(()=>res.statusText);
-          dbg.textContent = "debug: GET error → " + res.status + " " + msg;
-          throw new Error("GET " + res.status);
-        }
+        const res = await fetch(FUNCTION_URL + (force?"":""));
         const data = await res.json();
         state = data;
         elMeta.textContent = `period=${state.period_sec||90}s • base=${state.base_iso}`;
@@ -463,12 +435,15 @@
       const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
       elRemain.textContent = (ms/1000).toFixed(1);
 
+      // explicit thresholds to match edge function
       const LOCK_Q_MS = 60_000, LOCK_S_MS = 30_000;
 
+      // cue text near the cuts
       if (ms <= LOCK_Q_MS + 250 && !state.mid1_done) winnerText.textContent = 'Quarters just locked — semis live.';
       if (ms <= LOCK_S_MS + 250 && state.mid1_done && !state.mid2_done) winnerText.textContent = 'Semis just locked — final live.';
 
       const now = Date.now();
+      // resync exactly after each cut
       if (ms <= LOCK_Q_MS && !state.mid1_done && (!semiPhase1Synced || now-lastPhasePoll>1500)) {
         semiPhase1Synced=true; lastPhasePoll=now; fetchState(true);
       }
@@ -486,7 +461,7 @@
     forceBtn.addEventListener('click', ()=> fetchState(true));
     resetBtn.addEventListener('click', ()=> fetchState(true));
 
-    // realtime hooks
+    // realtime hooks (kept)
     supabase.channel('cycles-v2-live')
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'cycles_v2' }, async ()=>{ await fetchState(true); })
       .subscribe();
