@@ -5,20 +5,20 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Rage Space — Matchup (8-up, 2-up view)</title>
   <style>
-    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; }
+    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; --card:#0f1318; --border:#20242a; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
     .wrap { max-width:700px; margin:0 auto; padding:16px 12px 96px; }
     h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
     .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-    .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
+    .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid var(--border); border-radius:12px; background:var(--card); }
     .state { color:var(--muted); font-size:12px; }
 
-    .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
+    .card { margin-top:12px; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:var(--card); }
     .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
     .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
     .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
-    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid #20242a; }
+    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid var(--border); }
     .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
     .counts { font-variant-numeric: tabular-nums; font-weight:700; }
     .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
@@ -28,13 +28,15 @@
 
     .thumbs-wrap { margin-top:16px; }
     .thumbs-title { font-size:12px; opacity:.6; margin-bottom:6px; }
-    .thumbs { display:flex; gap:10px; flex-wrap:wrap; }
-    .thumb { width:110px; border:1px solid #20242a; border-radius:12px; overflow:hidden; background:#0f1318; cursor:pointer; }
+    .thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .thumb { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); cursor:pointer; }
+    .thumb.disabled { opacity:.55; cursor:default; }
     .thumb.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(57,255,20,.3); }
-    .thumb-img { width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
+    .thumb-img { width:100%; aspect-ratio:3/4; background:#0b0f13; display:grid; place-items:center; }
     .thumb-img img { width:100%; height:100%; object-fit:cover; }
-    .thumb-label { padding:4px 6px 6px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
+    .thumb-label { padding:6px 8px 8px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
     .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
+    .ghostBox { width:100%; height:100%; display:grid; place-items:center; color:#3b3b3b; font-weight:700; font-size:13px; letter-spacing:.08em; }
 
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
     .winner b { color:#39ff14; }
@@ -42,7 +44,7 @@
     /* FINAL BOX */
     .final-card { margin-top:14px; }
     .final-inner { display:flex; gap:12px; flex-wrap:wrap; padding:12px; }
-    .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed #20242a; border-radius:10px; padding:8px; text-align:center; }
+    .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed var(--border); border-radius:10px; padding:8px; text-align:center; }
     .final-slot .label { display:block; margin-bottom:4px; }
     .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#000; border-radius:8px; overflow:hidden; display:grid; place-items:center; }
     .final-slot .thumb-final img { width:100%; height:100%; object-fit:cover; }
@@ -98,7 +100,7 @@
       </div>
     </div>
 
-    <!-- OTHER MATCHES (no semi thumbnails) -->
+    <!-- OTHER MATCHES (Semis boxes are present, empty until 60s) -->
     <div class="thumbs-wrap">
       <div class="thumbs-title">Other matches</div>
       <div class="thumbs">
@@ -107,6 +109,17 @@
         <div class="thumb" id="thumbQ2"><div class="thumb-img"><img id="thumbQ2img" alt="Q2 C vs D"></div><div class="thumb-label"><span>Q2 C–D</span><span class="thumb-count" id="thumbQ2count">0-0</span></div></div>
         <div class="thumb" id="thumbQ3"><div class="thumb-img"><img id="thumbQ3img" alt="Q3 E vs F"></div><div class="thumb-label"><span>Q3 E–F</span><span class="thumb-count" id="thumbQ3count">0-0</span></div></div>
         <div class="thumb" id="thumbQ4"><div class="thumb-img"><img id="thumbQ4img" alt="Q4 G vs H"></div><div class="thumb-label"><span>Q4 G–H</span><span class="thumb-count" id="thumbQ4count">0-0</span></div></div>
+
+        <!-- Semis (always rendered; ghost until mid1_done) -->
+        <div class="thumb disabled" id="thumbS1">
+          <div class="thumb-img"><div class="ghostBox" id="thumbS1ghost">SEM I</div><img id="thumbS1img" alt="S1" style="display:none"></div>
+          <div class="thumb-label"><span>Semi 1</span><span class="thumb-count" id="thumbS1count">0-0</span></div>
+        </div>
+        <div class="thumb disabled" id="thumbS2">
+          <div class="thumb-img"><div class="ghostBox" id="thumbS2ghost">SEM II</div><img id="thumbS2img" alt="S2" style="display:none"></div>
+          <div class="thumb-label"><span>Semi 2</span><span class="thumb-count" id="thumbS2count">0-0</span></div>
+        </div>
+
         <!-- Final -->
         <div class="thumb" id="thumbFinal"><div class="thumb-img"><img id="thumbFinalImg" alt="Final"></div><div class="thumb-label"><span>Final</span><span class="thumb-count" id="thumbFinalCount">0-0</span></div></div>
       </div>
@@ -173,6 +186,8 @@
       q2:   { box:document.getElementById("thumbQ2"),   img:document.getElementById("thumbQ2img"),   count:document.getElementById("thumbQ2count") },
       q3:   { box:document.getElementById("thumbQ3"),   img:document.getElementById("thumbQ3img"),   count:document.getElementById("thumbQ3count") },
       q4:   { box:document.getElementById("thumbQ4"),   img:document.getElementById("thumbQ4img"),   count:document.getElementById("thumbQ4count") },
+      s1:   { box:document.getElementById("thumbS1"),   img:document.getElementById("thumbS1img"),   ghost:document.getElementById("thumbS1ghost"), count:document.getElementById("thumbS1count") },
+      s2:   { box:document.getElementById("thumbS2"),   img:document.getElementById("thumbS2img"),   ghost:document.getElementById("thumbS2ghost"), count:document.getElementById("thumbS2count") },
       final:{ box:document.getElementById("thumbFinal"),img:document.getElementById("thumbFinalImg"),count:document.getElementById("thumbFinalCount") },
     };
 
@@ -228,21 +243,22 @@
     // which match is shown
     let activeMatch = "q1"; // q1,q2,q3,q4,s1,s2,final
 
-    // click to switch (semis removed from thumbnails)
+    // click to switch (Semis ignore clicks before mid1_done)
     thumbs.q1.box.addEventListener('click', ()=>{ activeMatch="q1"; renderActive(); });
     thumbs.q2.box.addEventListener('click', ()=>{ activeMatch="q2"; renderActive(); });
     thumbs.q3.box.addEventListener('click', ()=>{ activeMatch="q3"; renderActive(); });
     thumbs.q4.box.addEventListener('click', ()=>{ activeMatch="q4"; renderActive(); });
+    thumbs.s1.box.addEventListener('click', ()=>{ if(state.mid1_done){ activeMatch="s1"; renderActive(); }});
+    thumbs.s2.box.addEventListener('click', ()=>{ if(state.mid1_done){ activeMatch="s2"; renderActive(); }});
     thumbs.final.box.addEventListener('click', ()=>{ activeMatch="final"; renderActive(); });
 
-    // ✅ persist vote (POST to edge function) + keep optimistic UI
-    async function vote(side){ // "red" (left) or "blue" (right)
+    // ✅ vote
+    async function vote(side){
       const baseIso = state.base_iso || "";
       const mem = readMem(baseIso);
       const key = phaseKeyFor(activeMatch);
-      if (mem[key]) return; // already voted this match in this cycle
+      if (mem[key]) return;
 
-      // optimistic bump on the correct live counters
       const up = {};
       if (activeMatch==="q1") up[side==="red"?"seed_a_count":"seed_b_count"] = (side==="red"?state.seed_a_count:state.seed_b_count)+1;
       else if (activeMatch==="q2") up[side==="red"?"seed_c_count":"seed_d_count"] = (side==="red"?state.seed_c_count:state.seed_d_count)+1;
@@ -252,32 +268,24 @@
       else if (activeMatch==="s2") up[side==="red"?"seed_c_count":"seed_d_count"] = (side==="red"?state.seed_c_count:state.seed_d_count)+1;
       else if (activeMatch==="final") up[side==="red"?"seed_a_count":"seed_b_count"] = (side==="red"?state.seed_a_count:state.seed_b_count)+1;
 
-      Object.assign(state, up); // optimistic
+      Object.assign(state, up);
       renderActive();
 
-      // server write
       try {
         const res = await fetch(FUNCTION_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-rsid": RSID },
           body: JSON.stringify({ phase: activeMatch, side: side === "red" ? "left" : "right" })
         });
-        if (!res.ok) {
-          await fetchState(true); // rollback to server truth
-          const msg = await res.json().catch(()=>({error:"vote_failed"}));
-          dbg.textContent = "debug: vote error → " + (msg.error || res.status);
-          return;
-        }
+        if (!res.ok) { await fetchState(true); return; }
         const serverState = await res.json();
-        state = serverState;                 // trust source of truth
-        writeMem(baseIso, key, side);        // prevent double vote on this device
+        state = serverState;
+        writeMem(baseIso, key, side);
         renderActive();
-      } catch (e) {
-        await fetchState(true);              // rollback on network error
-        dbg.textContent = "debug: vote network error → " + (e.message || e);
+      } catch {
+        await fetchState(true);
       }
     }
-
     btnActive1.onclick = ()=> vote("red");
     btnActive2.onclick = ()=> vote("blue");
 
@@ -287,8 +295,7 @@
       th.count.textContent = (leftCount??0) + "-" + (rightCount??0);
     }
     function markActive(){
-      // Only quarters + final have thumbnails now
-      const keys = ["q1","q2","q3","q4","final"];
+      const keys = ["q1","q2","q3","q4","s1","s2","final"];
       for (const k of keys) thumbs[k].box.classList.toggle("active", k===activeMatch);
     }
 
@@ -329,9 +336,41 @@
       setThumb(thumbs.q3, q3L, q3R, q3LC, q3RC, "E");
       setThumb(thumbs.q4, q4L, q4R, q4LC, q4RC, "G");
 
-      // final thumb uses finalists + live final counts when available
-      thumbs.final.img.src = state.mid_winner_1_url || state.mid_winner_2_url || placeholder("F");
-      thumbs.final.count.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
+      // --- SEMIS BOXES ---
+      if (!state.mid1_done) {
+        // hide images, show "ghost" text and 0–0, disable click
+        thumbs.s1.img.style.display = "none";
+        thumbs.s1.ghost.style.display = "grid";
+        thumbs.s1.box.classList.add("disabled");
+        thumbs.s1.count.textContent = "0-0";
+
+        thumbs.s2.img.style.display = "none";
+        thumbs.s2.ghost.style.display = "grid";
+        thumbs.s2.box.classList.add("disabled");
+        thumbs.s2.count.textContent = "0-0";
+      } else {
+        // show real semi entrants and live counts (freeze handled by backend at 30s)
+        thumbs.s1.img.src = (state.semi_1_left_url || state.semi_1_right_url || placeholder("S1"));
+        thumbs.s1.img.style.display = "block";
+        thumbs.s1.ghost.style.display = "none";
+        thumbs.s1.box.classList.remove("disabled");
+        thumbs.s1.count.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
+
+        thumbs.s2.img.src = (state.semi_2_left_url || state.semi_2_right_url || placeholder("S2"));
+        thumbs.s2.img.style.display = "block";
+        thumbs.s2.ghost.style.display = "none";
+        thumbs.s2.box.classList.remove("disabled");
+        thumbs.s2.count.textContent = (state.seed_c_count ?? 0) + "-" + (state.seed_d_count ?? 0);
+      }
+
+      // --- FINAL ---
+      if (!state.mid2_done) {
+        thumbs.final.img.src = placeholder("F");
+        thumbs.final.count.textContent = "0-0";
+      } else {
+        thumbs.final.img.src = state.mid_winner_1_url || state.mid_winner_2_url || placeholder("F");
+        thumbs.final.count.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
+      }
 
       markActive();
     }
@@ -374,16 +413,16 @@
       else if (activeMatch==="s1"){ leftLabel="Semi 1 — Left"; rightLabel="Semi 1 — Right";
         if (!state.mid1_done) { leftImg=rightImg=placeholder("?"); leftCt=rightCt=0; }
         else {
-          leftImg = state.semi_1_left_url  || state.seed_a_url || placeholder("?");
-          rightImg= state.semi_1_right_url || state.seed_b_url || placeholder("?");
+          leftImg = state.semi_1_left_url  || placeholder("?");
+          rightImg= state.semi_1_right_url || placeholder("?");
           leftCt  = state.seed_a_count ?? 0; rightCt = state.seed_b_count ?? 0;
         }
       }
       else if (activeMatch==="s2"){ leftLabel="Semi 2 — Left"; rightLabel="Semi 2 — Right";
         if (!state.mid1_done) { leftImg=rightImg=placeholder("?"); leftCt=rightCt=0; }
         else {
-          leftImg = state.semi_2_left_url  || state.seed_c_url || placeholder("?");
-          rightImg= state.semi_2_right_url || state.seed_d_url || placeholder("?");
+          leftImg = state.semi_2_left_url  || placeholder("?");
+          rightImg= state.semi_2_right_url || placeholder("?");
           leftCt  = state.seed_c_count ?? 0; rightCt = state.seed_d_count ?? 0;
         }
       }
@@ -436,21 +475,17 @@
       const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
       elRemain.textContent = (ms/1000).toFixed(1);
 
-      // explicit thresholds to match edge function
       const LOCK_Q_MS = 60_000, LOCK_S_MS = 30_000;
 
-      // transition-aware auto-switching since semi thumbs are gone
       if (state.mid1_done && !lastMid1) { activeMatch = "s1"; }
       if (state.mid2_done && !lastMid2) { activeMatch = "final"; }
       lastMid1 = state.mid1_done;
       lastMid2 = state.mid2_done;
 
-      // cue text near the cuts
       if (ms <= LOCK_Q_MS + 250 && !state.mid1_done) winnerText.textContent = 'Quarters just locked — semis live.';
       if (ms <= LOCK_S_MS + 250 && state.mid1_done && !state.mid2_done) winnerText.textContent = 'Semis just locked — final live.';
 
       const now = Date.now();
-      // resync exactly after each cut
       if (ms <= LOCK_Q_MS && !state.mid1_done && (!semiPhase1Synced || now-lastPhasePoll>1500)) {
         semiPhase1Synced=true; lastPhasePoll=now; fetchState(true);
       }
@@ -468,7 +503,7 @@
     forceBtn.addEventListener('click', ()=> fetchState(true));
     resetBtn.addEventListener('click', ()=> fetchState(true));
 
-    // realtime hooks (kept)
+    // realtime hooks
     supabase.channel('cycles-v2-live')
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'cycles_v2' }, async ()=>{ await fetchState(true); })
       .subscribe();
