@@ -278,8 +278,13 @@
           body: JSON.stringify({ phase: activeMatch, side: side === "red" ? "left" : "right" })
         });
         if (!res.ok) { await fetchState(true); return; }
-        const serverState = await res.json();
-        state = serverState;
+        const msg = await res.json().catch(()=> ({}));
+        const s = (msg && typeof msg === "object" && "state" in msg) ? msg.state : msg;
+        if (s && typeof s === "object") {
+          state = Object.assign(state, s);
+        } else {
+          await fetchState(true);
+        }
         writeMem(baseIso, key, side);
         renderActive();
       } catch {
@@ -338,7 +343,6 @@
 
       // --- SEMIS BOXES ---
       if (!state.mid1_done) {
-        // hide images, show "ghost" text and 0–0, disable click
         thumbs.s1.img.style.display = "none";
         thumbs.s1.ghost.style.display = "grid";
         thumbs.s1.box.classList.add("disabled");
@@ -349,7 +353,6 @@
         thumbs.s2.box.classList.add("disabled");
         thumbs.s2.count.textContent = "0-0";
       } else {
-        // show real semi entrants and live counts (freeze handled by backend at 30s)
         thumbs.s1.img.src = (state.semi_1_left_url || state.semi_1_right_url || placeholder("S1"));
         thumbs.s1.img.style.display = "block";
         thumbs.s1.ghost.style.display = "none";
@@ -453,10 +456,12 @@
     // ---------- NET ----------
     async function fetchState(force=false){
       try {
-        const res = await fetch(FUNCTION_URL + (force?"":""));
+        const res = await fetch(FUNCTION_URL + (force ? "" : ""));
         const data = await res.json();
-        state = data;
-        elMeta.textContent = `period=${state.period_sec||90}s • base=${state.base_iso}`;
+        // ✅ accept both shapes: { ok:true, state:{...} } OR plain state
+        const s = (data && typeof data === "object" && "state" in data) ? data.state : data;
+        state = Object.assign(state, s || {});
+        elMeta.textContent = `period=${state.period_sec||90}s • base=${state.base_iso||"--"}`;
         renderActive();
         dbg.textContent = "debug: ok " + new Date().toLocaleTimeString();
       } catch(e) {
