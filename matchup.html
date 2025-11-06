@@ -11,131 +11,145 @@
     h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
     .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-    .timer { font-variant-numeric: tabular-nums; font-weight:700; padding:6px 10px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
+    .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid #20242a; border-radius:12px; background:#0f1318; }
     .state { color:var(--muted); font-size:12px; }
 
     .card { margin-top:12px; border:1px solid #20242a; border-radius:16px; overflow:hidden; background:#0f1318; }
     .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
     .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
-    .fullscreenBtn { position:absolute; top:8px; right:8px; background:#0b0f13; border:1px solid #20242a; border-radius:10px; color:#d1d5db; font-size:12px; padding:4px 8px; cursor:pointer; }
+    .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
     .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid #20242a; }
     .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
     .counts { font-variant-numeric: tabular-nums; font-weight:700; }
-    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #26303b; background:#121820; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; }
-    .btn[disabled], .vote[disabled] { opacity:.5; cursor:not-allowed; }
-    .vote { font-weight:800; }
-    .vote:active { transform:translateY(1px); }
-    .accent { color:var(--accent); }
+    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
+    .btn.ghost { color:#a0aec0; }
+    button.vote { padding:10px 14px; }
+    button.vote:disabled { opacity:.6; cursor:default; }
 
-    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
-    .thumb { position:relative; border:1px solid #20242a; border-radius:16px; background:#0b0f13; overflow:hidden; cursor:pointer; }
-    .thumb .img { width:100%; aspect-ratio:4/3; background:#0b0f13; display:grid; place-items:center; }
-    .thumb .img img { width:100%; height:100%; object-fit:cover; display:block; }
-    .thumb .meta { display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-top:1px solid #20242a; }
-    .thumb.active { outline:2px solid var(--accent); }
-    .thumb .mini { position:absolute; left:8px; top:8px; background:#0b0f13c0; border:1px solid #20242a; color:#cbd5e1; font-size:11px; padding:2px 6px; border-radius:8px; }
+    .thumbs-wrap { margin-top:16px; }
+    .thumbs-title { font-size:12px; opacity:.6; margin-bottom:6px; }
+    .thumbs { display:flex; gap:10px; flex-wrap:wrap; }
+    .thumb { width:110px; border:1px solid #20242a; border-radius:12px; overflow:hidden; background:#0f1318; cursor:pointer; }
+    .thumb.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(57,255,20,.3); }
+    .thumb-img { width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
+    .thumb-img img { width:100%; height:100%; object-fit:cover; }
+    .thumb-label { padding:4px 6px 6px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
+    .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
 
-    .footer { position:fixed; left:0; right:0; bottom:0; padding:12px; background:linear-gradient(180deg, transparent, #0b0d0f 40%); backdrop-filter:blur(2px); }
-    .footerInner { border:1px dashed #2a343f; border-radius:12px; padding:8px 10px; color:#cbd5e1; font-size:12px; }
-
-    .tools { display:flex; gap:8px; align-items:center; }
-    .linkbtn, .backbtn { font-size:12px; padding:6px 10px; }
     .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
     .winner b { color:#39ff14; }
 
     /* FINAL BOX */
     .final-card { margin-top:14px; }
     .final-inner { display:flex; gap:12px; flex-wrap:wrap; padding:12px; }
-    .final-slot { flex:1 1 150px; background:#0b0f13; border:1px solid #20242a; border-radius:10px; padding:8px; text-align:center; }
+    .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed #20242a; border-radius:10px; padding:8px; text-align:center; }
     .final-slot .label { display:block; margin-bottom:4px; }
-    .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#0b0f13; border-radius:8px; overflow:hidden; display:grid; place-items:center; }
+    .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#000; border-radius:8px; overflow:hidden; display:grid; place-items:center; }
     .final-slot .thumb-final img { width:100%; height:100%; object-fit:cover; }
     .final-footer { padding:0 12px 12px; font-size:12px; color:#9aa0a6; }
 
-    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.95); justify-content:center; align-items:center; z-index:9999; }
+    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
     .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
- 
+    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
+    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
+    .debugbox { position:fixed; left:0; right:0; bottom:0; background:rgba(0,0,0,.75); color:#9ca3af; font-size:11px; padding:6px 10px; border-top:1px solid #111; }
   </style>
-  <script src="https://unpkg.com/@supabase/supabase-js@2.47.10/dist/umd/supabase.js"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="wrap">
+    <h1>Rage Space — Matchup (8-up, 2-up view)</h1>
+
     <div class="header">
       <div class="row">
-        <h1>Rage Space — Matchup</h1>
-        <div class="timer"><span id="tRemain">--</span></div>
+        <div class="timer" id="tRemain">90.0</div>
+        <div class="state" id="tMeta">syncing…</div>
       </div>
-      <div class="tools">
-        <button class="backbtn" onclick="location.href='winners.html'">Winners</button>
-        <button id="forceQueue" class="btn">Sync</button>
-        <button id="resetPair" class="btn">Reset Pair</button>
+      <div class="row">
+        <button id="forceQueue" class="btn ghost">Pull Now</button>
+        <button id="resetPair" class="btn ghost">Reset Pair</button>
+        <a class="backbtn" href="menu.html">← Menu</a>
+        <a class="linkbtn" href="winners.html">Winners</a>
       </div>
     </div>
 
-    <div class="state" id="tMeta">init…</div>
-
-    <!-- ACTIVE 2-UP -->
-    <div class="card">
+    <!-- ACTIVE MATCH AREA -->
+    <div class="card" id="activeTop">
       <div class="imgBox">
-        <img id="imgActive1" alt="left" />
-        <button class="fullscreenBtn" onclick="openFull('active1')">Fullscreen</button>
+        <img id="imgActive1" alt="Active left">
+        <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
       </div>
       <div class="bar">
         <div class="label" id="labelActive1">Left</div>
-        <div class="counts"><span id="countActive1">0</span></div>
-        <button id="btnActive1" class="vote" onclick="vote('red')">Vote</button>
+        <div class="counts" id="countActive1">0</div>
+        <button class="vote" id="btnActive1">Vote</button>
       </div>
+    </div>
+
+    <div class="card" id="activeBottom">
       <div class="imgBox">
-        <img id="imgActive2" alt="right" />
-        <button class="fullscreenBtn" onclick="openFull('active2')">Fullscreen</button>
+        <img id="imgActive2" alt="Active right">
+        <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
       </div>
       <div class="bar">
         <div class="label" id="labelActive2">Right</div>
-        <div class="counts"><span id="countActive2">0</span></div>
-        <button id="btnActive2" class="vote" onclick="vote('blue')">Vote</button>
+        <div class="counts" id="countActive2">0</div>
+        <button class="vote" id="btnActive2">Vote</button>
       </div>
     </div>
 
-    <!-- FINAL SNAPSHOT BOX -->
-    <div class="card final-card">
+    <!-- OTHER MATCHES -->
+    <div class="thumbs-wrap">
+      <div class="thumbs-title">Other matches</div>
+      <div class="thumbs">
+        <!-- Quarters -->
+        <div class="thumb" id="thumbQ1"><div class="thumb-img"><img id="thumbQ1img" alt="Q1 A vs B"></div><div class="thumb-label"><span>Q1 A–B</span><span class="thumb-count" id="thumbQ1count">0-0</span></div></div>
+        <div class="thumb" id="thumbQ2"><div class="thumb-img"><img id="thumbQ2img" alt="Q2 C vs D"></div><div class="thumb-label"><span>Q2 C–D</span><span class="thumb-count" id="thumbQ2count">0-0</span></div></div>
+        <div class="thumb" id="thumbQ3"><div class="thumb-img"><img id="thumbQ3img" alt="Q3 E vs F"></div><div class="thumb-label"><span>Q3 E–F</span><span class="thumb-count" id="thumbQ3count">0-0</span></div></div>
+        <div class="thumb" id="thumbQ4"><div class="thumb-img"><img id="thumbQ4img" alt="Q4 G vs H"></div><div class="thumb-label"><span>Q4 G–H</span><span class="thumb-count" id="thumbQ4count">0-0</span></div></div>
+        <!-- Semis -->
+        <div class="thumb" id="thumbS1"><div class="thumb-img"><img id="thumbS1img" alt="Semi 1"></div><div class="thumb-label"><span>Semi 1</span><span class="thumb-count" id="thumbS1count">0-0</span></div></div>
+        <div class="thumb" id="thumbS2"><div class="thumb-img"><img id="thumbS2img" alt="Semi 2"></div><div class="thumb-label"><span>Semi 2</span><span class="thumb-count" id="thumbS2count">0-0</span></div></div>
+        <!-- Final -->
+        <div class="thumb" id="thumbFinal"><div class="thumb-img"><img id="thumbFinalImg" alt="Final"></div><div class="thumb-label"><span>Final</span><span class="thumb-count" id="thumbFinalCount">0-0</span></div></div>
+      </div>
+    </div>
+
+    <div class="winner" id="winnerText">Quarters running… locks at 60s; semis at 30s; final at 0s.</div>
+
+    <!-- FINAL BOX -->
+    <div class="card final-card" id="finalCard">
+      <div class="bar">
+        <div class="label">Final</div>
+        <div style="font-size:12px;color:#a1a1a1;">Decides at 0s</div>
+      </div>
       <div class="final-inner">
         <div class="final-slot">
-          <span class="label" id="finalLeftLabel">Final — Left</span>
-          <div class="thumb-final"><img id="finalImg1" alt="final-1" /></div>
+          <span class="label" id="finalLeftLabel">Winner of Semi 1</span>
+          <div class="thumb-final"><img id="finalImg1" alt="Final slot 1"></div>
         </div>
         <div class="final-slot">
-          <span class="label" id="finalRightLabel">Final — Right</span>
-          <div class="thumb-final"><img id="finalImg2" alt="final-2" /></div>
+          <span class="label" id="finalRightLabel">Winner of Semi 2</span>
+          <div class="thumb-final"><img id="finalImg2" alt="Final slot 2"></div>
         </div>
       </div>
-      <div class="final-footer" id="finalFooter">Finalists will appear when semis lock.</div>
+      <div class="final-footer" id="finalFooter">Waiting…</div>
     </div>
 
-    <!-- THUMBS -->
-    <h3 style="margin:14px 0 6px; color:#a1a1a1; font-weight:600;">Other matches</h3>
-    <div class="grid">
-      <div id="thumbQ1" class="thumb"><span class="mini">Q1 A–B</span><div class="img"><img id="thumbQ1img" alt="Q1" /></div><div class="meta"><span class="label">Q1 A–B</span><span class="counts" id="thumbQ1count">0-0</span></div></div>
-      <div id="thumbQ2" class="thumb"><span class="mini">Q2 C–D</span><div class="img"><img id="thumbQ2img" alt="Q2" /></div><div class="meta"><span class="label">Q2 C–D</span><span class="counts" id="thumbQ2count">0-0</span></div></div>
-      <div id="thumbQ3" class="thumb"><span class="mini">Q3 E–F</span><div class="img"><img id="thumbQ3img" alt="Q3" /></div><div class="meta"><span class="label">Q3 E–F</span><span class="counts" id="thumbQ3count">0-0</span></div></div>
-      <div id="thumbQ4" class="thumb"><span class="mini">Q4 G–H</span><div class="img"><img id="thumbQ4img" alt="Q4" /></div><div class="meta"><span class="label">Q4 G–H</span><span class="counts" id="thumbQ4count">0-0</span></div></div>
-      <div id="thumbS1" class="thumb"><span class="mini">Semi 1</span><div class="img"><img id="thumbS1img" alt="S1" /></div><div class="meta"><span class="label">Semi 1</span><span class="counts" id="thumbS1count">0-0</span></div></div>
-      <div id="thumbS2" class="thumb"><span class="mini">Semi 2</span><div class="img"><img id="thumbS2img" alt="S2" /></div><div class="meta"><span class="label">Semi 2</span><span class="counts" id="thumbS2count">0-0</span></div></div>
-      <div id="thumbFinal" class="thumb"><span class="mini">Final</span><div class="img"><img id="thumbFinalImg" alt="F" /></div><div class="meta"><span class="label">Final</span><span class="counts" id="thumbFinalCount">0-0</span></div></div>
-    </div>
-
-    <div class="winner" id="winnerText">—</div>
-
-    <div class="footer">
-      <div class="footerInner" id="debugBox">debug: …</div>
-    </div>
+    <div class="hint">8 images → 4 quarters (decide at 60s) → 2 semis (decide at 30s) → Final (decide at 0s).</div>
   </div>
 
-  <div id="overlay" class="fullscreen-overlay"><img id="fullImg" alt="full" /><button id="closeFull" class="btn" style="position:absolute;top:20px;right:20px;">Close</button></div>
+  <div class="fullscreen-overlay" id="overlay">
+    <button id="closeFull">✕ Close</button>
+    <img id="fullImg" src="">
+  </div>
 
-<script>
+  <div class="debugbox" id="debugBox">debug: idle…</div>
+
+  <script>
     // === config (unchanged) ===
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXV...CI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
@@ -186,56 +200,35 @@
     }
 
     function placeholder(letter){
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="100%" height="100%" fill="#0b0f13"/><text x="50%" y="50%" fill="#39ff14" font-size="48" font-family="monospace" text-anchor="middle" dominant-baseline="middle">${letter}</text></svg>`;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960"><rect width="100%" height="100%" fill="#000"/><text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace" text-anchor="middle" dominant-baseline="middle">${letter}</text></svg>`;
       return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
     }
 
     // ---------- STATE ----------
-    const VOTE_MEMORY_KEY = "rs_vote_mem_v2";
-    const LOCK_Q_MS = 60000;  // quarters lock at 60s
-    const LOCK_S_MS = 30000;  // semis lock at 30s
-
     let state = {
-      base_iso: null,
-      remaining_ms: null,
-
-      // seed lane
-      seed_a_url:null, seed_b_url:null, seed_c_url:null, seed_d_url:null, seed_e_url:null, seed_f_url:null, seed_g_url:null, seed_h_url:null,
-      seed_a_count:0, seed_b_count:0, seed_c_count:0, seed_d_count:0, seed_e_count:0, seed_f_count:0, seed_g_count:0, seed_h_count:0,
-
-      // q snapshots (frozen at mid1)
+      base_iso:null, ends_at:null, period_sec:90,
+      // live lanes mirror the backend (A..H used for quarters; A/B then finalists later)
+      seed_a_url:null, seed_b_url:null, seed_c_url:null, seed_d_url:null,
+      seed_e_url:null, seed_f_url:null, seed_g_url:null, seed_h_url:null,
+      seed_a_count:0, seed_b_count:0, seed_c_count:0, seed_d_count:0,
+      seed_e_count:0, seed_f_count:0, seed_g_count:0, seed_h_count:0,
+      mid1_done:false, mid2_done:false,
+      // snapshots
       q1_a_url:null, q1_b_url:null, q1_a_count:0, q1_b_count:0,
       q2_c_url:null, q2_d_url:null, q2_c_count:0, q2_d_count:0,
       q3_e_url:null, q3_f_url:null, q3_e_count:0, q3_f_count:0,
       q4_g_url:null, q4_h_url:null, q4_g_count:0, q4_h_count:0,
-
-      // semi lanes + frozen counts at mid2
-      semi_1_left_url:null,  semi_1_right_url:null,  semi_1_left_count:0,  semi_1_right_count:0,
-      semi_2_left_url:null,  semi_2_right_url:null,  semi_2_left_count:0,  semi_2_right_count:0,
-
-      // winners
+      semi_1_left_url:null, semi_1_right_url:null, semi_1_left_count:0, semi_1_right_count:0,
+      semi_2_left_url:null, semi_2_right_url:null, semi_2_left_count:0, semi_2_right_count:0,
       mid_winner_1_url:null, mid_winner_2_url:null,
-      final_winner_url:null,
-
-      // flags
-      mid1_done:false, mid2_done:false, final_done:false,
     };
 
-    function setThumb(slot, leftUrl, rightUrl, leftCt, rightCt, fallbackLetter){
-      slot.img.src = (leftUrl || rightUrl) ? (leftUrl || rightUrl) : placeholder(fallbackLetter||"?");
-      slot.count.textContent = (leftCt??0) + "-" + (rightCt??0);
-    }
-
-    function msToClock(ms){
-      if (ms<0) ms=0;
-      const s = Math.floor(ms/1000), m=Math.floor(s/60), rem=s%60;
-      return m+":"+(rem<10?("0"+rem):rem);
-    }
-
+    // ---------- VOTE MEMORY ----------
+    const VOTE_MEMORY_KEY = "rs_vote_memory_v2";
     function readMem(baseIso){ try { return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")[baseIso]||{}; } catch { return {}; } }
-    function writeMem(baseIso,key,val){ const all = (()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}");}catch{return{};}})(); (all[baseIso]=all[baseIso]||{})[key]=val; localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
+    function writeMem(baseIso,key,val){ const all = (()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}");}catch{return {};}})(); all[baseIso]=Object.assign({},all[baseIso]||{}, {[key]:val}); localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
     function phaseKeyFor(tag){ return tag; }
-    function pruneVoteMem(keep){ const all = (()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}");}catch{return{};}})(); for (const k of Object.keys(all)) if (!keep.includes(k)) delete all[k]; localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
+    function pruneVoteMem(keep){ const all = (()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}");}catch{return {};}})(); for(const k of Object.keys(all)) if(k!==keep) delete all[k]; localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
 
     // which match is shown
     let activeMatch = "q1"; // q1,q2,q3,q4,s1,s2,final
@@ -247,20 +240,70 @@
 
     // ✅ persist vote (POST to edge function) + keep optimistic UI
     async function vote(side){ // "red" (left) or "blue" (right)
-      const mem = readMem(state.base_iso||"");
+      const baseIso = state.base_iso || "";
+      const mem = readMem(baseIso);
       const key = phaseKeyFor(activeMatch);
-      if (mem[key]) return;
+      if (mem[key]) return; // already voted this match in this cycle
+
+      // optimistic bump on the correct live counters
+      const up = {};
+      if (activeMatch==="q1") up[side==="red"?"seed_a_count":"seed_b_count"] = (side==="red"?state.seed_a_count:state.seed_b_count)+1;
+      else if (activeMatch==="q2") up[side==="red"?"seed_c_count":"seed_d_count"] = (side==="red"?state.seed_c_count:state.seed_d_count)+1;
+      else if (activeMatch==="q3") up[side==="red"?"seed_e_count":"seed_f_count"] = (side==="red"?state.seed_e_count:state.seed_f_count)+1;
+      else if (activeMatch==="q4") up[side==="red"?"seed_g_count":"seed_h_count"] = (side==="red"?state.seed_g_count:state.seed_h_count)+1;
+      else if (activeMatch==="s1") up[side==="red"?"seed_a_count":"seed_b_count"] = (side==="red"?state.seed_a_count:state.seed_b_count)+1;
+      else if (activeMatch==="s2") up[side==="red"?"seed_c_count":"seed_d_count"] = (side==="red"?state.seed_c_count:state.seed_d_count)+1;
+      else if (activeMatch==="final") up[side==="red"?"seed_a_count":"seed_b_count"] = (side==="red"?state.seed_a_count:state.seed_b_count)+1;
+
+      Object.assign(state, up); // optimistic
+      renderActive();
+
+      // server write
       try {
-        await fetch(FUNCTION_URL, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ rsid:RSID, action:"vote", which:activeMatch, side }) });
-        writeMem(state.base_iso||"", key, side);
+        const res = await fetch(FUNCTION_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-rsid": RSID },
+          body: JSON.stringify({ phase: activeMatch, side: side === "red" ? "left" : "right" })
+        });
+        if (!res.ok) {
+          await fetchState(true); // rollback to server truth
+          const msg = await res.json().catch(()=>({error:"vote_failed"}));
+          dbg.textContent = "debug: vote error → " + (msg.error || res.status);
+          return;
+        }
+        const serverState = await res.json();
+        state = serverState;                 // trust source of truth
+        writeMem(baseIso, key, side);        // prevent double vote on this device
         renderActive();
       } catch (e) {
-        console.warn("vote err", e);
+        await fetchState(true);              // rollback on network error
+        dbg.textContent = "debug: vote network error → " + (e.message || e);
       }
     }
 
-    // thumbs renderer (QUARTERS always visible, SEMIS gated by mid1_done, FINAL gated by mid2_done)
-function renderThumbs(){
+    btnActive1.onclick = ()=> vote("red");
+    btnActive2.onclick = ()=> vote("blue");
+
+    // ---------- RENDER ----------
+    function setThumb(th, leftUrl, rightUrl, leftCount, rightCount, labelFallback="?"){
+      th.img.src = leftUrl || rightUrl || placeholder(labelFallback);
+      th.count.textContent = (leftCount??0) + "-" + (rightCount??0);
+    }
+    function markActive(){
+      for (const k of Object.keys(thumbs)) thumbs[k].box.classList.toggle("active", k===activeMatch);
+    }
+
+    function renderFinalBox(){
+      finalImg1.src = state.mid_winner_1_url || placeholder("?");
+      finalImg2.src = state.mid_winner_2_url || placeholder("?");
+      finalLeftLabel.textContent  = "Winner of Semi 1";
+      finalRightLabel.textContent = "Winner of Semi 2";
+      if (state.mid2_done) finalFooter.textContent = "Final is live — decides at 0s.";
+      else if (state.mid1_done) finalFooter.textContent = "Semis live — final soon.";
+      else finalFooter.textContent = "Waiting for quarters…";
+    }
+
+    function renderThumbs(){
       // quarters: pre-mid1 from seed lanes; after mid1 from snapshots
       const q1L = state.mid1_done ? state.q1_a_url : state.seed_a_url;
       const q1R = state.mid1_done ? state.q1_b_url : state.seed_b_url;
@@ -287,62 +330,27 @@ function renderThumbs(){
       setThumb(thumbs.q3, q3L, q3R, q3LC, q3RC, "E");
       setThumb(thumbs.q4, q4L, q4R, q4LC, q4RC, "G");
 
-      // --- SEMIS ---
-      // Before mid1_done, semis are not live: hide with placeholders and 0-0.
-      let s1L, s1R, s1LC, s1RC;
-      let s2L, s2R, s2LC, s2RC;
+      // semis: pre-mid2 still in seed lanes; post-mid2 freeze counts from semi_*_count
+      const s1L = state.semi_1_left_url  || state.seed_a_url;
+      const s1R = state.semi_1_right_url || state.seed_b_url;
+      const s1LC = state.mid2_done ? state.semi_1_left_count : state.seed_a_count;
+      const s1RC = state.mid2_done ? state.semi_1_right_count: state.seed_b_count;
 
-      if (!state.mid1_done) {
-        s1L = s1R = null; s1LC = s1RC = 0;
-        s2L = s2R = null; s2LC = s2RC = 0;
-      } else {
-        // After quarters lock (mid1_done), show semi lanes.
-        s1L  = state.semi_1_left_url  || state.seed_a_url;
-        s1R  = state.semi_1_right_url || state.seed_b_url;
-        s2L  = state.semi_2_left_url  || state.seed_c_url;
-        s2R  = state.semi_2_right_url || state.seed_d_url;
-
-        // Counts remain live in seed lanes until mid2_done; after that, freeze from semi_*_count.
-        s1LC = state.mid2_done ? (state.semi_1_left_count  ?? 0)  : (state.seed_a_count ?? 0);
-        s1RC = state.mid2_done ? (state.semi_1_right_count ?? 0)  : (state.seed_b_count ?? 0);
-        s2LC = state.mid2_done ? (state.semi_2_left_count  ?? 0)  : (state.seed_c_count ?? 0);
-        s2RC = state.mid2_done ? (state.semi_2_right_count ?? 0)  : (state.seed_d_count ?? 0);
-      }
+      const s2L = state.semi_2_left_url  || state.seed_c_url;
+      const s2R = state.semi_2_right_url || state.seed_d_url;
+      const s2LC = state.mid2_done ? state.semi_2_left_count : state.seed_c_count;
+      const s2RC = state.mid2_done ? state.semi_2_right_count: state.seed_d_count;
 
       setThumb(thumbs.s1, s1L, s1R, s1LC, s1RC, "S1");
       setThumb(thumbs.s2, s2L, s2R, s2LC, s2RC, "S2");
 
-      // --- FINAL ---
-      // Before mid2_done, final should not display a decision.
-      if (!state.mid2_done) {
-        thumbs.final.img.src = placeholder("F");
-        thumbs.final.count.textContent = "0-0";
-      } else {
-        thumbs.final.img.src = state.mid_winner_1_url || state.mid_winner_2_url || placeholder("F");
-        // final count reflected in the same lanes used by the function (seed_a/b mirrored for final stage)
-        thumbs.final.count.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
-      }
-
+      // final thumb uses finalists + live final counts
+      thumbs.final.img.src = state.mid_winner_1_url || state.mid_winner_2_url || placeholder("F");
+      thumbs.final.count.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
       markActive();
     }
 
-    function renderFinalBox(){
-      if (!state.mid2_done) {
-        finalImg1.src = placeholder("?");
-        finalImg2.src = placeholder("?");
-        finalLeftLabel.textContent = "Final — Left";
-        finalRightLabel.textContent = "Final — Right";
-        finalFooter.textContent = "Finalists will appear when semis lock.";
-        return;
-      }
-      finalImg1.src = state.mid_winner_1_url || placeholder("?");
-      finalImg2.src = state.mid_winner_2_url || placeholder("?");
-      finalLeftLabel.textContent = "Final — Left";
-      finalRightLabel.textContent = "Final — Right";
-      finalFooter.textContent = "Final is live until 0s.";
-    }
-
-function renderActive(){
+    function renderActive(){
       renderThumbs();
       renderFinalBox();
 
@@ -378,32 +386,20 @@ function renderActive(){
         rightCt=state.mid1_done? (state.q4_h_count??0) : (state.seed_h_count??0);
       }
       else if (activeMatch==="s1"){ leftLabel="Semi 1 — Left"; rightLabel="Semi 1 — Right";
-        if (!state.mid1_done) {
-          leftImg = placeholder("?"); rightImg = placeholder("?"); leftCt = rightCt = 0;
-        } else {
-          leftImg = state.semi_1_left_url  || state.seed_a_url || placeholder("?");
-          rightImg= state.semi_1_right_url || state.seed_b_url || placeholder("?");
-          leftCt  = state.seed_a_count ?? 0; rightCt = state.seed_b_count ?? 0;
-        }
+        leftImg = state.semi_1_left_url  || state.seed_a_url || placeholder("?");
+        rightImg= state.semi_1_right_url || state.seed_b_url || placeholder("?");
+        leftCt  = state.seed_a_count ?? 0; rightCt = state.seed_b_count ?? 0;
       }
       else if (activeMatch==="s2"){ leftLabel="Semi 2 — Left"; rightLabel="Semi 2 — Right";
-        if (!state.mid1_done) {
-          leftImg = placeholder("?"); rightImg = placeholder("?"); leftCt = rightCt = 0;
-        } else {
-          leftImg = state.semi_2_left_url  || state.seed_c_url || placeholder("?");
-          rightImg= state.semi_2_right_url || state.seed_d_url || placeholder("?");
-          leftCt  = state.seed_c_count ?? 0; rightCt = state.seed_d_count ?? 0;
-        }
+        leftImg = state.semi_2_left_url  || state.seed_c_url || placeholder("?");
+        rightImg= state.semi_2_right_url || state.seed_d_url || placeholder("?");
+        leftCt  = state.seed_c_count ?? 0; rightCt = state.seed_d_count ?? 0;
       }
       else { // final
         leftLabel="Final — Left"; rightLabel="Final — Right";
-        if (!state.mid2_done) {
-          leftImg = placeholder("?"); rightImg = placeholder("?"); leftCt = rightCt = 0;
-        } else {
-          leftImg = state.mid_winner_1_url || placeholder("?");
-          rightImg= state.mid_winner_2_url || placeholder("?");
-          leftCt  = state.seed_a_count ?? 0; rightCt = state.seed_b_count ?? 0;
-        }
+        leftImg = state.mid_winner_1_url || placeholder("?");
+        rightImg= state.mid_winner_2_url || placeholder("?");
+        leftCt  = state.seed_a_count ?? 0; rightCt = state.seed_b_count ?? 0;
       }
 
       imgActive1.src = leftImg; imgActive2.src = rightImg;
@@ -411,11 +407,7 @@ function renderActive(){
       countActive1.textContent = leftCt; countActive2.textContent = rightCt;
 
       const picked = mem[key];
-      let phaseLive = true;
-      if (["s1","s2"].includes(activeMatch) && !state.mid1_done) phaseLive = false;
-      if (activeMatch==="final" && !state.mid2_done) phaseLive = false;
-      btnActive1.disabled = !!picked || !phaseLive;
-      btnActive2.disabled = !!picked || !phaseLive;
+      btnActive1.disabled = !!picked; btnActive2.disabled = !!picked;
       if (picked==="red")   labelActive1.textContent += " • you voted";
       if (picked==="blue")  labelActive2.textContent += " • you voted";
     }
@@ -425,35 +417,33 @@ function renderActive(){
       try {
         const res = await fetch(FUNCTION_URL + (force?"":""));
         const data = await res.json();
-        if (!data?.ok) throw new Error("bad");
-        const s = data.state;
-        state = Object.assign(state, s);
-        elMeta.textContent = s.phase_text || "";
-        winnerText.textContent = s.final_winner_url ? "Final locked — winner decided." : (s.mid2_done ? "Final running…" : s.mid1_done ? "Semis running…" : "Quarters running…");
-        if (s.base_iso) {
-          pruneVoteMem([s.base_iso]);
-        }
+        state = data;
+        elMeta.textContent = `period=${state.period_sec||90}s • base=${state.base_iso}`;
         renderActive();
-      } catch (e) {
-        elMeta.textContent = "sync error";
+        dbg.textContent = "debug: ok " + new Date().toLocaleTimeString();
+      } catch(e) {
         console.error(e);
+        dbg.textContent = "debug: GET error → " + (e.message || JSON.stringify(e));
+        renderActive();
       }
     }
 
     // ---------- TICK ----------
-    let lastTs=0, lastPhasePoll=0;
-    let semiPhase1Synced=false, semiPhase2Synced=false, finalSynced=false;
+    let semiPhase1Synced=false, semiPhase2Synced=false, finalSynced=false, lastPhasePoll=0;
+    function tick(){
+      if (!state?.ends_at) return requestAnimationFrame(tick);
+      const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
+      elRemain.textContent = (ms/1000).toFixed(1);
 
-    function tick(ts){
-      if (!lastTs) lastTs = ts;
-      const dt = ts-lastTs; lastTs = ts;
+      // explicit thresholds to match edge function
+      const LOCK_Q_MS = 60_000, LOCK_S_MS = 30_000;
 
-      const ms = state.remaining_ms ?? 90000;
-      elRemain.textContent = msToClock(ms);
-      dbg.textContent = `${new Date().toLocaleTimeString()} • base=${state.base_iso||"--"} • remain=${ms} • mid1=${state.mid1_done} • mid2=${state.mid2_done}`;
+      // cue text near the cuts
+      if (ms <= LOCK_Q_MS + 250 && !state.mid1_done) winnerText.textContent = 'Quarters just locked — semis live.';
+      if (ms <= LOCK_S_MS + 250 && state.mid1_done && !state.mid2_done) winnerText.textContent = 'Semis just locked — final live.';
 
-      // auto-poll when phases flip, so UI snaps at 60s and 30s
-      const now = performance.now();
+      const now = Date.now();
+      // resync exactly after each cut
       if (ms <= LOCK_Q_MS && !state.mid1_done && (!semiPhase1Synced || now-lastPhasePoll>1500)) {
         semiPhase1Synced=true; lastPhasePoll=now; fetchState(true);
       }
@@ -470,16 +460,18 @@ function renderActive(){
     // controls
     forceBtn.addEventListener('click', ()=> fetchState(true));
     resetBtn.addEventListener('click', ()=> fetchState(true));
-    thumbs.q1.box.addEventListener('click', ()=> activeMatch="q1");
-    thumbs.q2.box.addEventListener('click', ()=> activeMatch="q2");
-    thumbs.q3.box.addEventListener('click', ()=> activeMatch="q3");
-    thumbs.q4.box.addEventListener('click', ()=> activeMatch="q4");
-    thumbs.s1.box.addEventListener('click', ()=> activeMatch="s1");
-    thumbs.s2.box.addEventListener('click', ()=> activeMatch="s2");
-    thumbs.final.box.addEventListener('click', ()=> activeMatch="final");
 
-    // init
-    fetchState(true).then(()=> requestAnimationFrame(tick));
-</script>
+    // realtime hooks (kept)
+    supabase.channel('cycles-v2-live')
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'cycles_v2' }, async ()=>{ await fetchState(true); })
+      .subscribe();
+
+    supabase.channel('matchup-sync')
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'art_queue', filter:'status=in.(locked,used)' }, async ()=>{ await fetchState(true); })
+      .subscribe();
+
+    // boot
+    fetchState(true).then(()=>tick());
+  </script>
 </body>
 </html>
