@@ -147,11 +147,17 @@
   <div class="debugbox" id="debugBox">debug: idle…</div>
 
   <script>
-    // === config (unchanged) ===
+    // === config ===
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
+
+    // 🔐 Edge Function auth headers (required on GET + POST)
+    const FN_HEADERS = {
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+    };
 
     const RSID_KEY = "rsid_v2";
     let RSID = localStorage.getItem(RSID_KEY);
@@ -261,7 +267,11 @@
       try {
         const res = await fetch(FUNCTION_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-rsid": RSID },
+          headers: {
+            "Content-Type": "application/json",
+            "x-rsid": RSID,
+            ...FN_HEADERS
+          },
           body: JSON.stringify({ phase: activeMatch, side: side === "red" ? "left" : "right" })
         });
         if (!res.ok) {
@@ -337,15 +347,12 @@
 
       // --- Semis thumb counts/images by phase ---
       if (!state.mid1_done) {
-        // quarters running → semis not live yet
         setThumb(thumbs.s1, null, null, 0, 0, "S1");
         setThumb(thumbs.s2, null, null, 0, 0, "S2");
       } else if (!state.mid2_done) {
-        // semis live → use live seed lanes (A/B and C/D)
         setThumb(thumbs.s1, state.semi_1_left_url || state.seed_a_url,  state.semi_1_right_url || state.seed_b_url, state.seed_a_count, state.seed_b_count, "S1");
         setThumb(thumbs.s2, state.semi_2_left_url || state.seed_c_url,  state.semi_2_right_url || state.seed_d_url, state.seed_c_count, state.seed_d_count, "S2");
       } else {
-        // semis locked → show frozen counts
         setThumb(thumbs.s1, state.semi_1_left_url,  state.semi_1_right_url,  state.semi_1_left_count,  state.semi_1_right_count, "S1");
         setThumb(thumbs.s2, state.semi_2_left_url,  state.semi_2_right_url,  state.semi_2_left_count,  state.semi_2_right_count, "S2");
       }
@@ -430,7 +437,13 @@
     // ---------- NET ----------
     async function fetchState(force=false){
       try {
-        const res = await fetch(FUNCTION_URL + (force?"":""));
+        dbg.textContent = "debug: fetching…";
+        const res = await fetch(FUNCTION_URL, { headers: { ...FN_HEADERS } });
+        if (!res.ok) {
+          const msg = await res.text().catch(()=>res.statusText);
+          dbg.textContent = "debug: GET error → " + res.status + " " + msg;
+          throw new Error("GET " + res.status);
+        }
         const data = await res.json();
         state = data;
         elMeta.textContent = `period=${state.period_sec||90}s • base=${state.base_iso}`;
