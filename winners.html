@@ -5,27 +5,25 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Rage Space — Winners</title>
   <style>
-    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a;}
-    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
-    .wrap { max-width:780px; margin:0 auto; padding:16px 12px 24px; }
-    h1 { margin:0 0 10px; font-size:20px; font-weight:800; letter-spacing:.5px; }
-    .top { display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; }
-    a.btn, button.btn { text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:#131920; color:var(--fg); font-weight:700; cursor:pointer; }
-    .meta { color:var(--muted); font-size:12px; margin-bottom:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .tz { padding:2px 8px; border-radius:999px; background:#0b1220; border:1px solid #1a2636; color:#cbd5e1; font-weight:700; font-size:11px; letter-spacing:.06em; }
-    .card { border:1px solid var(--line); background:var(--card); border-radius:14px; overflow:hidden; }
-    .table-wrap { overflow-x:auto; }
-    table { width:100%; border-collapse:collapse; font-size:14px; table-layout:auto; }
-    th, td { padding:10px 12px; border-bottom:1px solid (--line); text-align:left; vertical-align:middle; }
-    th { color:#cbd5e1; font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
-    .pillA { background:#2a1212; border:1px solid #4c2222; display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
-    .pillB { background:#0f1f33; border:1px solid #20344d; display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
-    .by { color:#cbd5e1; font-size:12px; white-space:nowrap; }
-    .score { font-variant-numeric: tabular-nums; white-space:nowrap; font-weight:700; }
-    .cycle { word-break:break-all; color:#cbd5e1; opacity:.9; }
-    .thumb { width:42px; height:42px; object-fit:cover; border-radius:6px; border:1px solid var(--line); cursor:pointer; transition:transform .15s; }
-    .thumb:hover { transform:scale(1.08); }
-    @media (max-width:520px){ th.cycle,td.cycle{display:none;} th,td{padding:8px 10px;} table{font-size:13px;} }
+    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif}
+    .wrap{max-width:780px;margin:0 auto;padding:16px 12px 24px}
+    h1{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:.5px}
+    .top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
+    a.btn,button.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:#131920;color:var(--fg);font-weight:700;text-decoration:none;cursor:pointer}
+    .meta{color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .tz{padding:2px 8px;border-radius:999px;background:#0b1220;border:1px solid #1a2636;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.06em}
+    .card{border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+    th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+    .pillA{background:#2a1212;border:1px solid #4c2222;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+    .pillB{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+    .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
+    .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
+    .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+    @media (max-width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
   </style>
 </head>
 <body>
@@ -73,21 +71,18 @@
     const tzBadge = document.getElementById('tzBadge');
     const tbody  = document.getElementById('body');
 
-    // badge with local timezone
+    // timezone badge
     try {
       const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
-      const parts = fmt.formatToParts(new Date());
-      const tz = parts.find(p => p.type === "timeZoneName")?.value || "";
+      const tz = fmt.formatToParts(new Date()).find(p=>p.type==="timeZoneName")?.value || "";
       tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
     } catch { tzBadge.textContent = "Local time"; }
 
-    // --- time parsing helpers ---
+    // --- time helpers ---
     function parseAsUTCish(s){
       if (!s) return NaN;
       const str = String(s);
-      // if it already has Z or an offset, trust it
       if (/Z|[+-]\d{2}:\d{2}$/.test(str)) return Date.parse(str);
-      // otherwise treat as UTC (append Z)
       return Date.parse(str.replace(" ", "T") + "Z");
     }
     function fmtLocal(ts){
@@ -97,20 +92,17 @@
         hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
       });
     }
+    // Always prefer base_iso + period_sec to avoid "batch same-time" when server stamps now
     function computeDecidedAt(row){
-      // Prefer server-provided decided_at
-      const d = parseAsUTCish(row.decided_at);
-      if (!isNaN(d)) return d;
-      // Else derive from base_iso + period_sec (final decides when timer hits 0)
       const base = parseAsUTCish(row.base_iso);
-      if (!isNaN(base)){
+      if (!isNaN(base)) {
         const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 90;
         return base + secs * 1000;
       }
-      return NaN;
+      const d = parseAsUTCish(row.decided_at);
+      return isNaN(d) ? NaN : d;
     }
 
-    // render table
     function render(rows){
       if(!rows || rows.length===0){
         tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No finals yet.</td></tr>`;
@@ -121,15 +113,12 @@
         const n = N - idx;
         const seed = (r.winner_seed || "").toLowerCase();
         const isLeft = seed === "a" || seed === "c";
-        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
         const pillClass = isLeft ? "pillA" : "pillB";
+        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
         const img = r.image_url || r.winner_url || '';
-        const thumb = img
-          ? `<img src="${img}" class="thumb" style="width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid #20242a;">`
-          : `<span style="color:#666;">—</span>`;
-
+        const thumb = img ? `<img src="${img}" class="thumb">` : `<span style="color:#666;">—</span>`;
         const decidedTs = computeDecidedAt(r);
         return `
           <tr>
@@ -139,7 +128,7 @@
             <td><span class="${pillClass}">${seedLabel}</span></td>
             <td>${thumb}</td>
             <td class="score">${score}</td>
-            <td class="by">${by}</td>
+            <td>${by}</td>
           </tr>`;
       }).join('');
     }
@@ -150,16 +139,10 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      // keep ONLY finals
-      const finals = (all || []).filter(w => {
-        const phase = (w.phase || w.stage || "").toLowerCase();
-        if (phase === "final") return true;
-        const bi = String(w.base_iso || "");
-        // our semis are logged as `${base_iso}::semi`, so exclude those
-        return !bi.includes("::semi");
-      });
+      // Only finals (exclude semis logged as `${base_iso}::semi`)
+      const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
 
-      // sort newest first by real decided timestamp
+      // Sort newest first by computed real decision time
       finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
 
       render(finals);
@@ -182,7 +165,6 @@
     document.getElementById('refresh').onclick = load;
     document.getElementById('clear').onclick = clearData;
 
-    // initial + periodic refresh
     load();
     setInterval(load, 5000);
   </script>
