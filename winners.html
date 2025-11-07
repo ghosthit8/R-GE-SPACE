@@ -5,25 +5,27 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Rage Space — Winners</title>
   <style>
-    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif}
-    .wrap{max-width:780px;margin:0 auto;padding:16px 12px 24px}
-    h1{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:.5px}
-    .top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
-    a.btn,button.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:#131920;color:var(--fg);font-weight:700;text-decoration:none;cursor:pointer}
-    .meta{color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .tz{padding:2px 8px;border-radius:999px;background:#0b1220;border:1px solid #1a2636;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.06em}
-    .card{border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden}
-    .table-wrap{overflow-x:auto}
-    table{width:100%;border-collapse:collapse;font-size:14px}
-    th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
-    th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
-    .pillA{background:#2a1212;border:1px solid #4c2222;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-    .pillB{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-    .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
-    .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
-    .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
-    @media (max-width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
+    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a;}
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
+    .wrap { max-width:780px; margin:0 auto; padding:16px 12px 24px; }
+    h1 { margin:0 0 10px; font-size:20px; font-weight:800; letter-spacing:.5px; }
+    .top { display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; }
+    a.btn, button.btn { text-decoration:none; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:12px; border:1px solid var(--line); background:#131920; color:var(--fg); font-weight:700; cursor:pointer; }
+    .meta { color:var(--muted); font-size:12px; margin-bottom:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .tz { padding:2px 8px; border-radius:999px; background:#0b1220; border:1px solid #1a2636; color:#cbd5e1; font-weight:700; font-size:11px; letter-spacing:.06em; }
+    .card { border:1px solid var(--line); background:var(--card); border-radius:14px; overflow:hidden; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:14px; table-layout:auto; }
+    th, td { padding:10px 12px; border-bottom:1px solid (--line); text-align:left; vertical-align:middle; }
+    th { color:#cbd5e1; font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
+    .pillA { background:#2a1212; border:1px solid #4c2222; display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+    .pillB { background:#0f1f33; border:1px solid #20344d; display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+    .by { color:#cbd5e1; font-size:12px; white-space:nowrap; }
+    .score { font-variant-numeric: tabular-nums; white-space:nowrap; font-weight:700; }
+    .cycle { word-break:break-all; color:#cbd5e1; opacity:.9; }
+    .thumb { width:42px; height:42px; object-fit:cover; border-radius:6px; border:1px solid var(--line); cursor:pointer; transition:transform .15s; }
+    .thumb:hover { transform:scale(1.08); }
+    @media (max-width:520px){ th.cycle,td.cycle{display:none;} th,td{padding:8px 10px;} table{font-size:13px;} }
   </style>
 </head>
 <body>
@@ -71,18 +73,21 @@
     const tzBadge = document.getElementById('tzBadge');
     const tbody  = document.getElementById('body');
 
-    // timezone badge
+    // badge with local timezone
     try {
       const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
-      const tz = fmt.formatToParts(new Date()).find(p=>p.type==="timeZoneName")?.value || "";
+      const parts = fmt.formatToParts(new Date());
+      const tz = parts.find(p => p.type === "timeZoneName")?.value || "";
       tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
     } catch { tzBadge.textContent = "Local time"; }
 
-    // --- time helpers ---
+    // --- time parsing helpers ---
     function parseAsUTCish(s){
       if (!s) return NaN;
       const str = String(s);
+      // if it already has Z or an offset, trust it
       if (/Z|[+-]\d{2}:\d{2}$/.test(str)) return Date.parse(str);
+      // otherwise treat as UTC (append Z)
       return Date.parse(str.replace(" ", "T") + "Z");
     }
     function fmtLocal(ts){
@@ -92,75 +97,20 @@
         hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
       });
     }
-    // Stable final decision time even when page was closed
-    function computeFinalTs(row){
+    function computeDecidedAt(row){
+      // Prefer server-provided decided_at
+      const d = parseAsUTCish(row.decided_at);
+      if (!isNaN(d)) return d;
+      // Else derive from base_iso + period_sec (final decides when timer hits 0)
       const base = parseAsUTCish(row.base_iso);
-      if (!isNaN(base)) {
+      if (!isNaN(base)){
         const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 90;
         return base + secs * 1000;
       }
-      const d = parseAsUTCish(row.decided_at);
-      return isNaN(d) ? NaN : d;
+      return NaN;
     }
 
-    // Build a map of original seed letter -> url from fields present on the row
-    function buildSeedMap(r){
-      const m = {};
-      function set(letter, val){ if (val) m[letter] = val; }
-      set("a", r.seed_a_url); set("b", r.seed_b_url);
-      set("c", r.seed_c_url); set("d", r.seed_d_url);
-      set("e", r.seed_e_url); set("f", r.seed_f_url);
-      set("g", r.seed_g_url); set("h", r.seed_h_url);
-      // also accept snapshots if winners payload uses them
-      set("a", r.q1_a_url || m.a);
-      set("b", r.q1_b_url || m.b);
-      set("c", r.q2_c_url || m.c);
-      set("d", r.q2_d_url || m.d);
-      set("e", r.q3_e_url || m.e);
-      set("f", r.q3_f_url || m.f);
-      set("g", r.q4_g_url || m.g);
-      set("h", r.q4_h_url || m.h);
-      return m;
-    }
-    function normalize(u){ return String(u||"").split("?")[0]; }
-    // Try to infer the champion’s ORIGINAL seed (A–H) by URL match
-    function originSeedLetter(row){
-      const map = buildSeedMap(row);
-      const win = normalize(row.image_url || row.winner_url);
-      if (!win) return null;
-      for (const [letter, url] of Object.entries(map)){
-        if (normalize(url) && normalize(url) === win) return letter; // exact match
-      }
-      return null;
-    }
-    function colorClassFor(letter){
-      // give A/C/E/G one color and B/D/F/H the other for contrast
-      return /^(a|c|e|g)$/i.test(letter) ? "pillA" : "pillB";
-    }
-
-    // Finals-only with dedupe by base_iso
-    function finalsOnly(rows){
-      const out = rows.filter(r=>{
-        const phase = (r.phase||r.stage||"").toLowerCase();
-        if (phase.includes("final")) return true;
-        const seed = String(r.winner_seed||"").toLowerCase();
-        if (seed === "a" || seed === "b") return true;
-        // exclude known semis stamped as `${base_iso}::semi`
-        return !String(r.base_iso||"").includes("::semi");
-      });
-
-      const keep = new Map();
-      for (const r of out){
-        const key = r.base_iso || r.cycle_key || r.id || Math.random().toString(36);
-        const existing = keep.get(key);
-        if (!existing) { keep.set(key, r); continue; }
-        const ta = parseAsUTCish(r.decided_at);
-        const tb = parseAsUTCish(existing.decided_at);
-        if (!isNaN(ta) && (isNaN(tb) || ta > tb)) keep.set(key, r);
-      }
-      return Array.from(keep.values());
-    }
-
+    // render table
     function render(rows){
       if(!rows || rows.length===0){
         tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No finals yet.</td></tr>`;
@@ -169,29 +119,27 @@
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
-
-        // determine label: prefer original seed A–H via URL match
-        const inferred = originSeedLetter(r);
-        let labelLetter = inferred || String(r.winner_seed||"").toLowerCase() || "a";
-        labelLetter = labelLetter.toUpperCase();
-        const seedLabel = `Seed ${labelLetter}`;
-        const pillClass = colorClassFor(labelLetter);
-
+        const seed = (r.winner_seed || "").toLowerCase();
+        const isLeft = seed === "a" || seed === "c";
+        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
+        const pillClass = isLeft ? "pillA" : "pillB";
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
         const img = r.image_url || r.winner_url || '';
-        const thumb = img ? `<img src="${img}" class="thumb">` : `<span style="color:#666;">—</span>`;
-        const ts = computeFinalTs(r);
+        const thumb = img
+          ? `<img src="${img}" class="thumb" style="width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid #20242a;">`
+          : `<span style="color:#666;">—</span>`;
 
+        const decidedTs = computeDecidedAt(r);
         return `
           <tr>
             <td>${n}</td>
-            <td>${fmtLocal(ts)}</td>
+            <td>${fmtLocal(decidedTs)}</td>
             <td class="cycle">${r.base_iso || "—"}</td>
             <td><span class="${pillClass}">${seedLabel}</span></td>
             <td>${thumb}</td>
             <td class="score">${score}</td>
-            <td>${by}</td>
+            <td class="by">${by}</td>
           </tr>`;
       }).join('');
     }
@@ -202,10 +150,19 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      const finals = finalsOnly(all);
-      finals.sort((a,b) => computeFinalTs(b) - computeFinalTs(a));
-      render(finals);
+      // keep ONLY finals
+      const finals = (all || []).filter(w => {
+        const phase = (w.phase || w.stage || "").toLowerCase();
+        if (phase === "final") return true;
+        const bi = String(w.base_iso || "");
+        // our semis are logged as `${base_iso}::semi`, so exclude those
+        return !bi.includes("::semi");
+      });
 
+      // sort newest first by real decided timestamp
+      finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
+
+      render(finals);
       const total = finals.length;
       metaEl.firstChild ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom ` :
         (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
@@ -225,6 +182,7 @@
     document.getElementById('refresh').onclick = load;
     document.getElementById('clear').onclick = clearData;
 
+    // initial + periodic refresh
     load();
     setInterval(load, 5000);
   </script>
