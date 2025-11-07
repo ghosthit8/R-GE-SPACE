@@ -23,7 +23,7 @@
     .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
     .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
     .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
-    @media (max-width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
+    @media (max_width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
   </style>
 </head>
 <body>
@@ -93,18 +93,17 @@
       });
     }
 
-    // ---------- TIMESTAMPS (only changed area) ----------
-    // Prefer server-stamped decided_at; otherwise fall back to base + final offset.
+    // --- timestamps (only section changed) ---
+    // 1) prefer server-stamped decided_at
+    // 2) else final_decided_at/final_at
+    // 3) else base_iso + (final_offset_sec || period_sec>=60 ? period_sec : 90)
     function computeDecidedAt(row){
-      // 1) Use server-stamped time if present (prevents bunching when multiple cycles were processed)
-      const serverTs = parseAsUTCish(row.decided_at);
-      if (!isNaN(serverTs)) return serverTs;
+      const server = parseAsUTCish(row.decided_at);
+      if (!isNaN(server)) return server;
 
-      // 2) Otherwise, explicit final timestamps if API provides them
       const explicit = parseAsUTCish(row.final_decided_at) || parseAsUTCish(row.final_at);
       if (!isNaN(explicit)) return explicit;
 
-      // 3) Else compute from base start + offset (final assumed at 90s when period looks like 30s slices)
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
         let secs = Number(row.final_offset_sec);
@@ -114,8 +113,6 @@
         }
         return base + secs * 1000;
       }
-
-      // 4) Last resort: NaN (renders "—")
       return NaN;
     }
 
@@ -155,10 +152,10 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      // Finals only (unchanged)
+      // Only finals (exclude semis logged as `${base_iso}::semi`)
       const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
 
-      // Sort newest first by the computed decision time
+      // Sort newest first by computed real decision time
       finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
 
       render(finals);
