@@ -16,7 +16,7 @@
     .card { border:1px solid var(--line); background:var(--card); border-radius:14px; overflow:hidden; }
     .table-wrap { overflow-x:auto; }
     table { width:100%; border-collapse:collapse; font-size:14px; table-layout:auto; }
-    th, td { padding:10px 12px; border-bottom:1px solid (--line); text-align:left; vertical-align:middle; }
+    th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
     th { color:#cbd5e1; font-weight:700; font-size:12px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
     .pillA { background:#2a1212; border:1px solid #4c2222; display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
     .pillB { background:#0f1f33; border:1px solid #20344d; display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
@@ -25,6 +25,9 @@
     .cycle { word-break:break-all; color:#cbd5e1; opacity:.9; }
     .thumb { width:42px; height:42px; object-fit:cover; border-radius:6px; border:1px solid var(--line); cursor:pointer; transition:transform .15s; }
     .thumb:hover { transform:scale(1.08); }
+    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); justify-content:center; align-items:center; z-index:9999; }
+    .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
+    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
     @media (max-width:520px){ th.cycle,td.cycle{display:none;} th,td{padding:8px 10px;} table{font-size:13px;} }
   </style>
 </head>
@@ -66,14 +69,24 @@
     </div>
   </div>
 
+  <div class="fullscreen-overlay" id="overlay">
+    <button id="closeFull">✕ Close</button>
+    <img id="fullImg" src="">
+  </div>
+
   <script>
     const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
     const ADMIN_KEY = "Inklink88!";
     const metaEl = document.getElementById('meta');
     const tzBadge = document.getElementById('tzBadge');
     const tbody  = document.getElementById('body');
+    const overlay = document.getElementById('overlay');
+    const fullImg = document.getElementById('fullImg');
+    const btnRefresh = document.getElementById('refresh');
+    const btnClear   = document.getElementById('clear');
+    const btnClose   = document.getElementById('closeFull');
 
-    // badge with local timezone
+    // show local timezone abbrev
     try {
       const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
       const parts = fmt.formatToParts(new Date());
@@ -81,62 +94,72 @@
       tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
     } catch { tzBadge.textContent = "Local time"; }
 
-    // --- time parsing helpers ---
-    function parseAsUTCish(s){
-      if (!s) return NaN;
-      const str = String(s);
-      // if it already has Z or an offset, trust it
-      if (/Z|[+-]\d{2}:\d{2}$/.test(str)) return Date.parse(str);
-      // otherwise treat as UTC (append Z)
-      return Date.parse(str.replace(" ", "T") + "Z");
-    }
-    function fmtLocal(ts){
-      if (isNaN(ts)) return "—";
-      return new Date(ts).toLocaleString(undefined, {
-        year:"numeric", month:"2-digit", day:"2-digit",
-        hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
-      });
-    }
-    function computeDecidedAt(row){
-      // Prefer server-provided decided_at
-      const d = parseAsUTCish(row.decided_at);
-      if (!isNaN(d)) return d;
-      // Else derive from base_iso + period_sec (final decides when timer hits 0)
-      const base = parseAsUTCish(row.base_iso);
-      if (!isNaN(base)){
-        const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 90;
-        return base + secs * 1000;
-      }
-      return NaN;
+    btnClose.onclick = () => overlay.style.display = 'none';
+
+    function openFull(url){
+      fullImg.src = url;
+      overlay.style.display = 'flex';
     }
 
-    // render table
+    // Parse a timestamp robustly:
+    //  - If it already includes 'Z' or an explicit offset, trust it.
+    //  - If it has no timezone info, assume UTC.
+    function parseWhen(isoish){
+      if (!isoish) return NaN;
+      const s = String(isoish);
+      const hasZone = /Z|[+-]\d{2}:\d{2}$/.test(s);
+      const candidate = hasZone ? s : (s.replace(" ", "T") + "Z");
+      const t = Date.parse(candidate);
+      return isNaN(t) ? Date.parse(s) : t;
+    }
+
+    function fmtTime(isoish) {
+      const t = parseWhen(isoish);
+      if (isNaN(t)) return String(isoish);
+      try {
+        return new Date(t).toLocaleString(undefined, {
+          hour12: true,
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit",
+          month: "2-digit",
+          day: "2-digit",
+          year: "numeric"
+        });
+      } catch {
+        return new Date(t).toString();
+      }
+    }
+
+    // Uses original seed letter for label & pill (A/C = left/red, B/D = right/blue)
     function render(rows){
       if(!rows || rows.length===0){
-        tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No finals yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
         return;
       }
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
+
         const seed = (r.winner_seed || "").toLowerCase();
         const isLeft = seed === "a" || seed === "c";
         const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
         const pillClass = isLeft ? "pillA" : "pillB";
+        const pill = `<span class="${pillClass}">${seedLabel}</span>`;
+
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
-        const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
+        const score = `${r.red_count}–${r.blue_count}`;
         const img = r.image_url || r.winner_url || '';
         const thumb = img
-          ? `<img src="${img}" class="thumb" style="width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid #20242a;">`
+          ? `<img src="${img}" class="thumb" onclick="openFull('${img}')">`
           : `<span style="color:#666;">—</span>`;
 
-        const decidedTs = computeDecidedAt(r);
         return `
           <tr>
             <td>${n}</td>
-            <td>${fmtLocal(decidedTs)}</td>
-            <td class="cycle">${r.base_iso || "—"}</td>
-            <td><span class="${pillClass}">${seedLabel}</span></td>
+            <td>${fmtTime(r.decided_at)}</td>
+            <td class="cycle">${r.base_iso}</td>
+            <td>${pill}</td>
             <td>${thumb}</td>
             <td class="score">${score}</td>
             <td class="by">${by}</td>
@@ -145,27 +168,22 @@
     }
 
     async function load(){
-      metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent = 'Loading… ');
-      const res = await fetch(FUNCTION_URL + "?winners=1&limit=400");
-      const data = await res.json().catch(()=> ({}));
+      metaEl.firstChild.nodeValue = 'Loading… '; // keep tz badge
+      const res = await fetch(FUNCTION_URL + "?winners=1&limit=200");
+      const data = await res.json();
+
+      // Support both shapes {winners:[...]} or raw array
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      // keep ONLY finals
-      const finals = (all || []).filter(w => {
-        const phase = (w.phase || w.stage || "").toLowerCase();
-        if (phase === "final") return true;
-        const bi = String(w.base_iso || "");
-        // our semis are logged as `${base_iso}::semi`, so exclude those
-        return !bi.includes("::semi");
-      });
+      // Show ONLY finals (base_iso without ::semi)
+      const finals = (all || []).filter(w => !(w.base_iso || "").includes("::semi"));
 
-      // sort newest first by real decided timestamp
-      finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
+      // Sort by decided_at (newest first) using robust UTC-aware parser
+      finals.sort((a,b) => parseWhen(b.decided_at) - parseWhen(a.decided_at));
 
       render(finals);
       const total = finals.length;
-      metaEl.firstChild ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom ` :
-        (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
+      metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `;
     }
 
     async function clearData(){
@@ -175,16 +193,15 @@
         method:"DELETE",
         headers:{ "x-admin-key": ADMIN_KEY }
       });
+      const data = await res.json().catch(()=>({}));
       if(res.ok){ alert("Winner data cleared."); load(); }
-      else { const msg = await res.json().catch(()=>({})); alert("Error: " + (msg.error || "failed to clear")); }
+      else { alert("Error: " + (data.error || "failed to clear")); }
     }
 
-    document.getElementById('refresh').onclick = load;
-    document.getElementById('clear').onclick = clearData;
-
-    // initial + periodic refresh
-    load();
+    btnRefresh.onclick = load;
+    btnClear.onclick = clearData;
     setInterval(load, 5000);
+    load();
   </script>
 </body>
 </html>
