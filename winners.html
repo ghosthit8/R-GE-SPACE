@@ -103,54 +103,40 @@
       return isNaN(d) ? NaN : d;
     }
 
-    // Build a map of original seed letter -> url from fields present on the row
+    // Build map of original seed letter -> url (includes snapshots if present)
     function buildSeedMap(r){
       const m = {};
-      function set(letter, val){ if (val) m[letter] = val; }
+      const set=(k,v)=>{ if(v) m[k]=v; };
       set("a", r.seed_a_url); set("b", r.seed_b_url);
       set("c", r.seed_c_url); set("d", r.seed_d_url);
       set("e", r.seed_e_url); set("f", r.seed_f_url);
       set("g", r.seed_g_url); set("h", r.seed_h_url);
-      // also accept snapshots if winners payload uses them
-      set("a", r.q1_a_url || m.a);
-      set("b", r.q1_b_url || m.b);
-      set("c", r.q2_c_url || m.c);
-      set("d", r.q2_d_url || m.d);
-      set("e", r.q3_e_url || m.e);
-      set("f", r.q3_f_url || m.f);
-      set("g", r.q4_g_url || m.g);
-      set("h", r.q4_h_url || m.h);
+      set("a", r.q1_a_url || m.a); set("b", r.q1_b_url || m.b);
+      set("c", r.q2_c_url || m.c); set("d", r.q2_d_url || m.d);
+      set("e", r.q3_e_url || m.e); set("f", r.q3_f_url || m.f);
+      set("g", r.q4_g_url || m.g); set("h", r.q4_h_url || m.h);
       return m;
     }
-    function normalize(u){ return String(u||"").split("?")[0]; }
-    // Try to infer the champion’s ORIGINAL seed (A–H) by URL match
+    const norm = u => String(u||"").split("?")[0];
     function originSeedLetter(row){
-      const map = buildSeedMap(row);
-      const win = normalize(row.image_url || row.winner_url);
+      const win = norm(row.image_url || row.winner_url);
       if (!win) return null;
-      for (const [letter, url] of Object.entries(map)){
-        if (normalize(url) && normalize(url) === win) return letter; // exact match
-      }
+      const map = buildSeedMap(row);
+      for (const [letter,url] of Object.entries(map)) if (norm(url)===win) return letter;
       return null;
     }
-    function colorClassFor(letter){
-      // give A/C/E/G one color and B/D/F/H the other for contrast
-      return /^(a|c|e|g)$/i.test(letter) ? "pillA" : "pillB";
-    }
+    function colorClassFor(letter){ return /^(a|c|e|g)$/i.test(letter) ? "pillA" : "pillB"; }
 
-    // Finals-only with dedupe by base_iso
+    // Finals-only with strict include, plus dedupe by base_iso
     function finalsOnly(rows){
-      const out = rows.filter(r=>{
+      const finals = rows.filter(r=>{
         const phase = (r.phase||r.stage||"").toLowerCase();
-        if (phase.includes("final")) return true;
-        const seed = String(r.winner_seed||"").toLowerCase();
-        if (seed === "a" || seed === "b") return true;
-        // exclude known semis stamped as `${base_iso}::semi`
-        return !String(r.base_iso||"").includes("::semi");
+        const laneSeed = String(r.winner_seed||"").toLowerCase();
+        return phase.includes("final") || laneSeed==="a" || laneSeed==="b";
       });
 
       const keep = new Map();
-      for (const r of out){
+      for (const r of finals){
         const key = r.base_iso || r.cycle_key || r.id || Math.random().toString(36);
         const existing = keep.get(key);
         if (!existing) { keep.set(key, r); continue; }
@@ -170,12 +156,10 @@
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
 
-        // determine label: prefer original seed A–H via URL match
         const inferred = originSeedLetter(r);
-        let labelLetter = inferred || String(r.winner_seed||"").toLowerCase() || "a";
-        labelLetter = labelLetter.toUpperCase();
-        const seedLabel = `Seed ${labelLetter}`;
-        const pillClass = colorClassFor(labelLetter);
+        let letter = (inferred || String(r.winner_seed||"a")).toUpperCase();
+        const pillClass = colorClassFor(letter);
+        const seedLabel = `Seed ${letter}`;
 
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
@@ -188,7 +172,7 @@
             <td>${n}</td>
             <td>${fmtLocal(ts)}</td>
             <td class="cycle">${r.base_iso || "—"}</td>
-            <td><span class="${pillClass}">${seedLabel}</span></td>
+            <td><span class="${pillClass}">Seed ${letter}</span></td>
             <td>${thumb}</td>
             <td class="score">${score}</td>
             <td>${by}</td>
