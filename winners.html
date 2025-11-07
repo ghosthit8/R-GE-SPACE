@@ -20,6 +20,7 @@
     th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
     .pillA{background:#2a1212;border:1px solid #4c2222;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
     .pillB{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+    .pillU{background:#27272a;border:1px solid #3f3f46;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
     .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
     .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
     .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
@@ -103,31 +104,49 @@
       return isNaN(d) ? NaN : d;
     }
 
-    // Build map of original seed letter -> url (includes snapshots if present)
+    // ---------- ORIGINAL SEED (A–H) INFERENCE ----------
+    // Build map of seed -> url from any fields that may be present
     function buildSeedMap(r){
       const m = {};
       const set=(k,v)=>{ if(v) m[k]=v; };
+      // canonical
       set("a", r.seed_a_url); set("b", r.seed_b_url);
       set("c", r.seed_c_url); set("d", r.seed_d_url);
       set("e", r.seed_e_url); set("f", r.seed_f_url);
       set("g", r.seed_g_url); set("h", r.seed_h_url);
+      // snapshots some payloads include
       set("a", r.q1_a_url || m.a); set("b", r.q1_b_url || m.b);
       set("c", r.q2_c_url || m.c); set("d", r.q2_d_url || m.d);
       set("e", r.q3_e_url || m.e); set("f", r.q3_f_url || m.f);
       set("g", r.q4_g_url || m.g); set("h", r.q4_h_url || m.h);
       return m;
     }
-    const norm = u => String(u||"").split("?")[0];
+    // Very tolerant normalizer: strips scheme/host, querystrings, extensions, and keeps last path piece
+    function normalizeUrl(u){
+      if(!u) return "";
+      try{
+        const dec = decodeURIComponent(String(u)).toLowerCase();
+        const path = dec.replace(/^https?:\/\/[^/]+/,'').split('?')[0];
+        const last = path.split('/').filter(Boolean).pop() || path;
+        return last.replace(/\.(jpg|jpeg|png|webp|gif|avif)$/,'');
+      }catch{ return String(u).toLowerCase().split('?')[0]; }
+    }
     function originSeedLetter(row){
-      const win = norm(row.image_url || row.winner_url);
+      const win = normalizeUrl(row.image_url || row.winner_url);
       if (!win) return null;
       const map = buildSeedMap(row);
-      for (const [letter,url] of Object.entries(map)) if (norm(url)===win) return letter;
+      for (const [letter,url] of Object.entries(map)){
+        if (!url) continue;
+        if (normalizeUrl(url) === win) return letter;
+      }
       return null;
     }
-    function colorClassFor(letter){ return /^(a|c|e|g)$/i.test(letter) ? "pillA" : "pillB"; }
+    function pillClassFor(letter){
+      if (!letter) return "pillU";
+      return /^(a|c|e|g)$/i.test(letter) ? "pillA" : "pillB";
+    }
 
-    // Finals-only with strict include, plus dedupe by base_iso
+    // ---------- FINALS ONLY + DEDUPE ----------
     function finalsOnly(rows){
       const finals = rows.filter(r=>{
         const phase = (r.phase||r.stage||"").toLowerCase();
@@ -147,6 +166,7 @@
       return Array.from(keep.values());
     }
 
+    // ---------- RENDER ----------
     function render(rows){
       if(!rows || rows.length===0){
         tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No finals yet.</td></tr>`;
@@ -156,10 +176,10 @@
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
 
+        // prefer original A–H; if unknown show ?
         const inferred = originSeedLetter(r);
-        let letter = (inferred || String(r.winner_seed||"a")).toUpperCase();
-        const pillClass = colorClassFor(letter);
-        const seedLabel = `Seed ${letter}`;
+        const letter = (inferred ? inferred.toUpperCase() : "?");
+        const pillClass = pillClassFor(inferred);
 
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
