@@ -23,7 +23,7 @@
     .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
     .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
     .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
-    @media (max_width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
+    @media (max-width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
   </style>
 </head>
 <body>
@@ -93,27 +93,26 @@
       });
     }
 
-    // --- timestamps (only section changed) ---
-    // Prefer explicit final timestamps if the API provides them; otherwise compute from base start.
+    // ---------- TIMESTAMPS (only changed area) ----------
+    // Use explicit final time if provided; otherwise base_iso + correct final offset.
     function computeDecidedAt(row){
-      // 1) direct explicit fields if present
-      const direct =
-        parseAsUTCish(row.final_decided_at) ??
-        parseAsUTCish(row.final_at) ??
-        NaN;
-      if (!isNaN(direct)) return direct;
+      // 1) explicit final timestamps from API if available
+      const explicit = parseAsUTCish(row.final_decided_at) || parseAsUTCish(row.final_at);
+      if (!isNaN(explicit)) return explicit;
 
-      // 2) compute from base cycle start + configured offset
+      // 2) compute from base + offset
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
-        const secs =
-          Number(row.final_offset_sec) > 0 ? Number(row.final_offset_sec) :
-          Number(row.period_sec) > 0      ? Number(row.period_sec)      :
-          90; // default safety
+        // If the API gives a final offset, use it; else if period_sec looks like a full run (>=60), use it; otherwise default to 90s.
+        let secs = Number(row.final_offset_sec);
+        if (!(secs > 0)) {
+          const p = Number(row.period_sec);
+          secs = (p >= 60 ? p : 90);
+        }
         return base + secs * 1000;
       }
 
-      // 3) fall back to whatever server stamped
+      // 3) fallback to server's decided_at
       const d = parseAsUTCish(row.decided_at);
       return isNaN(d) ? NaN : d;
     }
@@ -154,10 +153,10 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      // Only finals (exclude semis logged as `${base_iso}::semi`)
+      // Finals only (your existing rule)
       const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
 
-      // Sort newest first by computed real decision time
+      // Sort newest first by the computed decision time
       finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
 
       render(finals);
