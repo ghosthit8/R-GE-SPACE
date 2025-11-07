@@ -23,7 +23,7 @@
     .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
     .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
     .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
-    @media (max_width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
+    @media (max-width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
   </style>
 </head>
 <body>
@@ -78,7 +78,7 @@
       tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
     } catch { tzBadge.textContent = "Local time"; }
 
-    // --- time helpers ---
+    // --- helpers ---
     function parseAsUTCish(s){
       if (!s) return NaN;
       const str = String(s);
@@ -93,26 +93,21 @@
       });
     }
 
-    // --- timestamps (only section changed) ---
-    // 1) prefer server-stamped decided_at
-    // 2) else final_decided_at/final_at
-    // 3) else base_iso + (final_offset_sec || period_sec>=60 ? period_sec : 90)
+    // --- TIMESTAMPS (only change) ---
+    // Decide time from base_iso suffix: quarters +30s, semis +60s, final +90s.
     function computeDecidedAt(row){
-      const server = parseAsUTCish(row.decided_at);
-      if (!isNaN(server)) return server;
-
-      const explicit = parseAsUTCish(row.final_decided_at) || parseAsUTCish(row.final_at);
-      if (!isNaN(explicit)) return explicit;
-
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
-        let secs = Number(row.final_offset_sec);
-        if (!(secs > 0)) {
-          const p = Number(row.period_sec);
-          secs = (p >= 60 ? p : 90);
-        }
-        return base + secs * 1000;
+        const key = String(row.base_iso || "").toLowerCase();
+        let offset = 90;               // default final
+        if (key.includes("::q1") || key.includes("::q2") || key.includes("::q3") || key.includes("::q4")) offset = 30;
+        else if (key.includes("::semi")) offset = 60;
+        else if (key.includes("::final")) offset = 90;
+        return base + offset * 1000;
       }
+      // fallback if no base_iso
+      const explicit = parseAsUTCish(row.final_decided_at) || parseAsUTCish(row.final_at) || parseAsUTCish(row.decided_at);
+      if (!isNaN(explicit)) return explicit;
       return NaN;
     }
 
@@ -152,10 +147,8 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      // Only finals (exclude semis logged as `${base_iso}::semi`)
+      // keep your existing filtering/sorting; only timestamps changed
       const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
-
-      // Sort newest first by computed real decision time
       finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
 
       render(finals);
