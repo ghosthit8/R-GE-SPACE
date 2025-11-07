@@ -94,16 +94,19 @@
     }
 
     // ---------- TIMESTAMPS (only changed area) ----------
-    // Use explicit final time if provided; otherwise base_iso + correct final offset.
+    // Prefer server-stamped decided_at; otherwise fall back to base + final offset.
     function computeDecidedAt(row){
-      // 1) explicit final timestamps from API if available
+      // 1) Use server-stamped time if present (prevents bunching when multiple cycles were processed)
+      const serverTs = parseAsUTCish(row.decided_at);
+      if (!isNaN(serverTs)) return serverTs;
+
+      // 2) Otherwise, explicit final timestamps if API provides them
       const explicit = parseAsUTCish(row.final_decided_at) || parseAsUTCish(row.final_at);
       if (!isNaN(explicit)) return explicit;
 
-      // 2) compute from base + offset
+      // 3) Else compute from base start + offset (final assumed at 90s when period looks like 30s slices)
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
-        // If the API gives a final offset, use it; else if period_sec looks like a full run (>=60), use it; otherwise default to 90s.
         let secs = Number(row.final_offset_sec);
         if (!(secs > 0)) {
           const p = Number(row.period_sec);
@@ -112,9 +115,8 @@
         return base + secs * 1000;
       }
 
-      // 3) fallback to server's decided_at
-      const d = parseAsUTCish(row.decided_at);
-      return isNaN(d) ? NaN : d;
+      // 4) Last resort: NaN (renders "—")
+      return NaN;
     }
 
     function render(rows){
@@ -153,7 +155,7 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      // Finals only (your existing rule)
+      // Finals only (unchanged)
       const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
 
       // Sort newest first by the computed decision time
