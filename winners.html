@@ -50,7 +50,7 @@
               <th>#</th>
               <th>Decided At</th>
               <th class="cycle">Cycle</th>
-              <th>Winner (Original Seed)</th>
+              <th>Winner</th>
               <th>Thumbnail</th>
               <th>Score</th>
               <th>Decided By</th>
@@ -78,7 +78,7 @@
       tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
     } catch { tzBadge.textContent = "Local time"; }
 
-    // --- helpers ---
+    // --- time helpers ---
     function parseAsUTCish(s){
       if (!s) return NaN;
       const str = String(s);
@@ -92,21 +92,8 @@
         hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
       });
     }
-    // Normalize a URL so different host/query variants still match
-    function normalizeUrl(u){
-      if(!u) return "";
-      try{
-        const dec = decodeURIComponent(String(u)).toLowerCase();
-        const path = dec.replace(/^https?:\/\/[^/]+/,'').split('?')[0];
-        // compare by last path segment without extension
-        const last = path.split('/').filter(Boolean).pop() || path;
-        return last.replace(/\.(jpg|jpeg|png|webp|gif|avif)$/,'');
-      }catch{
-        return String(u).toLowerCase().split('?')[0];
-      }
-    }
 
-    // --- timestamps (unchanged except comments) ---
+    // --- timestamps ---
     function computeDecidedAt(row){
       const direct =
         parseAsUTCish(row.final_decided_at) ??
@@ -122,65 +109,41 @@
           90;
         return base + secs * 1000;
       }
-
       const d = parseAsUTCish(row.decided_at);
       return isNaN(d) ? NaN : d;
     }
 
-    // finals only: drop quarters (::q1..::q4) and semis (::semi)
-    function isFinalRow(r){
-      const key = String(r.base_iso||"").toLowerCase();
-      if (!key) return true; // prefer to keep if unknown
-      if (key.includes("::q1") || key.includes("::q2") || key.includes("::q3") || key.includes("::q4")) return false;
-      if (key.includes("::semi")) return false;
-      return true;
-    }
-
-    // winner original seed A–H by URL match against seed_a_url..seed_h_url
-    function originalSeed(r){
-      const win = normalizeUrl(r.image_url || r.winner_url);
-      const map = {
-        a: r.seed_a_url, b: r.seed_b_url, c: r.seed_c_url, d: r.seed_d_url,
-        e: r.seed_e_url, f: r.seed_f_url, g: r.seed_g_url, h: r.seed_h_url,
-      };
-      for (const [letter, url] of Object.entries(map)) {
-        if (url && normalizeUrl(url) === win) return letter.toUpperCase();
-      }
-      // fallback: if API already gave a letter like 'a'..'h'
-      if (r.winner_seed && /^[a-h]$/i.test(String(r.winner_seed))) {
-        return String(r.winner_seed).toUpperCase();
-      }
-      return "?";
-    }
-    function pillClass(letter){
-      // keep your color scheme by parity so it doesn't look all one color
-      return /^(A|C|E|G)$/.test(letter) ? "pillA" : "pillB";
-    }
-
+    // --- render with unique timestamps ---
     function render(rows){
       if(!rows || rows.length===0){
         tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No finals yet.</td></tr>`;
         return;
       }
       const N = rows.length;
+      let lastTs = 0;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
-
-        const letter = originalSeed(r);
-        const pill = pillClass(letter);
-
+        const seed = (r.winner_seed || "").toLowerCase();
+        const isLeft = seed === "a" || seed === "c";
+        const pillClass = isLeft ? "pillA" : "pillB";
+        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
         const img = r.image_url || r.winner_url || '';
         const thumb = img ? `<img src="${img}" class="thumb">` : `<span style="color:#666;">—</span>`;
-        const decidedTs = computeDecidedAt(r);
+
+        // unique timestamp logic
+        let decidedTs = computeDecidedAt(r);
+        if (isNaN(decidedTs)) decidedTs = Date.now();
+        if (decidedTs <= lastTs) decidedTs = lastTs + 1000;
+        lastTs = decidedTs;
 
         return `
           <tr>
             <td>${n}</td>
             <td>${fmtLocal(decidedTs)}</td>
             <td class="cycle">${r.base_iso || "—"}</td>
-            <td><span class="${pill}">Seed ${letter}</span></td>
+            <td><span class="${pillClass}">${seedLabel}</span></td>
             <td>${thumb}</td>
             <td class="score">${score}</td>
             <td>${by}</td>
@@ -194,7 +157,8 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      const finals = (all || []).filter(isFinalRow);
+      const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
+
       finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
 
       render(finals);
