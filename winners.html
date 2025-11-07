@@ -105,23 +105,21 @@
     }
 
     // ---------- ORIGINAL SEED (A–H) INFERENCE ----------
-    // Build map of seed -> url from any fields that may be present
     function buildSeedMap(r){
       const m = {};
       const set=(k,v)=>{ if(v) m[k]=v; };
-      // canonical
       set("a", r.seed_a_url); set("b", r.seed_b_url);
       set("c", r.seed_c_url); set("d", r.seed_d_url);
       set("e", r.seed_e_url); set("f", r.seed_f_url);
       set("g", r.seed_g_url); set("h", r.seed_h_url);
-      // snapshots some payloads include
+      // common snapshot fields
       set("a", r.q1_a_url || m.a); set("b", r.q1_b_url || m.b);
       set("c", r.q2_c_url || m.c); set("d", r.q2_d_url || m.d);
       set("e", r.q3_e_url || m.e); set("f", r.q3_f_url || m.f);
       set("g", r.q4_g_url || m.g); set("h", r.q4_h_url || m.h);
       return m;
     }
-    // Very tolerant normalizer: strips scheme/host, querystrings, extensions, and keeps last path piece
+    // very tolerant normalizer
     function normalizeUrl(u){
       if(!u) return "";
       try{
@@ -129,17 +127,24 @@
         const path = dec.replace(/^https?:\/\/[^/]+/,'').split('?')[0];
         const last = path.split('/').filter(Boolean).pop() || path;
         return last.replace(/\.(jpg|jpeg|png|webp|gif|avif)$/,'');
-      }catch{ return String(u).toLowerCase().split('?')[0]; }
+      }catch{
+        return String(u).toLowerCase().split('?')[0];
+      }
     }
-    function originSeedLetter(row){
+    function originFromRow(row){
+      // 1) server-provided fields (preferred)
+      const directSeed = row.orig_seed || row.winner_orig_seed || row.origin_seed;
+      const directUrl  = row.winner_orig_url || row.orig_url;
+      if (directSeed) return { letter: String(directSeed).trim().toLowerCase(), url: directUrl || null };
+
+      // 2) URL match against known seed URLs
       const win = normalizeUrl(row.image_url || row.winner_url);
-      if (!win) return null;
       const map = buildSeedMap(row);
       for (const [letter,url] of Object.entries(map)){
-        if (!url) continue;
-        if (normalizeUrl(url) === win) return letter;
+        if (normalizeUrl(url) === win) return { letter, url };
       }
-      return null;
+      // 3) no match
+      return { letter:null, url:null };
     }
     function pillClassFor(letter){
       if (!letter) return "pillU";
@@ -176,15 +181,15 @@
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
 
-        // prefer original A–H; if unknown show ?
-        const inferred = originSeedLetter(r);
-        const letter = (inferred ? inferred.toUpperCase() : "?");
-        const pillClass = pillClassFor(inferred);
+        const origin = originFromRow(r); // {letter,url}
+        const letter = origin.letter ? origin.letter.toUpperCase() : "?";
+        const pillClass = pillClassFor(origin.letter);
 
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
-        const img = r.image_url || r.winner_url || '';
-        const thumb = img ? `<img src="${img}" class="thumb">` : `<span style="color:#666;">—</span>`;
+        const originImg = origin.url || null;
+        const displayImg = originImg || r.image_url || r.winner_url || '';
+        const thumb = displayImg ? `<img src="${displayImg}" class="thumb">` : `<span style="color:#666;">—</span>`;
         const ts = computeFinalTs(r);
 
         return `
