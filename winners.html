@@ -80,26 +80,23 @@
 
     // --- time helpers ---
     function asNumber(x) {
-      // Accept numbers or numeric strings (ms or sec). Return NaN if not parseable.
       if (x === null || x === undefined || x === "") return NaN;
       const n = Number(x);
       if (!Number.isFinite(n)) return NaN;
-      // Heuristic: if it's seconds since epoch (<1e12), convert to ms
-      return n < 1e12 ? n * 1000 : n;
+      return n < 1e12 ? n * 1000 : n; // seconds->ms if needed
     }
 
     function parseAsUTCish(s){
       if (s === null || s === undefined) return NaN;
-      // Number-like?
       const maybeNum = asNumber(s);
       if (!isNaN(maybeNum)) return maybeNum;
 
       const str = String(s).trim();
       if (!str) return NaN;
-      // If already ISO with zone, let Date parse it
+
       if (/Z|[+-]\d{2}:\d{2}$/.test(str)) return Date.parse(str);
-      // If looks like "YYYY-MM-DD HH:MM:SS", make it ISO and treat as UTC
-      // (server may have logged without TZ)
+
+      // Handle "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DDTHH:MM:SS" (no TZ)
       const isoish = str.replace(" ", "T");
       const parsed = Date.parse(isoish + "Z");
       return Number.isFinite(parsed) ? parsed : NaN;
@@ -115,7 +112,6 @@
 
     // --- Choose the best decision timestamp for a FINAL ---
     function bestFinalTimestamp(row){
-      // Prefer explicit "final" decision fields first, then fall back.
       const candidates = [
         row.final_decided_at,
         row.final_at,
@@ -130,50 +126,43 @@
         const t = parseAsUTCish(c);
         if (!isNaN(t)) return t;
       }
-
-      // Compute from cycle base if available (e.g., base start + configured offset)
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
         const secs =
           Number(row.final_offset_sec) > 0 ? Number(row.final_offset_sec) :
           Number(row.period_sec) > 0      ? Number(row.period_sec)      :
           Number(row.total_sec) > 0       ? Number(row.total_sec)       :
-          90; // default safety
+          90;
         return base + secs * 1000;
       }
-
-      // Nothing found
       return NaN;
     }
 
-    // Render with de-duplicated *display* times, while sorting by the true decision time.
     function render(rows){
       if(!rows || rows.length===0){
         tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No finals yet.</td></tr>`;
         return;
       }
 
-      // Augment with timestamps
-      const augmented = rows.map((r) => {
-        const decidedTs = bestFinalTimestamp(r);
-        return { ...r, _decided: decidedTs };
-      });
+      const augmented = rows.map((r) => ({ ...r, _decided: bestFinalTimestamp(r) }));
 
-      // Sort newest first using the true decision time; unknowns sink to bottom.
+      // Sort by true decision time (newest first)
       augmented.sort((a,b) => {
         const aa = isNaN(a._decided) ? -Infinity : a._decided;
         const bb = isNaN(b._decided) ? -Infinity : b._decided;
         return bb - aa;
       });
 
-      // Ensure displayed times are unique (human-friendly; preserves sort stability).
-      const used = new Set();
+      // Ensure displayed *clock strings* are unique by nudging in whole seconds.
+      const usedStrings = new Set();
       for (const r of augmented) {
         let t = r._decided;
-        if (isNaN(t)) continue;
-        while (used.has(t)) t += 1; // nudge by 1 ms
-        used.add(t);
+        if (isNaN(t)) { r._displayTs = NaN; r._displayStr = "—"; continue; }
+        let s = fmtLocal(t);
+        while (usedStrings.has(s)) { t += 1000; s = fmtLocal(t); } // +1s until unique
+        usedStrings.add(s);
         r._displayTs = t;
+        r._displayStr = s;
       }
 
       const N = augmented.length;
@@ -187,12 +176,11 @@
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
         const img = r.image_url || r.winner_url || '';
         const thumb = img ? `<img src="${img}" class="thumb" loading="lazy">` : `<span style="color:#666;">—</span>`;
-        const shownTs = !isNaN(r._displayTs) ? r._displayTs : r._decided;
 
         return `
           <tr>
             <td>${n}</td>
-            <td>${fmtLocal(shownTs)}</td>
+            <td title="${fmtLocal(r._decided)}">${r._displayStr}</td>
             <td class="cycle">${r.base_iso || "—"}</td>
             <td><span class="${pillClass}">${seedLabel}</span></td>
             <td>${thumb}</td>
@@ -207,12 +195,8 @@
       const res = await fetch(FUNCTION_URL + "?winners=1&limit=400");
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
-
-      // Only finals (exclude semis logged as `${base_iso}::semi`)
       const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
-
       render(finals);
-
       const total = finals.length;
       metaEl.firstChild
         ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `
