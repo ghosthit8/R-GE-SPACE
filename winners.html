@@ -23,7 +23,6 @@
     .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
     .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
     .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
-    @media (max_width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
   </style>
 </head>
 <body>
@@ -65,8 +64,10 @@
   </div>
 
   <script>
+    // === CONFIG ===
     const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
     const ADMIN_KEY = "Inklink88!";
+
     const metaEl = document.getElementById('meta');
     const tzBadge = document.getElementById('tzBadge');
     const tbody  = document.getElementById('body');
@@ -78,129 +79,123 @@
       tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
     } catch { tzBadge.textContent = "Local time"; }
 
-    // --- time helpers ---
-    function asNumber(x) {
-      if (x === null || x === undefined || x === "") return NaN;
-      const n = Number(x);
-      if (!Number.isFinite(n)) return NaN;
-      return n < 1e12 ? n * 1000 : n; // seconds->ms if needed
-    }
-
+    // ---- helpers ----
+    function asNumber(x){ if (x==null||x==="") return NaN; const n=Number(x); return Number.isFinite(n)?(n<1e12?n*1000:n):NaN; }
     function parseAsUTCish(s){
-      if (s === null || s === undefined) return NaN;
-      const maybeNum = asNumber(s);
-      if (!isNaN(maybeNum)) return maybeNum;
-
-      const str = String(s).trim();
-      if (!str) return NaN;
-
+      if (s==null) return NaN;
+      const n=asNumber(s); if(!isNaN(n)) return n;
+      const str=String(s).trim(); if(!str) return NaN;
       if (/Z|[+-]\d{2}:\d{2}$/.test(str)) return Date.parse(str);
-
-      // Handle "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DDTHH:MM:SS" (no TZ)
-      const isoish = str.replace(" ", "T");
-      const parsed = Date.parse(isoish + "Z");
-      return Number.isFinite(parsed) ? parsed : NaN;
+      const t=Date.parse(str.replace(" ","T")+"Z");
+      return Number.isFinite(t)?t:NaN;
     }
-
     function fmtLocal(ts){
       if (isNaN(ts)) return "—";
-      return new Date(ts).toLocaleString(undefined, {
-        year:"numeric", month:"2-digit", day:"2-digit",
-        hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
+      return new Date(ts).toLocaleString(undefined,{
+        year:"numeric",month:"2-digit",day:"2-digit",
+        hour:"numeric",minute:"2-digit",second:"2-digit",hour12:true
       });
     }
 
-    // --- Choose the best decision timestamp for a FINAL ---
+    // Identify FINAL rows only.
+    // Accept a bunch of possible flags, and *exclude* q1–q4 and sf1/sf2 explicitly.
+    function isFinalRow(r){
+      const tag = (r.base_iso || r.cycle || r.tag || "").toString();
+      const lower = tag.toLowerCase();
+
+      // explicit excludes (quarters & semis)
+      if (/::q[1-4]\b/i.test(tag)) return false;
+      if (/::sf[12]\b/i.test(tag)) return false;
+
+      // explicit includes
+      if (/::(final|f|champ|winner)\b/i.test(tag)) return true;
+      if (String(r.phase).toLowerCase()==="final") return true;
+      if (String(r.round).toLowerCase()==="final") return true;
+      if (String(r.stage).toLowerCase()==="final") return true;
+      if (String(r.match).toLowerCase()==="final") return true;
+      if (r.is_final === true) return true;
+
+      // If there's no bracket tag at all, treat it as final logs written by the edge function.
+      // (Your function typically only logs finals unless tagged otherwise.)
+      if (!/::/.test(lower)) return true;
+
+      return false;
+    }
+
+    // pick the best timestamp to display for FINALS
     function bestFinalTimestamp(row){
       const candidates = [
-        row.final_decided_at,
-        row.final_at,
-        row.decided_at_final,
-        row.decided_at,
-        row.created_at,
-        row.inserted_at,
-        row.at,
-        row.ts
+        row.final_decided_at, row.decided_at_final, row.final_at,
+        row.decided_at, row.created_at, row.inserted_at, row.at, row.ts
       ];
-      for (const c of candidates) {
+      for (const c of candidates){
         const t = parseAsUTCish(c);
         if (!isNaN(t)) return t;
       }
+      // fallback: base + duration (assume 90s if unknown)
       const base = parseAsUTCish(row.base_iso);
-      if (!isNaN(base)) {
-        const secs =
-          Number(row.final_offset_sec) > 0 ? Number(row.final_offset_sec) :
-          Number(row.period_sec) > 0      ? Number(row.period_sec)      :
-          Number(row.total_sec) > 0       ? Number(row.total_sec)       :
-          90;
-        return base + secs * 1000;
+      if (!isNaN(base)){
+        const secs = Number(row.final_offset_sec)||Number(row.period_sec)||Number(row.total_sec)||90;
+        return base + secs*1000;
       }
       return NaN;
     }
 
     function render(rows){
       if(!rows || rows.length===0){
-        tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No finals yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No final winners yet.</td></tr>`;
+        metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Showing 0 finals ' : (metaEl.textContent='Showing 0 finals ');
         return;
       }
 
-      const augmented = rows.map((r) => ({ ...r, _decided: bestFinalTimestamp(r) }));
+      const augmented = rows.map(r=>({ ...r, _decided: bestFinalTimestamp(r) }));
+      augmented.sort((a,b)=>(isNaN(b._decided)?-Infinity:b._decided)-(isNaN(a._decided)?-Infinity:a._decided));
 
-      // Sort by true decision time (newest first)
-      augmented.sort((a,b) => {
-        const aa = isNaN(a._decided) ? -Infinity : a._decided;
-        const bb = isNaN(b._decided) ? -Infinity : b._decided;
-        return bb - aa;
-      });
-
-      // Ensure displayed *clock strings* are unique by nudging in whole seconds.
-      const usedStrings = new Set();
-      for (const r of augmented) {
-        let t = r._decided;
-        if (isNaN(t)) { r._displayTs = NaN; r._displayStr = "—"; continue; }
-        let s = fmtLocal(t);
-        while (usedStrings.has(s)) { t += 1000; s = fmtLocal(t); } // +1s until unique
-        usedStrings.add(s);
-        r._displayTs = t;
-        r._displayStr = s;
+      // make the human-visible clock string unique to avoid duplicates in the UI
+      const used = new Set();
+      for (const r of augmented){
+        let t=r._decided, s=fmtLocal(t);
+        while(used.has(s)){ t+=1000; s=fmtLocal(t); }
+        used.add(s);
+        r._displayTs=t; r._displayStr=s;
       }
 
       const N = augmented.length;
-      tbody.innerHTML = augmented.map((r, idx) => {
-        const n = N - idx;
-        const seed = (r.winner_seed || "").toLowerCase();
-        const isLeft = seed === "a" || seed === "c" || seed === "e" || seed === "g";
-        const pillClass = isLeft ? "pillA" : "pillB";
-        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
-        const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
-        const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
-        const img = r.image_url || r.winner_url || '';
+      tbody.innerHTML = augmented.map((r,idx)=>{
+        const n = N-idx;
+        const seed = (r.winner_seed||"").toLowerCase();
+        const left = ["a","c","e","g"].includes(seed);
+        const pill = left ? "pillA" : "pillB";
+        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : "Seed ?";
+        const img = r.image_url || r.winner_url || "";
         const thumb = img ? `<img src="${img}" class="thumb" loading="lazy">` : `<span style="color:#666;">—</span>`;
-
+        const by = r.decided_by === "random_tie" ? "random tie" : "votes";
+        const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
         return `
           <tr>
             <td>${n}</td>
             <td title="${fmtLocal(r._decided)}">${r._displayStr}</td>
             <td class="cycle">${r.base_iso || "—"}</td>
-            <td><span class="${pillClass}">${seedLabel}</span></td>
+            <td><span class="${pill}">${seedLabel}</span></td>
             <td>${thumb}</td>
             <td class="score">${score}</td>
             <td>${by}</td>
           </tr>`;
       }).join('');
-    }
 
-    async function load(){
-      metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent = 'Loading… ');
-      const res = await fetch(FUNCTION_URL + "?winners=1&limit=400");
-      const data = await res.json().catch(()=> ({}));
-      const all = Array.isArray(data) ? data : (data.winners || []);
-      const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
-      render(finals);
-      const total = finals.length;
+      const total = augmented.length;
       metaEl.firstChild
         ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `
         : (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
+    }
+
+    async function load(){
+      metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent='Loading… ');
+      const res = await fetch(FUNCTION_URL + "?winners=1&limit=500");
+      const payload = await res.json().catch(()=> ({}));
+      const all = Array.isArray(payload) ? payload : (payload.winners || []);
+      const finalsOnly = (all||[]).filter(isFinalRow);
+      render(finalsOnly);
     }
 
     async function clearData(){
