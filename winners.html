@@ -92,8 +92,8 @@
         hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
       });
     }
-    // Always prefer base_iso + period_sec to avoid "batch same-time" when server stamps now
-    function computeDecidedAt(row){
+    // Use base_iso + period_sec for a stable final decision time even when page was closed
+    function computeFinalTs(row){
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
         const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 90;
@@ -101,6 +101,38 @@
       }
       const d = parseAsUTCish(row.decided_at);
       return isNaN(d) ? NaN : d;
+    }
+
+    // Keep only true finals:
+    //  - explicit phase/stage says "final", OR
+    //  - winner_seed is A or B (final lane),
+    // then dedupe so only one row per base_iso remains (the latest by decided_at if present).
+    function finalsOnly(rows){
+      const out = rows.filter(r=>{
+        const phase = (r.phase||r.stage||"").toLowerCase();
+        if (phase.includes("final")) return true;
+        const seed = String(r.winner_seed||"").toLowerCase();
+        return seed === "a" || seed === "b";
+      });
+
+      // dedupe by base_iso
+      const keep = new Map();
+      for (const r of out){
+        const key = r.base_iso || r.cycle_key || r.id || Math.random().toString(36);
+        const existing = keep.get(key);
+        if (!existing) { keep.set(key, r); continue; }
+        const ta = parseAsUTCish(r.decided_at);
+        const tb = parseAsUTCish(existing.decided_at);
+        if (!isNaN(ta) && isNaN(tb)) keep.set(key, r);
+        else if (!isNaN(ta) && !isNaN(tb) && ta > tb) keep.set(key, r);
+        else if (isNaN(ta) && isNaN(tb)) {
+          // break ties deterministically using score sum
+          const sa = (r.red_count??0)+(r.blue_count??0);
+          const sb = (existing.red_count??0)+(existing.blue_count??0);
+          if (sa >= sb) keep.set(key, r);
+        }
+      }
+      return Array.from(keep.values());
     }
 
     function render(rows){
@@ -112,18 +144,18 @@
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
         const seed = (r.winner_seed || "").toLowerCase();
-        const isLeft = seed === "a" || seed === "c";
+        const isLeft = seed === "a"; // final uses A (left/red) vs B (right/blue)
         const pillClass = isLeft ? "pillA" : "pillB";
         const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
         const img = r.image_url || r.winner_url || '';
         const thumb = img ? `<img src="${img}" class="thumb">` : `<span style="color:#666;">—</span>`;
-        const decidedTs = computeDecidedAt(r);
+        const ts = computeFinalTs(r);
         return `
           <tr>
             <td>${n}</td>
-            <td>${fmtLocal(decidedTs)}</td>
+            <td>${fmtLocal(ts)}</td>
             <td class="cycle">${r.base_iso || "—"}</td>
             <td><span class="${pillClass}">${seedLabel}</span></td>
             <td>${thumb}</td>
@@ -139,11 +171,9 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      // Only finals (exclude semis logged as `${base_iso}::semi`)
-      const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
-
-      // Sort newest first by computed real decision time
-      finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
+      const finals = finalsOnly(all);
+      // sort newest first by computed final timestamp
+      finals.sort((a,b) => computeFinalTs(b) - computeFinalTs(a));
 
       render(finals);
       const total = finals.length;
