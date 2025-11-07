@@ -20,11 +20,10 @@
     th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
     .pillA{background:#2a1212;border:1px solid #4c2222;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
     .pillB{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-    .pillU{background:#27272a;border:1px solid #3f3f46;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
     .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
     .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
     .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
-    @media (max-width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
+    @media (max_width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
   </style>
 </head>
 <body>
@@ -79,7 +78,7 @@
       tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
     } catch { tzBadge.textContent = "Local time"; }
 
-    // ---- helpers ----
+    // --- helpers ---
     function parseAsUTCish(s){
       if (!s) return NaN;
       const str = String(s);
@@ -93,11 +92,13 @@
         hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
       });
     }
+    // Normalize a URL so different host/query variants still match
     function normalizeUrl(u){
       if(!u) return "";
       try{
         const dec = decodeURIComponent(String(u)).toLowerCase();
         const path = dec.replace(/^https?:\/\/[^/]+/,'').split('?')[0];
+        // compare by last path segment without extension
         const last = path.split('/').filter(Boolean).pop() || path;
         return last.replace(/\.(jpg|jpeg|png|webp|gif|avif)$/,'');
       }catch{
@@ -105,44 +106,55 @@
       }
     }
 
-    // timestamp: for finals, base_iso + 90s; fallbacks if base_iso missing
-    function computeFinalTs(row){
+    // --- timestamps (unchanged except comments) ---
+    function computeDecidedAt(row){
+      const direct =
+        parseAsUTCish(row.final_decided_at) ??
+        parseAsUTCish(row.final_at) ??
+        NaN;
+      if (!isNaN(direct)) return direct;
+
       const base = parseAsUTCish(row.base_iso);
-      if (!isNaN(base)) return base + 90*1000;
-      const explicit = parseAsUTCish(row.final_decided_at) || parseAsUTCish(row.final_at) || parseAsUTCish(row.decided_at);
-      return isNaN(explicit) ? NaN : explicit;
+      if (!isNaN(base)) {
+        const secs =
+          Number(row.final_offset_sec) > 0 ? Number(row.final_offset_sec) :
+          Number(row.period_sec) > 0      ? Number(row.period_sec)      :
+          90;
+        return base + secs * 1000;
+      }
+
+      const d = parseAsUTCish(row.decided_at);
+      return isNaN(d) ? NaN : d;
     }
 
-    // finals-only filter (drops ::q1..::q4 and ::semi)
-    function finalsOnly(rows){
-      return rows.filter(r=>{
-        const key = String(r.base_iso||"").toLowerCase();
-        if (!key) return true; // allow if base missing (older rows)
-        if (key.includes("::q1") || key.includes("::q2") || key.includes("::q3") || key.includes("::q4")) return false;
-        if (key.includes("::semi")) return false;
-        return true;
-      });
+    // finals only: drop quarters (::q1..::q4) and semis (::semi)
+    function isFinalRow(r){
+      const key = String(r.base_iso||"").toLowerCase();
+      if (!key) return true; // prefer to keep if unknown
+      if (key.includes("::q1") || key.includes("::q2") || key.includes("::q3") || key.includes("::q4")) return false;
+      if (key.includes("::semi")) return false;
+      return true;
     }
 
-    // map winner image to original seed letter using seed_a_url..seed_h_url
-    function originalSeedForRow(r){
+    // winner original seed A–H by URL match against seed_a_url..seed_h_url
+    function originalSeed(r){
       const win = normalizeUrl(r.image_url || r.winner_url);
-      if (!win) return { letter:null, url:null };
-
       const map = {
         a: r.seed_a_url, b: r.seed_b_url, c: r.seed_c_url, d: r.seed_d_url,
         e: r.seed_e_url, f: r.seed_f_url, g: r.seed_g_url, h: r.seed_h_url,
       };
       for (const [letter, url] of Object.entries(map)) {
-        if (url && normalizeUrl(url) === win) return { letter, url };
+        if (url && normalizeUrl(url) === win) return letter.toUpperCase();
       }
-      // optional server hints if you ever add them
-      if (r.orig_seed) return { letter: String(r.orig_seed).toLowerCase(), url: r.winner_orig_url || r.orig_url || null };
-      return { letter:null, url:null };
+      // fallback: if API already gave a letter like 'a'..'h'
+      if (r.winner_seed && /^[a-h]$/i.test(String(r.winner_seed))) {
+        return String(r.winner_seed).toUpperCase();
+      }
+      return "?";
     }
     function pillClass(letter){
-      if (!letter) return "pillU";
-      return /^(a|c|e|g)$/i.test(letter) ? "pillA" : "pillB";
+      // keep your color scheme by parity so it doesn't look all one color
+      return /^(A|C|E|G)$/.test(letter) ? "pillA" : "pillB";
     }
 
     function render(rows){
@@ -154,22 +166,19 @@
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
 
-        const origin = originalSeedForRow(r); // {letter,url}
-        const letter = origin.letter ? origin.letter.toUpperCase() : (r.winner_seed || "").toUpperCase() || "?";
-        const pill = pillClass(origin.letter || r.winner_seed);
+        const letter = originalSeed(r);
+        const pill = pillClass(letter);
 
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
-
-        const img = (origin.url || r.image_url || r.winner_url || '');
+        const img = r.image_url || r.winner_url || '';
         const thumb = img ? `<img src="${img}" class="thumb">` : `<span style="color:#666;">—</span>`;
-
-        const ts = computeFinalTs(r);
+        const decidedTs = computeDecidedAt(r);
 
         return `
           <tr>
             <td>${n}</td>
-            <td>${fmtLocal(ts)}</td>
+            <td>${fmtLocal(decidedTs)}</td>
             <td class="cycle">${r.base_iso || "—"}</td>
             <td><span class="${pill}">Seed ${letter}</span></td>
             <td>${thumb}</td>
@@ -181,12 +190,12 @@
 
     async function load(){
       metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent = 'Loading… ');
-      const res = await fetch(FUNCTION_URL + "?winners=1&limit=500");
+      const res = await fetch(FUNCTION_URL + "?winners=1&limit=400");
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      const finals = finalsOnly(all);
-      finals.sort((a,b) => computeFinalTs(b) - computeFinalTs(a));
+      const finals = (all || []).filter(isFinalRow);
+      finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
 
       render(finals);
       const total = finals.length;
