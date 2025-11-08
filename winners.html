@@ -92,7 +92,7 @@
         hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
       });
     }
-    // Always prefer base_iso + period_sec to avoid "batch same-time" when server stamps now
+    // Always prefer base_iso + period_sec to avoid "batch same-time"
     function computeDecidedAt(row){
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
@@ -139,16 +139,17 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      // Only finals (exclude semis logged as `${base_iso}::semi`)
-      const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
+      // ✅ finals only: exclude anything with a :: phase suffix (quarters & semis)
+      const finals = (all || []).filter(w => !String(w.base_iso || "").includes("::"));
 
-      // Sort newest first by computed real decision time
+      // newest first
       finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
 
       render(finals);
       const total = finals.length;
-      metaEl.firstChild ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom ` :
-        (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
+      metaEl.firstChild
+        ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `
+        : (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
     }
 
     async function clearData(){
