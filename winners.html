@@ -1,28 +1,30 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Rage Space — Winners</title>
-<style>
-  :root { --fg:#e5e7eb; --bg:#0b0d0f; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif}
-  .wrap{max-width:780px;margin:0 auto;padding:16px 12px 24px}
-  h1{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:.5px}
-  .top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
-  a.btn,button.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:#131920;color:var(--fg);font-weight:700;text-decoration:none;cursor:pointer}
-  .meta{color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .tz{padding:2px 8px;border-radius:999px;background:#0b1220;border:1px solid #1a2636;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.06em}
-  .card{border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden}
-  .table-wrap{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;font-size:14px}
-  th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
-  th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
-  .pill{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-  .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
-  .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
-  .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rage Space — Winners</title>
+  <style>
+    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif}
+    .wrap{max-width:780px;margin:0 auto;padding:16px 12px 24px}
+    h1{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:.5px}
+    .top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
+    a.btn,button.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:#131920;color:var(--fg);font-weight:700;text-decoration:none;cursor:pointer}
+    .meta{color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .tz{padding:2px 8px;border-radius:999px;background:#0b1220;border:1px solid #1a2636;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.06em}
+    .card{border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+    th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+    .pillA{background:#2a1212;border:1px solid #4c2222;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+    .pillB{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+    .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
+    .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
+    .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+    @media (max-width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -42,7 +44,7 @@
 
     <div class="card">
       <div class="table-wrap">
-        <table>
+        <table id="tbl">
           <thead>
             <tr>
               <th>#</th>
@@ -62,175 +64,109 @@
     </div>
   </div>
 
-<script>
-  // ===== CONFIG =====
-  const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
-  const ADMIN_KEY    = "Inklink88!";
+  <script>
+    const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
+    const ADMIN_KEY = "Inklink88!";
+    const metaEl = document.getElementById('meta');
+    const tzBadge = document.getElementById('tzBadge');
+    const tbody  = document.getElementById('body');
 
-  // Optional (for URL→seed mapping via REST when row lacks seed_a_url…seed_h_url)
-  const SUPABASE_URL  = "https://tuqvpcevrhciursxrgav.supabase.co";
-  const SUPABASE_ANON = ""; // paste anon key if you want REST mapping; leave "" to skip
+    // timezone badge
+    try {
+      const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
+      const tz = fmt.formatToParts(new Date()).find(p=>p.type==="timeZoneName")?.value || "";
+      tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
+    } catch { tzBadge.textContent = "Local time"; }
 
-  const metaEl = document.getElementById('meta');
-  const tzBadge = document.getElementById('tzBadge');
-  const tbody = document.getElementById('body');
-
-  try {
-    const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName:"short" });
-    const tz = fmt.formatToParts(new Date()).find(p=>p.type==="timeZoneName")?.value || "";
-    tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
-  } catch { tzBadge.textContent = "Local time"; }
-
-  // ---------- helpers ----------
-  const n = x => (x==null||x==="") ? NaN : (Number(x)<1e12?Number(x)*1000:Number(x));
-  function parseAsUTCish(s){ if(s==null) return NaN; const k=n(s); if(Number.isFinite(k)) return k;
-    const t=Date.parse(String(s).trim().replace(" ","T").replace(/(?!Z)$/, "Z")); return Number.isFinite(t)?t:NaN; }
-  function fmtLocal(ts){ if(isNaN(ts)) return "—";
-    return new Date(ts).toLocaleString(undefined,{year:"numeric",month:"2-digit",day:"2-digit",hour:"numeric",minute:"2-digit",second:"2-digit",hour12:true}); }
-
-  function isFinalRow(r){
-    const tag = (r.base_iso || r.cycle || r.tag || "").toString();
-    if (/::q[1-4]\b/i.test(tag)) return false;
-    if (/::sf[12]\b/i.test(tag)) return false;
-    if (/::(final|f|champ|winner)\b/i.test(tag)) return true;
-    const f=[r.phase,r.round,r.stage,r.match]; if(f.some(v=>String(v||"").toLowerCase()==="final")) return true;
-    if (r.is_final===true) return true;
-    if (!/::/.test(tag)) return true;
-    return false;
-  }
-
-  function bestFinalTimestamp(row){
-    const c=[row.final_decided_at,row.decided_at_final,row.final_at,row.decided_at,row.created_at,row.inserted_at,row.at,row.ts];
-    for (const x of c){ const t=parseAsUTCish(x); if(!isNaN(t)) return t; }
-    const base=parseAsUTCish(row.base_iso); if(!isNaN(base)){ const secs=Number(row.final_offset_sec)||Number(row.period_sec)||Number(row.total_sec)||90; return base+secs*1000; }
-    return NaN;
-  }
-
-  // URL normalization and mapping
-  function norm(u){ try{ const x=new URL(String(u), location.origin); return x.pathname.toLowerCase(); }catch{ return String(u||"").toLowerCase().replace(/^https?:\/\/[^/]+/,"").split("?")[0]; } }
-
-  const cycleSeedMapCache = Object.create(null);
-  async function fetchCycleSeedMap(base_iso){
-    if (!SUPABASE_ANON || !base_iso) return null;
-    if (cycleSeedMapCache[base_iso]) return cycleSeedMapCache[base_iso];
-    try{
-      const url = `${SUPABASE_URL}/rest/v1/cycles_v2?select=base_iso,seed_a_url,seed_b_url,seed_c_url,seed_d_url,seed_e_url,seed_f_url,seed_g_url,seed_h_url&base_iso=eq.${encodeURIComponent(base_iso)}`;
-      const res = await fetch(url,{headers:{apikey:SUPABASE_ANON,Authorization:`Bearer ${SUPABASE_ANON}`}});
-      const rows = await res.json(); const r = Array.isArray(rows)?rows[0]:null; if(!r) return null;
-      const m = {a:norm(r.seed_a_url),b:norm(r.seed_b_url),c:norm(r.seed_c_url),d:norm(r.seed_d_url),e:norm(r.seed_e_url),f:norm(r.seed_f_url),g:norm(r.seed_g_url),h:norm(r.seed_h_url)};
-      cycleSeedMapCache[base_iso]=m; return m;
-    }catch{ return null; }
-  }
-  function mapFromRow(r){
-    const m={a:norm(r.seed_a_url),b:norm(r.seed_b_url),c:norm(r.seed_c_url),d:norm(r.seed_d_url),e:norm(r.seed_e_url),f:norm(r.seed_f_url),g:norm(r.seed_g_url),h:norm(r.seed_h_url)};
-    return Object.values(m).some(Boolean)?m:null;
-  }
-  function urlToSeed(url, map){
-    if (!url || !map) return "";
-    const p = norm(url);
-    for (const k of "abcdefgh"){ const t=map[k]; if(t && (p===t || p.endsWith(t) || t.endsWith(p))) return k; }
-    return "";
-  }
-
-  function winnerImageUrl(row){
-    const direct=row.winner_thumb||row.winner_thumbnail||row.winner_image_url||row.final_winner_thumb||row.final_winner_url||row.winner_url||row.image_url;
-    if (direct) return direct;
-    const red=Number(row.red_count), blue=Number(row.blue_count);
-    if (Number.isFinite(red)&&Number.isFinite(blue)){ if (red>blue && row.red_url) return row.red_url; if (blue>red && row.blue_url) return row.blue_url; }
-    return row.red_url || row.blue_url || "";
-  }
-
-  function explicitSeed(row){
-    let s=(row.winner_seed||row.final_winner_seed||row.winner||row.final_winner||row.seed_winner||"").toString().trim().toLowerCase().replace(/^seed\s+/,'');
-    return /^[a-h]$/.test(s)?s:"";
-  }
-
-  // NEW PRIORITY: URL→seed FIRST, then explicit field
-  async function deriveWinnerSeed(row){
-    const url = winnerImageUrl(row);
-
-    // a) row seed map
-    let map = mapFromRow(row);
-    let s = urlToSeed(url, map);
-    if (s){ console.log("WIN seed via row map:", s, url); return s; }
-
-    // b) REST seed map
-    map = await fetchCycleSeedMap(row.base_iso);
-    s = urlToSeed(url, map);
-    if (s){ console.log("WIN seed via REST map:", s, url, "base:", row.base_iso); return s; }
-
-    // c) picsum pattern
-    const m = norm(url).match(/\/seed\/([a-h])\b/i);
-    if (m){ console.log("WIN seed via picsum:", m[1].toLowerCase(), url); return m[1].toLowerCase(); }
-
-    // d) explicit field LAST (prevents A/B from overriding URL)
-    s = explicitSeed(row);
-    if (s){ console.log("WIN seed via explicit field:", s); return s; }
-
-    console.log("WIN seed unknown (Seed ?), url:", url, row);
-    return "";
-  }
-
-  function render(rows){
-    if(!rows || rows.length===0){
-      tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No final winners yet.</td></tr>`;
-      metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Showing 0 finals ' : (metaEl.textContent='Showing 0 finals ');
-      return;
+    // --- time helpers ---
+    function parseAsUTCish(s){
+      if (!s) return NaN;
+      const str = String(s);
+      if (/Z|[+-]\d{2}:\d{2}$/.test(str)) return Date.parse(str);
+      return Date.parse(str.replace(" ", "T") + "Z");
+    }
+    function fmtLocal(ts){
+      if (isNaN(ts)) return "—";
+      return new Date(ts).toLocaleString(undefined, {
+        year:"numeric", month:"2-digit", day:"2-digit",
+        hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
+      });
+    }
+    // Always prefer base_iso + period_sec to avoid "batch same-time" when server stamps now
+    function computeDecidedAt(row){
+      const base = parseAsUTCish(row.base_iso);
+      if (!isNaN(base)) {
+        const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 90;
+        return base + secs * 1000;
+      }
+      const d = parseAsUTCish(row.decided_at);
+      return isNaN(d) ? NaN : d;
     }
 
-    const augmented = rows.map(r=>({ ...r, _decided: bestFinalTimestamp(r) }));
-    augmented.sort((a,b)=>(isNaN(b._decided)?-Infinity:b._decided)-(isNaN(a._decided)?-Infinity:a._decided));
+    function render(rows){
+      if(!rows || rows.length===0){
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No finals yet.</td></tr>`;
+        return;
+      }
+      const N = rows.length;
+      tbody.innerHTML = rows.map((r, idx) => {
+        const n = N - idx;
+        const seed = (r.winner_seed || "").toLowerCase();
+        const isLeft = seed === "a" || seed === "c";
+        const pillClass = isLeft ? "pillA" : "pillB";
+        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
+        const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
+        const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
+        const img = r.image_url || r.winner_url || '';
+        const thumb = img ? `<img src="${img}" class="thumb">` : `<span style="color:#666;">—</span>`;
+        const decidedTs = computeDecidedAt(r);
+        return `
+          <tr>
+            <td>${n}</td>
+            <td>${fmtLocal(decidedTs)}</td>
+            <td class="cycle">${r.base_iso || "—"}</td>
+            <td><span class="${pillClass}">${seedLabel}</span></td>
+            <td>${thumb}</td>
+            <td class="score">${score}</td>
+            <td>${by}</td>
+          </tr>`;
+      }).join('');
+    }
 
-    const used=new Set();
-    for (const r of augmented){ let t=r._decided, s=fmtLocal(t); while(used.has(s)){ t+=1000; s=fmtLocal(t);} used.add(s); r._displayTs=t; r._displayStr=s; }
+    async function load(){
+      metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent = 'Loading… ');
+      const res = await fetch(FUNCTION_URL + "?winners=1&limit=400");
+      const data = await res.json().catch(()=> ({}));
+      const all = Array.isArray(data) ? data : (data.winners || []);
 
-    const N = augmented.length;
-    Promise.all(augmented.map(async (r,idx)=>{
-      const n=N-idx;
-      const seed = await deriveWinnerSeed(r);
-      const seedTxt = seed ? `Seed ${seed.toUpperCase()}` : "Seed ?";
-      const url = winnerImageUrl(r);
-      const thumb = url ? `<img src="${url}" class="thumb" loading="lazy">` : `<span style="color:#666;">—</span>`;
-      const by = r.decided_by === "random_tie" ? "random tie" : "votes";
-      const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
-      return `<tr>
-        <td>${n}</td>
-        <td title="${fmtLocal(r._decided)}">${r._displayStr}</td>
-        <td class="cycle">${r.base_iso || "—"}</td>
-        <td><span class="pill">${seedTxt}</span></td>
-        <td>${thumb}</td>
-        <td class="score">${score}</td>
-        <td>${by}</td>
-      </tr>`;
-    })).then(html => {
-      tbody.innerHTML = html.join('');
-      const total=N;
-      metaEl.firstChild ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `
-                        : (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
-    });
-  }
+      // Only finals (exclude semis logged as `${base_iso}::semi`)
+      const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
 
-  async function load(){
-    metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent='Loading… ');
-    const res = await fetch(FUNCTION_URL + "?winners=1&limit=500");
-    const payload = await res.json().catch(()=> ({}));
-    const all = Array.isArray(payload) ? payload : (payload.winners || []);
-    const finalsOnly = (all||[]).filter(isFinalRow);
-    console.log("EDGE winners rows:", finalsOnly);
-    render(finalsOnly);
-  }
+      // Sort newest first by computed real decision time
+      finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
 
-  async function clearData(){
-    if(!confirm("⚠️ Permanently delete all winner data?")) return;
-    metaEl.firstChild.nodeValue = 'Clearing data… ';
-    const res = await fetch(FUNCTION_URL + "?clear=1", { method:"DELETE", headers:{ "x-admin-key": ADMIN_KEY } });
-    if(res.ok){ alert("Winner data cleared."); load(); }
-    else { const msg = await res.json().catch(()=>({})); alert("Error: " + (msg.error || "failed to clear")); }
-  }
+      render(finals);
+      const total = finals.length;
+      metaEl.firstChild ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom ` :
+        (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
+    }
 
-  document.getElementById('refresh').onclick = load;
-  document.getElementById('clear').onclick = clearData;
-  load(); setInterval(load, 5000);
-</script>
+    async function clearData(){
+      if(!confirm("⚠️ Permanently delete all winner data?")) return;
+      metaEl.firstChild.nodeValue = 'Clearing data… ';
+      const res = await fetch(FUNCTION_URL + "?clear=1", {
+        method:"DELETE",
+        headers:{ "x-admin-key": ADMIN_KEY }
+      });
+      if(res.ok){ alert("Winner data cleared."); load(); }
+      else { const msg = await res.json().catch(()=>({})); alert("Error: " + (msg.error || "failed to clear")); }
+    }
+
+    document.getElementById('refresh').onclick = load;
+    document.getElementById('clear').onclick = clearData;
+
+    load();
+    setInterval(load, 5000);
+  </script>
 </body>
 </html>
