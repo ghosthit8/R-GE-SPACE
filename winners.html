@@ -78,7 +78,7 @@
       tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
     } catch { tzBadge.textContent = "Local time"; }
 
-    // time helpers
+    // --- time helpers ---
     function parseAsUTCish(s){
       if (!s) return NaN;
       const str = String(s);
@@ -92,7 +92,8 @@
         hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
       });
     }
-    function decidedAtFrom(row){
+    // Always prefer base_iso + period_sec to avoid "batch same-time" when server stamps now
+    function computeDecidedAt(row){
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
         const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 90;
@@ -110,19 +111,15 @@
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
-
-        // IMPORTANT: do NOT default to A/B if backend mapping failed
         const seed = (r.winner_seed || "").toLowerCase();
-        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : "Seed ?";
-        const isLeft = seed === "a" || seed === "c" || seed === "e" || seed === "g"; // cosmetic color split
+        const isLeft = seed === "a" || seed === "c";
         const pillClass = isLeft ? "pillA" : "pillB";
-
+        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
-        const score = `${r.red_count ?? r.seed_a_count ?? 0}–${r.blue_count ?? r.seed_b_count ?? 0}`;
+        const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
         const img = r.image_url || r.winner_url || '';
         const thumb = img ? `<img src="${img}" class="thumb">` : `<span style="color:#666;">—</span>`;
-        const decidedTs = decidedAtFrom(r);
-
+        const decidedTs = computeDecidedAt(r);
         return `
           <tr>
             <td>${n}</td>
@@ -142,16 +139,16 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      // finals only: exclude any phase-suffixed rows like ::q1..::q4, ::semi1/2
-      const finals = (all || []).filter(w => !String(w.base_iso || "").includes("::"));
+      // Only finals (exclude semis logged as `${base_iso}::semi`)
+      const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
 
-      finals.sort((a,b) => decidedAtFrom(b) - decidedAtFrom(a));
+      // Sort newest first by computed real decision time
+      finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
+
       render(finals);
-
       const total = finals.length;
-      metaEl.firstChild
-        ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `
-        : (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
+      metaEl.firstChild ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom ` :
+        (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
     }
 
     async function clearData(){
@@ -159,7 +156,7 @@
       metaEl.firstChild.nodeValue = 'Clearing data… ';
       const res = await fetch(FUNCTION_URL + "?clear=1", {
         method:"DELETE",
-        headers:{ "x-admin-key": "Inklink88!" }
+        headers:{ "x-admin-key": ADMIN_KEY }
       });
       if(res.ok){ alert("Winner data cleared."); load(); }
       else { const msg = await res.json().catch(()=>({})); alert("Error: " + (msg.error || "failed to clear")); }
