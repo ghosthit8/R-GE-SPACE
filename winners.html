@@ -78,7 +78,7 @@
       tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
     } catch { tzBadge.textContent = "Local time"; }
 
-    // --- time helpers ---
+    // time helpers
     function parseAsUTCish(s){
       if (!s) return NaN;
       const str = String(s);
@@ -92,8 +92,7 @@
         hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
       });
     }
-    // Always prefer base_iso + period_sec to avoid "batch same-time"
-    function computeDecidedAt(row){
+    function decidedAtFrom(row){
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
         const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 90;
@@ -111,15 +110,19 @@
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
+
+        // IMPORTANT: do NOT default to A/B if backend mapping failed
         const seed = (r.winner_seed || "").toLowerCase();
-        const isLeft = seed === "a" || seed === "c";
+        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : "Seed ?";
+        const isLeft = seed === "a" || seed === "c" || seed === "e" || seed === "g"; // cosmetic color split
         const pillClass = isLeft ? "pillA" : "pillB";
-        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
+
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
-        const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
+        const score = `${r.red_count ?? r.seed_a_count ?? 0}–${r.blue_count ?? r.seed_b_count ?? 0}`;
         const img = r.image_url || r.winner_url || '';
         const thumb = img ? `<img src="${img}" class="thumb">` : `<span style="color:#666;">—</span>`;
-        const decidedTs = computeDecidedAt(r);
+        const decidedTs = decidedAtFrom(r);
+
         return `
           <tr>
             <td>${n}</td>
@@ -139,13 +142,12 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      // ✅ finals only: exclude anything with a :: phase suffix (quarters & semis)
+      // finals only: exclude any phase-suffixed rows like ::q1..::q4, ::semi1/2
       const finals = (all || []).filter(w => !String(w.base_iso || "").includes("::"));
 
-      // newest first
-      finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
-
+      finals.sort((a,b) => decidedAtFrom(b) - decidedAtFrom(a));
       render(finals);
+
       const total = finals.length;
       metaEl.firstChild
         ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `
@@ -157,7 +159,7 @@
       metaEl.firstChild.nodeValue = 'Clearing data… ';
       const res = await fetch(FUNCTION_URL + "?clear=1", {
         method:"DELETE",
-        headers:{ "x-admin-key": ADMIN_KEY }
+        headers:{ "x-admin-key": "Inklink88!" }
       });
       if(res.ok){ alert("Winner data cleared."); load(); }
       else { const msg = await res.json().catch(()=>({})); alert("Error: " + (msg.error || "failed to clear")); }
