@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Rage Space — Winners</title>
 <style>
-  :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
+  :root { --fg:#e5e7eb; --bg:#0b0d0f; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
   html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif}
   .wrap{max-width:780px;margin:0 auto;padding:16px 12px 24px}
   h1{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:.5px}
@@ -18,8 +18,7 @@
   table{width:100%;border-collapse:collapse;font-size:14px}
   th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
   th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
-  .pillL{background:#2a1212;border:1px solid #4c2222;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-  .pillR{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+  .pill{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
   .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
   .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
   .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
@@ -64,7 +63,7 @@
   </div>
 
 <script>
-  // --- CONFIG ---
+  // === CONFIG (update if your function URL changes) ===
   const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
   const ADMIN_KEY    = "Inklink88!";
 
@@ -77,9 +76,7 @@
     const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
     const tz = fmt.formatToParts(new Date()).find(p=>p.type==="timeZoneName")?.value || "";
     tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
-  } catch {
-    tzBadge.textContent = "Local time";
-  }
+  } catch { tzBadge.textContent = "Local time"; }
 
   // ---------- helpers ----------
   function asNumber(x){ if (x==null||x==="") return NaN; const n=Number(x); return Number.isFinite(n)?(n<1e12?n*1000:n):NaN; }
@@ -108,12 +105,10 @@
     const fields = [r.phase,r.round,r.stage,r.match];
     if (fields.some(v => String(v||"").toLowerCase()==="final")) return true;
     if (r.is_final === true) return true;
-    // If there is no stage tag at all, assume the edge function wrote this as a final.
-    if (!/::/.test(tag)) return true;
+    if (!/::/.test(tag)) return true; // no sub-stage tag → treat as final log
     return false;
   }
 
-  // Pick the most trustworthy timestamp for finals
   function bestFinalTimestamp(row){
     const cands = [
       row.final_decided_at, row.decided_at_final, row.final_at,
@@ -128,59 +123,73 @@
     return NaN;
   }
 
-  // Robust winner seed resolution (NO default to A/B)
-  function resolveWinnerSeed(r){
-    // 1) explicit fields from edge function
-    let s =
-      r.winner_seed || r.final_winner_seed || r.winner || r.final_winner ||
-      r.seed_winner || r.winner_label || r.victor_seed || "";
-    s = String(s||"").trim().toLowerCase().replace(/^seed\s+/,'');
-    if (/^[a-h]$/.test(s)) return s;
-
-    // 2) side flags
-    const side = String(r.winner_side||r.victor_side||"").toLowerCase();
-    if (side === "left")  return r.left_seed  ? String(r.left_seed).toLowerCase()  : "";
-    if (side === "right") return r.right_seed ? String(r.right_seed).toLowerCase() : "";
-
-    // 3) by counts + known seeds for this match
-    const red  = Number(r.red_count);
-    const blue = Number(r.blue_count);
-    const redSeed  = String(r.red_seed  || r.left_seed  || "").toLowerCase();
-    const blueSeed = String(r.blue_seed || r.right_seed || "").toLowerCase();
-    if (Number.isFinite(red) && Number.isFinite(blue)){
-      if (red > blue && /^[a-h]$/.test(redSeed))  return redSeed;
-      if (blue > red && /^[a-h]$/.test(blueSeed)) return blueSeed;
+  // Normalize URL for matching (ignore scheme/host/query and size segments)
+  function norm(url){
+    const s = String(url||"").trim().toLowerCase();
+    if (!s) return "";
+    try {
+      const u = new URL(s, location.origin);
+      return (u.pathname + u.search).replace(/\?.*$/,"");
+    } catch {
+      // raw path
+      return s.replace(/^https?:\/\//,"").replace(/^[^/]*\//,"/").replace(/\?.*$/,"");
     }
+  }
 
-    // 4) cannot determine
+  // Map a URL to seed letter using seed_*_url fields or picsum `/seed/<x>/` pattern
+  function mapUrlToSeed(row, url){
+    const p = norm(url);
+    if (!p) return "";
+
+    // Picsum pattern: /seed/<letter>/
+    const m = p.match(/\/seed\/([a-h])\b/i);
+    if (m) return m[1].toLowerCase();
+
+    // Compare against seed_a_url..seed_h_url
+    const map = {
+      a: norm(row.seed_a_url), b: norm(row.seed_b_url), c: norm(row.seed_c_url), d: norm(row.seed_d_url),
+      e: norm(row.seed_e_url), f: norm(row.seed_f_url), g: norm(row.seed_g_url), h: norm(row.seed_h_url)
+    };
+    for (const k of Object.keys(map)){
+      if (map[k] && (p === map[k] || p.includes(map[k]))) return k;
+    }
     return "";
   }
 
-  // Winner image resolution
-  function resolveWinnerThumb(r, seed){
-    // 1) explicit thumb/url from payload
-    const direct = r.winner_thumb || r.winner_thumbnail || r.winner_image_url ||
-                   r.final_winner_thumb || r.final_winner_url ||
-                   r.winner_url || r.image_url;
+  // Decide which image actually won (from explicit winner fields or by counts)
+  function winnerImageUrl(row){
+    const direct = row.winner_thumb || row.winner_thumbnail || row.winner_image_url ||
+                   row.final_winner_thumb || row.final_winner_url ||
+                   row.winner_url || row.image_url;
     if (direct) return direct;
 
-    // 2) map by seed to seed_*_url
-    if (seed){
-      const map = {
-        a: r.seed_a_url, b: r.seed_b_url, c: r.seed_c_url, d: r.seed_d_url,
-        e: r.seed_e_url, f: r.seed_f_url, g: r.seed_g_url, h: r.seed_h_url
-      };
-      if (map[seed]) return map[seed];
-    }
-
-    // 3) fallback: choose side with higher votes if side URLs are present
-    const red  = Number(r.red_count),  blue = Number(r.blue_count);
+    const red = Number(row.red_count), blue = Number(row.blue_count);
     if (Number.isFinite(red) && Number.isFinite(blue)){
-      if (red > blue && r.red_url)   return r.red_url;
-      if (blue > red && r.blue_url)  return r.blue_url;
+      if (red > blue && row.red_url)  return row.red_url;
+      if (blue > red && row.blue_url) return row.blue_url;
     }
+    // last resort: any non-empty side url
+    return row.red_url || row.blue_url || "";
+  }
 
-    // 4) give up
+  // Resolve winner seed (never assume A/B)
+  function resolveWinnerSeed(row){
+    // explicit seed fields
+    let s = (row.winner_seed || row.final_winner_seed || row.winner || row.final_winner || row.seed_winner || "").toString().trim().toLowerCase().replace(/^seed\s+/,'');
+    if (/^[a-h]$/.test(s)) return s;
+
+    // from explicit side + known seeds
+    const side = String(row.winner_side||row.victor_side||"").toLowerCase();
+    const sideSeed = side==="left" ? String(row.left_seed||"").toLowerCase()
+                     : side==="right" ? String(row.right_seed||"").toLowerCase() : "";
+    if (/^[a-h]$/.test(sideSeed)) return sideSeed;
+
+    // from the image URL we determined
+    const url = winnerImageUrl(row);
+    const byUrl = mapUrlToSeed(row, url);
+    if (/^[a-h]$/.test(byUrl)) return byUrl;
+
+    // give up
     return "";
   }
 
@@ -194,7 +203,7 @@
     const augmented = rows.map(r=>({ ...r, _decided: bestFinalTimestamp(r) }));
     augmented.sort((a,b)=>(isNaN(b._decided)?-Infinity:b._decided)-(isNaN(a._decided)?-Infinity:a._decided));
 
-    // unique visible time strings
+    // unique clock strings
     const used = new Set();
     for (const r of augmented){
       let t=r._decided, s=fmtLocal(t);
@@ -206,12 +215,10 @@
     const N = augmented.length;
     tbody.innerHTML = augmented.map((r,idx)=>{
       const n = N-idx;
-      const seed = resolveWinnerSeed(r);                  // "" if unknown
+      const seed = resolveWinnerSeed(r);
       const seedTxt = seed ? `Seed ${seed.toUpperCase()}` : "Seed ?";
-      // Styling pill: left set (a/c/e/g) vs right set (b/d/f/h); unknown uses right style for contrast
-      const pillClass = ["a","c","e","g"].includes(seed) ? "pillL" : "pillR";
-      const thumbUrl = resolveWinnerThumb(r, seed);
-      const thumb = thumbUrl ? `<img src="${thumbUrl}" class="thumb" loading="lazy">` : `<span style="color:#666;">—</span>`;
+      const url = winnerImageUrl(r);
+      const thumb = url ? `<img src="${url}" class="thumb" loading="lazy">` : `<span style="color:#666;">—</span>`;
       const by = r.decided_by === "random_tie" ? "random tie" : "votes";
       const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
 
@@ -220,7 +227,7 @@
           <td>${n}</td>
           <td title="${fmtLocal(r._decided)}">${r._displayStr}</td>
           <td class="cycle">${r.base_iso || "—"}</td>
-          <td><span class="${pillClass}">${seedTxt}</span></td>
+          <td><span class="pill">${seedTxt}</span></td>
           <td>${thumb}</td>
           <td class="score">${score}</td>
           <td>${by}</td>
@@ -259,223 +266,5 @@
   load();
   setInterval(load, 5000);
 </script>
-<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
-<script>
-(function () {
-  const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
-
-  // --- create floating button OUTSIDE the hidden panel ---
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'dbgFloatingBtn';
-  floatBtn.textContent = '🐛 Debug';
-  floatBtn.style.cssText = `
-    position: fixed; right: 8px; bottom: 8px;
-    z-index: 2147483647; background:#000; color:#0f0;
-    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
-    font: 12px/1.1 monospace; cursor:pointer;
-  `;
-  document.body.appendChild(floatBtn);
-
-  // --- panel wrapper (starts hidden) ---
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
-  `;
-
-  const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-  bar.innerHTML = `
-    <span style="color:#6f6">Rage Debug</span>
-    <label>Filter:
-      <select id="dbgFilter">
-        <option value="">All</option>
-        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
-        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
-        <option>ERR</option><option>WARN</option><option>LOG</option>
-      </select>
-    </label>
-    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgDownload">Download</button>
-    <button id="dbgClear">Clear</button>
-    <span style="margin-left:auto"></span>
-    <button id="dbgClose">✕</button>
-  `;
-
-  const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-
-  // button wiring
-  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-  // controls
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
-  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
-  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-  bar.querySelector('#dbgDownload').onclick = () => {
-    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
-    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  };
-
-  // ring buffer + rendering
-  let buffer = [];
-  function push(kind, msg, extra) {
-    if (!recordChk.checked) return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
-    if (buffer.length > MAX_LINES) buffer.shift();
-    const f = filterSel.value;
-    if (!f || f === kind) addLine({kind, line});
-  }
-  function addLine(r){
-    const div = document.createElement('div');
-    div.textContent = r.line;
-    if (r.kind === 'ERR') div.style.color = '#f88';
-    else if (r.kind === 'WARN') div.style.color = '#ff8';
-    else if (r.kind === 'EDGE') div.style.color = '#8ff';
-    else if (r.kind === 'NET')  div.style.color = '#8cf';
-    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-    list.appendChild(div); list.scrollTop = list.scrollHeight;
-  }
-  function render(){
-    list.innerHTML = '';
-    const f = filterSel.value;
-    for (const r of buffer) if (!f || f === r.kind) addLine(r);
-  }
-  filterSel.onchange = render;
-
-  // console hooks
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-
-  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-
-  // visibility & UI observers
-  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-  const q = (id) => document.getElementById(id);
-
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
-
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
-    let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
-        const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
-        last = el.textContent; lastAt = now;
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  })();
-
-  // fetch tracer
-  const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
-    const start = performance.now();
-    const method = (opts && opts.method) || 'GET';
-    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
-    push(tag, `${method} ${url}`);
-    try {
-      const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-      return res;
-    } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
-      throw e;
-    }
-  };
-
-  // timers & rAF
-  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-
-  const timers = new Map();
-  window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-  window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-  window.requestAnimationFrame = function(fn){
-    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
-  };
-  window.cancelAnimationFrame = function(id){ _caf(id); };
-
-  // image load tracing
-  function hookImg(img){
-    if (!img || img.__dbgHooked) return;
-    img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
-  }
-  Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
-      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
-
-  // bracket observer
-  const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
-      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
-  }
-
-  // public helpers
-  window.RageDebug = {
-    log: (k, m) => push(k||'LOG', m||''),
-    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
-    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
-    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
-  };
-
-  // small banner
-  (console.log||(()=>{}))('Debugger ready');
-})();
-</script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
