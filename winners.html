@@ -63,133 +63,111 @@
   </div>
 
 <script>
-  // === CONFIG (update if your function URL changes) ===
+  // ===== CONFIG =====
   const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
   const ADMIN_KEY    = "Inklink88!";
+
+  // Optional (for URL→seed mapping via REST when row lacks seed_a_url…seed_h_url)
+  const SUPABASE_URL  = "https://tuqvpcevrhciursxrgav.supabase.co";
+  const SUPABASE_ANON = ""; // paste anon key if you want REST mapping; leave "" to skip
 
   const metaEl = document.getElementById('meta');
   const tzBadge = document.getElementById('tzBadge');
   const tbody = document.getElementById('body');
 
-  // timezone badge
   try {
-    const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
+    const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName:"short" });
     const tz = fmt.formatToParts(new Date()).find(p=>p.type==="timeZoneName")?.value || "";
     tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
   } catch { tzBadge.textContent = "Local time"; }
 
   // ---------- helpers ----------
-  function asNumber(x){ if (x==null||x==="") return NaN; const n=Number(x); return Number.isFinite(n)?(n<1e12?n*1000:n):NaN; }
-  function parseAsUTCish(s){
-    if (s==null) return NaN;
-    const n=asNumber(s); if(!isNaN(n)) return n;
-    const str=String(s).trim(); if(!str) return NaN;
-    if (/Z|[+-]\d{2}:\d{2}$/.test(str)) return Date.parse(str);
-    const t=Date.parse(str.replace(" ","T")+"Z");
-    return Number.isFinite(t)?t:NaN;
-  }
-  function fmtLocal(ts){
-    if (isNaN(ts)) return "—";
-    return new Date(ts).toLocaleString(undefined,{
-      year:"numeric",month:"2-digit",day:"2-digit",
-      hour:"numeric",minute:"2-digit",second:"2-digit",hour12:true
-    });
-  }
+  const n = x => (x==null||x==="") ? NaN : (Number(x)<1e12?Number(x)*1000:Number(x));
+  function parseAsUTCish(s){ if(s==null) return NaN; const k=n(s); if(Number.isFinite(k)) return k;
+    const t=Date.parse(String(s).trim().replace(" ","T").replace(/(?!Z)$/, "Z")); return Number.isFinite(t)?t:NaN; }
+  function fmtLocal(ts){ if(isNaN(ts)) return "—";
+    return new Date(ts).toLocaleString(undefined,{year:"numeric",month:"2-digit",day:"2-digit",hour:"numeric",minute:"2-digit",second:"2-digit",hour12:true}); }
 
-  // Finals filter: include finals; exclude quarters (q1..q4) and semis (sf1/sf2)
   function isFinalRow(r){
     const tag = (r.base_iso || r.cycle || r.tag || "").toString();
     if (/::q[1-4]\b/i.test(tag)) return false;
     if (/::sf[12]\b/i.test(tag)) return false;
     if (/::(final|f|champ|winner)\b/i.test(tag)) return true;
-    const fields = [r.phase,r.round,r.stage,r.match];
-    if (fields.some(v => String(v||"").toLowerCase()==="final")) return true;
-    if (r.is_final === true) return true;
-    if (!/::/.test(tag)) return true; // no sub-stage tag → treat as final log
+    const f=[r.phase,r.round,r.stage,r.match]; if(f.some(v=>String(v||"").toLowerCase()==="final")) return true;
+    if (r.is_final===true) return true;
+    if (!/::/.test(tag)) return true;
     return false;
   }
 
   function bestFinalTimestamp(row){
-    const cands = [
-      row.final_decided_at, row.decided_at_final, row.final_at,
-      row.decided_at, row.created_at, row.inserted_at, row.at, row.ts
-    ];
-    for (const c of cands){ const t=parseAsUTCish(c); if(!isNaN(t)) return t; }
-    const base = parseAsUTCish(row.base_iso);
-    if (!isNaN(base)){
-      const secs = Number(row.final_offset_sec)||Number(row.period_sec)||Number(row.total_sec)||90;
-      return base + secs*1000;
-    }
+    const c=[row.final_decided_at,row.decided_at_final,row.final_at,row.decided_at,row.created_at,row.inserted_at,row.at,row.ts];
+    for (const x of c){ const t=parseAsUTCish(x); if(!isNaN(t)) return t; }
+    const base=parseAsUTCish(row.base_iso); if(!isNaN(base)){ const secs=Number(row.final_offset_sec)||Number(row.period_sec)||Number(row.total_sec)||90; return base+secs*1000; }
     return NaN;
   }
 
-  // Normalize URL for matching (ignore scheme/host/query and size segments)
-  function norm(url){
-    const s = String(url||"").trim().toLowerCase();
-    if (!s) return "";
-    try {
-      const u = new URL(s, location.origin);
-      return (u.pathname + u.search).replace(/\?.*$/,"");
-    } catch {
-      // raw path
-      return s.replace(/^https?:\/\//,"").replace(/^[^/]*\//,"/").replace(/\?.*$/,"");
-    }
+  // URL normalization and mapping
+  function norm(u){ try{ const x=new URL(String(u), location.origin); return x.pathname.toLowerCase(); }catch{ return String(u||"").toLowerCase().replace(/^https?:\/\/[^/]+/,"").split("?")[0]; } }
+
+  const cycleSeedMapCache = Object.create(null);
+  async function fetchCycleSeedMap(base_iso){
+    if (!SUPABASE_ANON || !base_iso) return null;
+    if (cycleSeedMapCache[base_iso]) return cycleSeedMapCache[base_iso];
+    try{
+      const url = `${SUPABASE_URL}/rest/v1/cycles_v2?select=base_iso,seed_a_url,seed_b_url,seed_c_url,seed_d_url,seed_e_url,seed_f_url,seed_g_url,seed_h_url&base_iso=eq.${encodeURIComponent(base_iso)}`;
+      const res = await fetch(url,{headers:{apikey:SUPABASE_ANON,Authorization:`Bearer ${SUPABASE_ANON}`}});
+      const rows = await res.json(); const r = Array.isArray(rows)?rows[0]:null; if(!r) return null;
+      const m = {a:norm(r.seed_a_url),b:norm(r.seed_b_url),c:norm(r.seed_c_url),d:norm(r.seed_d_url),e:norm(r.seed_e_url),f:norm(r.seed_f_url),g:norm(r.seed_g_url),h:norm(r.seed_h_url)};
+      cycleSeedMapCache[base_iso]=m; return m;
+    }catch{ return null; }
   }
-
-  // Map a URL to seed letter using seed_*_url fields or picsum `/seed/<x>/` pattern
-  function mapUrlToSeed(row, url){
+  function mapFromRow(r){
+    const m={a:norm(r.seed_a_url),b:norm(r.seed_b_url),c:norm(r.seed_c_url),d:norm(r.seed_d_url),e:norm(r.seed_e_url),f:norm(r.seed_f_url),g:norm(r.seed_g_url),h:norm(r.seed_h_url)};
+    return Object.values(m).some(Boolean)?m:null;
+  }
+  function urlToSeed(url, map){
+    if (!url || !map) return "";
     const p = norm(url);
-    if (!p) return "";
-
-    // Picsum pattern: /seed/<letter>/
-    const m = p.match(/\/seed\/([a-h])\b/i);
-    if (m) return m[1].toLowerCase();
-
-    // Compare against seed_a_url..seed_h_url
-    const map = {
-      a: norm(row.seed_a_url), b: norm(row.seed_b_url), c: norm(row.seed_c_url), d: norm(row.seed_d_url),
-      e: norm(row.seed_e_url), f: norm(row.seed_f_url), g: norm(row.seed_g_url), h: norm(row.seed_h_url)
-    };
-    for (const k of Object.keys(map)){
-      if (map[k] && (p === map[k] || p.includes(map[k]))) return k;
-    }
+    for (const k of "abcdefgh"){ const t=map[k]; if(t && (p===t || p.endsWith(t) || t.endsWith(p))) return k; }
     return "";
   }
 
-  // Decide which image actually won (from explicit winner fields or by counts)
   function winnerImageUrl(row){
-    const direct = row.winner_thumb || row.winner_thumbnail || row.winner_image_url ||
-                   row.final_winner_thumb || row.final_winner_url ||
-                   row.winner_url || row.image_url;
+    const direct=row.winner_thumb||row.winner_thumbnail||row.winner_image_url||row.final_winner_thumb||row.final_winner_url||row.winner_url||row.image_url;
     if (direct) return direct;
-
-    const red = Number(row.red_count), blue = Number(row.blue_count);
-    if (Number.isFinite(red) && Number.isFinite(blue)){
-      if (red > blue && row.red_url)  return row.red_url;
-      if (blue > red && row.blue_url) return row.blue_url;
-    }
-    // last resort: any non-empty side url
+    const red=Number(row.red_count), blue=Number(row.blue_count);
+    if (Number.isFinite(red)&&Number.isFinite(blue)){ if (red>blue && row.red_url) return row.red_url; if (blue>red && row.blue_url) return row.blue_url; }
     return row.red_url || row.blue_url || "";
   }
 
-  // Resolve winner seed (never assume A/B)
-  function resolveWinnerSeed(row){
-    // explicit seed fields
-    let s = (row.winner_seed || row.final_winner_seed || row.winner || row.final_winner || row.seed_winner || "").toString().trim().toLowerCase().replace(/^seed\s+/,'');
-    if (/^[a-h]$/.test(s)) return s;
+  function explicitSeed(row){
+    let s=(row.winner_seed||row.final_winner_seed||row.winner||row.final_winner||row.seed_winner||"").toString().trim().toLowerCase().replace(/^seed\s+/,'');
+    return /^[a-h]$/.test(s)?s:"";
+  }
 
-    // from explicit side + known seeds
-    const side = String(row.winner_side||row.victor_side||"").toLowerCase();
-    const sideSeed = side==="left" ? String(row.left_seed||"").toLowerCase()
-                     : side==="right" ? String(row.right_seed||"").toLowerCase() : "";
-    if (/^[a-h]$/.test(sideSeed)) return sideSeed;
-
-    // from the image URL we determined
+  // NEW PRIORITY: URL→seed FIRST, then explicit field
+  async function deriveWinnerSeed(row){
     const url = winnerImageUrl(row);
-    const byUrl = mapUrlToSeed(row, url);
-    if (/^[a-h]$/.test(byUrl)) return byUrl;
 
-    // give up
+    // a) row seed map
+    let map = mapFromRow(row);
+    let s = urlToSeed(url, map);
+    if (s){ console.log("WIN seed via row map:", s, url); return s; }
+
+    // b) REST seed map
+    map = await fetchCycleSeedMap(row.base_iso);
+    s = urlToSeed(url, map);
+    if (s){ console.log("WIN seed via REST map:", s, url, "base:", row.base_iso); return s; }
+
+    // c) picsum pattern
+    const m = norm(url).match(/\/seed\/([a-h])\b/i);
+    if (m){ console.log("WIN seed via picsum:", m[1].toLowerCase(), url); return m[1].toLowerCase(); }
+
+    // d) explicit field LAST (prevents A/B from overriding URL)
+    s = explicitSeed(row);
+    if (s){ console.log("WIN seed via explicit field:", s); return s; }
+
+    console.log("WIN seed unknown (Seed ?), url:", url, row);
     return "";
   }
 
@@ -203,41 +181,33 @@
     const augmented = rows.map(r=>({ ...r, _decided: bestFinalTimestamp(r) }));
     augmented.sort((a,b)=>(isNaN(b._decided)?-Infinity:b._decided)-(isNaN(a._decided)?-Infinity:a._decided));
 
-    // unique clock strings
-    const used = new Set();
-    for (const r of augmented){
-      let t=r._decided, s=fmtLocal(t);
-      while(used.has(s)){ t+=1000; s=fmtLocal(t); }
-      used.add(s);
-      r._displayTs=t; r._displayStr=s;
-    }
+    const used=new Set();
+    for (const r of augmented){ let t=r._decided, s=fmtLocal(t); while(used.has(s)){ t+=1000; s=fmtLocal(t);} used.add(s); r._displayTs=t; r._displayStr=s; }
 
     const N = augmented.length;
-    tbody.innerHTML = augmented.map((r,idx)=>{
-      const n = N-idx;
-      const seed = resolveWinnerSeed(r);
+    Promise.all(augmented.map(async (r,idx)=>{
+      const n=N-idx;
+      const seed = await deriveWinnerSeed(r);
       const seedTxt = seed ? `Seed ${seed.toUpperCase()}` : "Seed ?";
       const url = winnerImageUrl(r);
       const thumb = url ? `<img src="${url}" class="thumb" loading="lazy">` : `<span style="color:#666;">—</span>`;
       const by = r.decided_by === "random_tie" ? "random tie" : "votes";
       const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
-
-      return `
-        <tr>
-          <td>${n}</td>
-          <td title="${fmtLocal(r._decided)}">${r._displayStr}</td>
-          <td class="cycle">${r.base_iso || "—"}</td>
-          <td><span class="pill">${seedTxt}</span></td>
-          <td>${thumb}</td>
-          <td class="score">${score}</td>
-          <td>${by}</td>
-        </tr>`;
-    }).join('');
-
-    const total = augmented.length;
-    metaEl.firstChild
-      ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `
-      : (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
+      return `<tr>
+        <td>${n}</td>
+        <td title="${fmtLocal(r._decided)}">${r._displayStr}</td>
+        <td class="cycle">${r.base_iso || "—"}</td>
+        <td><span class="pill">${seedTxt}</span></td>
+        <td>${thumb}</td>
+        <td class="score">${score}</td>
+        <td>${by}</td>
+      </tr>`;
+    })).then(html => {
+      tbody.innerHTML = html.join('');
+      const total=N;
+      metaEl.firstChild ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `
+                        : (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
+    });
   }
 
   async function load(){
@@ -246,243 +216,21 @@
     const payload = await res.json().catch(()=> ({}));
     const all = Array.isArray(payload) ? payload : (payload.winners || []);
     const finalsOnly = (all||[]).filter(isFinalRow);
+    console.log("EDGE winners rows:", finalsOnly);
     render(finalsOnly);
   }
 
   async function clearData(){
     if(!confirm("⚠️ Permanently delete all winner data?")) return;
     metaEl.firstChild.nodeValue = 'Clearing data… ';
-    const res = await fetch(FUNCTION_URL + "?clear=1", {
-      method:"DELETE",
-      headers:{ "x-admin-key": ADMIN_KEY }
-    });
+    const res = await fetch(FUNCTION_URL + "?clear=1", { method:"DELETE", headers:{ "x-admin-key": ADMIN_KEY } });
     if(res.ok){ alert("Winner data cleared."); load(); }
     else { const msg = await res.json().catch(()=>({})); alert("Error: " + (msg.error || "failed to clear")); }
   }
 
   document.getElementById('refresh').onclick = load;
   document.getElementById('clear').onclick = clearData;
-
-  load();
-  setInterval(load, 5000);
+  load(); setInterval(load, 5000);
 </script>
-<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
-<script>
-(function () {
-  const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
-
-  // --- create floating button OUTSIDE the hidden panel ---
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'dbgFloatingBtn';
-  floatBtn.textContent = '🐛 Debug';
-  floatBtn.style.cssText = `
-    position: fixed; right: 8px; bottom: 8px;
-    z-index: 2147483647; background:#000; color:#0f0;
-    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
-    font: 12px/1.1 monospace; cursor:pointer;
-  `;
-  document.body.appendChild(floatBtn);
-
-  // --- panel wrapper (starts hidden) ---
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
-  `;
-
-  const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-  bar.innerHTML = `
-    <span style="color:#6f6">Rage Debug</span>
-    <label>Filter:
-      <select id="dbgFilter">
-        <option value="">All</option>
-        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
-        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
-        <option>ERR</option><option>WARN</option><option>LOG</option>
-      </select>
-    </label>
-    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgDownload">Download</button>
-    <button id="dbgClear">Clear</button>
-    <span style="margin-left:auto"></span>
-    <button id="dbgClose">✕</button>
-  `;
-
-  const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-
-  // button wiring
-  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-  // controls
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
-  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
-  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-  bar.querySelector('#dbgDownload').onclick = () => {
-    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
-    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  };
-
-  // ring buffer + rendering
-  let buffer = [];
-  function push(kind, msg, extra) {
-    if (!recordChk.checked) return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
-    if (buffer.length > MAX_LINES) buffer.shift();
-    const f = filterSel.value;
-    if (!f || f === kind) addLine({kind, line});
-  }
-  function addLine(r){
-    const div = document.createElement('div');
-    div.textContent = r.line;
-    if (r.kind === 'ERR') div.style.color = '#f88';
-    else if (r.kind === 'WARN') div.style.color = '#ff8';
-    else if (r.kind === 'EDGE') div.style.color = '#8ff';
-    else if (r.kind === 'NET')  div.style.color = '#8cf';
-    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-    list.appendChild(div); list.scrollTop = list.scrollHeight;
-  }
-  function render(){
-    list.innerHTML = '';
-    const f = filterSel.value;
-    for (const r of buffer) if (!f || f === r.kind) addLine(r);
-  }
-  filterSel.onchange = render;
-
-  // console hooks
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-
-  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-
-  // visibility & UI observers
-  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-  const q = (id) => document.getElementById(id);
-
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
-
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
-    let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
-        const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
-        last = el.textContent; lastAt = now;
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  })();
-
-  // fetch tracer
-  const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
-    const start = performance.now();
-    const method = (opts && opts.method) || 'GET';
-    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
-    push(tag, `${method} ${url}`);
-    try {
-      const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-      return res;
-    } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
-      throw e;
-    }
-  };
-
-  // timers & rAF
-  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-
-  const timers = new Map();
-  window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-  window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-  window.requestAnimationFrame = function(fn){
-    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
-  };
-  window.cancelAnimationFrame = function(id){ _caf(id); };
-
-  // image load tracing
-  function hookImg(img){
-    if (!img || img.__dbgHooked) return;
-    img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
-  }
-  Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
-      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
-
-  // bracket observer
-  const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
-      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
-  }
-
-  // public helpers
-  window.RageDebug = {
-    log: (k, m) => push(k||'LOG', m||''),
-    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
-    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
-    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
-  };
-
-  // small banner
-  (console.log||(()=>{}))('Debugger ready');
-})();
-</script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
