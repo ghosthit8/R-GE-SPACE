@@ -1,29 +1,29 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Winners</title>
-  <style>
-    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif}
-    .wrap{max-width:780px;margin:0 auto;padding:16px 12px 24px}
-    h1{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:.5px}
-    .top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
-    a.btn,button.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:#131920;color:var(--fg);font-weight:700;text-decoration:none;cursor:pointer}
-    .meta{color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .tz{padding:2px 8px;border-radius:999px;background:#0b1220;border:1px solid #1a2636;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.06em}
-    .card{border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden}
-    .table-wrap{overflow-x:auto}
-    table{width:100%;border-collapse:collapse;font-size:14px}
-    th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
-    th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
-    .pillA{background:#2a1212;border:1px solid #4c2222;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-    .pillB{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-    .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
-    .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
-    .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Rage Space — Winners</title>
+<style>
+  :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif}
+  .wrap{max-width:780px;margin:0 auto;padding:16px 12px 24px}
+  h1{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:.5px}
+  .top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
+  a.btn,button.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:#131920;color:var(--fg);font-weight:700;text-decoration:none;cursor:pointer}
+  .meta{color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .tz{padding:2px 8px;border-radius:999px;background:#0b1220;border:1px solid #1a2636;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.06em}
+  .card{border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden}
+  .table-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+  th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+  .pillL{background:#2a1212;border:1px solid #4c2222;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+  .pillR{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+  .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
+  .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
+  .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+</style>
 </head>
 <body>
   <div class="wrap">
@@ -43,7 +43,7 @@
 
     <div class="card">
       <div class="table-wrap">
-        <table id="tbl">
+        <table>
           <thead>
             <tr>
               <th>#</th>
@@ -63,157 +63,201 @@
     </div>
   </div>
 
-  <script>
-    // === CONFIG ===
-    const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
-    const ADMIN_KEY = "Inklink88!";
+<script>
+  // --- CONFIG ---
+  const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
+  const ADMIN_KEY    = "Inklink88!";
 
-    const metaEl = document.getElementById('meta');
-    const tzBadge = document.getElementById('tzBadge');
-    const tbody  = document.getElementById('body');
+  const metaEl = document.getElementById('meta');
+  const tzBadge = document.getElementById('tzBadge');
+  const tbody = document.getElementById('body');
 
-    // timezone badge
-    try {
-      const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
-      const tz = fmt.formatToParts(new Date()).find(p=>p.type==="timeZoneName")?.value || "";
-      tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
-    } catch { tzBadge.textContent = "Local time"; }
+  // timezone badge
+  try {
+    const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
+    const tz = fmt.formatToParts(new Date()).find(p=>p.type==="timeZoneName")?.value || "";
+    tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
+  } catch {
+    tzBadge.textContent = "Local time";
+  }
 
-    // ---- helpers ----
-    function asNumber(x){ if (x==null||x==="") return NaN; const n=Number(x); return Number.isFinite(n)?(n<1e12?n*1000:n):NaN; }
-    function parseAsUTCish(s){
-      if (s==null) return NaN;
-      const n=asNumber(s); if(!isNaN(n)) return n;
-      const str=String(s).trim(); if(!str) return NaN;
-      if (/Z|[+-]\d{2}:\d{2}$/.test(str)) return Date.parse(str);
-      const t=Date.parse(str.replace(" ","T")+"Z");
-      return Number.isFinite(t)?t:NaN;
+  // ---------- helpers ----------
+  function asNumber(x){ if (x==null||x==="") return NaN; const n=Number(x); return Number.isFinite(n)?(n<1e12?n*1000:n):NaN; }
+  function parseAsUTCish(s){
+    if (s==null) return NaN;
+    const n=asNumber(s); if(!isNaN(n)) return n;
+    const str=String(s).trim(); if(!str) return NaN;
+    if (/Z|[+-]\d{2}:\d{2}$/.test(str)) return Date.parse(str);
+    const t=Date.parse(str.replace(" ","T")+"Z");
+    return Number.isFinite(t)?t:NaN;
+  }
+  function fmtLocal(ts){
+    if (isNaN(ts)) return "—";
+    return new Date(ts).toLocaleString(undefined,{
+      year:"numeric",month:"2-digit",day:"2-digit",
+      hour:"numeric",minute:"2-digit",second:"2-digit",hour12:true
+    });
+  }
+
+  // Finals filter: include finals; exclude quarters (q1..q4) and semis (sf1/sf2)
+  function isFinalRow(r){
+    const tag = (r.base_iso || r.cycle || r.tag || "").toString();
+    if (/::q[1-4]\b/i.test(tag)) return false;
+    if (/::sf[12]\b/i.test(tag)) return false;
+    if (/::(final|f|champ|winner)\b/i.test(tag)) return true;
+    const fields = [r.phase,r.round,r.stage,r.match];
+    if (fields.some(v => String(v||"").toLowerCase()==="final")) return true;
+    if (r.is_final === true) return true;
+    // If there is no stage tag at all, assume the edge function wrote this as a final.
+    if (!/::/.test(tag)) return true;
+    return false;
+  }
+
+  // Pick the most trustworthy timestamp for finals
+  function bestFinalTimestamp(row){
+    const cands = [
+      row.final_decided_at, row.decided_at_final, row.final_at,
+      row.decided_at, row.created_at, row.inserted_at, row.at, row.ts
+    ];
+    for (const c of cands){ const t=parseAsUTCish(c); if(!isNaN(t)) return t; }
+    const base = parseAsUTCish(row.base_iso);
+    if (!isNaN(base)){
+      const secs = Number(row.final_offset_sec)||Number(row.period_sec)||Number(row.total_sec)||90;
+      return base + secs*1000;
     }
-    function fmtLocal(ts){
-      if (isNaN(ts)) return "—";
-      return new Date(ts).toLocaleString(undefined,{
-        year:"numeric",month:"2-digit",day:"2-digit",
-        hour:"numeric",minute:"2-digit",second:"2-digit",hour12:true
-      });
-    }
+    return NaN;
+  }
 
-    // Identify FINAL rows only.
-    // Accept a bunch of possible flags, and *exclude* q1–q4 and sf1/sf2 explicitly.
-    function isFinalRow(r){
-      const tag = (r.base_iso || r.cycle || r.tag || "").toString();
-      const lower = tag.toLowerCase();
+  // Robust winner seed resolution (NO default to A/B)
+  function resolveWinnerSeed(r){
+    // 1) explicit fields from edge function
+    let s =
+      r.winner_seed || r.final_winner_seed || r.winner || r.final_winner ||
+      r.seed_winner || r.winner_label || r.victor_seed || "";
+    s = String(s||"").trim().toLowerCase().replace(/^seed\s+/,'');
+    if (/^[a-h]$/.test(s)) return s;
 
-      // explicit excludes (quarters & semis)
-      if (/::q[1-4]\b/i.test(tag)) return false;
-      if (/::sf[12]\b/i.test(tag)) return false;
+    // 2) side flags
+    const side = String(r.winner_side||r.victor_side||"").toLowerCase();
+    if (side === "left")  return r.left_seed  ? String(r.left_seed).toLowerCase()  : "";
+    if (side === "right") return r.right_seed ? String(r.right_seed).toLowerCase() : "";
 
-      // explicit includes
-      if (/::(final|f|champ|winner)\b/i.test(tag)) return true;
-      if (String(r.phase).toLowerCase()==="final") return true;
-      if (String(r.round).toLowerCase()==="final") return true;
-      if (String(r.stage).toLowerCase()==="final") return true;
-      if (String(r.match).toLowerCase()==="final") return true;
-      if (r.is_final === true) return true;
-
-      // If there's no bracket tag at all, treat it as final logs written by the edge function.
-      // (Your function typically only logs finals unless tagged otherwise.)
-      if (!/::/.test(lower)) return true;
-
-      return false;
-    }
-
-    // pick the best timestamp to display for FINALS
-    function bestFinalTimestamp(row){
-      const candidates = [
-        row.final_decided_at, row.decided_at_final, row.final_at,
-        row.decided_at, row.created_at, row.inserted_at, row.at, row.ts
-      ];
-      for (const c of candidates){
-        const t = parseAsUTCish(c);
-        if (!isNaN(t)) return t;
-      }
-      // fallback: base + duration (assume 90s if unknown)
-      const base = parseAsUTCish(row.base_iso);
-      if (!isNaN(base)){
-        const secs = Number(row.final_offset_sec)||Number(row.period_sec)||Number(row.total_sec)||90;
-        return base + secs*1000;
-      }
-      return NaN;
-    }
-
-    function render(rows){
-      if(!rows || rows.length===0){
-        tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No final winners yet.</td></tr>`;
-        metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Showing 0 finals ' : (metaEl.textContent='Showing 0 finals ');
-        return;
-      }
-
-      const augmented = rows.map(r=>({ ...r, _decided: bestFinalTimestamp(r) }));
-      augmented.sort((a,b)=>(isNaN(b._decided)?-Infinity:b._decided)-(isNaN(a._decided)?-Infinity:a._decided));
-
-      // make the human-visible clock string unique to avoid duplicates in the UI
-      const used = new Set();
-      for (const r of augmented){
-        let t=r._decided, s=fmtLocal(t);
-        while(used.has(s)){ t+=1000; s=fmtLocal(t); }
-        used.add(s);
-        r._displayTs=t; r._displayStr=s;
-      }
-
-      const N = augmented.length;
-      tbody.innerHTML = augmented.map((r,idx)=>{
-        const n = N-idx;
-        const seed = (r.winner_seed||"").toLowerCase();
-        const left = ["a","c","e","g"].includes(seed);
-        const pill = left ? "pillA" : "pillB";
-        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : "Seed ?";
-        const img = r.image_url || r.winner_url || "";
-        const thumb = img ? `<img src="${img}" class="thumb" loading="lazy">` : `<span style="color:#666;">—</span>`;
-        const by = r.decided_by === "random_tie" ? "random tie" : "votes";
-        const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
-        return `
-          <tr>
-            <td>${n}</td>
-            <td title="${fmtLocal(r._decided)}">${r._displayStr}</td>
-            <td class="cycle">${r.base_iso || "—"}</td>
-            <td><span class="${pill}">${seedLabel}</span></td>
-            <td>${thumb}</td>
-            <td class="score">${score}</td>
-            <td>${by}</td>
-          </tr>`;
-      }).join('');
-
-      const total = augmented.length;
-      metaEl.firstChild
-        ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `
-        : (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
+    // 3) by counts + known seeds for this match
+    const red  = Number(r.red_count);
+    const blue = Number(r.blue_count);
+    const redSeed  = String(r.red_seed  || r.left_seed  || "").toLowerCase();
+    const blueSeed = String(r.blue_seed || r.right_seed || "").toLowerCase();
+    if (Number.isFinite(red) && Number.isFinite(blue)){
+      if (red > blue && /^[a-h]$/.test(redSeed))  return redSeed;
+      if (blue > red && /^[a-h]$/.test(blueSeed)) return blueSeed;
     }
 
-    async function load(){
-      metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent='Loading… ');
-      const res = await fetch(FUNCTION_URL + "?winners=1&limit=500");
-      const payload = await res.json().catch(()=> ({}));
-      const all = Array.isArray(payload) ? payload : (payload.winners || []);
-      const finalsOnly = (all||[]).filter(isFinalRow);
-      render(finalsOnly);
+    // 4) cannot determine
+    return "";
+  }
+
+  // Winner image resolution
+  function resolveWinnerThumb(r, seed){
+    // 1) explicit thumb/url from payload
+    const direct = r.winner_thumb || r.winner_thumbnail || r.winner_image_url ||
+                   r.final_winner_thumb || r.final_winner_url ||
+                   r.winner_url || r.image_url;
+    if (direct) return direct;
+
+    // 2) map by seed to seed_*_url
+    if (seed){
+      const map = {
+        a: r.seed_a_url, b: r.seed_b_url, c: r.seed_c_url, d: r.seed_d_url,
+        e: r.seed_e_url, f: r.seed_f_url, g: r.seed_g_url, h: r.seed_h_url
+      };
+      if (map[seed]) return map[seed];
     }
 
-    async function clearData(){
-      if(!confirm("⚠️ Permanently delete all winner data?")) return;
-      metaEl.firstChild.nodeValue = 'Clearing data… ';
-      const res = await fetch(FUNCTION_URL + "?clear=1", {
-        method:"DELETE",
-        headers:{ "x-admin-key": ADMIN_KEY }
-      });
-      if(res.ok){ alert("Winner data cleared."); load(); }
-      else { const msg = await res.json().catch(()=>({})); alert("Error: " + (msg.error || "failed to clear")); }
+    // 3) fallback: choose side with higher votes if side URLs are present
+    const red  = Number(r.red_count),  blue = Number(r.blue_count);
+    if (Number.isFinite(red) && Number.isFinite(blue)){
+      if (red > blue && r.red_url)   return r.red_url;
+      if (blue > red && r.blue_url)  return r.blue_url;
     }
 
-    document.getElementById('refresh').onclick = load;
-    document.getElementById('clear').onclick = clearData;
+    // 4) give up
+    return "";
+  }
 
-    load();
-    setInterval(load, 5000);
-  </script>
+  function render(rows){
+    if(!rows || rows.length===0){
+      tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No final winners yet.</td></tr>`;
+      metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Showing 0 finals ' : (metaEl.textContent='Showing 0 finals ');
+      return;
+    }
+
+    const augmented = rows.map(r=>({ ...r, _decided: bestFinalTimestamp(r) }));
+    augmented.sort((a,b)=>(isNaN(b._decided)?-Infinity:b._decided)-(isNaN(a._decided)?-Infinity:a._decided));
+
+    // unique visible time strings
+    const used = new Set();
+    for (const r of augmented){
+      let t=r._decided, s=fmtLocal(t);
+      while(used.has(s)){ t+=1000; s=fmtLocal(t); }
+      used.add(s);
+      r._displayTs=t; r._displayStr=s;
+    }
+
+    const N = augmented.length;
+    tbody.innerHTML = augmented.map((r,idx)=>{
+      const n = N-idx;
+      const seed = resolveWinnerSeed(r);                  // "" if unknown
+      const seedTxt = seed ? `Seed ${seed.toUpperCase()}` : "Seed ?";
+      // Styling pill: left set (a/c/e/g) vs right set (b/d/f/h); unknown uses right style for contrast
+      const pillClass = ["a","c","e","g"].includes(seed) ? "pillL" : "pillR";
+      const thumbUrl = resolveWinnerThumb(r, seed);
+      const thumb = thumbUrl ? `<img src="${thumbUrl}" class="thumb" loading="lazy">` : `<span style="color:#666;">—</span>`;
+      const by = r.decided_by === "random_tie" ? "random tie" : "votes";
+      const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
+
+      return `
+        <tr>
+          <td>${n}</td>
+          <td title="${fmtLocal(r._decided)}">${r._displayStr}</td>
+          <td class="cycle">${r.base_iso || "—"}</td>
+          <td><span class="${pillClass}">${seedTxt}</span></td>
+          <td>${thumb}</td>
+          <td class="score">${score}</td>
+          <td>${by}</td>
+        </tr>`;
+    }).join('');
+
+    const total = augmented.length;
+    metaEl.firstChild
+      ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `
+      : (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
+  }
+
+  async function load(){
+    metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent='Loading… ');
+    const res = await fetch(FUNCTION_URL + "?winners=1&limit=500");
+    const payload = await res.json().catch(()=> ({}));
+    const all = Array.isArray(payload) ? payload : (payload.winners || []);
+    const finalsOnly = (all||[]).filter(isFinalRow);
+    render(finalsOnly);
+  }
+
+  async function clearData(){
+    if(!confirm("⚠️ Permanently delete all winner data?")) return;
+    metaEl.firstChild.nodeValue = 'Clearing data… ';
+    const res = await fetch(FUNCTION_URL + "?clear=1", {
+      method:"DELETE",
+      headers:{ "x-admin-key": ADMIN_KEY }
+    });
+    if(res.ok){ alert("Winner data cleared."); load(); }
+    else { const msg = await res.json().catch(()=>({})); alert("Error: " + (msg.error || "failed to clear")); }
+  }
+
+  document.getElementById('refresh').onclick = load;
+  document.getElementById('clear').onclick = clearData;
+
+  load();
+  setInterval(load, 5000);
+</script>
 </body>
 </html>
