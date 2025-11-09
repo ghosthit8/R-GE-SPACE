@@ -33,6 +33,7 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <a class="btn" href="matchup.html">← Back</a>
         <button class="btn" id="refresh">Refresh</button>
+        <button class="btn" id="togglePhases" title="Show all phases (quarters/semis) or only finals">Show: Finals Only</button>
         <button class="btn" id="clear">Clear Data</button>
       </div>
     </div>
@@ -70,6 +71,21 @@
     const metaEl = document.getElementById('meta');
     const tzBadge = document.getElementById('tzBadge');
     const tbody  = document.getElementById('body');
+    const toggleBtn = document.getElementById('togglePhases');
+
+    // ----- Toggle state (persisted) -----
+    let showAllPhases = localStorage.getItem('winners_show_all') === '1';
+    function updateToggleUI(){
+      toggleBtn.textContent = showAllPhases ? 'Show: All Phases ✓' : 'Show: Finals Only';
+    }
+    updateToggleUI();
+
+    toggleBtn.addEventListener('click', () => {
+      showAllPhases = !showAllPhases;
+      localStorage.setItem('winners_show_all', showAllPhases ? '1' : '0');
+      updateToggleUI();
+      load(); // re-render in the new mode
+    });
 
     // timezone badge
     try {
@@ -92,7 +108,7 @@
         hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
       });
     }
-    // Always prefer base_iso + period_sec to avoid "batch same-time" when server stamps now
+    // Prefer base_iso + period_sec to avoid identical timestamps from server "now"
     function computeDecidedAt(row){
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
@@ -105,7 +121,7 @@
 
     function render(rows){
       if(!rows || rows.length===0){
-        tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No finals yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No results yet.</td></tr>`;
         return;
       }
       const N = rows.length;
@@ -139,16 +155,18 @@
       const data = await res.json().catch(()=> ({}));
       const all = Array.isArray(data) ? data : (data.winners || []);
 
-      // Only finals (exclude semis logged as `${base_iso}::semi`)
-      const finals = (all || []).filter(w => !String(w.base_iso||"").includes("::semi"));
+      // Finals only when toggle is OFF. Finals are entries whose base_iso has NO phase suffix ("::").
+      const rows = showAllPhases ? (all || []) : (all || []).filter(w => !String(w.base_iso || "").includes("::"));
 
-      // Sort newest first by computed real decision time
-      finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
+      // Sort newest first by computed decision time
+      rows.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
 
-      render(finals);
-      const total = finals.length;
-      metaEl.firstChild ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom ` :
-        (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
+      render(rows);
+      const total = rows.length;
+      const mode = showAllPhases ? "all phases" : "finals only";
+      metaEl.firstChild
+        ? metaEl.firstChild.nodeValue = `Showing ${total} (${mode}) • newest is #${total} at top • #1 at bottom `
+        : (metaEl.textContent = `Showing ${total} (${mode}) • newest is #${total} at top • #1 at bottom `);
     }
 
     async function clearData(){
