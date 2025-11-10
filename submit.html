@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Rage Space — Submit</title>
+<title>Rage Space — Submit (debug timer)</title>
 <link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
@@ -18,7 +18,7 @@ body{
   margin:0; background:radial-gradient(1200px 900px at 50% -10%,rgba(57,255,20,.08),transparent 60%), #000;
   color:var(--ink); font:14px/1.45 system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
 }
-.wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 80px}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 120px}
 h1{margin:0 0 12px; font-size:24px; letter-spacing:.6px}
 .header{display:flex; align-items:center; justify-content:space-between; gap:10px}
 .badge{border:1px solid var(--border); padding:6px 10px; border-radius:12px; color:var(--ink)}
@@ -39,19 +39,10 @@ h1{margin:0 0 12px; font-size:24px; letter-spacing:.6px}
 .card{border:1px solid var(--border); border-radius:18px; background:rgba(9,9,9,.6); padding:16px}
 .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
 .small{font-size:12px; color:var(--muted)}
-.mono{font-family:ui-monospace,"SF Mono", Menlo,Consolas,monospace}
+.mono{font-family:ui-monospace, Menlo,Consolas,monospace}
 .center{display:flex; justify-content:center; align-items:center; gap:12px}
 
 hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
-
-/* Queue grid */
-.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px}
-.thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#ff3aa0; min-height:120px}
-.thumb img{display:block; width:100%; height:100%; object-fit:cover}
-.thumb .idx{
-  position:absolute; top:6px; left:6px; font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
-  background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35)
-}
 
 /* Timer card */
 .timer .row{justify-content:space-between}
@@ -64,22 +55,12 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
   border:1px dashed var(--border); padding:6px 10px; border-radius:12px; color:#d8ffd8;
   background:rgba(57,255,20,.06)
 }
-.debug{position:fixed; right:10px; bottom:10px; background:#061b06; color:var(--muted); font:12px ui-monospace,monospace;
-  border:1px solid var(--border); border-radius:10px; padding:6px 8px; opacity:.9}
-
-/* Drop zone */
-.drop{
-  border:1px dashed var(--border); border-radius:14px; padding:14px; background:rgba(9,9,9,.5)
+.debugBox{
+  position:fixed; left:10px; right:10px; bottom:10px;
+  border:1px solid var(--border); border-radius:12px; background:#061b06; padding:8px;
+  color:#b7ffb7; font:12px ui-monospace,monospace; max-height:38vh; overflow:auto;
 }
-.drop.drag{outline:2px solid rgba(57,255,20,.4); outline-offset:2px}
-.drop .hint{color:#bfe6bf}
-.pickRow{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
-
-.preview{
-  margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
-}
-.preview img{max-height:120px; border-radius:10px; border:1px solid var(--border)}
-.authRow{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+.debugBox pre{white-space:pre-wrap; margin:6px 0}
 </style>
 </head>
 <body>
@@ -87,48 +68,8 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
     <div class="header">
       <h1 style="color:var(--green)">SUBMIT ART</h1>
       <div class="row">
-        <span id="authBadge" class="badge small">not logged in</span>
         <a class="btn ghost" href="./menu.html">← Menu</a>
       </div>
-    </div>
-
-    <!-- Auth quick panel -->
-    <div class="card" style="margin-top:12px">
-      <div class="authRow">
-        <input id="emailInput" class="input" placeholder="email@you.com (for magic link)" style="max-width:260px">
-        <button id="btnMagic" class="btn">Send magic link</button>
-        <button id="btnSignOut" class="btn ghost">Sign out</button>
-        <span id="authMsg" class="small mono"></span>
-      </div>
-    </div>
-
-    <!-- Minimal uploader -->
-    <div class="card" style="margin-top:16px">
-      <div id="pickZone" class="drop">
-        <div class="pickRow">
-          <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
-          <span class="hint small">jpg / png / webp — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</span>
-        </div>
-        <input id="fileInput" class="hidden" type="file" accept="image/*"/>
-        <div class="row" style="margin-top:8px">
-          <span id="fileName" class="small mono">jpg / png / webp — 10MB max</span>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <button id="btnPasteUrl" class="btn">Paste image URL instead</button>
-          <input id="urlInput" class="input hidden" placeholder="https://example.com/your-image.jpg" />
-        </div>
-        <div class="preview">
-          <img id="imgPreview" class="hidden" alt="preview"/>
-          <span id="previewHint" class="small mono"></span>
-        </div>
-      </div>
-      <hr class="sep">
-      <label class="row small">
-        <input id="consent" type="checkbox"/>
-        <span>I am 18+, no sexual minors, no Nazi BS.</span>
-      </label>
-      <div class="center" style="margin-top:8px"><button id="btnSubmit" class="btn big" disabled>✅ Submit</button></div>
-      <div class="center small mono" id="submitMsg"></div>
     </div>
 
     <!-- Timer -->
@@ -146,222 +87,61 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
         <span id="stage" class="badge">—</span>
       </div>
     </div>
+  </div>
 
-    <!-- Queue panel -->
-    <div class="card" style="margin-top:16px">
-      <div class="row" style="justify-content:space-between">
-        <div class="row"><span>📜 In the Queue</span></div>
-        <div class="row">
-          <span id="queueCount" class="badge">(0)</span>
-          <button id="queueToggle" class="btn">Expand ▼</button>
-        </div>
-      </div>
-      <div id="queuePanel" class="hidden">
-        <div id="queueEmpty" class="small">Oldest first → next in</div>
-        <div id="queue" class="grid" style="margin-top:10px"></div>
-      </div>
-    </div>
-
-    <div class="debug"><button class="btn ghost" onclick="syncState(true)">🐍 Debug</button></div>
+  <div class="debugBox" id="dbg"><b>Timer Debug</b>
+    <div>now: <span id="now"></span></div>
+    <div>end: <span id="end"></span></div>
+    <div>period: <span id="per"></span>  remaining: <span id="rem"></span>  paused: <span id="pau"></span></div>
+    <pre id="raw"></pre>
   </div>
 
 <script>
-/* ---------- Config ---------- */
 const SUPABASE_URL = 'https://tuqvpcevrhciursxrgav.supabase.co';
-const SUPABASE_ANON = 'public-anon-key-placeholder';
-const BUCKET = 'art-uploads';
-const TABLE = 'submissions_v2'; // table where queued items live
 const EDGE_TIMER_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
-
-const emailInput = document.getElementById('emailInput');
-const btnMagic = document.getElementById('btnMagic');
-const btnSignOut = document.getElementById('btnSignOut');
-const authMsg = document.getElementById('authMsg');
-
-const pickZone = document.getElementById('pickZone');
-const btnPick = document.getElementById('btnPick');
-const fileInput = document.getElementById('fileInput');
-const urlInput = document.getElementById('urlInput');
-const fileName = document.getElementById('fileName');
-const previewHint = document.getElementById('previewHint');
-const imgPreview = document.getElementById('imgPreview');
-
-const consent = document.getElementById('consent');
-const btnSubmit = document.getElementById('btnSubmit');
-const submitMsg = document.getElementById('submitMsg');
-
-const queuePanel = document.getElementById('queuePanel');
-const queueToggle = document.getElementById('queueToggle');
-const queueCount = document.getElementById('queueCount');
-const queueGrid = document.getElementById('queue');
-const queueEmpty = document.getElementById('queueEmpty');
 
 const clockEl = document.getElementById('clock');
 const stageEl = document.getElementById('stage');
+const rawEl = document.getElementById('raw');
+const nowEl = document.getElementById('now');
+const endEl = document.getElementById('end');
+const perEl = document.getElementById('per');
+const remEl = document.getElementById('rem');
+const pauEl = document.getElementById('pau');
 
-/* ---------- Debugger (kept) ---------- */
 const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
-log('LOG: Debugger ready');
 
-/* ---------- Supabase ---------- */
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-
-/* ---------- Auth quick flow ---------- */
-function updateAuthBadge(user){
-  const b = document.getElementById('authBadge');
-  if (user){
-    b.textContent = `signed in: ${user.email || user.id.slice(0,8)}…`;
-    b.style.color = 'var(--green2)';
-  }else{
-    b.textContent = 'not logged in';
-    b.style.color = 'var(--muted)';
+function computeStage(periodSec, remainingSec){
+  const t = Math.max(0, Math.floor(remainingSec||0));
+  if (periodSec===90){
+    if      (t > 60) return 'R32';
+    else if (t > 30) return 'R16';
+    else if (t > 0 ) return 'QF/SF';
+    else             return 'Final';
   }
-}
-supabase.auth.getUser().then(({data})=>updateAuthBadge(data?.user||null));
-supabase.auth.onAuthStateChange((_e,s)=>updateAuthBadge(s?.user||null));
-
-btnMagic.addEventListener('click', async ()=>{
-  try{
-    const email = (emailInput.value||'').trim();
-    if (!email) return toast('Enter your email');
-    const { error } = await supabase.auth.signInWithOtp({ email, options:{emailRedirectTo:location.href} });
-    if (error) throw error;
-    authMsg.textContent='Check your email for the link';
-    setTimeout(()=>authMsg.textContent='', 6000);
-  }catch(e){ authMsg.textContent = e?.message || 'Failed to send magic link'; }
-});
-btnSignOut.addEventListener('click', async ()=>{
-  await supabase.auth.signOut(); toast('Signed out');
-});
-
-/* ---------- Picking / Preview ---------- */
-let picked = {file:null, url:''};
-
-btnPick.addEventListener('click', ()=> fileInput.click());
-fileInput.addEventListener('change', ()=>{
-  const f = fileInput.files?.[0];
-  if (!f) return;
-  if (!f.type.startsWith('image/')) return toast('File must be an image');
-  if (f.size > 10*1024*1024) return toast('Max 10MB');
-  picked.file = f; picked.url='';
-  urlInput.value=''; urlInput.classList.add('hidden');
-  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  setPreview(URL.createObjectURL(f));
-  previewHint.textContent = 'Ready to upload';
-});
-
-document.getElementById('btnPasteUrl').addEventListener('click', ()=>{
-  urlInput.classList.toggle('hidden');
-  urlInput.focus();
-});
-urlInput.addEventListener('input', ()=>{
-  picked.url = (urlInput.value||'').trim();
-  if (picked.url){
-    picked.file = null;
-    fileInput.value=''; fileName.textContent='Using URL';
-    previewHint.textContent = picked.url;
-    // quick sanity check for image URL
-    const im = new Image();
-    im.onload = ()=> setPreview(picked.url);
-    im.onerror = ()=> { setPreview(''); toast('URL is not an image'); };
-    im.src = picked.url;
-  } else {
-    previewHint.textContent='';
-    setPreview('');
-  }
-});
-
-/* Drag & Drop */
-['dragenter','dragover'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.add('drag');}));
-['dragleave','drop'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.remove('drag');}));
-pickZone.addEventListener('drop', (e)=>{
-  const f = e.dataTransfer?.files?.[0];
-  if (!f) return;
-  if (!f.type.startsWith('image/')) return toast('File must be an image');
-  if (f.size > 10*1024*1024) return toast('Max 10MB');
-  picked.file = f; picked.url='';
-  fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  setPreview(URL.createObjectURL(f));
-  previewHint.textContent = 'Ready to upload (dropped)';
-});
-
-/* Paste support (clipboard image or URL text) */
-window.addEventListener('paste', (e)=>{
-  try{
-    const items = e.clipboardData?.items || [];
-    let ok=false;
-    for (const it of items){
-      if (it.type && it.type.startsWith('image/')){
-        const f = it.getAsFile();
-        picked.file = f; picked.url='';
-        fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-        fileName.textContent = `pasted-image — ${bytesToMB(f.size)} MB`;
-        setPreview(URL.createObjectURL(f));
-        previewHint.textContent = 'Ready to upload (pasted)';
-        ok=true; break;
-      }
-    }
-    if (!ok){
-      const txt = e.clipboardData?.getData('text') || '';
-      if (/^https?:\/\/\S+\.(png|jpe?g|webp)(\?.*)?$/i.test(txt)){
-        picked = {file:null, url:txt};
-        fileInput.value=''; urlInput.value=txt; urlInput.classList.remove('hidden');
-        fileName.textContent='Using URL';
-        const im = new Image();
-        im.onload = ()=> setPreview(txt);
-        im.onerror = ()=> { setPreview(''); toast('URL is not an image'); };
-        im.src = txt;
-        ok=true;
-      }
-    }
-    if (ok) toast('Pasted ✓');
-  }catch(e){}
-});
-
-/* Helpers */
-function bytesToMB(n){ return (n/1024/1024).toFixed(2) }
-function setPreview(src){
-  const im = imgPreview;
-  if (!src){ im.src=''; im.classList.add('hidden'); return; }
-  im.src=src; im.classList.remove('hidden');
-}
-function toast(msg){
-  submitMsg.textContent = msg;
-  setTimeout(()=>{ if (submitMsg.textContent===msg) submitMsg.textContent=''; }, 4000);
+  return '—';
 }
 
-/* ---------- Edge timer fetch & normalize ---------- */
 async function fetchState(){
   const url = `${EDGE_TIMER_URL}?winners=0&limit=1`;
   const res = await fetch(url, {headers:{'x-client':'submit.html'}});
-  const raw = await res.text();
-  let j=null;
-  try{ j = JSON.parse(raw); }catch(e){ console.warn('edge parse error', String(e)); }
-  if (!res.ok) throw new Error((j&&j.error)||raw||'edge error');
+  const text = await res.text();
+  let j=null; try{ j=JSON.parse(text); }catch(e){}
+  if (!res.ok) throw new Error((j&&j.error)||text||'edge error');
+  rawEl.textContent = JSON.stringify(j,null,2);
   return j?.state || j || {};
 }
 
 function normalize(s){
-  try { log('[EDGE] raw state', JSON.stringify(s)); } catch {}
-
-  // 1) Use the server’s real end timestamp
   const phaseEnd =
-    s.ends_at                 // ← main field from the function
-    || s.phase_end_at
-    || s.phaseEndAt
-    || s.next_at
-    || s.next_iso
-    || null;                  // DO NOT fall back to base_iso here
+    s.ends_at || s.phase_end_at || s.phaseEndAt || s.next_at || s.next_iso || null;
 
-  // 2) Period seconds (fallback 90s if your system uses that)
   const period =
     (typeof s.period_sec==='number') ? s.period_sec
   : (typeof s.period==='number')     ? s.period
   : (typeof s.period_s==='number')   ? s.period_s
   : 90;
 
-  // 3) Remaining seconds if present, otherwise derive from ends_at
   let remaining =
     (typeof s.remaining_sec==='number') ? s.remaining_sec
   : (typeof s.remaining==='number')     ? s.remaining
@@ -374,392 +154,57 @@ function normalize(s){
     if (!isNaN(ms)) remaining = Math.max(0, Math.ceil(ms/1000));
   }
 
-  try {
-    log('[EDGE] normalized', JSON.stringify({
-      ends_at: phaseEnd, period_sec: period, remaining_sec: remaining, paused: !!s.paused
-    }));
-  } catch {}
-
   return { phase_end_at: phaseEnd, period_sec: period, paused: !!s.paused, remaining_sec: remaining };
 }
 
-/* ---------- Timer state ---------- */
-let paused=false, serverPhaseEndISO=null, periodSec=90, remainingSec=null, lastSyncAt=0;
+let paused=false, serverPhaseEndISO=null, periodSec=90, remainingSec=null;
 
-/* ---------- Stage display (placeholder mapping) ---------- */
-function computeStage(){
-  if (periodSec===90){
-    const t = Math.max(0, Math.floor(remainingSec||0));
-    if      (t > 60) return 'R32';
-    else if (t > 30) return 'R16';
-    else if (t > 0 ) return 'QF/SF';
-    else             return 'Final';
-  }
-  return '—';
-}
-
-/* ---------- Render + Loop ---------- */
-function renderTimer(){
+function render(){
   const t = Math.max(0, Math.floor(remainingSec||0));
   clockEl.textContent = String(t);
-  stageEl.textContent = computeStage();
-}
-
-async function callEdge(){
-  const u = `${EDGE_TIMER_URL}?winners=0&limit=1`;
-  log('EDGE: GET', u);
-  const r = await fetch(u, { headers: { 'x-client': 'submit.html' }});
-  const raw = await r.text();
-  try { return JSON.parse(raw).state || JSON.parse(raw); } catch { return {}; }
+  stageEl.textContent = computeStage(periodSec, remainingSec);
+  nowEl.textContent = new Date().toISOString();
+  endEl.textContent = serverPhaseEndISO || 'null';
+  perEl.textContent = String(periodSec);
+  remEl.textContent = String(remainingSec);
+  pauEl.textContent = String(paused);
 }
 
 async function syncState(){
   try{
-    const s = normalize(await callEdge());
-    const __prev = serverPhaseEndISO;
-
+    const raw = await fetchState();
+    const s = normalize(raw);
     serverPhaseEndISO = s.phase_end_at || null;
-    remainingSec = s.remaining_sec;
-    periodSec = (typeof s.period_sec==='number' ? s.period_sec : 90);
+    remainingSec = (typeof s.remaining_sec==='number') ? s.remaining_sec
+                 : (serverPhaseEndISO ? Math.max(0, Math.ceil((Date.parse(serverPhaseEndISO)-Date.now())/1000)) : 0);
+    periodSec = (typeof s.period_sec==='number') ? s.period_sec : 90;
     paused = !!s.paused;
-    lastSyncAt = Date.now();
-
-    if (__prev && serverPhaseEndISO && __prev !== serverPhaseEndISO) {
-      try { await renderQueue(); } catch {}
-    }
-
-    stageEl.textContent = computeStage();
-    log('CLOCK: clock — →', (typeof remainingSec==='number')?remainingSec:'—', `(Δ ${__prev!==serverPhaseEndISO?'phase-change':''})`);
+    render();
   }catch(e){
-    console.error('syncState failed', e);
+    rawEl.textContent = 'edge fetch failed: ' + (e.message||String(e));
+    console.error(e);
   }
 }
 
-let rafId=null, lastRAF=0;
+let rafId; let last=0;
 function loop(ts){
-  if (!lastRAF) lastRAF = ts;
-  const dt = (ts - lastRAF)/1000;
-  if (dt >= 1){
+  if (!last) last=ts;
+  const dt=(ts-last)/1000;
+  if (dt>=1){
     if (!paused && typeof remainingSec==='number'){
       remainingSec = Math.max(0, remainingSec - Math.floor(dt));
-      renderTimer();
+      render();
     }
-    lastRAF = ts;
+    last=ts;
   }
   rafId = requestAnimationFrame(loop);
 }
 
-/* ---------- Submit to queue ---------- */
-consent.addEventListener('change', ()=> btnSubmit.disabled = !consent.checked || (!picked.file && !picked.url));
-
-btnSubmit.addEventListener('click', async ()=>{
-  try{
-    if (!consent.checked) return toast('Confirm the content policy');
-    if (!picked.file && !picked.url) return toast('Pick an image or paste a URL first');
-
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // If a URL, just insert that; if a file, upload to bucket then insert URL
-    let publicURL = picked.url;
-
-    if (picked.file){
-      const ext = (picked.file.type.split('/')[1]||'jpg').replace('jpeg','jpg');
-      const key = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { data: up, error: upErr } = await supabase.storage.from(BUCKET).upload(key, picked.file, {contentType:picked.file.type, upsert:false});
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(key);
-      publicURL = pub.publicUrl;
-    }
-
-    const row = {
-      url: publicURL,
-      created_at: new Date().toISOString(),
-      user_id: user?.id || null
-    };
-    const { error: insErr } = await supabase.from(TABLE).insert(row);
-    if (insErr) throw insErr;
-
-    picked = {file:null, url:''};
-    fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-    fileName.textContent = 'jpg / png / webp — 10MB max';
-    previewHint.textContent = '';
-    setPreview('');
-    consent.checked = false;
-
-    toast('✅ Art queued for next round');
-    submitMsg.textContent = 'Art queued for next round.';
-    await renderQueue();
-    if (queuePanel && queuePanel.style.display === 'none') { queuePanel.style.display = 'block'; queueToggle.textContent = 'Collapse ▲'; }
-  }catch(e){
-    console.error(e);
-    toast(e?.message || 'Submit failed');
-    submitMsg.textContent = e?.message || 'Submit failed';
-  }
-});
-
-/* ---------- Queue ---------- */
-async function fetchQueue(){
-  const { data, error } = await supabase.from(TABLE).select('id,url,created_at').order('created_at',{ascending:true}).limit(40);
-  if (error) throw error;
-  return data||[];
-}
-async function renderQueue(){
-  try{
-    const items = await fetchQueue();
-    queueCount.textContent = `(${items.length||0})`;
-    queueGrid.innerHTML='';
-    if (!items.length){
-      queueEmpty.classList.remove('hidden');
-      return;
-    }
-    queueEmpty.classList.add('hidden');
-    items.forEach((it, i)=>{
-      const d = document.createElement('div');
-      d.className='thumb';
-      d.innerHTML = `<span class="idx">#${i+1}</span>`;
-      const im = document.createElement('img');
-      im.loading='lazy'; im.decoding='async';
-      im.src = it.url; im.alt = `queued ${i+1}`;
-      d.appendChild(im);
-      queueGrid.appendChild(d);
-    });
-  }catch(e){
-    console.error(e);
-  }
-}
-queueToggle.addEventListener('click', ()=>{
-  const showing = queuePanel.style.display !== 'none';
-  if (showing){ queuePanel.style.display = 'none'; queueToggle.textContent = 'Expand ▼'; }
-  else { queuePanel.style.display = 'block'; queueToggle.textContent = 'Collapse ▲'; renderQueue(); }
-});
-queuePanel.style.display = 'none';
-
-/* ---------- Boot ---------- */
 (async function boot(){
-  await syncState(true);
-  renderQueue();
+  await syncState();
   requestAnimationFrame(loop);
-  // refresh the timer snapshot every ~15s to correct drift
-  setInterval(()=>syncState(false), 15000);
+  setInterval(syncState, 5000);
 })();
 </script>
-<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
-<script>
-(function () {
-  const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
-
-  // --- create floating button OUTSIDE the hidden panel ---
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'dbgFloatingBtn';
-  floatBtn.textContent = '🐛 Debug';
-  floatBtn.style.cssText = `
-    position: fixed; right: 8px; bottom: 8px;
-    z-index: 2147483647; background:#000; color:#0f0;
-    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
-    font: 12px/1.1 monospace; cursor:pointer;
-  `;
-  document.body.appendChild(floatBtn);
-
-  // --- panel wrapper (starts hidden) ---
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
-  `;
-
-  const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-  bar.innerHTML = `
-    <span style="color:#6f6">Rage Debug</span>
-    <label>Filter:
-      <select id="dbgFilter">
-        <option value="">All</option>
-        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
-        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
-        <option>ERR</option><option>WARN</option><option>LOG</option>
-      </select>
-    </label>
-    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgDownload">Download</button>
-    <button id="dbgClear">Clear</button>
-    <span style="margin-left:auto"></span>
-    <button id="dbgClose">✕</button>
-  `;
-
-  const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-
-  // button wiring
-  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-  // controls
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
-  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
-  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-  bar.querySelector('#dbgDownload').onclick = () => {
-    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
-    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  };
-
-  // ring buffer + rendering
-  let buffer = [];
-  function push(kind, msg, extra) {
-    if (!recordChk.checked) return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
-    if (buffer.length > MAX_LINES) buffer.shift();
-    const f = filterSel.value;
-    if (!f || f === kind) addLine({kind, line});
-  }
-  function addLine(r){
-    const div = document.createElement('div');
-    div.textContent = r.line;
-    if (r.kind === 'ERR') div.style.color = '#f88';
-    else if (r.kind === 'WARN') div.style.color = '#ff8';
-    else if (r.kind === 'EDGE') div.style.color = '#8ff';
-    else if (r.kind === 'NET')  div.style.color = '#8cf';
-    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-    list.appendChild(div); list.scrollTop = list.scrollHeight;
-  }
-  function render(){
-    list.innerHTML = '';
-    const f = filterSel.value;
-    for (const r of buffer) if (!f || f === r.kind) addLine(r);
-  }
-  filterSel.onchange = render;
-
-  // console hooks
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-
-  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-
-  // visibility & UI observers
-  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-  const q = (id) => document.getElementById(id);
-
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
-
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
-    let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
-        const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
-        last = el.textContent; lastAt = now;
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  })();
-
-  // fetch tracer
-  const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
-    const start = performance.now();
-    const method = (opts && opts.method) || 'GET';
-    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
-    push(tag, `${method} ${url}`);
-    try {
-      const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-      return res;
-    } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
-      throw e;
-    }
-  };
-
-  // timers & rAF
-  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-
-  const timers = new Map();
-  window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-  window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-  window.requestAnimationFrame = function(fn){
-    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
-  };
-  window.cancelAnimationFrame = function(id){ _caf(id); };
-
-  // image load tracing
-  function hookImg(img){
-    if (!img || img.__dbgHooked) return;
-    img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
-  }
-  Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
-      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
-
-  // bracket observer
-  const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
-      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
-  }
-
-  // public helpers
-  window.RageDebug = {
-    log: (k, m) => push(k||'LOG', m||''),
-    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
-    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
-    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
-  };
-
-  // small banner
-  (console.log||(()=>{}))('Debugger ready');
-})();
-</script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
