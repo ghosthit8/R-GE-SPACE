@@ -21,12 +21,13 @@ body{
 .wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 80px}
 h1{margin:0 0 12px; font-size:24px; letter-spacing:.6px}
 .header{display:flex; align-items:center; justify-content:space-between; gap:10px}
-.badge{border:1px solid var(--border); padding:6px 10px; border-radius:12px; background:rgba(9,9,9,.6)}
-a{color:var(--green); text-decoration:none}
+.badge{border:1px solid var(--border); padding:6px 10px; border-radius:12px; color:var(--ink)}
 .btn{
-  border:1px solid var(--border); border-radius:14px; padding:10px 14px; font-weight:600;
+  display:inline-flex; align-items:center; gap:8px; justify-content:center; text-decoration:none;
+  border:1px solid var(--border); border-radius:14px; padding:10px 14px; 
   background:linear-gradient(180deg, rgba(57,255,20,.08), rgba(57,255,20,.02));
   color:var(--green); transition:box-shadow .2s ease, transform .08s ease; cursor:pointer;
+  font-weight:600;
 }
 .btn:hover{box-shadow:0 0 14px rgba(57,255,20,.22)}
 .btn.big{font-size:18px; padding:16px 18px}
@@ -343,15 +344,24 @@ async function fetchState(){
 
 function normalize(s){
   try { log('[EDGE] raw state', JSON.stringify(s)); } catch {}
-  const phaseEnd =
-    s.ends_at || s.phase_end_at || s.phaseEndAt || s.next_at || s.next_iso || null; // do NOT fall back to base_iso
 
+  // 1) Use the server’s real end timestamp
+  const phaseEnd =
+    s.ends_at                 // ← main field from the function
+    || s.phase_end_at
+    || s.phaseEndAt
+    || s.next_at
+    || s.next_iso
+    || null;                  // DO NOT fall back to base_iso here
+
+  // 2) Period seconds (fallback 90s if your system uses that)
   const period =
     (typeof s.period_sec==='number') ? s.period_sec
   : (typeof s.period==='number')     ? s.period
   : (typeof s.period_s==='number')   ? s.period_s
   : 90;
 
+  // 3) Remaining seconds if present, otherwise derive from ends_at
   let remaining =
     (typeof s.remaining_sec==='number') ? s.remaining_sec
   : (typeof s.remaining==='number')     ? s.remaining
@@ -364,64 +374,77 @@ function normalize(s){
     if (!isNaN(ms)) remaining = Math.max(0, Math.ceil(ms/1000));
   }
 
-  try { log('[EDGE] normalized', JSON.stringify({ends_at:phaseEnd, period_sec:period, remaining_sec:remaining, paused:!!s.paused})); } catch {}
+  try {
+    log('[EDGE] normalized', JSON.stringify({
+      ends_at: phaseEnd, period_sec: period, remaining_sec: remaining, paused: !!s.paused
+    }));
+  } catch {}
+
   return { phase_end_at: phaseEnd, period_sec: period, paused: !!s.paused, remaining_sec: remaining };
 }
 
 /* ---------- Timer state ---------- */
-let paused=false, serverPhaseEndISO=null, periodSec=90, remainingSec=0;
-let rafId=null, lastTick=0;
+let paused=false, serverPhaseEndISO=null, periodSec=90, remainingSec=null, lastSyncAt=0;
 
-function applyState(n){
-  paused = !!n.paused;
-  serverPhaseEndISO = n.phase_end_at || null;
-  if (typeof n.period_sec==='number') periodSec = n.period_sec;
-  if (typeof n.remaining_sec==='number') remainingSec = n.remaining_sec;
-
-  // Compute if we only have an end ISO
-  if (!paused && remainingSec==null && serverPhaseEndISO){
-    const ms = Date.parse(serverPhaseEndISO) - Date.now();
-    remainingSec = Math.max(0, Math.ceil(ms/1000));
+/* ---------- Stage display (placeholder mapping) ---------- */
+function computeStage(){
+  if (periodSec===90){
+    const t = Math.max(0, Math.floor(remainingSec||0));
+    if      (t > 60) return 'R32';
+    else if (t > 30) return 'R16';
+    else if (t > 0 ) return 'QF/SF';
+    else             return 'Final';
   }
-
-  renderTimer();
+  return '—';
 }
 
+/* ---------- Render + Loop ---------- */
 function renderTimer(){
   const t = Math.max(0, Math.floor(remainingSec||0));
-  clockEl.textContent = t;
-  // crude stage label (match your app’s mapping)
-  let stage='R32';
-  if (periodSec===90){
-    // example mapping based on remaining seconds (customize to your phases)
-    if      (t > 60) stage='R32';
-    else if (t > 30) stage='R16';
-    else if (t > 0 ) stage='QF/SF';
-    else             stage='Final';
-  }
-  stageEl.textContent = stage;
+  clockEl.textContent = String(t);
+  stageEl.textContent = computeStage();
 }
 
-async function syncState(debug=false){
+async function callEdge(){
+  const u = `${EDGE_TIMER_URL}?winners=0&limit=1`;
+  log('EDGE: GET', u);
+  const r = await fetch(u, { headers: { 'x-client': 'submit.html' }});
+  const raw = await r.text();
+  try { return JSON.parse(raw).state || JSON.parse(raw); } catch { return {}; }
+}
+
+async function syncState(){
   try{
-    const raw = await fetchState();
-    const n = normalize(raw);
-    if (debug) log('EDGE: normalized', n);
-    applyState(n);
+    const s = normalize(await callEdge());
+    const __prev = serverPhaseEndISO;
+
+    serverPhaseEndISO = s.phase_end_at || null;
+    remainingSec = s.remaining_sec;
+    periodSec = (typeof s.period_sec==='number' ? s.period_sec : 90);
+    paused = !!s.paused;
+    lastSyncAt = Date.now();
+
+    if (__prev && serverPhaseEndISO && __prev !== serverPhaseEndISO) {
+      try { await renderQueue(); } catch {}
+    }
+
+    stageEl.textContent = computeStage();
+    log('CLOCK: clock — →', (typeof remainingSec==='number')?remainingSec:'—', `(Δ ${__prev!==serverPhaseEndISO?'phase-change':''})`);
   }catch(e){
-    console.error(e);
+    console.error('syncState failed', e);
   }
 }
 
-/* rAF loop */
+let rafId=null, lastRAF=0;
 function loop(ts){
-  if (paused){ rafId = requestAnimationFrame(loop); return; }
-  if (!lastTick) lastTick = ts;
-  const dt = (ts - lastTick)/1000;
+  if (!lastRAF) lastRAF = ts;
+  const dt = (ts - lastRAF)/1000;
   if (dt >= 1){
-    remainingSec = Math.max(0, (remainingSec||0) - Math.floor(dt));
-    lastTick = ts;
-    renderTimer();
+    if (!paused && typeof remainingSec==='number'){
+      remainingSec = Math.max(0, remainingSec - Math.floor(dt));
+      renderTimer();
+    }
+    lastRAF = ts;
   }
   rafId = requestAnimationFrame(loop);
 }
