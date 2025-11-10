@@ -1,181 +1,173 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Winners Log</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rage Space — Winners</title>
   <style>
-    :root {
-      --bg:#0b0d0f; --card:#101418; --muted:#97a1ab; --fg:#e5e7eb; --accent:#39ff14;
-      --border:#1f2630; --pill:#0f1822; --danger:#ff0033;
-    }
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Inter,Roboto,ui-sans-serif;}
-    .wrap{max-width:900px;margin:0 auto;padding:18px 14px 100px;}
-    h1{margin:0 0 14px 0;font-size:26px;letter-spacing:.3px}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .btn{appearance:none;border:1px solid var(--border);background:#131922;color:#fff;padding:10px 14px;border-radius:14px;cursor:pointer;font-weight:700}
-    .btn.ghost{color:#b7c1cc}
-    .note{margin-top:8px;color:var(--muted);font-size:12px}
-    .chip{display:inline-block;padding:4px 8px;border-radius:999px;background:#0d1821;border:1px solid var(--border);font-size:12px;color:#c7d0da}
-    .table{margin-top:14px;border:1px solid var(--border);border-radius:16px;overflow:hidden;background:var(--card)}
-    .thead,.rowitem{display:grid;grid-template-columns:60px 1.2fr 1.2fr 1.2fr .8fr;align-items:center}
-    .thead{background:#0e141a;color:#a9b3bd;font-size:12px;font-weight:700;border-bottom:1px solid var(--border)}
-    .thead div,.rowitem>div{padding:10px 12px}
-    .rowitem{border-top:1px solid var(--border);font-size:14px}
-    .rowitem:nth-child(even){background:#0d1217}
-    .idx{opacity:.9;text-align:right;font-variant-numeric:tabular-nums;}
-    .seedpill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#0b1620;border:1px solid #1a2430;font-weight:800;color:#d1deea}
-    .seedpill .dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--accent)}
-    .thumb{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:9px;overflow:hidden;background:#000;border:1px solid var(--border)}
-    .thumb img{width:100%;height:100%;object-fit:cover;display:block}
-    .score{font-weight:800;font-variant-numeric:tabular-nums;}
-    .back{margin-right:auto}
-    .local{display:inline-block;margin-top:8px}
-    .warn{color:#ffb4b4}
-    .foot{margin-top:10px;color:#8fa0b2;font-size:12px}
-    @media (max-width:700px){
-      .thead,.rowitem{grid-template-columns:46px 1fr 1fr .9fr .8fr}
-      .thead div,.rowitem>div{padding:10px 8px}
-    }
+    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif}
+    .wrap{max-width:780px;margin:0 auto;padding:16px 12px 24px}
+    h1{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:.5px}
+    .top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
+    a.btn,button.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:#131920;color:var(--fg);font-weight:700;text-decoration:none;cursor:pointer}
+    .meta{color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .tz{padding:2px 8px;border-radius:999px;background:#0b1220;border:1px solid #1a2636;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.06em}
+    .card{border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+    th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+    .pillA{background:#2a1212;border:1px solid #4c2222;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+    .pillB{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+    .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
+    .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
+    .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+    @media (max-width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="row" style="margin-bottom:6px">
-      <button class="btn back" onclick="history.back()">← Back</button>
-      <button id="refreshBtn" class="btn">Refresh</button>
-      <button id="clearBtn" class="btn ghost">Clear Data</button>
-    </div>
-
-    <h1>Winners Log</h1>
-    <div class="note" id="summary">Loading…</div>
-    <span id="localTz" class="chip">Local time: …</span>
-
-    <div class="table" id="table" style="display:none">
-      <div class="thead">
-        <div>#</div>
-        <div>Decided At</div>
-        <div>Winner</div>
-        <div>Thumbnail</div>
-        <div>Score</div>
+    <div class="top">
+      <h1>Winners Log</h1>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a class="btn" href="matchup.html">← Back</a>
+        <button class="btn" id="refresh">Refresh</button>
+        <button class="btn" id="clear">Clear Data</button>
       </div>
-      <div id="tbody"></div>
     </div>
 
-    <div class="foot">Shows only <b>Final</b> rows. Quarters/Semis are hidden to keep this clean.</div>
+    <div class="meta" id="meta">
+      Loading…
+      <span class="tz" id="tzBadge"></span>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Decided At</th>
+              <th class="cycle">Cycle</th>
+              <th>Winner</th>
+              <th>Thumbnail</th>
+              <th>Score</th>
+              <th>Decided By</th>
+            </tr>
+          </thead>
+          <tbody id="body">
+            <tr><td colspan="7" style="padding:18px;color:#9aa0a6;">Loading winners…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <script>
-    // ==== CONFIG ====
-    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
-    const ADMIN_CLEAR_KEY = "Inklink88!"; // must match your function
+    const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
+    const ADMIN_KEY = "Inklink88!";
+    const metaEl = document.getElementById('meta');
+    const tzBadge = document.getElementById('tzBadge');
+    const tbody  = document.getElementById('body');
 
-    const elSummary = document.getElementById("summary");
-    const elBody = document.getElementById("tbody");
-    const elTable = document.getElementById("table");
-    const elLocal = document.getElementById("localTz");
-    const refreshBtn = document.getElementById("refreshBtn");
-    const clearBtn = document.getElementById("clearBtn");
+    // timezone badge
+    try {
+      const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
+      const tz = fmt.formatToParts(new Date()).find(p=>p.type==="timeZoneName")?.value || "";
+      tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
+    } catch { tzBadge.textContent = "Local time"; }
 
-    elLocal.textContent = "Local time: " + Intl.DateTimeFormat([], { timeZoneName:"short"}).format(new Date()).split(" ").pop();
-
-    function isFinalRow(base_iso){
-      // Finals use plain base_iso; quarters/semi rows are suffixed with ::q1/::q2/::semi…
-      return !String(base_iso||"").includes("::");
+    // --- time helpers ---
+    function parseAsUTCish(s){
+      if (!s) return NaN;
+      const str = String(s);
+      if (/Z|[+-]\d{2}:\d{2}$/.test(str)) return Date.parse(str);
+      return Date.parse(str.replace(" ", "T") + "Z");
     }
-
-    function seedBadge(seed){
-      const s = (seed||"?").toUpperCase();
-      return `<span class="seedpill"><span class="dot"></span> SEED&nbsp;${s}</span>`;
+    function fmtLocal(ts){
+      if (isNaN(ts)) return "—";
+      return new Date(ts).toLocaleString(undefined, {
+        year:"numeric", month:"2-digit", day:"2-digit",
+        hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
+      });
     }
-
-    function imgTag(url){
-      const u = url || "data:image/svg+xml;utf8,"+encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><rect width='100%' height='100%' fill='#000'/><text x='50%' y='50%' fill='#39ff14' dy='.35em' text-anchor='middle' font-family='monospace' font-size='18'>?</text></svg>`);
-      return `<span class="thumb"><img src="${u}"/></span>`;
-    }
-
-    function fmtLocal(iso){
-      const d = new Date(iso);
-      return d.toLocaleString(undefined, { hour12:true });
-    }
-
-    function scoreStr(row){
-      // Edge returns red_count and blue_count; display as “R–B”
-      const r = Number(row.red_count ?? row.seed_a_count ?? 0);
-      const b = Number(row.blue_count ?? row.seed_b_count ?? 0);
-      return `${r}–${b}`;
-    }
-
-    async function fetchWinners(){
-      const res = await fetch(`${FUNCTION_URL}?winners=1&limit=500`, { method:"GET" });
-      if(!res.ok) throw new Error("Fetch failed");
-      const payload = await res.json();
-      return Array.isArray(payload?.winners) ? payload.winners : [];
+    // Always prefer base_iso + period_sec to avoid "batch same-time"
+    function computeDecidedAt(row){
+      const base = parseAsUTCish(row.base_iso);
+      if (!isNaN(base)) {
+        const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 90;
+        return base + secs * 1000;
+      }
+      const d = parseAsUTCish(row.decided_at);
+      return isNaN(d) ? NaN : d;
     }
 
     function render(rows){
-      // finals only
-      const finals = rows.filter(r => isFinalRow(r.base_iso));
-      // newest on top
-      finals.sort((a,b)=> new Date(b.decided_at).getTime() - new Date(a.decided_at).getTime());
+      if(!rows || rows.length===0){
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No finals yet.</td></tr>`;
+        return;
+      }
+      const N = rows.length;
+      tbody.innerHTML = rows.map((r, idx) => {
+        const n = N - idx;
+        const seed = (r.winner_seed || "").toLowerCase();
+        const isLeft = seed === "a" || seed === "c";
+        const pillClass = isLeft ? "pillA" : "pillB";
+        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
+        const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
+        const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
+        const img = r.image_url || r.winner_url || '';
+        const thumb = img ? `<img src="${img}" class="thumb">` : `<span style="color:#666;">—</span>`;
+        const decidedTs = computeDecidedAt(r);
+        return `
+          <tr>
+            <td>${n}</td>
+            <td>${fmtLocal(decidedTs)}</td>
+            <td class="cycle">${r.base_iso || "—"}</td>
+            <td><span class="${pillClass}">${seedLabel}</span></td>
+            <td>${thumb}</td>
+            <td class="score">${score}</td>
+            <td>${by}</td>
+          </tr>`;
+      }).join('');
+    }
 
-      elBody.innerHTML = "";
-      let idx = finals.length;
-      finals.forEach((w,i)=>{
-        const tr = document.createElement("div");
-        tr.className = "rowitem";
-        tr.innerHTML = `
-          <div class="idx">${idx--}</div>
-          <div>${fmtLocal(w.decided_at)}</div>
-          <div>${seedBadge(w.winner_seed)}</div>
-          <div>${imgTag(w.image_url)}</div>
-          <div class="score">${scoreStr(w)}</div>
-        `;
-        elBody.appendChild(tr);
+    async function load(){
+      metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent = 'Loading… ');
+      const res = await fetch(FUNCTION_URL + "?winners=1&limit=400");
+      const data = await res.json().catch(()=> ({}));
+      const all = Array.isArray(data) ? data : (data.winners || []);
+
+      // ✅ finals only: exclude anything with a :: phase suffix (quarters & semis)
+      const finals = (all || []).filter(w => !String(w.base_iso || "").includes("::"));
+
+      // newest first
+      finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
+
+      render(finals);
+      const total = finals.length;
+      metaEl.firstChild
+        ? metaEl.firstChild.nodeValue = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `
+        : (metaEl.textContent = `Showing ${total} finals • newest is #${total} at top • #1 at bottom `);
+    }
+
+    async function clearData(){
+      if(!confirm("⚠️ Permanently delete all winner data?")) return;
+      metaEl.firstChild.nodeValue = 'Clearing data… ';
+      const res = await fetch(FUNCTION_URL + "?clear=1", {
+        method:"DELETE",
+        headers:{ "x-admin-key": ADMIN_KEY }
       });
-
-      elTable.style.display = "block";
-      if (finals.length === 0){
-        elSummary.innerHTML = "No finals yet. Play a round to populate.";
-      } else {
-        elSummary.innerHTML = `Showing <b>${finals.length}</b> finals • newest is <b>#${finals.length}</b> at top • <b>#1</b> at bottom`;
-      }
+      if(res.ok){ alert("Winner data cleared."); load(); }
+      else { const msg = await res.json().catch(()=>({})); alert("Error: " + (msg.error || "failed to clear")); }
     }
 
-    async function refresh(){
-      elSummary.textContent = "Loading…";
-      try{
-        const winners = await fetchWinners();
-        render(winners);
-      }catch(e){
-        elSummary.innerHTML = `<span class="warn">Error:</span> ${e.message||e}`;
-      }
-    }
+    document.getElementById('refresh').onclick = load;
+    document.getElementById('clear').onclick = clearData;
 
-    async function clearAll(){
-      if (!confirm("Clear ALL winners_v2 rows?")) return;
-      try{
-        const res = await fetch(`${FUNCTION_URL}?clear=1`, {
-          method:"DELETE",
-          headers: { "x-admin-key": ADMIN_CLEAR_KEY }
-        });
-        if (!res.ok){
-          const t = await res.text();
-          alert("Failed to clear: " + t);
-          return;
-        }
-        await refresh();
-      }catch(e){
-        alert("Error: " + (e.message||e));
-      }
-    }
-
-    refreshBtn.addEventListener("click", refresh);
-    clearBtn.addEventListener("click", clearAll);
-
-    // boot
-    refresh();
+    load();
+    setInterval(load, 5000);
   </script>
 </body>
 </html>
