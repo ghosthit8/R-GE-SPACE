@@ -54,6 +54,9 @@
     .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .debugbox { position:fixed; left:0; right:0; bottom:0; background:rgba(0,0,0,.75); color:#9ca3af; font-size:11px; padding:6px 10px; border-top:1px solid #111; }
+
+    /* NEW: hide helper */
+    .hidden { display: none !important; }
   </style>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
@@ -186,7 +189,6 @@
     function pick(a,b){ return (a!=null && a!=="") ? a : b; }
 
     // ---------- MATCH INDEX ----------
-    // R16 pairs (A–B, C–D, E–F, G–H, I–J, K–L, M–N, O–P)
     const order = [
       {key:"r1", label:"R16 A–B", left:"seed_a_url", right:"seed_b_url", lct:"seed_a_count", rct:"seed_b_count"},
       {key:"r2", label:"R16 C–D", left:"seed_c_url", right:"seed_d_url", lct:"seed_c_count", rct:"seed_d_count"},
@@ -196,12 +198,10 @@
       {key:"r6", label:"R16 K–L", left:"seed_k_url", right:"seed_l_url", lct:"seed_k_count", rct:"seed_l_count"},
       {key:"r7", label:"R16 M–N", left:"seed_m_url", right:"seed_n_url", lct:"seed_m_count", rct:"seed_n_count"},
       {key:"r8", label:"R16 O–P", left:"seed_o_url", right:"seed_p_url", lct:"seed_o_count", rct:"seed_p_count"},
-      // Quarters use A..H lanes (snapshots preferred)
       {key:"q1", label:"QF A–B", left:"q1_a_url", right:"q1_b_url", lct:"q1_a_count", rct:"q1_b_count", fbLeft:"seed_a_url", fbRight:"seed_b_url", fbLct:"seed_a_count", fbRct:"seed_b_count"},
       {key:"q2", label:"QF C–D", left:"q2_c_url", right:"q2_d_url", lct:"q2_c_count", rct:"q2_d_count", fbLeft:"seed_c_url", fbRight:"seed_d_url", fbLct:"seed_c_count", fbRct:"seed_d_count"},
       {key:"q3", label:"QF E–F", left:"q3_e_url", right:"q3_f_url", lct:"q3_e_count", rct:"q3_f_count", fbLeft:"seed_e_url", fbRight:"seed_f_url", fbLct:"seed_e_count", fbRct:"seed_f_count"},
       {key:"q4", label:"QF G–H", left:"q4_g_url", right:"q4_h_url", lct:"q4_g_count", rct:"q4_h_count", fbLeft:"seed_g_url", fbRight:"seed_h_url", fbLct:"seed_g_count", fbRct:"seed_h_count"},
-      // Semis use mid1 lanes counts on seed A..D
       {key:"s1", label:"Semi 1", semi:true},
       {key:"s2", label:"Semi 2", semi:true},
       {key:"final", label:"Final"}
@@ -219,7 +219,6 @@
       div.addEventListener("click", ()=>{
         if (item.key.startsWith("s") && !state.mid1_done) return;
         if (item.key==="final" && !state.mid2_done) return;
-        // lock R16 tiles after r16_done flips
         if (item.key.startsWith("r") && state.r16_done) return;
         activeMatch = item.key; renderActive();
       });
@@ -235,36 +234,31 @@
     // ---------- STATE ----------
     let state = {
       base_iso:null, ends_at:null, period_sec:120,
-      // A..H
       seed_a_url:null, seed_b_url:null, seed_c_url:null, seed_d_url:null,
       seed_e_url:null, seed_f_url:null, seed_g_url:null, seed_h_url:null,
       seed_a_count:0, seed_b_count:0, seed_c_count:0, seed_d_count:0,
       seed_e_count:0, seed_f_count:0, seed_g_count:0, seed_h_count:0,
-      // I..P
       seed_i_url:null, seed_j_url:null, seed_k_url:null, seed_l_url:null,
       seed_m_url:null, seed_n_url:null, seed_o_url:null, seed_p_url:null,
       seed_i_count:0, seed_j_count:0, seed_k_count:0, seed_l_count:0,
       seed_m_count:0, seed_n_count:0, seed_o_count:0, seed_p_count:0,
-      // flags
       r16_done:false, mid1_done:false, mid2_done:false,
-      // QF snapshots
       q1_a_url:null, q1_b_url:null, q1_a_count:0, q1_b_count:0,
       q2_c_url:null, q2_d_url:null, q2_c_count:0, q2_d_count:0,
       q3_e_url:null, q3_f_url:null, q3_e_count:0, q3_f_count:0,
       q4_g_url:null, q4_h_url:null, q4_g_count:0, q4_h_count:0,
-      // semi/final
       semi_1_left_url:null, semi_1_right_url:null, semi_1_left_count:0, semi_1_right_count:0,
       semi_2_left_url:null, semi_2_right_url:null, semi_2_left_count:0, semi_2_right_count:0,
       mid_winner_1_url:null, mid_winner_2_url:null,
     };
 
-    // vote memory (per base)
+    // vote memory
     const VOTE_MEMORY_KEY="rs_vote_memory_v3";
     function memRead(base){ try{ return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")[base]||{} }catch{return{}} }
     function memWrite(base,key,val){ const all=(()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")}catch{return{}}})(); all[base]=Object.assign({},all[base]||{}, {[key]:val}); localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
     function pruneMem(keep){ const all=(()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")}catch{return{}}})(); for(const k of Object.keys(all)) if(k!==keep) delete all[k]; localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
 
-    let activeMatch = "r1"; // default to first R16 tile
+    let activeMatch = "r1";
 
     async function vote(color){
       const base = state.base_iso||"";
@@ -272,13 +266,10 @@
       const key = activeMatch;
       if (mem[key]) return;
 
-      // optimistic UI bump
       const red = color==="red";
       const inc = (k)=> state[k] = (state[k]||0)+1;
-
       const post = { phase: activeMatch, side: red ? "left":"right" };
 
-      // local mirrors
       const map = {
         r1:["seed_a_count","seed_b_count"], r2:["seed_c_count","seed_d_count"],
         r3:["seed_e_count","seed_f_count"], r4:["seed_g_count","seed_h_count"],
@@ -314,7 +305,7 @@
     }
 
     function renderThumbs(){
-      // R16 (use I..P when present pre-90; they vanish after r16_done)
+      // R16
       setThumb("r1", state.seed_a_url, state.seed_b_url, state.seed_a_count, state.seed_b_count,"A");
       setThumb("r2", state.seed_c_url, state.seed_d_url, state.seed_c_count, state.seed_d_count,"C");
       setThumb("r3", state.seed_e_url, state.seed_f_url, state.seed_e_count, state.seed_f_count,"E");
@@ -324,7 +315,7 @@
       setThumb("r7", state.seed_m_url, state.seed_n_url, state.seed_m_count, state.seed_n_count,"M");
       setThumb("r8", state.seed_o_url, state.seed_p_url, state.seed_o_count, state.seed_p_count,"O");
 
-      // quarters: prefer snapshots, fallback to live A..H
+      // Quarters (prefer snapshots)
       const q = [
         ["q1","q1_a_url","q1_b_url","q1_a_count","q1_b_count","seed_a_url","seed_b_url","seed_a_count","seed_b_count","A"],
         ["q2","q2_c_url","q2_d_url","q2_c_count","q2_d_count","seed_c_url","seed_d_url","seed_c_count","seed_d_count","C"],
@@ -337,34 +328,38 @@
         const LC = pick(state[lc], state[flc]);
         const RC = pick(state[rc], state[frc]);
         setThumb(k, L, R, LC, RC, fb);
-        // disable until r16_done
+        // disable + HIDE until R16 done
         thumbs[k].box.classList.toggle("disabled", !state.r16_done);
+        thumbs[k].box.classList.toggle("hidden",   !state.r16_done);
       }
 
-      // semis thumbs
+      // Semis
       if (!state.mid1_done){
-        thumbs.s1.img.src = placeholder("S1"); thumbs.s1.count.textContent = "0-0"; thumbs.s1.box.classList.add("disabled");
-        thumbs.s2.img.src = placeholder("S2"); thumbs.s2.count.textContent = "0-0"; thumbs.s2.box.classList.add("disabled");
+        thumbs.s1.img.src = placeholder("S1"); thumbs.s1.count.textContent = "0-0";
+        thumbs.s1.box.classList.add("disabled"); thumbs.s1.box.classList.add("hidden");
+        thumbs.s2.img.src = placeholder("S2"); thumbs.s2.count.textContent = "0-0";
+        thumbs.s2.box.classList.add("disabled"); thumbs.s2.box.classList.add("hidden");
       }else{
         thumbs.s1.img.src = state.semi_1_left_url || state.semi_1_right_url || placeholder("S1");
         thumbs.s1.count.textContent = (state.seed_a_count||0) + "-" + (state.seed_b_count||0);
-        thumbs.s1.box.classList.remove("disabled");
+        thumbs.s1.box.classList.remove("disabled"); thumbs.s1.box.classList.remove("hidden");
 
         thumbs.s2.img.src = state.semi_2_left_url || state.semi_2_right_url || placeholder("S2");
         thumbs.s2.count.textContent = (state.seed_c_count||0) + "-" + (state.seed_d_count||0);
-        thumbs.s2.box.classList.remove("disabled");
+        thumbs.s2.box.classList.remove("disabled"); thumbs.s2.box.classList.remove("hidden");
       }
 
-      // final thumb
+      // Final
       if (!state.mid2_done){
-        thumbs.final.img.src = placeholder("F"); thumbs.final.count.textContent = "0-0"; thumbs.final.box.classList.add("disabled");
+        thumbs.final.img.src = placeholder("F"); thumbs.final.count.textContent = "0-0";
+        thumbs.final.box.classList.add("disabled"); thumbs.final.box.classList.add("hidden");
       }else{
         thumbs.final.img.src = state.mid_winner_1_url || state.mid_winner_2_url || placeholder("F");
         thumbs.final.count.textContent = (state.seed_a_count||0) + "-" + (state.seed_b_count||0);
-        thumbs.final.box.classList.remove("disabled");
+        thumbs.final.box.classList.remove("disabled"); thumbs.final.box.classList.remove("hidden");
       }
 
-      // lock R16 tiles after r16_done
+      // Lock R16 after done (still visible)
       for (let i=1;i<=8;i++){
         thumbs["r"+i].box.classList.toggle("disabled", !!state.r16_done);
       }
@@ -389,7 +384,6 @@
       const mem = memRead(base);
       const picked = mem[activeMatch];
 
-      // decide which images + counts
       let leftImg=placeholder("?"), rightImg=placeholder("?"), leftCt=0, rightCt=0, leftLabel="Left", rightLabel="Right";
 
       const find = order.find(o=>o.key===activeMatch);
@@ -408,7 +402,7 @@
       } else if (activeMatch==="s2"){
         if (state.mid1_done){ leftImg = state.semi_2_left_url || placeholder("?"); rightImg = state.semi_2_right_url || placeholder("?"); leftCt = state.seed_c_count||0; rightCt=state.seed_d_count||0; }
         leftLabel="Semi 2 — Left"; rightLabel="Semi 2 — Right";
-      } else { // final
+      } else {
         if (state.mid2_done){ leftImg = state.mid_winner_1_url || placeholder("?"); rightImg = state.mid_winner_2_url || placeholder("?"); leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0; }
         leftLabel="Final — Left"; rightLabel="Final — Right";
       }
@@ -469,7 +463,6 @@
       if (ms <= Q_MS + 250 && state.r16_done && !state.mid1_done) winnerText.textContent = 'Quarters just locked — semis live.';
       if (ms <= S_MS + 250 && state.mid1_done && !state.mid2_done) winnerText.textContent = 'Semis just locked — final live.';
 
-      const now = Date.now();
       if (ms <= R_MS && !state.r16_done && !phaseSync.r){ phaseSync.r=true; fetchState(true); }
       if (ms <= Q_MS && state.r16_done && !state.mid1_done && !phaseSync.q){ phaseSync.q=true; fetchState(true); }
       if (ms <= S_MS && state.mid1_done && !state.mid2_done && !phaseSync.s){ phaseSync.s=true; fetchState(true); }
