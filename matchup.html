@@ -1,514 +1,456 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup (8-up, 2-up view)</title>
-  <style>
-    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#8b8b8b; --card:#0f1318; --border:#20242a; }
-    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
-    .wrap { max-width:700px; margin:0 auto; padding:16px 12px 96px; }
-    h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
-    .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-    .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid var(--border); border-radius:12px; background:var(--card); }
-    .state { color:var(--muted); font-size:12px; }
+// global-timer-v2 — 16-up version: R16 @90s, quarters @60s, semis @30s, final @0s
+// drop-in replacement for your current file
 
-    .card { margin-top:12px; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:var(--card); }
-    .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
-    .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
-    .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
-    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid var(--border); }
-    .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
-    .counts { font-variant-numeric: tabular-nums; font-weight:700; }
-    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
-    .btn.ghost { color:#a0aec0; }
-    button.vote { padding:10px 14px; }
-    button.vote:disabled { opacity:.6; cursor:default; }
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-    .thumbs-wrap { margin-top:16px; }
-    .thumbs-title { font-size:12px; opacity:.6; margin-bottom:6px; }
-    .thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
-    .thumb { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); cursor:pointer; }
-    .thumb.disabled { opacity:.55; cursor:default; }
-    .thumb.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(57,255,20,.3); }
-    .thumb-img { width:100%; aspect-ratio:3/4; background:#0b0f13; display:grid; place-items:center; }
-    .thumb-img img { width:100%; height:100%; object-fit:cover; }
-    .thumb-label { padding:6px 8px 8px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
-    .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
-    .ghostBox { width:100%; height:100%; display:grid; place-items:center; color:#3b3b3b; font-weight:700; font-size:13px; letter-spacing:.08em; }
+type Row = {
+  id: string;
+  base_iso: string;
+  ends_at: string;
+  period_sec: number;
 
-    .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
-    .winner b { color:#39ff14; }
+  // live lanes (reused each phase)
+  seed_a_url: string | null; seed_b_url: string | null;
+  seed_c_url: string | null; seed_d_url: string | null;
+  seed_e_url: string | null; seed_f_url: string | null;
+  seed_g_url: string | null; seed_h_url: string | null;
 
-    /* FINAL BOX */
-    .final-card { margin-top:14px; }
-    .final-inner { display:flex; gap:12px; flex-wrap:wrap; padding:12px; }
-    .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed var(--border); border-radius:10px; padding:8px; text-align:center; }
-    .final-slot .label { display:block; margin-bottom:4px; }
-    .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#000; border-radius:8px; overflow:hidden; display:grid; place-items:center; }
-    .final-slot .thumb-final img { width:100%; height:100%; object-fit:cover; }
-    .final-footer { padding:0 12px 12px; font-size:12px; color:#9aa0a6; }
+  // extra R16 lanes
+  seed_i_url: string | null; seed_j_url: string | null;
+  seed_k_url: string | null; seed_l_url: string | null;
+  seed_m_url: string | null; seed_n_url: string | null;
+  seed_o_url: string | null; seed_p_url: string | null;
 
-    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
-    .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
-    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
-    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
-    .debugbox { position:fixed; left:0; right:0; bottom:0; background:rgba(0,0,0,.75); color:#9ca3af; font-size:11px; padding:6px 10px; border-top:1px solid #111; }
-  </style>
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-</head>
-<body>
-  <div class="wrap">
-    <h1>Rage Space — Matchup (8-up, 2-up view)</h1>
+  seed_a_count: number; seed_b_count: number;
+  seed_c_count: number; seed_d_count: number;
+  seed_e_count: number; seed_f_count: number;
+  seed_g_count: number; seed_h_count: number;
 
-    <div class="header">
-      <div class="row">
-        <div class="timer" id="tRemain">90.0</div>
-        <div class="state" id="tMeta">syncing…</div>
-      </div>
-      <div class="row">
-        <button id="forceQueue" class="btn ghost">Pull Now</button>
-        <button id="resetPair" class="btn ghost">Reset Pair</button>
-        <a class="backbtn" href="menu.html">← Menu</a>
-        <a class="linkbtn" href="winners.html">Winners</a>
-      </div>
-    </div>
+  seed_i_count: number; seed_j_count: number;
+  seed_k_count: number; seed_l_count: number;
+  seed_m_count: number; seed_n_count: number;
+  seed_o_count: number; seed_p_count: number;
 
-    <!-- ACTIVE MATCH AREA -->
-    <div class="card" id="activeTop">
-      <div class="imgBox">
-        <img id="imgActive1" alt="Active left">
-        <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
-      </div>
-      <div class="bar">
-        <div class="label" id="labelActive1">Left</div>
-        <div class="counts" id="countActive1">0</div>
-        <button class="vote" id="btnActive1">Vote</button>
-      </div>
-    </div>
+  // phase flags
+  r16_done: boolean | null;  // after R16 (T-90)
+  mid1_done: boolean | null; // after quarters (T-60)
+  mid2_done: boolean | null; // after semis   (T-30)
 
-    <div class="card" id="activeBottom">
-      <div class="imgBox">
-        <img id="imgActive2" alt="Active right">
-        <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
-      </div>
-      <div class="bar">
-        <div class="label" id="labelActive2">Right</div>
-        <div class="counts" id="countActive2">0</div>
-        <button class="vote" id="btnActive2">Vote</button>
-      </div>
-    </div>
+  // quarter snapshots (unchanged shape)
+  q1_a_url?: string | null; q1_b_url?: string | null;
+  q1_a_count?: number | null; q1_b_count?: number | null;
+  q2_c_url?: string | null; q2_d_url?: string | null;
+  q2_c_count?: number | null; q2_d_count?: number | null;
+  q3_e_url?: string | null; q3_f_url?: string | null;
+  q3_e_count?: number | null; q3_f_count?: number | null;
+  q4_g_url?: string | null; q4_h_url?: string | null;
+  q4_g_count?: number | null; q4_h_count?: number | null;
 
-    <!-- OTHER MATCHES -->
-    <div class="thumbs-wrap">
-      <div class="thumbs-title">Other matches</div>
-      <div class="thumbs">
-        <!-- Quarters -->
-        <div class="thumb" id="thumbQ1"><div class="thumb-img"><img id="thumbQ1img" alt="Q1 A vs B"></div><div class="thumb-label"><span>Q1 A–B</span><span class="thumb-count" id="thumbQ1count">0-0</span></div></div>
-        <div class="thumb" id="thumbQ2"><div class="thumb-img"><img id="thumbQ2img" alt="Q2 C vs D"></div><div class="thumb-label"><span>Q2 C–D</span><span class="thumb-count" id="thumbQ2count">0-0</span></div></div>
-        <div class="thumb" id="thumbQ3"><div class="thumb-img"><img id="thumbQ3img" alt="Q3 E vs F"></div><div class="thumb-label"><span>Q3 E–F</span><span class="thumb-count" id="thumbQ3count">0-0</span></div></div>
-        <div class="thumb" id="thumbQ4"><div class="thumb-img"><img id="thumbQ4img" alt="Q4 G vs H"></div><div class="thumb-label"><span>Q4 G–H</span><span class="thumb-count" id="thumbQ4count">0-0</span></div></div>
+  // semi snapshots
+  semi_1_left_url?: string | null;  semi_1_right_url?: string | null;
+  semi_1_left_count?: number | null; semi_1_right_count?: number | null;
+  semi_2_left_url?: string | null;  semi_2_right_url?: string | null;
+  semi_2_left_count?: number | null; semi_2_right_count?: number | null;
 
-        <!-- Semis (always present; show ghost until 60s) -->
-        <div class="thumb disabled" id="thumbS1">
-          <div class="thumb-img"><div class="ghostBox" id="thumbS1ghost">SEM I</div><img id="thumbS1img" alt="S1" style="display:none"></div>
-          <div class="thumb-label"><span>Semi 1</span><span class="thumb-count" id="thumbS1count">0-0</span></div>
-        </div>
-        <div class="thumb disabled" id="thumbS2">
-          <div class="thumb-img"><div class="ghostBox" id="thumbS2ghost">SEM II</div><img id="thumbS2img" alt="S2" style="display:none"></div>
-          <div class="thumb-label"><span>Semi 2</span><span class="thumb-count" id="thumbS2count">0-0</span></div>
-        </div>
+  // final snapshot (UI-compatible)
+  mid_winner_1_url?: string | null;
+  mid_winner_2_url?: string | null;
+};
 
-        <!-- Final -->
-        <div class="thumb" id="thumbFinal"><div class="thumb-img"><img id="thumbFinalImg" alt="Final"></div><div class="thumb-label"><span>Final</span><span class="thumb-count" id="thumbFinalCount">0-0</span></div></div>
-      </div>
-    </div>
+const cors: Record<string,string> = {
+  "Access-Control-Allow-Origin":"*",
+  "Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type, x-rsid, x-admin-key",
+  "Access-Control-Allow-Methods":"GET, POST, DELETE, OPTIONS",
+  "Content-Type":"application/json",
+};
 
-    <div class="winner" id="winnerText">Quarters running… locks at 60s; semis at 30s; final at 0s.</div>
+const DEFAULT_PERIOD_SEC = 120; // 🔔 120s total
+const GRACE_MS = 800;
+const ADMIN_CLEAR_KEY = "Inklink88!";
 
-    <!-- FINAL BOX -->
-    <div class="card final-card" id="finalCard">
-      <div class="bar">
-        <div class="label">Final</div>
-        <div style="font-size:12px;color:#a1a1a1;">Decides at 0s</div>
-      </div>
-      <div class="final-inner">
-        <div class="final-slot">
-          <span class="label" id="finalLeftLabel">Winner of Semi 1</span>
-          <div class="thumb-final"><img id="finalImg1" alt="Final slot 1"></div>
-        </div>
-        <div class="final-slot">
-          <span class="label" id="finalRightLabel">Winner of Semi 2</span>
-          <div class="thumb-final"><img id="finalImg2" alt="Final slot 2"></div>
-        </div>
-      </div>
-      <div class="final-footer" id="finalFooter">Waiting…</div>
-    </div>
+function supaAdmin(){
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const srk = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  return createClient(url, srk, { auth: { persistSession:false } });
+}
 
-    <div class="hint">8 images → 4 quarters (decide at 60s) → 2 semis (decide at 30s) → Final (decide at 0s).</div>
-  </div>
+const picsum = (seed:string)=>`https://picsum.photos/seed/${encodeURIComponent(seed)}/900/1200`;
+const safeIso = (d:Date|string)=> new Date(d).toISOString().replace(/\.\d{3}Z$/,"Z");
 
-  <div class="fullscreen-overlay" id="overlay">
-    <button id="closeFull">✕ Close</button>
-    <img id="fullImg" src="">
-  </div>
+function rngBit(){ try{const a=new Uint32Array(1); crypto.getRandomValues(a); return (a[0]&1)===0;}catch{return Math.random()<.5;} }
+function decidePair(u1:string|null,u2:string|null,c1:number,c2:number){ 
+  if (c1===c2) return {winner_url: rngBit()?u1:u2, decided_by:"random_tie" as const};
+  return {winner_url: c1>c2?u1:u2, decided_by:"votes" as const};
+}
 
-  <div class="debugbox" id="debugBox">debug: idle…</div>
+function remainingMs(tiso:string){ return new Date(tiso).getTime()-Date.now(); }
 
-  <script>
-    // === config ===
-    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
-
-    const RSID_KEY = "rsid_v2";
-    let RSID = localStorage.getItem(RSID_KEY);
-    if (!RSID) { RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
-
-    const elRemain = document.getElementById("tRemain");
-    const elMeta   = document.getElementById("tMeta");
-    const dbg      = document.getElementById("debugBox");
-    const winnerText = document.getElementById("winnerText");
-
-    const imgActive1 = document.getElementById("imgActive1");
-    const imgActive2 = document.getElementById("imgActive2");
-    const labelActive1 = document.getElementById("labelActive1");
-    const labelActive2 = document.getElementById("labelActive2");
-    const countActive1 = document.getElementById("countActive1");
-    const countActive2 = document.getElementById("countActive2");
-    const btnActive1 = document.getElementById("btnActive1");
-    const btnActive2 = document.getElementById("btnActive2");
-
-    const thumbs = {
-      q1:   { box:document.getElementById("thumbQ1"),   img:document.getElementById("thumbQ1img"),   count:document.getElementById("thumbQ1count") },
-      q2:   { box:document.getElementById("thumbQ2"),   img:document.getElementById("thumbQ2img"),   count:document.getElementById("thumbQ2count") },
-      q3:   { box:document.getElementById("thumbQ3"),   img:document.getElementById("thumbQ3img"),   count:document.getElementById("thumbQ3count") },
-      q4:   { box:document.getElementById("thumbQ4"),   img:document.getElementById("thumbQ4img"),   count:document.getElementById("thumbQ4count") },
-      s1:   { box:document.getElementById("thumbS1"),   img:document.getElementById("thumbS1img"),   ghost:document.getElementById("thumbS1ghost"), count:document.getElementById("thumbS1count") },
-      s2:   { box:document.getElementById("thumbS2"),   img:document.getElementById("thumbS2img"),   ghost:document.getElementById("thumbS2ghost"), count:document.getElementById("thumbS2count") },
-      final:{ box:document.getElementById("thumbFinal"),img:document.getElementById("thumbFinalImg"),count:document.getElementById("thumbFinalCount") },
-    };
-
-    const finalImg1 = document.getElementById("finalImg1");
-    const finalImg2 = document.getElementById("finalImg2");
-    const finalLeftLabel  = document.getElementById("finalLeftLabel");
-    const finalRightLabel = document.getElementById("finalRightLabel");
-    const finalFooter = document.getElementById("finalFooter");
-
-    const overlay  = document.getElementById("overlay");
-    const fullImg  = document.getElementById("fullImg");
-    const btnClose = document.getElementById("closeFull"); btnClose.onclick = () => overlay.style.display = 'none';
-
-    const forceBtn = document.getElementById("forceQueue");
-    const resetBtn = document.getElementById("resetPair");
-
-    function openFull(which){
-      const url = which==="active1" ? imgActive1.src : which==="active2" ? imgActive2.src : "";
-      fullImg.src = url; overlay.style.display = 'flex';
+async function claimN(db: ReturnType<typeof supaAdmin>, n:number, base_iso:string){
+  const picked:any[]=[]; 
+  for (let i=0;i<Math.ceil(n/2);i++){
+    const {data,error}=await db.rpc("claim_two_queue_items",{base_iso});
+    if (error) break;
+    if (Array.isArray(data)){
+      for (const row of data){
+        if (row?.image_url){ picked.push(row); if (picked.length>=n) break; }
+      }
     }
+    if (picked.length>=n) break;
+  }
+  return picked.slice(0,n);
+}
 
-    function placeholder(letter){
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960"><rect width="100%" height="100%" fill="#000"/><text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace" text-anchor="middle" dominant-baseline="middle">${letter}</text></svg>`;
-      return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-    }
+async function getSingleton(db=supaAdmin()): Promise<Row>{
+  const {data, error} = await db.from("cycles_v2").select("*").limit(1).maybeSingle();
+  if (error) throw error;
 
-    // ---------- STATE ----------
-    let state = {
-      base_iso:null, ends_at:null, period_sec:90,
-      seed_a_url:null, seed_b_url:null, seed_c_url:null, seed_d_url:null,
-      seed_e_url:null, seed_f_url:null, seed_g_url:null, seed_h_url:null,
+  if (!data){
+    const base_iso = safeIso(new Date());
+    const ends_at  = new Date(Date.now()+DEFAULT_PERIOD_SEC*1000).toISOString();
+    const seeds16  = "abcdefghijklmnop".split("").map(s=>picsum(s));
+    const insert:any = {
+      base_iso, ends_at, period_sec: DEFAULT_PERIOD_SEC,
+      // A..H
+      seed_a_url:seeds16[0], seed_b_url:seeds16[1], seed_c_url:seeds16[2], seed_d_url:seeds16[3],
+      seed_e_url:seeds16[4], seed_f_url:seeds16[5], seed_g_url:seeds16[6], seed_h_url:seeds16[7],
+      // I..P
+      seed_i_url:seeds16[8], seed_j_url:seeds16[9], seed_k_url:seeds16[10], seed_l_url:seeds16[11],
+      seed_m_url:seeds16[12],seed_n_url:seeds16[13],seed_o_url:seeds16[14], seed_p_url:seeds16[15],
+
       seed_a_count:0, seed_b_count:0, seed_c_count:0, seed_d_count:0,
       seed_e_count:0, seed_f_count:0, seed_g_count:0, seed_h_count:0,
-      mid1_done:false, mid2_done:false,
-      // snapshots (may be present even before 60s)
-      q1_a_url:null, q1_b_url:null, q1_a_count:0, q1_b_count:0,
-      q2_c_url:null, q2_d_url:null, q2_c_count:0, q2_d_count:0,
-      q3_e_url:null, q3_f_url:null, q3_e_count:0, q3_f_count:0,
-      q4_g_url:null, q4_h_url:null, q4_g_count:0, q4_h_count:0,
-      // semis/final
-      semi_1_left_url:null, semi_1_right_url:null, semi_1_left_count:0, semi_1_right_count:0,
-      semi_2_left_url:null, semi_2_right_url:null, semi_2_left_count:0, semi_2_right_count:0,
-      mid_winner_1_url:null, mid_winner_2_url:null,
+      seed_i_count:0, seed_j_count:0, seed_k_count:0, seed_l_count:0,
+      seed_m_count:0, seed_n_count:0, seed_o_count:0, seed_p_count:0,
+
+      r16_done:false, mid1_done:false, mid2_done:false
     };
+    const {data:ins, error:e2}=await db.from("cycles_v2").insert(insert).select("*").single();
+    if (e2) throw e2;
+    return ins as any;
+  }
 
-    // ---------- VOTE MEMORY ----------
-    const VOTE_MEMORY_KEY = "rs_vote_memory_v2";
-    function readMem(baseIso){ try { return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")[baseIso]||{}; } catch { return {}; } }
-    function writeMem(baseIso,key,val){ const all = (()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}");}catch{return {};}})(); all[baseIso]=Object.assign({},all[baseIso]||{}, {[key]:val}); localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
-    function phaseKeyFor(tag){ return tag; }
-    function pruneVoteMem(keep){ const all = (()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}");}catch{return {};}})(); for(const k of Object.keys(all)) if(k!==keep) delete all[k]; localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
+  return {
+    ...data,
+    period_sec: data.period_sec ?? DEFAULT_PERIOD_SEC,
+    // backfill new fields if null
+    r16_done: data.r16_done ?? false,
+    seed_i_url: data.seed_i_url ?? picsum("i"),
+    seed_j_url: data.seed_j_url ?? picsum("j"),
+    seed_k_url: data.seed_k_url ?? picsum("k"),
+    seed_l_url: data.seed_l_url ?? picsum("l"),
+    seed_m_url: data.seed_m_url ?? picsum("m"),
+    seed_n_url: data.seed_n_url ?? picsum("n"),
+    seed_o_url: data.seed_o_url ?? picsum("o"),
+    seed_p_url: data.seed_p_url ?? picsum("p"),
+    seed_i_count: data.seed_i_count ?? 0,
+    seed_j_count: data.seed_j_count ?? 0,
+    seed_k_count: data.seed_k_count ?? 0,
+    seed_l_count: data.seed_l_count ?? 0,
+    seed_m_count: data.seed_m_count ?? 0,
+    seed_n_count: data.seed_n_count ?? 0,
+    seed_o_count: data.seed_o_count ?? 0,
+    seed_p_count: data.seed_p_count ?? 0,
+    mid1_done: data.mid1_done ?? false,
+    mid2_done: data.mid2_done ?? false,
+  } as any;
+}
 
-    // which match is shown
-    let activeMatch = "q1"; // q1,q2,q3,q4,s1,s2,final
+// ---------- PHASE A (T-90): decide R16 -> fill A..H lanes ----------
+async function runR16(row:Row, db=supaAdmin()){
+  if (row.r16_done) return row;
 
-    // click to switch
-    thumbs.q1.box.addEventListener('click', ()=>{ activeMatch="q1"; renderActive(); });
-    thumbs.q2.box.addEventListener('click', ()=>{ activeMatch="q2"; renderActive(); });
-    thumbs.q3.box.addEventListener('click', ()=>{ activeMatch="q3"; renderActive(); });
-    thumbs.q4.box.addEventListener('click', ()=>{ activeMatch="q4"; renderActive(); });
-    thumbs.s1.box.addEventListener('click', ()=>{ if(state.mid1_done){ activeMatch="s1"; renderActive(); }});
-    thumbs.s2.box.addEventListener('click', ()=>{ if(state.mid1_done){ activeMatch="s2"; renderActive(); }});
-    thumbs.final.box.addEventListener('click', ()=>{ activeMatch="final"; renderActive(); });
+  const p = (u1:any,u2:any,c1:any,c2:any)=>decidePair(u1,u2,c1,c2).winner_url;
+  const wA = p(row.seed_a_url,row.seed_b_url,row.seed_a_count,row.seed_b_count);
+  const wB = p(row.seed_c_url,row.seed_d_url,row.seed_c_count,row.seed_d_count);
+  const wC = p(row.seed_e_url,row.seed_f_url,row.seed_e_count,row.seed_f_count);
+  const wD = p(row.seed_g_url,row.seed_h_url,row.seed_g_count,row.seed_h_count);
+  const wE = p(row.seed_i_url,row.seed_j_url,row.seed_i_count,row.seed_j_count);
+  const wF = p(row.seed_k_url,row.seed_l_url,row.seed_k_count,row.seed_l_count);
+  const wG = p(row.seed_m_url,row.seed_n_url,row.seed_m_count,row.seed_n_count);
+  const wH = p(row.seed_o_url,row.seed_p_url,row.seed_o_count,row.seed_p_count);
 
-    // vote
-    async function vote(side){
-      const baseIso = state.base_iso || "";
-      const mem = readMem(baseIso);
-      const key = phaseKeyFor(activeMatch);
-      if (mem[key]) return;
+  const { data:upd } = await db.from("cycles_v2").update({
+    // promote 8 winners into A..H lanes for quarters
+    seed_a_url:wA, seed_b_url:wB, seed_c_url:wC, seed_d_url:wD,
+    seed_e_url:wE, seed_f_url:wF, seed_g_url:wG, seed_h_url:wH,
 
-      const up = {};
-      if (activeMatch==="q1") up[side==="red"?"seed_a_count":"seed_b_count"] = (side==="red"?state.seed_a_count:state.seed_b_count)+1;
-      else if (activeMatch==="q2") up[side==="red"?"seed_c_count":"seed_d_count"] = (side==="red"?state.seed_c_count:state.seed_d_count)+1;
-      else if (activeMatch==="q3") up[side==="red"?"seed_e_count":"seed_f_count"] = (side==="red"?state.seed_e_count:state.seed_f_count)+1;
-      else if (activeMatch==="q4") up[side==="red"?"seed_g_count":"seed_h_count"] = (side==="red"?state.seed_g_count:state.seed_h_count)+1;
-      else if (activeMatch==="s1") up[side==="red"?"seed_a_count":"seed_b_count"] = (side==="red"?state.seed_a_count:state.seed_b_count)+1;
-      else if (activeMatch==="s2") up[side==="red"?"seed_c_count":"seed_d_count"] = (side==="red"?state.seed_c_count:state.seed_d_count)+1;
-      else if (activeMatch==="final") up[side==="red"?"seed_a_count":"seed_b_count"] = (side==="red"?state.seed_a_count:state.seed_b_count)+1;
+    // clear counts; clear I..P
+    seed_a_count:0, seed_b_count:0, seed_c_count:0, seed_d_count:0,
+    seed_e_count:0, seed_f_count:0, seed_g_count:0, seed_h_count:0,
+    seed_i_url:null, seed_j_url:null, seed_k_url:null, seed_l_url:null,
+    seed_m_url:null, seed_n_url:null, seed_o_url:null, seed_p_url:null,
+    seed_i_count:0, seed_j_count:0, seed_k_count:0, seed_l_count:0,
+    seed_m_count:0, seed_n_count:0, seed_o_count:0, seed_p_count:0,
 
-      Object.assign(state, up);
-      renderActive();
+    r16_done:true
+  }).eq("id", row.id).select("*").maybeSingle();
 
-      try {
-        const res = await fetch(FUNCTION_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-rsid": RSID },
-          body: JSON.stringify({ phase: activeMatch, side: side === "red" ? "left" : "right" })
-        });
-        if (!res.ok) { await fetchState(true); return; }
-        const msg = await res.json().catch(()=> ({}));
-        const s = (msg && typeof msg === "object" && "state" in msg) ? msg.state : msg;
-        if (s && typeof s === "object") state = Object.assign(state, s);
-        else await fetchState(true);
-        writeMem(baseIso, key, side);
-        renderActive();
-      } catch {
-        await fetchState(true);
-      }
-    }
-    btnActive1.onclick = ()=> vote("red");
-    btnActive2.onclick = ()=> vote("blue");
+  return (upd as any) ?? row;
+}
 
-    // ---------- RENDER ----------
-    function setThumb(th, leftUrl, rightUrl, leftCount, rightCount, labelFallback="?"){
-      th.img.src = leftUrl || rightUrl || placeholder(labelFallback);
-      th.count.textContent = (leftCount??0) + "-" + (rightCount??0);
-    }
-    function markActive(){
-      const keys = ["q1","q2","q3","q4","s1","s2","final"];
-      for (const k of keys) thumbs[k].box.classList.toggle("active", k===activeMatch);
-    }
+// ---------- PHASE B (T-60): quarters -> semis (same as before) ----------
+async function runQuarters(row:Row, db=supaAdmin()){
+  if (row.mid1_done) return row;
 
-    function renderFinalBox(){
-      finalImg1.src = state.mid_winner_1_url || placeholder("?");
-      finalImg2.src = state.mid_winner_2_url || placeholder("?");
-      finalLeftLabel.textContent  = "Winner of Semi 1";
-      finalRightLabel.textContent = "Winner of Semi 2";
-      if (state.mid2_done) finalFooter.textContent = "Final is live — decides at 0s.";
-      else if (state.mid1_done) finalFooter.textContent = "Semis live — final soon.";
-      else finalFooter.textContent = "Waiting for quarters…";
-    }
+  const q1 = decidePair(row.seed_a_url,row.seed_b_url,row.seed_a_count,row.seed_b_count);
+  const q2 = decidePair(row.seed_c_url,row.seed_d_url,row.seed_c_count,row.seed_d_count);
+  const q3 = decidePair(row.seed_e_url,row.seed_f_url,row.seed_e_count,row.seed_f_count);
+  const q4 = decidePair(row.seed_g_url,row.seed_h_url,row.seed_g_count,row.seed_h_count);
+  const decided_at = new Date().toISOString();
 
-    function pick(valA, valB){ return (valA!=null && valA!=="" ? valA : valB); }
+  await db.from("winners_v2").insert([
+    { base_iso: row.base_iso + "::q1", winner_seed: (q1.winner_url===row.seed_a_url?"a":"b"),
+      winner_url: q1.winner_url, seed_a_count: row.seed_a_count, seed_b_count: row.seed_b_count,
+      decided_by: q1.decided_by, decided_at },
+    { base_iso: row.base_iso + "::q2", winner_seed: (q2.winner_url===row.seed_c_url?"c":"d"),
+      winner_url: q2.winner_url, seed_a_count: row.seed_c_count, seed_b_count: row.seed_d_count,
+      decided_by: q2.decided_by, decided_at },
+    { base_iso: row.base_iso + "::q3", winner_seed: (q3.winner_url===row.seed_e_url?"e":"f"),
+      winner_url: q3.winner_url, seed_a_count: row.seed_e_count, seed_b_count: row.seed_f_count,
+      decided_by: q3.decided_by, decided_at },
+    { base_iso: row.base_iso + "::q4", winner_seed: (q4.winner_url===row.seed_g_url?"g":"h"),
+      winner_url: q4.winner_url, seed_a_count: row.seed_g_count, seed_b_count: row.seed_h_count,
+      decided_by: q4.decided_by, decided_at },
+  ]);
 
-    function renderThumbs(){
-      // Quarters: prefer pre-hydrated snapshots when present; otherwise fall back to seed lanes.
-      const q1L = pick(state.q1_a_url, state.seed_a_url);
-      const q1R = pick(state.q1_b_url, state.seed_b_url);
-      const q1LC = pick(state.q1_a_count, state.seed_a_count);
-      const q1RC = pick(state.q1_b_count, state.seed_b_count);
+  const { data: upd } = await db.from("cycles_v2").update({
+    // snapshot quarters
+    q1_a_url: row.seed_a_url, q1_b_url: row.seed_b_url,
+    q1_a_count: row.seed_a_count, q1_b_count: row.seed_b_count,
+    q2_c_url: row.seed_c_url, q2_d_url: row.seed_d_url,
+    q2_c_count: row.seed_c_count, q2_d_count: row.seed_d_count,
+    q3_e_url: row.seed_e_url, q3_f_url: row.seed_f_url,
+    q3_e_count: row.seed_e_count, q3_f_count: row.seed_f_count,
+    q4_g_url: row.seed_g_url, q4_h_url: row.seed_h_url,
+    q4_g_count: row.seed_g_count, q4_h_count: row.seed_h_count,
 
-      const q2L = pick(state.q2_c_url, state.seed_c_url);
-      const q2R = pick(state.q2_d_url, state.seed_d_url);
-      const q2LC = pick(state.q2_c_count, state.seed_c_count);
-      const q2RC = pick(state.q2_d_count, state.seed_d_count);
+    // promote to semis lanes
+    semi_1_left_url:  q1.winner_url,
+    semi_1_right_url: q2.winner_url,
+    semi_2_left_url:  q3.winner_url,
+    semi_2_right_url: q4.winner_url,
 
-      const q3L = pick(state.q3_e_url, state.seed_e_url);
-      const q3R = pick(state.q3_f_url, state.seed_f_url);
-      const q3LC = pick(state.q3_e_count, state.seed_e_count);
-      const q3RC = pick(state.q3_f_count, state.seed_f_count);
+    // live lanes become semi finalists
+    seed_a_url: q1.winner_url, seed_b_url: q2.winner_url,
+    seed_c_url: q3.winner_url, seed_d_url: q4.winner_url,
+    seed_e_url: null, seed_f_url: null, seed_g_url: null, seed_h_url: null,
 
-      const q4L = pick(state.q4_g_url, state.seed_g_url);
-      const q4R = pick(state.q4_h_url, state.seed_h_url);
-      const q4LC = pick(state.q4_g_count, state.seed_g_count);
-      const q4RC = pick(state.q4_h_count, state.seed_h_count);
+    seed_a_count:0, seed_b_count:0, seed_c_count:0, seed_d_count:0,
+    seed_e_count:0, seed_f_count:0, seed_g_count:0, seed_h_count:0,
 
-      setThumb(thumbs.q1, q1L, q1R, q1LC, q1RC, "A");
-      setThumb(thumbs.q2, q2L, q2R, q2LC, q2RC, "C");
-      setThumb(thumbs.q3, q3L, q3R, q3LC, q3RC, "E");
-      setThumb(thumbs.q4, q4L, q4R, q4LC, q4RC, "G");
+    mid1_done:true
+  }).eq("id", row.id).select("*").maybeSingle();
 
-      // Semis boxes
-      if (!state.mid1_done) {
-        thumbs.s1.img.style.display = "none";
-        thumbs.s1.ghost.style.display = "grid";
-        thumbs.s1.box.classList.add("disabled");
-        thumbs.s1.count.textContent = "0-0";
+  return (upd as any) ?? row;
+}
 
-        thumbs.s2.img.style.display = "none";
-        thumbs.s2.ghost.style.display = "grid";
-        thumbs.s2.box.classList.add("disabled");
-        thumbs.s2.count.textContent = "0-0";
-      } else {
-        thumbs.s1.img.src = (state.semi_1_left_url || state.semi_1_right_url || placeholder("S1"));
-        thumbs.s1.img.style.display = "block";
-        thumbs.s1.ghost.style.display = "none";
-        thumbs.s1.box.classList.remove("disabled");
-        thumbs.s1.count.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
+// ---------- PHASE C (T-30): semis -> final (same) ----------
+async function runSemis(row:Row, db=supaAdmin()){
+  if (row.mid2_done) return row;
 
-        thumbs.s2.img.src = (state.semi_2_left_url || state.semi_2_right_url || placeholder("S2"));
-        thumbs.s2.img.style.display = "block";
-        thumbs.s2.ghost.style.display = "none";
-        thumbs.s2.box.classList.remove("disabled");
-        thumbs.s2.count.textContent = (state.seed_c_count ?? 0) + "-" + (state.seed_d_count ?? 0);
-      }
+  const s1 = decidePair(row.semi_1_left_url ?? row.seed_a_url, row.semi_1_right_url ?? row.seed_b_url,
+                        row.seed_a_count, row.seed_b_count);
+  const s2 = decidePair(row.semi_2_left_url ?? row.seed_c_url, row.semi_2_right_url ?? row.seed_d_url,
+                        row.seed_c_count, row.seed_d_count);
+  const decided_at = new Date().toISOString();
 
-      // Final thumb
-      if (!state.mid2_done) {
-        thumbs.final.img.src = placeholder("F");
-        thumbs.final.count.textContent = "0-0";
-      } else {
-        thumbs.final.img.src = state.mid_winner_1_url || state.mid_winner_2_url || placeholder("F");
-        thumbs.final.count.textContent = (state.seed_a_count ?? 0) + "-" + (state.seed_b_count ?? 0);
-      }
+  await db.from("winners_v2").insert([
+    { base_iso: row.base_iso + "::semi1", winner_seed: "?", winner_url: s1.winner_url,
+      seed_a_count: row.seed_a_count, seed_b_count: row.seed_b_count, decided_by: s1.decided_by, decided_at },
+    { base_iso: row.base_iso + "::semi2", winner_seed: "?", winner_url: s2.winner_url,
+      seed_a_count: row.seed_c_count, seed_b_count: row.seed_d_count, decided_by: s2.decided_by, decided_at },
+  ]);
 
-      markActive();
-    }
+  const { data: upd } = await db.from("cycles_v2").update({
+    semi_1_left_count: row.seed_a_count,
+    semi_1_right_count: row.seed_b_count,
+    semi_2_left_count: row.seed_c_count,
+    semi_2_right_count: row.seed_d_count,
 
-    function renderActive(){
-      renderThumbs();
-      renderFinalBox();
+    mid_winner_1_url: s1.winner_url,
+    mid_winner_2_url: s2.winner_url,
 
-      const mem = readMem(state.base_iso||"");
-      const key = phaseKeyFor(activeMatch);
+    seed_a_url: s1.winner_url, seed_b_url: s2.winner_url,
+    seed_c_url: null, seed_d_url: null,
+    seed_a_count:0, seed_b_count:0, seed_c_count:0, seed_d_count:0,
 
-      let leftLabel = "Left", rightLabel = "Right";
-      let leftImg = placeholder("?"), rightImg = placeholder("?");
-      let leftCt = 0, rightCt = 0;
+    mid2_done:true
+  }).eq("id", row.id).select("*").maybeSingle();
 
-      if (activeMatch==="q1"){ leftLabel="Seed A"; rightLabel="Seed B";
-        leftImg = pick(state.q1_a_url, state.seed_a_url) || placeholder("A");
-        rightImg= pick(state.q1_b_url, state.seed_b_url) || placeholder("B");
-        leftCt  = pick(state.q1_a_count, state.seed_a_count) ?? 0;
-        rightCt = pick(state.q1_b_count, state.seed_b_count) ?? 0;
-      }
-      else if (activeMatch==="q2"){ leftLabel="Seed C"; rightLabel="Seed D";
-        leftImg = pick(state.q2_c_url, state.seed_c_url) || placeholder("C");
-        rightImg= pick(state.q2_d_url, state.seed_d_url) || placeholder("D");
-        leftCt  = pick(state.q2_c_count, state.seed_c_count) ?? 0;
-        rightCt = pick(state.q2_d_count, state.seed_d_count) ?? 0;
-      }
-      else if (activeMatch==="q3"){ leftLabel="Seed E"; rightLabel="Seed F";
-        leftImg = pick(state.q3_e_url, state.seed_e_url) || placeholder("E");
-        rightImg= pick(state.q3_f_url, state.seed_f_url) || placeholder("F");
-        leftCt  = pick(state.q3_e_count, state.seed_e_count) ?? 0;
-        rightCt = pick(state.q3_f_count, state.seed_f_count) ?? 0;
-      }
-      else if (activeMatch==="q4"){ leftLabel="Seed G"; rightLabel="Seed H";
-        leftImg = pick(state.q4_g_url, state.seed_g_url) || placeholder("G");
-        rightImg= pick(state.q4_h_url, state.seed_h_url) || placeholder("H");
-        leftCt  = pick(state.q4_g_count, state.seed_g_count) ?? 0;
-        rightCt = pick(state.q4_h_count, state.seed_h_count) ?? 0;
-      }
-      else if (activeMatch==="s1"){ leftLabel="Semi 1 — Left"; rightLabel="Semi 1 — Right";
-        if (!state.mid1_done) { leftImg=rightImg=placeholder("?"); leftCt=rightCt=0; }
-        else { leftImg = state.semi_1_left_url  || placeholder("?"); rightImg= state.semi_1_right_url || placeholder("?"); leftCt = state.seed_a_count ?? 0; rightCt = state.seed_b_count ?? 0; }
-      }
-      else if (activeMatch==="s2"){ leftLabel="Semi 2 — Left"; rightLabel="Semi 2 — Right";
-        if (!state.mid1_done) { leftImg=rightImg=placeholder("?"); leftCt=rightCt=0; }
-        else { leftImg = state.semi_2_left_url  || placeholder("?"); rightImg= state.semi_2_right_url || placeholder("?"); leftCt = state.seed_c_count ?? 0; rightCt = state.seed_d_count ?? 0; }
-      }
-      else { // final
-        leftLabel="Final — Left"; rightLabel="Final — Right";
-        if (!state.mid2_done) { leftImg=rightImg=placeholder("?"); leftCt=rightCt=0; }
-        else { leftImg = state.mid_winner_1_url || placeholder("?"); rightImg= state.mid_winner_2_url || placeholder("?"); leftCt = state.seed_a_count ?? 0; rightCt = state.seed_b_count ?? 0; }
-      }
+  return (upd as any) ?? row;
+}
 
-      imgActive1.src = leftImg; imgActive2.src = rightImg;
-      labelActive1.textContent = leftLabel; labelActive2.textContent = rightLabel;
-      countActive1.textContent = leftCt; countActive2.textContent = rightCt;
+// ---------- FINAL (T-0): decide + advance ----------
+async function decideAndAdvance(row:Row, db=supaAdmin()){
+  const final = decidePair(row.seed_a_url,row.seed_b_url,row.seed_a_count,row.seed_b_count);
 
-      const picked = mem[key];
-      let phaseLive = true;
-      if (["s1","s2"].includes(activeMatch) && !state.mid1_done) phaseLive = false;
-      if (activeMatch==="final" && !state.mid2_done) phaseLive = false;
-      btnActive1.disabled = !!picked || !phaseLive;
-      btnActive2.disabled = !!picked || !phaseLive;
-      if (picked==="red")   labelActive1.textContent += " • you voted";
-      if (picked==="blue")  labelActive2.textContent += " • you voted";
-    }
-
-    // ---------- NET ----------
-    async function fetchState(force=false){
-      try {
-        const res = await fetch(FUNCTION_URL + (force ? "" : ""));
-        const data = await res.json();
-        const s = (data && typeof data === "object" && "state" in data) ? data.state : data;
-        state = Object.assign(state, s || {});
-        elMeta.textContent = `period=${state.period_sec||90}s • base=${state.base_iso||"--"}`;
-        renderActive();
-        dbg.textContent = "debug: ok " + new Date().toLocaleTimeString();
-      } catch(e) {
-        console.error(e);
-        dbg.textContent = "debug: GET error → " + (e.message || JSON.stringify(e));
-        renderActive();
-      }
-    }
-
-    // ---------- TICK ----------
-    let semiPhase1Synced=false, semiPhase2Synced=false, finalSynced=false, lastPhasePoll=0;
-    let lastMid1=false, lastMid2=false;
-
-    function tick(){
-      if (!state?.ends_at) return requestAnimationFrame(tick);
-      const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
-      elRemain.textContent = (ms/1000).toFixed(1);
-
-      const LOCK_Q_MS = 60_000, LOCK_S_MS = 30_000;
-
-      if (state.mid1_done && !lastMid1) { activeMatch = "s1"; }
-      if (state.mid2_done && !lastMid2) { activeMatch = "final"; }
-      lastMid1 = state.mid1_done;
-      lastMid2 = state.mid2_done;
-
-      if (ms <= LOCK_Q_MS + 250 && !state.mid1_done) winnerText.textContent = 'Quarters just locked — semis live.';
-      if (ms <= LOCK_S_MS + 250 && state.mid1_done && !state.mid2_done) winnerText.textContent = 'Semis just locked — final live.';
-
-      const now = Date.now();
-      if (ms <= LOCK_Q_MS && !state.mid1_done && (!semiPhase1Synced || now-lastPhasePoll>1500)) {
-        semiPhase1Synced=true; lastPhasePoll=now; fetchState(true);
-      }
-      if (ms <= LOCK_S_MS && state.mid1_done && !state.mid2_done && (!semiPhase2Synced || now-lastPhasePoll>1500)) {
-        semiPhase2Synced=true; lastPhasePoll=now; fetchState(true);
-      }
-      if (ms <= 0 && state.mid2_done && !finalSynced) {
-        finalSynced=true; fetchState(true);
-      }
-
-      requestAnimationFrame(tick);
-    }
-
-    // controls
-    forceBtn.addEventListener('click', ()=> fetchState(true));
-    resetBtn.addEventListener('click', ()=> fetchState(true));
-
-    // realtime hooks
-    supabase.channel('cycles-v2-live')
-      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'cycles_v2' }, async ()=>{ await fetchState(true); })
-      .subscribe();
-
-    supabase.channel('matchup-sync')
-      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'art_queue', filter:'status=in.(locked,used)' }, async ()=>{ await fetchState(true); })
-      .subscribe();
-
-    // boot — hydrate quickly in case the function fills fields just after start
-    fetchState(true).then(()=>{
-      setTimeout(()=>fetchState(true), 600);
-      setTimeout(()=>fetchState(true), 1500);
-      tick();
+  // Idempotent final write
+  const { data: exists } = await db.from("winners_v2").select("id").eq("base_iso", row.base_iso).maybeSingle();
+  if (!exists){
+    await db.from("winners_v2").insert({
+      base_iso: row.base_iso,
+      winner_seed: final.winner_url===row.seed_a_url? "a" : "b",
+      winner_url: final.winner_url,
+      seed_a_count: row.seed_a_count, seed_b_count: row.seed_b_count,
+      decided_by: final.decided_by, decided_at: row.ends_at
     });
-  </script>
-</body>
-</html>
+  }
+
+  // next window
+  const periodMs = (row.period_sec || DEFAULT_PERIOD_SEC) * 1000;
+  const ends = Date.now() + periodMs;
+  const base_iso = safeIso(new Date(ends - periodMs));
+  const ends_at = new Date(ends).toISOString();
+
+  // reset + clear snapshots
+  const { data: updCycle } = await db.from("cycles_v2").update({
+    base_iso, ends_at, period_sec: row.period_sec || DEFAULT_PERIOD_SEC,
+    // zero counts
+    seed_a_count:0, seed_b_count:0, seed_c_count:0, seed_d_count:0,
+    seed_e_count:0, seed_f_count:0, seed_g_count:0, seed_h_count:0,
+    seed_i_count:0, seed_j_count:0, seed_k_count:0, seed_l_count:0,
+    seed_m_count:0, seed_n_count:0, seed_o_count:0, seed_p_count:0,
+    // flags
+    r16_done:false, mid1_done:false, mid2_done:false,
+    // snapshots
+    mid_winner_1_url:null, mid_winner_2_url:null,
+    q1_a_url:null,q1_b_url:null,q1_a_count:null,q1_b_count:null,
+    q2_c_url:null,q2_d_url:null,q2_c_count:null,q2_d_count:null,
+    q3_e_url:null,q3_f_url:null,q3_e_count:null,q3_f_count:null,
+    q4_g_url:null,q4_h_url:null,q4_g_count:null,q4_h_count:null,
+    semi_1_left_url:null, semi_1_right_url:null,
+    semi_1_left_count:null, semi_1_right_count:null,
+    semi_2_left_url:null, semi_2_right_url:null,
+    semi_2_left_count:null, semi_2_right_count:null,
+  }).eq("id", row.id).select("*").single();
+
+  // seed next 16
+  let next = "abcdefghijklmnop".split("").map(s=>picsum(s));
+  try {
+    const claimed = await claimN(db, 16, base_iso);
+    for (let i=0;i<16;i++) if (claimed[i]?.image_url) next[i]=claimed[i].image_url;
+  } catch {}
+
+  await db.from("cycles_v2").update({
+    seed_a_url:next[0],seed_b_url:next[1],seed_c_url:next[2],seed_d_url:next[3],
+    seed_e_url:next[4],seed_f_url:next[5],seed_g_url:next[6],seed_h_url:next[7],
+    seed_i_url:next[8],seed_j_url:next[9],seed_k_url:next[10],seed_l_url:next[11],
+    seed_m_url:next[12],seed_n_url:next[13],seed_o_url:next[14],seed_p_url:next[15],
+  }).eq("id",(updCycle as any).id);
+
+  return updCycle as Row;
+}
+
+Deno.serve(async (req)=>{
+  if (req.method === "OPTIONS") return new Response("", { headers:cors });
+
+  try{
+    const db = supaAdmin();
+    const url = new URL(req.url);
+    const wantWinners = url.searchParams.get("winners");
+    const wantClear   = url.searchParams.get("clear");
+    const limit = Number(url.searchParams.get("limit") || "200");
+
+    // admin: clear winners
+    if (req.method==="DELETE" && wantClear){
+      const k = req.headers.get("x-admin-key") || "";
+      if (k !== ADMIN_CLEAR_KEY) return new Response(JSON.stringify({error:"forbidden"}), {headers:cors,status:403});
+      const { error } = await db.from("winners_v2").delete().neq("id","00000000-0000-0000-0000-000000000000");
+      if (error) return new Response(JSON.stringify({error:error.message}), {headers:cors,status:500});
+      return new Response(JSON.stringify({ok:true}), {headers:cors,status:200});
+    }
+
+    // winners passthrough (unchanged response shape)
+    if (req.method==="GET" && wantWinners){
+      const { data:winners, error } = await db
+        .from("winners_v2")
+        .select("base_iso,winner_seed,winner_url,seed_a_count,seed_b_count,decided_by,decided_at")
+        .order("decided_at",{ascending:false}).limit(isNaN(limit)?200:limit);
+      if (error) return new Response(JSON.stringify({error:error.message}), {headers:cors,status:500});
+      const mapped = (winners||[]).map(w=>{
+        const s=(w.winner_seed||"").toLowerCase();
+        const isLeft = s==="a"||s==="c"||s==="e"||s==="g";
+        return { ...w, winner_color: isLeft ? "red":"blue", red_count:w.seed_a_count, blue_count:w.seed_b_count, image_url:w.winner_url };
+      });
+      return new Response(JSON.stringify({ winners:mapped, caught_up:0 }), {headers:cors,status:200});
+    }
+
+    // POST vote
+    if (req.method==="POST"){
+      const body = await req.json().catch(()=> ({}));
+      const phase = String(body?.phase||"");
+      const side  = String(body?.side ||""); // "left"|"right"
+      const valid = ["r1","r2","r3","r4","r5","r6","r7","r8","q1","q2","q3","q4","s1","s2","final"];
+      if (!valid.includes(phase) || !["left","right"].includes(side)){
+        return new Response(JSON.stringify({error:"bad_request"}), {headers:cors,status:400});
+      }
+
+      let row = await getSingleton(db);
+      const ms = remainingMs(row.ends_at);
+      if (ms <= 0) return new Response(JSON.stringify({error:"cycle_over"}), {headers:cors,status:409});
+
+      if (phase.startsWith("r") && row.r16_done)             return new Response(JSON.stringify({error:"r16_locked"}), {headers:cors,status:409});
+      if (phase.startsWith("q") && (!row.r16_done || row.mid1_done)) return new Response(JSON.stringify({error:"quarters_locked"}), {headers:cors,status:409});
+      if (phase.startsWith("s") && (!row.mid1_done || row.mid2_done)) return new Response(JSON.stringify({error:"semis_closed"}), {headers:cors,status:409});
+      if (phase==="final" && !row.mid2_done)                 return new Response(JSON.stringify({error:"final_not_live"}), {headers:cors,status:409});
+
+      const up: Record<string,number> = {};
+      const inc = (k: keyof Row)=> (up[k as string] = ((row as any)[k]||0)+1);
+
+      // map phases → seed counters
+      const leftRight = (l: keyof Row, r: keyof Row) => inc(side==="left" ? l : r);
+
+      if (phase==="r1") leftRight("seed_a_count","seed_b_count");
+      else if (phase==="r2") leftRight("seed_c_count","seed_d_count");
+      else if (phase==="r3") leftRight("seed_e_count","seed_f_count");
+      else if (phase==="r4") leftRight("seed_g_count","seed_h_count");
+      else if (phase==="r5") leftRight("seed_i_count","seed_j_count");
+      else if (phase==="r6") leftRight("seed_k_count","seed_l_count");
+      else if (phase==="r7") leftRight("seed_m_count","seed_n_count");
+      else if (phase==="r8") leftRight("seed_o_count","seed_p_count");
+      else if (phase==="q1") leftRight("seed_a_count","seed_b_count");
+      else if (phase==="q2") leftRight("seed_c_count","seed_d_count");
+      else if (phase==="q3") leftRight("seed_e_count","seed_f_count");
+      else if (phase==="q4") leftRight("seed_g_count","seed_h_count");
+      else if (phase==="s1") leftRight("seed_a_count","seed_b_count");
+      else if (phase==="s2") leftRight("seed_c_count","seed_d_count");
+      else if (phase==="final") leftRight("seed_a_count","seed_b_count");
+
+      const { data:upd, error:ue } = await db.from("cycles_v2").update(up).eq("id", row.id).select("*").maybeSingle();
+      if (ue) return new Response(JSON.stringify({error:ue.message}), {headers:cors,status:500});
+      return new Response(JSON.stringify(upd), {headers:cors,status:200});
+    }
+
+    // GET — scheduler
+    let row = await getSingleton(db);
+
+    // catch-up loop
+    let guard=0;
+    while (remainingMs(row.ends_at) <= -GRACE_MS && guard++ < 2000){
+      row = await decideAndAdvance(row, db);
+    }
+
+    const ms = remainingMs(row.ends_at);
+    const LOCK_R16_MS = 90_000;
+    const LOCK_Q_MS   = 60_000;
+    const LOCK_S_MS   = 30_000;
+
+    if (ms <= LOCK_R16_MS && !row.r16_done){
+      row = await runR16(row, db);
+    }
+    if (ms <= LOCK_Q_MS && row.r16_done && !row.mid1_done){
+      row = await runQuarters(row, db);
+    }
+    if (ms <= LOCK_S_MS && row.mid1_done && !row.mid2_done){
+      row = await runSemis(row, db);
+    }
+    if (ms <= 0 && row.mid2_done){
+      row = await decideAndAdvance(row, db);
+    }
+
+    return new Response(JSON.stringify(row), {headers:cors,status:200});
+  }catch(e:any){
+    return new Response(JSON.stringify({error:String(e?.message||e)}), {headers:cors,status:500});
+  }
+});
