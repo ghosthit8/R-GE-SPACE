@@ -1,9 +1,12 @@
+
+
+
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Rage Space — Submit (debug timer)</title>
+<title>Rage Space — Submit</title>
 <link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
@@ -18,16 +21,15 @@ body{
   margin:0; background:radial-gradient(1200px 900px at 50% -10%,rgba(57,255,20,.08),transparent 60%), #000;
   color:var(--ink); font:14px/1.45 system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
 }
-.wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 120px}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 80px}
 h1{margin:0 0 12px; font-size:24px; letter-spacing:.6px}
 .header{display:flex; align-items:center; justify-content:space-between; gap:10px}
 .badge{border:1px solid var(--border); padding:6px 10px; border-radius:12px; color:var(--ink)}
 .btn{
   display:inline-flex; align-items:center; gap:8px; justify-content:center; text-decoration:none;
-  border:1px solid var(--border); border-radius:14px; padding:10px 14px; 
+  border:1px solid var(--border); border-radius:14px; padding:10px 14px; font-weight:600;
   background:linear-gradient(180deg, rgba(57,255,20,.08), rgba(57,255,20,.02));
   color:var(--green); transition:box-shadow .2s ease, transform .08s ease; cursor:pointer;
-  font-weight:600;
 }
 .btn:hover{box-shadow:0 0 14px rgba(57,255,20,.22)}
 .btn.big{font-size:18px; padding:16px 18px}
@@ -39,28 +41,42 @@ h1{margin:0 0 12px; font-size:24px; letter-spacing:.6px}
 .card{border:1px solid var(--border); border-radius:18px; background:rgba(9,9,9,.6); padding:16px}
 .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
 .small{font-size:12px; color:var(--muted)}
-.mono{font-family:ui-monospace, Menlo,Consolas,monospace}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
 .center{display:flex; justify-content:center; align-items:center; gap:12px}
 
 hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 
+/* Queue grid */
+.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px}
+.thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#ff3aa0; min-height:120px}
+.thumb img{display:block; width:100%; height:100%; object-fit:cover}
+.thumb .idx{
+  position:absolute; top:6px; left:6px; font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
+  background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35)
+}
+
 /* Timer card */
 .timer .row{justify-content:space-between}
-.timerNum{
-  font:700 24px/1.1 ui-monospace,monospace; color:var(--green);
-  border:1px solid var(--border); border-radius:12px; padding:10px 14px; min-width:62px; text-align:center;
-  background:linear-gradient(180deg,rgba(57,255,20,.08),rgba(57,255,20,.02));
+.clock,.stage{display:inline-flex; min-width:36px; height:26px; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:10px; padding:0 10px}
+
+.toast{
+  position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
+  background:rgba(0,0,0,.85); color:var(--ink); border:1px solid var(--border); padding:10px 12px; border-radius:12px;
+  opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
 }
-.stageBadge{
-  border:1px dashed var(--border); padding:6px 10px; border-radius:12px; color:#d8ffd8;
-  background:rgba(57,255,20,.06)
+.toast.show{opacity:1; transform:translateX(-50%) translateY(-4px)}
+
+/* Drop zone */
+.drop{
+  border:1px dashed var(--border); border-radius:14px; padding:14px; text-align:center;
+  background:rgba(57,255,20,.03);
 }
-.debugBox{
-  position:fixed; left:10px; right:10px; bottom:10px;
-  border:1px solid var(--border); border-radius:12px; background:#061b06; padding:8px;
-  color:#b7ffb7; font:12px ui-monospace,monospace; max-height:38vh; overflow:auto;
+.drop.drag{background:rgba(57,255,20,.08)}
+.preview{
+  margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
 }
-.debugBox pre{white-space:pre-wrap; margin:6px 0}
+.preview img{max-height:120px; border-radius:10px; border:1px solid var(--border)}
+.authRow{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
 </style>
 </head>
 <body>
@@ -68,79 +84,298 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
     <div class="header">
       <h1 style="color:var(--green)">SUBMIT ART</h1>
       <div class="row">
+        <span id="authBadge" class="badge small">not logged in</span>
         <a class="btn ghost" href="./menu.html">← Menu</a>
       </div>
     </div>
 
-    <!-- Timer -->
-    <div class="card timer" style="margin-top:16px">
-      <div class="row">
-        <div class="row">
-          <span>⏱️ Tournament Clock</span>
-        </div>
-        <div class="row">
-          <span id="clock" class="timerNum">0</span>
+    <!-- Auth quick panel -->
+    <div class="card" style="margin-top:12px">
+      <div class="authRow">
+        <input id="emailInput" class="input" placeholder="email@you.com (for magic link)" style="max-width:260px">
+        <button id="btnMagic" class="btn">Send magic link</button>
+        <button id="btnSignOut" class="btn ghost">Sign out</button>
+        <span id="authMsg" class="small mono"></span>
+      </div>
+    </div>
+
+    <!-- Minimal uploader -->
+    <div class="card" style="margin-top:16px">
+      <div id="pickZone" class="drop">
+        <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
+        <div id="fileName" class="small">jpg / png / webp — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
+        <input id="fileInput" type="file" accept="image/*" class="hidden">
+        <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
+        <div class="preview">
+          <img id="imgPreview" alt="" class="hidden">
+          <div class="small mono" id="previewHint"></div>
         </div>
       </div>
-      <div class="row" style="margin-top:8px">
-        <span class="stageBadge">🏷️ Current Round</span>
-        <span id="stage" class="badge">—</span>
+
+      <hr class="sep">
+
+      <label class="row small" style="align-items:flex-start">
+        <input id="consent" type="checkbox">
+        <span>I am 18+, no sexual minors, no Nazi BS.</span>
+      </label>
+
+      <div class="center" style="margin-top:10px">
+        <button id="btnSubmit" class="btn">✅ Submit</button>
+        <span id="submitMsg" class="small"></span>
       </div>
+    </div>
+
+    <!-- Live tournament status -->
+    <div class="card" style="margin-top:16px">
+      <div class="timer">
+        <div class="row">
+          <span>🕒 Tournament Clock</span>
+          <span id="clock" class="clock">—</span>
+        </div>
+        <div class="row">
+          <span>🏷️ Current Round</span>
+          <span id="stage" class="stage">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queue (collapsible) -->
+    <div class="card" style="margin-top:16px">
+      <div class="row" style="justify-content:space-between; align-items:center">
+        <strong>📜 In the Queue</strong>
+        <div class="row small" style="gap:8px">
+          <span id="queueCount" class="small"></span>
+          <button id="queueToggle" class="btn ghost" style="padding:6px 10px">Expand ▼</button>
+        </div>
+      </div>
+      <div id="queuePanel" style="display:none; margin-top:12px">
+        <div id="queue" class="grid"></div>
+        <div id="queueEmpty" class="small" style="margin-top:6px; display:none">No items in queue.</div>
+      </div>
+      <div class="small" style="margin-top:6px">Oldest first → next in</div>
     </div>
   </div>
 
-  <div class="debugBox" id="dbg"><b>Timer Debug</b>
-    <div>now: <span id="now"></span></div>
-    <div>end: <span id="end"></span></div>
-    <div>period: <span id="per"></span>  remaining: <span id="rem"></span>  paused: <span id="pau"></span></div>
-    <pre id="raw"></pre>
-  </div>
+  <div id="toast" class="toast"></div>
 
 <script>
-const SUPABASE_URL = 'https://tuqvpcevrhciursxrgav.supabase.co';
-const EDGE_TIMER_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
+/* ---------- Supabase + constants ---------- */
+const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
+const BUCKET = 'art-uploads';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ---------- Elements ---------- */
+const authBadge = document.getElementById('authBadge');
+const toastEl = document.getElementById('toast');
+
+const emailInput = document.getElementById('emailInput');
+const btnMagic = document.getElementById('btnMagic');
+const btnSignOut = document.getElementById('btnSignOut');
+const authMsg = document.getElementById('authMsg');
+
+const pickZone = document.getElementById('pickZone');
+const btnPick = document.getElementById('btnPick');
+const fileInput = document.getElementById('fileInput');
+const urlInput = document.getElementById('urlInput');
+const fileName = document.getElementById('fileName');
+const previewHint = document.getElementById('previewHint');
+const imgPreview = document.getElementById('imgPreview');
+
+const consent = document.getElementById('consent');
+const btnSubmit = document.getElementById('btnSubmit');
+const submitMsg = document.getElementById('submitMsg');
+
+const queuePanel = document.getElementById('queuePanel');
+const queueToggle = document.getElementById('queueToggle');
+const queueCount = document.getElementById('queueCount');
+const queueGrid = document.getElementById('queue');
+const queueEmpty = document.getElementById('queueEmpty');
 
 const clockEl = document.getElementById('clock');
 const stageEl = document.getElementById('stage');
-const rawEl = document.getElementById('raw');
-const nowEl = document.getElementById('now');
-const endEl = document.getElementById('end');
-const perEl = document.getElementById('per');
-const remEl = document.getElementById('rem');
-const pauEl = document.getElementById('pau');
 
+/* ---------- Debugger (kept) ---------- */
 const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
+log('LOG: Debugger ready');
 
-function computeStage(periodSec, remainingSec){
-  const t = Math.max(0, Math.floor(remainingSec||0));
-  if (periodSec===90){
-    if      (t > 60) return 'R32';
-    else if (t > 30) return 'R16';
-    else if (t > 0 ) return 'QF/SF';
-    else             return 'Final';
-  }
-  return '—';
+/* ---------- Utils ---------- */
+const iso = (d)=> new Date(d).toISOString().replace(/\.\d{3}Z$/,'Z');
+function toast(msg, ms=1600){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
+function bytesToMB(n){ return (n/(1024*1024)).toFixed(2); }
+const varGreen = ()=> getComputedStyle(document.documentElement).getPropertyValue('--green') || '#39ff14';
+function show(el){ el.classList.remove('hidden'); }
+function hide(el){ el.classList.add('hidden'); }
+function setPreview(src){
+  if (src){ imgPreview.src = src; show(imgPreview); }
+  else { imgPreview.removeAttribute('src'); hide(imgPreview); }
 }
 
-async function fetchState(){
-  const url = `${EDGE_TIMER_URL}?winners=0&limit=1`;
-  const res = await fetch(url, {headers:{'x-client':'submit.html'}});
-  const text = await res.text();
-  let j=null; try{ j=JSON.parse(text); }catch(e){}
-  if (!res.ok) throw new Error((j&&j.error)||text||'edge error');
-  rawEl.textContent = JSON.stringify(j,null,2);
+/* ---------- Auth helpers ---------- */
+async function uid(){
+  const { data:{session} } = await supabase.auth.getSession();
+  return session?.user?.id || null;
+}
+function paintAuth(id){
+  if (id){ authBadge.textContent='logged in'; authBadge.style.color=varGreen(); }
+  else   { authBadge.textContent='not logged in'; authBadge.style.color='#ff6b6b'; authBadge.style.borderColor='#3b1616'; }
+}
+btnMagic.addEventListener('click', async ()=>{
+  const email = (emailInput.value||'').trim();
+  if (!email) return toast('Enter email first');
+  authMsg.textContent = 'Sending link…';
+  const { error } = await supabase.auth.signInWithOtp({ email, options:{ emailRedirectTo: window.location.href } });
+  if (error){ authMsg.textContent = 'Error sending link'; console.error(error); toast('Magic link failed'); }
+  else { authMsg.textContent = 'Check your email for the link.'; toast('Magic link sent'); }
+});
+btnSignOut.addEventListener('click', async ()=>{
+  await supabase.auth.signOut();
+  paintAuth(null);
+  toast('Signed out');
+});
+
+/* ---------- Pick flow (file or URL) ---------- */
+let picked = { file:null, url:'' };
+
+btnPick.addEventListener('click', ()=>{
+  if (!picked.file && !picked.url){
+    fileInput.click();
+  } else {
+    urlInput.classList.toggle('hidden');
+    if (!urlInput.classList.contains('hidden')) urlInput.focus();
+  }
+});
+
+fileInput.addEventListener('change', ()=>{
+  const f = fileInput.files?.[0];
+  if (!f) return;
+  if (!f.type.startsWith('image/')){ toast('File must be an image'); fileInput.value=''; return; }
+  if (f.size > 10*1024*1024){ toast('Max 10MB'); fileInput.value=''; return; }
+  picked.file = f; picked.url = '';
+  urlInput.value = ''; urlInput.classList.add('hidden');
+  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
+  setPreview(URL.createObjectURL(f));
+  previewHint.textContent = 'Ready to upload';
+});
+
+urlInput.addEventListener('input', ()=>{
+  picked.url = urlInput.value.trim();
+  if (picked.url) {
+    picked.file = null; fileInput.value='';
+    fileName.textContent = 'Using pasted URL';
+    previewHint.textContent = picked.url;
+    // quick sanity check for image URL
+    const im = new Image();
+    im.onload = ()=> setPreview(picked.url);
+    im.onerror = ()=> { setPreview(''); toast('URL is not an image'); };
+    im.src = picked.url;
+  } else {
+    previewHint.textContent='';
+    setPreview('');
+  }
+});
+
+/* Drag & Drop */
+['dragenter','dragover'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.remove('drag');}));
+pickZone.addEventListener('drop', (e)=>{
+  const f = e.dataTransfer?.files?.[0];
+  if (!f) return;
+  if (!f.type.startsWith('image/')) return toast('File must be an image');
+  if (f.size > 10*1024*1024) return toast('Max 10MB');
+  picked.file = f; picked.url='';
+  fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
+  setPreview(URL.createObjectURL(f));
+  previewHint.textContent = 'Ready to upload (dropped)';
+});
+
+/* Paste support (clipboard image or URL text) */
+window.addEventListener('paste', (e)=>{
+  try{
+    const items = e.clipboardData?.items || [];
+    for (const it of items){
+      if (it.kind === 'file'){
+        const f = it.getAsFile();
+        if (f && f.type.startsWith('image/')){
+          if (f.size > 10*1024*1024) { toast('Max 10MB'); return; }
+          picked.file = f; picked.url='';
+          fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+          fileName.textContent = `${f.name||'pasted-image'} — ${bytesToMB(f.size)} MB`;
+          setPreview(URL.createObjectURL(f));
+          previewHint.textContent = 'Ready to upload (pasted image)';
+          return;
+        }
+      } else if (it.kind === 'string'){
+        it.getAsString((txt)=>{
+          const s = (txt||'').trim();
+          if (/^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i.test(s)){
+            picked.url = s; picked.file = null;
+            urlInput.value = s; urlInput.classList.remove('hidden');
+            fileInput.value = '';
+            fileName.textContent = 'Using pasted URL';
+            setPreview(s);
+            previewHint.textContent = s;
+          }
+        });
+      }
+    }
+  }catch{}
+});
+
+/* ---------- Upload helper ---------- */
+async function uploadToStorage(userId, file){
+  const d=new Date();
+  const path = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${crypto.randomUUID()}-${file.name}`;
+  const t0=performance.now();
+  const { data, error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl:'3600', upsert:false });
+  const dt=(performance.now()-t0).toFixed(0);
+  if (error) throw error;
+
+  // Public URL first; if that fails to load later, fall back to signed URL
+  const { data:pub } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
+  let url = pub?.publicUrl || null;
+
+  // Optional quick HEAD check — browsers limit CORS, so we’ll also offer a signed URL fallback unconditionally
+  try{
+    const { data:signed } = await supabase.storage.from(BUCKET).createSignedUrl(data.path, 60*60*24*7); // 7 days
+    if (signed?.signedUrl) url = url || signed.signedUrl;
+  }catch(e){ /* ignore if bucket is public and signed not needed */ }
+
+  log('IMG: uploaded ', url, `(${dt}ms)`);
+  return url;
+}
+
+/* ---------- Edge call + timer normalize ---------- */
+async function callEdge(){
+  const t0 = performance.now();
+  log('EDGE: GET', EDGE_URL);
+  const res = await fetch(EDGE_URL, {
+    method:'GET',
+    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`, 'apikey':SUPABASE_ANON_KEY }
+  });
+  const raw = await res.text();
+  const dt = (performance.now()-t0).toFixed(0);
+  log(`EDGE: GET ${EDGE_URL} → ${res.status} (${dt}ms)`);
+  const preview = raw.length>200 ? raw.slice(0,200)+'…' : raw;
+  log('EDGE: body ~200b =', preview);
+
+  let j=null; try{ j=JSON.parse(raw); }catch(e){ log('EDGE: JSON parse error', String(e)); }
+  if (!res.ok) throw new Error((j&&j.error)||raw||'edge error');
   return j?.state || j || {};
 }
 
 function normalize(s){
+  try { log('[EDGE] raw state', JSON.stringify(s)); } catch {}
   const phaseEnd =
-    s.ends_at || s.phase_end_at || s.phaseEndAt || s.next_at || s.next_iso || null;
+    s.phase_end_at || s.phaseEndAt || s.next_at || s.next_iso || s.base_iso || null;
 
   const period =
     (typeof s.period_sec==='number') ? s.period_sec
   : (typeof s.period==='number')     ? s.period
   : (typeof s.period_s==='number')   ? s.period_s
-  : 90;
+  : 20;
 
   let remaining =
     (typeof s.remaining_sec==='number') ? s.remaining_sec
@@ -154,57 +389,444 @@ function normalize(s){
     if (!isNaN(ms)) remaining = Math.max(0, Math.ceil(ms/1000));
   }
 
+  try { log('[EDGE] normalized', JSON.stringify({phase_end_at:phaseEnd, period_sec:period, remaining_sec:remaining, paused:!!s.paused})); } catch {}
   return { phase_end_at: phaseEnd, period_sec: period, paused: !!s.paused, remaining_sec: remaining };
 }
 
-let paused=false, serverPhaseEndISO=null, periodSec=90, remainingSec=null;
+/* ---------- Timer state ---------- */
+let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
 
-function render(){
-  const t = Math.max(0, Math.floor(remainingSec||0));
-  clockEl.textContent = String(t);
-  stageEl.textContent = computeStage(periodSec, remainingSec);
-  nowEl.textContent = new Date().toISOString();
-  endEl.textContent = serverPhaseEndISO || 'null';
-  perEl.textContent = String(periodSec);
-  remEl.textContent = String(remainingSec);
-  pauEl.textContent = String(paused);
-}
+/* ---------- Stage display (placeholder) ---------- */
+function computeStage(){ return 'R32'; } // leave as-is for now
 
+/* ---------- Sync ---------- */
 async function syncState(){
   try{
-    const raw = await fetchState();
-    const s = normalize(raw);
-    serverPhaseEndISO = s.phase_end_at || null;
-    remainingSec = (typeof s.remaining_sec==='number') ? s.remaining_sec
-                 : (serverPhaseEndISO ? Math.max(0, Math.ceil((Date.parse(serverPhaseEndISO)-Date.now())/1000)) : 0);
-    periodSec = (typeof s.period_sec==='number') ? s.period_sec : 90;
+    const s = normalize(await callEdge());
+    const __prev = serverPhaseEndISO;
+
+    serverPhaseEndISO = s.phase_end_at; if (!serverPhaseEndISO && s.base_iso) serverPhaseEndISO = s.base_iso;
+    remainingSec = s.remaining_sec;
+    periodSec = s.period_sec ?? 20;
     paused = !!s.paused;
-    render();
-  }catch(e){
-    rawEl.textContent = 'edge fetch failed: ' + (e.message||String(e));
-    console.error(e);
-  }
-}
+    lastSyncAt = Date.now();
 
-let rafId; let last=0;
-function loop(ts){
-  if (!last) last=ts;
-  const dt=(ts-last)/1000;
-  if (dt>=1){
-    if (!paused && typeof remainingSec==='number'){
-      remainingSec = Math.max(0, remainingSec - Math.floor(dt));
-      render();
+    if (__prev && serverPhaseEndISO && __prev !== serverPhaseEndISO) {
+      try { await renderQueue(); } catch {}
     }
-    last=ts;
+
+    stageEl.textContent = computeStage();
+    log('CLOCK: clock — →', (typeof remainingSec==='number')?remainingSec:'—', `(Δdom ${(performance.now()/1000).toFixed(2)}s)`);
+  }catch(e){
+    console.error(e);
+    toast('Timer sync failed');
   }
-  rafId = requestAnimationFrame(loop);
 }
 
-(async function boot(){
-  await syncState();
-  requestAnimationFrame(loop);
-  setInterval(syncState, 5000);
+/* ---------- Render loop ---------- */
+let raf;
+function loop(){
+  if (typeof remainingSec === 'number') {
+    const elapsed = (Date.now() - lastSyncAt) / 1000;
+    const sec = Math.max(0, Math.ceil(remainingSec - elapsed));
+    clockEl.textContent = String(sec);
+    if (sec<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
+  } else if (serverPhaseEndISO) {
+    const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
+    const sec = Math.ceil(rem/1000);
+    clockEl.textContent = String(sec);
+    if (rem<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
+  } else {
+    const elapsed = Math.floor(((Date.now()% (periodSec*1000)))/1000);
+    const sec = Math.max(0, periodSec - elapsed);
+    clockEl.textContent = String(sec);
+    if (Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
+  }
+  raf = requestAnimationFrame(loop);
+}
+
+/* Keep your style of periodic logging */
+log('TIMER: interval 3 set @ 30000ms');
+const int3 = setInterval(()=> syncState().catch(()=>{}), 30000);
+log('TIMER: timeout 4 set @ 0ms');
+setTimeout(()=>{ log('TIMER: timeout 4 run 0.0ms'); }, 0);
+
+/* ---------- Submit handler ---------- */
+btnSubmit.addEventListener('click', async ()=>{
+  submitMsg.textContent='';
+  const id = await uid();
+  if (!id) return toast('Log in to submit');
+  if (!consent.checked) return toast('Please consent to the rules');
+
+  let finalUrl = (picked.url||'').trim();
+  try{
+    if (picked.file){
+      toast('Uploading…');
+      finalUrl = await uploadToStorage(id, picked.file);
+    }
+    if (!finalUrl) return toast('Pick a file or paste a URL');
+
+    const { error } = await supabase.from('art_queue').insert({
+      image_url: finalUrl, status: 'pending'
+    });
+    if (error) throw error;
+
+    picked = {file:null, url:''};
+    fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+    fileName.textContent = 'jpg / png / webp — 10MB max';
+    previewHint.textContent = '';
+    setPreview('');
+    consent.checked = false;
+
+    toast('✅ Art queued for next round');
+    submitMsg.textContent = 'Art queued for next round.';
+    await renderQueue();
+    if (queuePanel && queuePanel.style.display === 'none') { queuePanel.style.display = 'block'; queueToggle.textContent = 'Collapse ▲'; }
+  }catch(e){
+    console.error(e);
+    toast(e?.message || 'Submit failed');
+    submitMsg.textContent = 'Submit failed.';
+  }
+});
+
+/* ---------- Queue toggle ---------- */
+if (queueToggle){
+  queueToggle.addEventListener('click', ()=>{
+    const shown = queuePanel.style.display !== 'none';
+    queuePanel.style.display = shown ? 'none' : 'block';
+    queueToggle.textContent = shown ? 'Expand ▼' : 'Collapse ▲';
+  });
+}
+
+/* ---------- Queue render ---------- */
+async function renderQueue(){
+  try{
+    const { data, error } = await supabase
+      .from('art_queue')
+      .select('id,image_url,created_at')
+      .eq('status','pending')
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+
+    if (!data || !data.length){
+      queueGrid.innerHTML = '';
+      queueEmpty.style.display = 'block';
+      if (queueCount) queueCount.textContent = '(0)';
+      return;
+    }
+    queueEmpty.style.display = 'none';
+    if (queueCount) queueCount.textContent = `(${data.length})`;
+    queueGrid.innerHTML = data.map((r,i)=>`
+      <div class="thumb" data-id="${r.id}" title="${r.image_url}">
+        <span class="idx">#${i+1}</span>
+        <img src="${r.image_url}" alt="queued art ${i+1}"/>
+      </div>
+    `).join('');
+
+    // Image load logs + 404 cleanup
+    queueGrid.querySelectorAll('img').forEach(img=>{
+      img.addEventListener('load', ()=> log('IMG: loaded  ', img.src));
+      img.addEventListener('error', ()=> {
+        console.warn('IMG: error   ', img.src);
+        const host = img.closest('[data-id], .thumb, .item');
+        if (host) {
+          host.remove();
+          const count = queueGrid.children.length;
+          if (queueCount) queueCount.textContent = `(${count})`;
+          if (count === 0) queueEmpty.style.display = 'block';
+          console.warn('[QUEUE] removed 404 image tile');
+        }
+      });
+    });
+  }catch(e){
+    console.error(e);
+    toast('Queue failed to load');
+  }
+}
+
+/* ---------- Realtime queue watch ---------- */
+const queueChannel = supabase.channel('queue-watch')
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'art_queue' }, (payload) => {
+    const id = payload.new?.id;
+    const newS = payload.new?.status;
+    if (!id) return;
+    if (newS === 'locked' || newS === 'used') {
+      const el = queueGrid.querySelector(`[data-id="${id}"]`);
+      if (el) {
+        el.remove();
+        const count = queueGrid.children.length;
+        if (queueCount) queueCount.textContent = `(${count})`;
+        if (count === 0) queueEmpty.style.display = 'block';
+        console.log('[QUEUE] removed', id, '→', newS);
+      } else {
+        renderQueue().catch(()=>{});
+      }
+    }
+  })
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'art_queue' }, (payload) => {
+    const row = payload.new;
+    if (row?.status !== 'pending') return;
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    div.dataset.id = row.id;
+    div.title = row.image_url;
+    div.innerHTML = `<span class="idx">#?</span><img src="${row.image_url}" alt="queued art"/>`;
+    if (queueGrid.children.length === 0) {
+      queueEmpty.style.display = 'none';
+      queueGrid.appendChild(div);
+    } else {
+      queueGrid.appendChild(div);
+    }
+    const count = queueGrid.children.length;
+    if (queueCount) queueCount.textContent = `(${count})`;
+  })
+  .subscribe();
+
+// Clean up
+window.addEventListener('beforeunload', ()=> { try { supabase.removeChannel(queueChannel); } catch {} });
+
+/* ---------- Round start watch ---------- */
+let __lastClock = null;
+function __watchRoundStart() {
+  const n = parseInt(clockEl.textContent, 10);
+  if (!isNaN(n)) {
+    if (__lastClock !== null && __lastClock <= 1 && n > __lastClock) {
+      console.log('[QUEUE] round start detected — refreshing queue');
+      renderQueue().catch(()=>{});
+    }
+    __lastClock = n;
+  }
+  requestAnimationFrame(__watchRoundStart);
+}
+__watchRoundStart();
+
+/* ---------- Boot ---------- */
+(async()=>{
+  paintAuth(await uid());
+  supabase.auth.onAuthStateChange((_e, session)=> paintAuth(session?.user?.id || null));
+
+  // First paint
+  await Promise.all([renderQueue(), syncState()]);
+  loop();
+
+  // Safety poll (kept)
+  setInterval(()=> renderQueue().catch(()=>{}), 5000);
+
+  // Refresh on visibility regain (kept)
+  document.addEventListener('visibilitychange', ()=>{
+    if (document.visibilityState === 'visible') {
+      renderQueue().catch(()=>{});
+      syncState().catch(()=>{});
+    }
+  });
 })();
 </script>
+
+<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
+<script>
+(function () {
+  const MAX_LINES = 2000;
+  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
+
+  const floatBtn = document.createElement('button');
+  floatBtn.id = 'dbgFloatingBtn';
+  floatBtn.textContent = '🐛 Debug';
+  floatBtn.style.cssText = `
+    position: fixed; right: 8px; bottom: 8px;
+    z-index: 2147483647; background:#000; color:#0f0;
+    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
+    font: 12px/1.1 monospace; cursor:pointer;
+  `;
+  document.body.appendChild(floatBtn);
+
+  const wrap = document.createElement('div');
+  wrap.id = 'dbg';
+  wrap.style.cssText = `
+    position: fixed; right: 0; bottom: 0; left: 0;
+    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
+    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
+  `;
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
+  bar.innerHTML = `
+    <span style="color:#6f6">Rage Debug</span>
+    <label>Filter:
+      <select id="dbgFilter">
+        <option value="">All</option>
+        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
+        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
+        <option>ERR</option><option>WARN</option><option>LOG</option>
+      </select>
+    </label>
+    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
+    <button id="dbgCopy">Copy</button>
+    <button id="dbgDownload">Download</button>
+    <button id="dbgClear">Clear</button>
+    <span style="margin-left:auto"></span>
+    <button id="dbgClose">✕</button>
+  `;
+
+  const list = document.createElement('div');
+  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
+
+  wrap.appendChild(bar); wrap.appendChild(list);
+  document.body.appendChild(wrap);
+
+  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
+  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
+  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
+
+  const filterSel  = bar.querySelector('#dbgFilter');
+  const recordChk  = bar.querySelector('#dbgRecord');
+  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
+  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
+  bar.querySelector('#dbgDownload').onclick = () => {
+    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
+    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
+    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  };
+
+  let buffer = [];
+  function push(kind, msg, extra) {
+    if (!recordChk.checked) return;
+    const ts = new Date().toLocaleTimeString();
+    const line = `[${ts}] ${kind}: ${msg}`;
+    buffer.push({kind, line, extra});
+    if (buffer.length > MAX_LINES) buffer.shift();
+    const f = filterSel.value;
+    if (!f || f === kind) addLine({kind, line});
+  }
+  function addLine(r){
+    const div = document.createElement('div');
+    div.textContent = r.line;
+    if (r.kind === 'ERR') div.style.color = '#f88';
+    else if (r.kind === 'WARN') div.style.color = '#ff8';
+    else if (r.kind === 'EDGE') div.style.color = '#8ff';
+    else if (r.kind === 'NET')  div.style.color = '#8cf';
+    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
+    list.appendChild(div); list.scrollTop = list.scrollHeight;
+  }
+  function render(){
+    list.innerHTML = '';
+    const f = filterSel.value;
+    for (const r of buffer) if (!f || f === r.kind) addLine(r);
+  }
+  filterSel.onchange = render;
+
+  const _log = console.log, _warn = console.warn, _err = console.error;
+  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
+  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
+  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
+
+  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
+  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
+
+  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
+  const q = (id) => document.getElementById(id);
+
+  function observeText(id, kind) {
+    const el = q(id); if (el) {
+      let last = el.textContent;
+      const mo = new MutationObserver(() => {
+        if (el.textContent !== last) {
+          last = el.textContent;
+          push(kind, `${id} → ${last}`);
+        }
+      });
+      mo.observe(el, {childList:true, characterData:true, subtree:true});
+    }
+  }
+  observeText('phaseKey', 'STAGE');
+  observeText('state', 'STAGE');
+
+  (function watchClock(){
+    const el = q('clock'); if (!el) return;
+    let last = el.textContent, lastAt = performance.now();
+    const mo = new MutationObserver(() => {
+      const now = performance.now();
+      if (el.textContent !== last) {
+        const dt = ((now - lastAt)/1000).toFixed(2);
+        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
+        last = el.textContent; lastAt = now;
+      }
+    });
+    mo.observe(el, {childList:true, characterData:true, subtree:true});
+  })();
+
+  const _fetch = window.fetch.bind(window);
+  window.fetch = async function(url, opts = {}) {
+    const start = performance.now();
+    const method = (opts && opts.method) || 'GET';
+    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
+    push(tag, `${method} ${url}`);
+    try {
+      const res = await _fetch(url, opts);
+      const ms = (performance.now() - start).toFixed(0);
+      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
+      return res;
+    } catch (e) {
+      const ms = (performance.now() - start).toFixed(0);
+      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
+      throw e;
+    }
+  };
+
+  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
+  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
+  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
+
+  const timers = new Map();
+  window.setInterval = function(fn, ms, ...rest){
+    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
+  };
+  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
+  window.setTimeout  = function(fn, ms, ...rest){
+    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
+  };
+  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
+  window.requestAnimationFrame = function(fn){
+    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
+  };
+  window.cancelAnimationFrame = function(id){ _caf(id); };
+
+  function hookImg(img){
+    if (!img || img.__dbgHooked) return;
+    img.__dbgHooked = true;
+    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
+    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
+  }
+  Array.from(document.images).forEach(hookImg);
+  const imgObs = new MutationObserver((ms)=>{
+    for (const m of ms) for (const n of m.addedNodes) {
+      if (n.tagName === 'IMG') hookImg(n);
+      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
+    }
+  });
+  imgObs.observe(document.documentElement, {childList:true, subtree:true});
+
+  const brows = document.getElementById('brows');
+  if (brows) {
+    const mo = new MutationObserver((ms)=>{
+      let adds = 0, rems = 0;
+      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
+      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
+    });
+    mo.observe(brows, {childList:true, subtree:false});
+  }
+
+  window.RageDebug = {
+    log: (k, m) => push(k||'LOG', m||''),
+    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
+    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
+    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
+  };
+
+  (console.log||(()=>{}))('Debugger ready');
+})();
+</script>
+<!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
