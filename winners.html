@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Winners (All Phases)</title>
+  <title>Rage Space — Winners</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
     html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif}
@@ -11,8 +11,9 @@
     h1{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:.5px}
     .top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
     a.btn,button.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:#131920;color:var(--fg);font-weight:700;text-decoration:none;cursor:pointer}
-    .meta{color:var(--muted);font-size:12px;margin:6px 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .meta{color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
     .tz{padding:2px 8px;border-radius:999px;background:#0b1220;border:1px solid #1a2636;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.06em}
+    .seg{display:inline-block;margin-left:6px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:11px;color:#cbd5e1;background:#0b1220}
     .card{border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden}
     .table-wrap{overflow-x:auto}
     table{width:100%;border-collapse:collapse;font-size:14px}
@@ -23,7 +24,6 @@
     .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
     .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
     .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
-    .seg{display:inline-block;margin-left:6px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:11px;color:#cbd5e1;background:#0b1220}
     @media (max-width:560px){
       th.cycle,td.cycle{display:none}
       table{font-size:13px}
@@ -92,6 +92,15 @@
     function applyModeBtn(){
       btnToggleMode.textContent = viewMode==="all" ? "Mode: All Phases" : "Mode: Finals Only";
     }
+    applyModeBtn();
+
+    btnToggleMode.onclick = () => { viewMode = (viewMode==="all" ? "finals" : "all"); localStorage.setItem(MODE_KEY, viewMode); applyModeBtn(); load(); };
+    btnRefresh.onclick = () => load();
+    btnToggleAuto.onclick = () => {
+      auto = !auto;
+      btnToggleAuto.textContent = `Auto-Refresh: ${auto ? "On" : "Off"}`;
+    };
+    btnClear.onclick = clearData;
 
     // timezone badge
     try {
@@ -120,9 +129,9 @@
       const suf = s.split("::")[1];
       const map = { q1:"Quarter 1", q2:"Quarter 2", q3:"Quarter 3", q4:"Quarter 4",
                     semi1:"Semi 1", semi2:"Semi 2" };
+      // r16_1..r16_8 will show as R16_1..R16_8 which is fine
       return map[suf] || suf.toUpperCase();
     }
-
     function computeDecidedAt(row){
       const d = parseAsUTCish(row.decided_at);
       if (!isNaN(d)) return d;
@@ -133,8 +142,23 @@
       }
       return NaN;
     }
-
     function isFinalRow(w){ return !String(w.base_iso || "").includes("::"); }
+
+    // Build a map per cycle: image_url → original seed (a..p) using R16 rows
+    function buildUrlToSeedMap(all){
+      const byCycle = new Map(); // cycleBase -> Map(url -> seedLetter)
+      for (const r of all){
+        const base = String(r.base_iso||"");
+        const root = base.split("::")[0];
+        if (!byCycle.has(root)) byCycle.set(root, new Map());
+        if (base.includes("::r16_")){
+          const url = r.image_url || r.winner_url || "";
+          const seed = (r.winner_seed || "").toLowerCase();
+          if (url && seed) byCycle.get(root).set(url, seed);
+        }
+      }
+      return byCycle;
+    }
 
     function render(rows){
       if(!rows || rows.length===0){
@@ -144,7 +168,7 @@
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
-        const seed = (r.winner_seed || "").toLowerCase();
+        const seed = (r._resolved_seed || r.winner_seed || "").toLowerCase();
         const isLeft = ["a","c","e","g","i","k","m","o"].includes(seed);
         const pillClass = isLeft ? "pillA" : "pillB";
         const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
@@ -175,6 +199,18 @@
         const res = await fetch(`${FUNCTION_URL}?winners=1&limit=500&_=${ts}`, { cache: "no-store" });
         const data = await res.json().catch(()=> ({}));
         const all = Array.isArray(data) ? data : (data.winners || []);
+
+        // Resolve original seeds for non-R16 rows by matching image_url back to R16
+        const mapByCycle = buildUrlToSeedMap(all);
+        for (const r of all){
+          const root = String(r.base_iso||"").split("::")[0];
+          const url = r.image_url || r.winner_url || "";
+          const m = mapByCycle.get(root);
+          if (m && url && m.has(url)){
+            r._resolved_seed = m.get(url); // a..p
+          }
+        }
+
         // filter according to mode
         const rows = viewMode==="finals" ? (all||[]).filter(isFinalRow) : (all||[]);
         // newest first by decided_at
@@ -212,32 +248,9 @@
       }
     }
 
-    // auto-refresh
     let auto = true;
-    let timer = null;
-    function startAuto(){ stopAuto(); timer = setInterval(load, 5000); }
-    function stopAuto(){ if (timer) clearInterval(timer); timer = null; }
-    function toggleAuto(){
-      auto = !auto;
-      btnToggleAuto.textContent = `Auto-Refresh: ${auto ? "On" : "Off"}`;
-      if (auto) startAuto(); else stopAuto();
-    }
-    function toggleMode(){
-      viewMode = (viewMode==="all") ? "finals" : "all";
-      localStorage.setItem(MODE_KEY, viewMode);
-      applyModeBtn();
-      load();
-    }
-
-    btnRefresh.onclick = load;
-    btnToggleAuto.onclick = toggleAuto;
-    btnToggleMode.onclick = toggleMode;
-    btnClear.onclick = clearData;
-
-    // initial
-    applyModeBtn();
+    setInterval(()=>{ if (auto) load(); }, 5_000);
     load();
-    startAuto();
   </script>
 </body>
 </html>
