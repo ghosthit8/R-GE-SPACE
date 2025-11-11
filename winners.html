@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Winners</title>
+  <title>Rage Space — Winners (All Phases)</title>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
     html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif}
@@ -11,7 +11,7 @@
     h1{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:.5px}
     .top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
     a.btn,button.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:#131920;color:var(--fg);font-weight:700;text-decoration:none;cursor:pointer}
-    .meta{color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .meta{color:var(--muted);font-size:12px;margin:6px 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
     .tz{padding:2px 8px;border-radius:999px;background:#0b1220;border:1px solid #1a2636;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.06em}
     .card{border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden}
     .table-wrap{overflow-x:auto}
@@ -23,7 +23,12 @@
     .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
     .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
     .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
-    @media (max-width:520px){ th.cycle,td.cycle{display:none} th,td{padding:8px 10px} table{font-size:13px} }
+    .seg{display:inline-block;margin-left:6px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:11px;color:#cbd5e1;background:#0b1220}
+    @media (max-width:560px){
+      th.cycle,td.cycle{display:none}
+      table{font-size:13px}
+      th,td{padding:8px 10px}
+    }
   </style>
 </head>
 <body>
@@ -34,6 +39,7 @@
         <a class="btn" href="matchup.html">← Back</a>
         <button class="btn" id="refresh">Refresh</button>
         <button class="btn" id="toggleAuto">Auto-Refresh: On</button>
+        <button class="btn" id="toggleMode">Mode: All Phases</button>
         <button class="btn" id="clear">Clear Data</button>
       </div>
     </div>
@@ -41,6 +47,7 @@
     <div class="meta" id="meta">
       Loading…
       <span class="tz" id="tzBadge"></span>
+      <span class="seg">Cycle: R16@90s → QF@60s → SF@30s → Final@0s</span>
     </div>
 
     <div class="card">
@@ -50,6 +57,7 @@
             <tr>
               <th>#</th>
               <th>Decided At</th>
+              <th>Phase</th>
               <th class="cycle">Cycle</th>
               <th>Winner</th>
               <th>Thumbnail</th>
@@ -58,7 +66,7 @@
             </tr>
           </thead>
           <tbody id="body">
-            <tr><td colspan="7" style="padding:18px;color:#9aa0a6;">Loading winners…</td></tr>
+            <tr><td colspan="8" style="padding:18px;color:#9aa0a6;">Loading winners…</td></tr>
           </tbody>
         </table>
       </div>
@@ -75,7 +83,15 @@
     const tbody  = document.getElementById('body');
     const btnRefresh = document.getElementById('refresh');
     const btnToggleAuto = document.getElementById('toggleAuto');
+    const btnToggleMode = document.getElementById('toggleMode');
     const btnClear = document.getElementById('clear');
+
+    // persistent view mode
+    const MODE_KEY = "winners_mode_v2"; // "all" | "finals"
+    let viewMode = localStorage.getItem(MODE_KEY) || "all";
+    function applyModeBtn(){
+      btnToggleMode.textContent = viewMode==="all" ? "Mode: All Phases" : "Mode: Finals Only";
+    }
 
     // timezone badge
     try {
@@ -98,31 +114,31 @@
         hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
       });
     }
+    function phaseFromBase(base){
+      const s = String(base||"");
+      if (!s.includes("::")) return "Final";
+      const suf = s.split("::")[1];
+      const map = { q1:"Quarter 1", q2:"Quarter 2", q3:"Quarter 3", q4:"Quarter 4",
+                    semi1:"Semi 1", semi2:"Semi 2" };
+      return map[suf] || suf.toUpperCase();
+    }
 
-    // Prefer the server-written final timestamp.
     function computeDecidedAt(row){
-      // Finals from the edge have decided_at = ends_at of that cycle.
       const d = parseAsUTCish(row.decided_at);
       if (!isNaN(d)) return d;
-
-      // Fallback: derive from base_iso (rare; for legacy rows).
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
-        // If period_sec is provided, honor it; otherwise assume 120s default.
         const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 120;
         return base + secs * 1000;
       }
       return NaN;
     }
 
-    function isFinalRow(w){
-      // Finals have base_iso with NO phase suffix (“::q1”, “::semi2”, etc.)
-      return !String(w.base_iso || "").includes("::");
-    }
+    function isFinalRow(w){ return !String(w.base_iso || "").includes("::"); }
 
     function render(rows){
       if(!rows || rows.length===0){
-        tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">No finals yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
         return;
       }
       const N = rows.length;
@@ -137,10 +153,12 @@
         const img = r.image_url || r.winner_url || '';
         const thumb = img ? `<img src="${img}" class="thumb" alt="winner">` : `<span style="color:#666;">—</span>`;
         const decidedTs = computeDecidedAt(r);
+        const phase = phaseFromBase(r.base_iso);
         return `
           <tr>
             <td>${n}</td>
             <td>${fmtLocal(decidedTs)}</td>
+            <td>${phase}</td>
             <td class="cycle">${r.base_iso || "—"}</td>
             <td><span class="${pillClass}">${seedLabel}</span></td>
             <td>${thumb}</td>
@@ -157,28 +175,24 @@
         const res = await fetch(`${FUNCTION_URL}?winners=1&limit=500&_=${ts}`, { cache: "no-store" });
         const data = await res.json().catch(()=> ({}));
         const all = Array.isArray(data) ? data : (data.winners || []);
+        // filter according to mode
+        const rows = viewMode==="finals" ? (all||[]).filter(isFinalRow) : (all||[]);
+        // newest first by decided_at
+        rows.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
+        render(rows);
 
-        // finals only
-        const finals = (all || []).filter(isFinalRow);
-
-        // newest first by server-written decided_at
-        finals.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
-
-        render(finals);
-        const total = finals.length;
-        const newest = finals[0];
+        const total = rows.length;
+        const newest = rows[0];
         const newestTs = newest ? computeDecidedAt(newest) : NaN;
-
-        const prefix = `Showing ${total} finals`;
+        const prefix = `Showing ${total} ${viewMode==="finals"?"finals":"winners"}`;
         const newestTxt = isNaN(newestTs) ? '' : ` • newest at ${fmtLocal(newestTs)}`;
-        const tail = ` • newest is #${total} at top • #1 at bottom`;
-
+        const tail = total ? ` • newest is #${total} at top • #1 at bottom` : '';
         metaEl.firstChild
           ? metaEl.firstChild.nodeValue = `${prefix}${newestTxt}${tail} `
           : (metaEl.textContent = `${prefix}${newestTxt}${tail} `);
       } catch (e) {
         console.error(e);
-        tbody.innerHTML = `<tr><td colspan="7" style="padding:18px;color:#9aa0a6;">Failed to load winners.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:#9aa0a6;">Failed to load winners.</td></tr>`;
         metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Load error. ' : (metaEl.textContent = 'Load error. ');
       }
     }
@@ -208,12 +222,20 @@
       btnToggleAuto.textContent = `Auto-Refresh: ${auto ? "On" : "Off"}`;
       if (auto) startAuto(); else stopAuto();
     }
+    function toggleMode(){
+      viewMode = (viewMode==="all") ? "finals" : "all";
+      localStorage.setItem(MODE_KEY, viewMode);
+      applyModeBtn();
+      load();
+    }
 
     btnRefresh.onclick = load;
     btnToggleAuto.onclick = toggleAuto;
+    btnToggleMode.onclick = toggleMode;
     btnClear.onclick = clearData;
 
     // initial
+    applyModeBtn();
     load();
     startAuto();
   </script>
