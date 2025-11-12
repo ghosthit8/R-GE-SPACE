@@ -19,8 +19,13 @@
     table{width:100%;border-collapse:collapse;font-size:14px}
     th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
     th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
-    .pillA{background:#2a1212;border:1px solid #4c2222;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-    .pillB{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+
+    /* winner pills */
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase; border:1px solid transparent; }
+    .pillA{ background:#2a1212; border-color:#4c2222; }
+    .pillB{ background:#0f1f33; border-color:#20344d; }
+    .pillN{ background:#202327; border-color:#2b3137; color:#cbd5e1; }
+
     .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
     .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
     .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
@@ -130,6 +135,7 @@
       const map = { q1:"Quarter 1", q2:"Quarter 2", q3:"Quarter 3", q4:"Quarter 4",
                     semi1:"Semi 1", semi2:"Semi 2" };
       if (suf.startsWith("r32_")) return "R32 " + suf.split("_")[1];
+      if (suf.startsWith("r16_")) return "R16 " + suf.split("_")[1];
       return map[suf] || suf.toUpperCase();
     }
     function computeDecidedAt(row){
@@ -137,25 +143,35 @@
       if (!isNaN(d)) return d;
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
-        const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 150; // fallback now 150s
+        const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 150; // fallback 150s
         return base + secs * 1000;
       }
       return NaN;
     }
     function isFinalRow(w){ return !String(w.base_iso || "").includes("::"); }
 
-    // Build a map per cycle: image_url → original seed (a..af)
-    // Include both R16 and R32 rows to backfill original seed letters cleanly.
+    // Normalize URLs to improve matching (strip query/hash).
+    function norm(u){
+      if (!u) return "";
+      try { const x = new URL(u); return x.origin + x.pathname; }
+      catch { return String(u).split("#")[0].split("?")[0]; }
+    }
+
+    // Build a map per cycle: normalized image_url → original seed (a..af)
+    // Use both R32 and R16 rows (which carry original letters).
     function buildUrlToSeedMap(all){
       const byCycle = new Map(); // cycleBase -> Map(url -> seedLetter)
       for (const r of all){
         const base = String(r.base_iso||"");
         const root = base.split("::")[0];
+        const phase = base.split("::")[1] || "";
         if (!byCycle.has(root)) byCycle.set(root, new Map());
-        if (base.includes("::r16_") || base.includes("::r32_")){
-          const url = r.image_url || r.winner_url || "";
-          const seed = (r.winner_seed || "").toLowerCase();
-          if (url && seed) byCycle.get(root).set(url, seed);
+        const url = norm(r.image_url || r.winner_url || "");
+        const seed = (r.winner_seed || "").toLowerCase();
+        if (!url) continue;
+        // Only trust phases that carry original seed letters
+        if (phase.startsWith("r32_") || phase.startsWith("r16_")){
+          if (seed) byCycle.get(root).set(url, seed);
         }
       }
       return byCycle;
@@ -169,23 +185,35 @@
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
-        const seed = (r._resolved_seed || r.winner_seed || "").toLowerCase();
+
+        // Resolve seed: prefer _resolved_seed; else only use winner_seed if it’s longer than 1 char.
+        const resolved = (r._resolved_seed || "").toLowerCase();
+        const winnerSeed = (r.winner_seed || "").toLowerCase();
+        const seed = resolved || (winnerSeed.length > 1 ? winnerSeed : "");
+
+        // Pill color: use API-provided color when present; else infer from seed side; else neutral.
+        const apiColor = (r.winner_color || "").toLowerCase(); // "red" | "blue"
         const isLeft = ["a","c","e","g","i","k","m","o","q","s","u","w","y","aa","ac","ae"].includes(seed);
-        const pillClass = isLeft ? "pillA" : "pillB";
-        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
+        const pillClass = seed
+          ? (apiColor === "red" ? "pillA" : apiColor === "blue" ? "pillB" : (isLeft ? "pillA" : "pillB"))
+          : "pillN";
+
+        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : "—";
+
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
         const img = r.image_url || r.winner_url || '';
         const thumb = img ? `<img src="${img}" class="thumb" alt="winner">` : `<span style="color:#666;">—</span>`;
         const decidedTs = computeDecidedAt(r);
         const phase = phaseFromBase(r.base_iso);
+
         return `
           <tr>
             <td>${n}</td>
             <td>${fmtLocal(decidedTs)}</td>
             <td>${phase}</td>
             <td class="cycle">${r.base_iso || "—"}</td>
-            <td><span class="${pillClass}">${seedLabel}</span></td>
+            <td><span class="pill ${pillClass}">${seedLabel}</span></td>
             <td>${thumb}</td>
             <td class="score">${score}</td>
             <td>${by}</td>
@@ -205,7 +233,7 @@
         const mapByCycle = buildUrlToSeedMap(all);
         for (const r of all){
           const root = String(r.base_iso||"").split("::")[0];
-          const url = r.image_url || r.winner_url || "";
+          const url = norm(r.image_url || r.winner_url || "");
           const m = mapByCycle.get(root);
           if (m && url && m.has(url)){
             r._resolved_seed = m.get(url); // a..af
