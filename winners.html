@@ -94,8 +94,14 @@
     }
     applyModeBtn();
 
-    btnToggleMode.onclick = () => { viewMode = (viewMode==="all" ? "finals" : "all"); localStorage.setItem(MODE_KEY, viewMode); applyModeBtn(); load(); };
+    btnToggleMode.onclick = () => {
+      viewMode = (viewMode==="all" ? "finals" : "all");
+      localStorage.setItem(MODE_KEY, viewMode);
+      applyModeBtn();
+      load();
+    };
     btnRefresh.onclick = () => load();
+    let auto = true;
     btnToggleAuto.onclick = () => {
       auto = !auto;
       btnToggleAuto.textContent = `Auto-Refresh: ${auto ? "On" : "Off"}`;
@@ -107,7 +113,9 @@
       const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
       const tz = fmt.formatToParts(new Date()).find(p=>p.type==="timeZoneName")?.value || "";
       tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
-    } catch { tzBadge.textContent = "Local time"; }
+    } catch {
+      tzBadge.textContent = "Local time";
+    }
 
     // --- helpers ---
     function parseAsUTCish(s){
@@ -127,11 +135,14 @@
       const s = String(base||"");
       if (!s.includes("::")) return "Final";
       const suf = s.split("::")[1];
-      const map = { q1:"Quarter 1", q2:"Quarter 2", q3:"Quarter 3", q4:"Quarter 4",
-                    semi1:"Semi 1", semi2:"Semi 2" };
+      const map = {
+        q1:"Quarter 1", q2:"Quarter 2", q3:"Quarter 3", q4:"Quarter 4",
+        semi1:"Semi 1", semi2:"Semi 2"
+      };
       if (suf.startsWith("r32_")) return "R32 " + suf.split("_")[1];
       return map[suf] || suf.toUpperCase();
     }
+
     function computeDecidedAt(row){
       const d = parseAsUTCish(row.decided_at);
       if (!isNaN(d)) return d;
@@ -142,7 +153,10 @@
       }
       return NaN;
     }
-    function isFinalRow(w){ return !String(w.base_iso || "").includes("::"); }
+
+    function isFinalRow(w){ 
+      return !String(w.base_iso || "").includes("::");
+    }
 
     // Build a map per cycle: image_url → original seed (a..af)
     // Include both R16 and R32 rows to backfill original seed letters cleanly.
@@ -161,6 +175,18 @@
       return byCycle;
     }
 
+    // NEW: map a..af → 1..32
+    function seedLetterToNumber(letter) {
+      const list = [
+        "a","b","c","d","e","f","g","h",
+        "i","j","k","l","m","n","o","p",
+        "q","r","s","t","u","v","w","x",
+        "y","z","aa","ab","ac","ad","ae","af"
+      ];
+      const idx = list.indexOf(String(letter || "").toLowerCase());
+      return idx >= 0 ? idx + 1 : null;
+    }
+
     function render(rows){
       if(!rows || rows.length===0){
         tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
@@ -172,7 +198,11 @@
         const seed = (r._resolved_seed || r.winner_seed || "").toLowerCase();
         const isLeft = ["a","c","e","g","i","k","m","o","q","s","u","w","y","aa","ac","ae"].includes(seed);
         const pillClass = isLeft ? "pillA" : "pillB";
-        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
+
+        // *** CHANGED: letters → numbers ***
+        const num = seedLetterToNumber(seed);
+        const seedLabel = num ? `Seed #${num}` : "Seed ?";
+
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
         const img = r.image_url || r.winner_url || '';
@@ -223,34 +253,36 @@
         const newestTs = newest ? computeDecidedAt(newest) : NaN;
         const prefix = `Showing ${total} ${viewMode==="finals"?"finals":"winners"}`;
         const newestTxt = isNaN(newestTs) ? '' : ` • newest at ${fmtLocal(newestTs)}`;
-        const tail = total ? ` • newest is #${total} at top • #1 at bottom` : '';
-        metaEl.firstChild
-          ? metaEl.firstChild.nodeValue = `${prefix}${newestTxt}${tail} `
-          : (metaEl.textContent = `${prefix}${newestTxt}${tail} `);
-      } catch (e) {
+        const tail = total ? newestTxt : '';
+        metaEl.firstChild ? metaEl.firstChild.nodeValue = prefix + tail : (metaEl.textContent = prefix + tail);
+      } catch (e){
+        metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Error loading winners' : (metaEl.textContent = 'Error loading winners');
         console.error(e);
-        tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:#9aa0a6;">Failed to load winners.</td></tr>`;
-        metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Load error. ' : (metaEl.textContent = 'Load error. ');
       }
     }
 
     async function clearData(){
-      if(!confirm("⚠️ Permanently delete all winner data?")) return;
-      metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Clearing data… ' : (metaEl.textContent = 'Clearing data… ');
-      const res = await fetch(`${FUNCTION_URL}?clear=1`, {
-        method:"DELETE",
-        headers:{ "x-admin-key": ADMIN_KEY },
-        cache: "no-store"
-      });
-      if(res.ok){ alert("Winner data cleared."); load(); }
-      else {
-        const msg = await res.json().catch(()=>({}));
-        alert("Error: " + (msg.error || "failed to clear"));
+      const ok = prompt("Admin key to clear winners:") === ADMIN_KEY;
+      if (!ok) return;
+      try{
+        const res = await fetch(`${FUNCTION_URL}?clear=1`, {
+          method: "DELETE",
+          headers: { "x-admin-key": ADMIN_KEY }
+        });
+        if (!res.ok) throw new Error("clear failed");
+        await load();
+      }catch(e){
+        alert("Clear failed: " + (e?.message||e));
       }
     }
 
-    let auto = true;
-    setInterval(()=>{ if (auto) load(); }, 5_000);
+    // auto refresh loop
+    (function loop(){
+      if (auto) load();
+      setTimeout(loop, 15000);
+    })();
+
+    // initial load
     load();
   </script>
 </body>
