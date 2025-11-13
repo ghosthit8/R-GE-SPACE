@@ -137,7 +137,7 @@
       if (!isNaN(d)) return d;
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
-        const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 150; // fallback now 150s
+        const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 150;
         return base + secs * 1000;
       }
       return NaN;
@@ -202,7 +202,7 @@
       }).join('');
     }
 
-    // ------------- Robust loader (fixes manual Refresh) -------------
+    // ------------- Robust loader (CORS-safe) -------------
     let currentLoadAbort;
     async function load(force=false){
       try {
@@ -213,12 +213,16 @@
         btnRefresh.disabled = true;
         metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent = 'Loading… ');
 
-        const ts = Date.now(); // strong cache-buster
+        // Cache-buster & no-store; DO NOT send extra headers (they trigger CORS preflight failures)
+        const ts = Date.now();
         const res = await fetch(`${FUNCTION_URL}?winners=1&limit=500&_=${ts}`, {
           cache: "no-store",
-          headers: { "Cache-Control": "no-cache, no-store, must-revalidate", "Pragma":"no-cache", "Expires":"0" },
+          mode: "cors",
+          credentials: "omit",
           signal
         });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const data = await res.json().catch(()=> ({}));
         const all = Array.isArray(data) ? data : (data.winners || []);
@@ -248,10 +252,8 @@
           ? metaEl.firstChild.nodeValue = `${prefix}${newestTxt}${tail} `
           : (metaEl.textContent = `${prefix}${newestTxt}${tail} `);
       } catch (e) {
-        if (e?.name !== "AbortError") {
-          console.error(e);
-          tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:#ef4444;">Error loading winners.</td></tr>`;
-        }
+        console.error("Winners load error:", e);
+        tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:#ef4444;">Error loading winners.</td></tr>`;
       } finally {
         btnRefresh.disabled = false;
       }
