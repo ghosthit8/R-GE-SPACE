@@ -202,7 +202,19 @@
       }).join('');
     }
 
-    // ------------- Robust loader (CORS-safe) -------------
+    // ---- NEW: tick the state machine so locks/advances happen even from Winners ----
+    async function stateTick(){
+      try{
+        // Normal GET (no winners param) triggers the lock/advance checks on the Edge function
+        await fetch(`${FUNCTION_URL}?_=${Date.now()}`, {
+          cache: "no-store",
+          mode: "cors",
+          credentials: "omit"
+        });
+      }catch{}
+    }
+
+    // ------------- Robust loader -------------
     let currentLoadAbort;
     async function load(force=false){
       try {
@@ -213,7 +225,10 @@
         btnRefresh.disabled = true;
         metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent = 'Loading… ');
 
-        // Cache-buster & no-store; DO NOT send extra headers (they trigger CORS preflight failures)
+        // 1) advance server state (R32/R16/QF/SF/Final)
+        await stateTick();
+
+        // 2) fetch winners list
         const ts = Date.now();
         const res = await fetch(`${FUNCTION_URL}?winners=1&limit=500&_=${ts}`, {
           cache: "no-store",
@@ -267,6 +282,8 @@
           method:"DELETE",
           headers:{ "x-admin-key": ADMIN_KEY }
         });
+        // After clearing, force a tick so a fresh window is ready
+        await stateTick();
         await load(true);
       } catch(e){
         alert("Clear failed.");
@@ -275,7 +292,7 @@
 
     // auto-refresh
     let auto = true;
-    setInterval(()=>{ if (auto) load(false); }, 5000);
+    setInterval(async ()=>{ if (auto) await load(false); }, 5000);
 
     // initial
     load(true);
