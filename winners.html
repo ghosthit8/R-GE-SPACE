@@ -94,8 +94,8 @@
     }
     applyModeBtn();
 
-    btnToggleMode.onclick = () => { viewMode = (viewMode==="all" ? "finals" : "all"); localStorage.setItem(MODE_KEY, viewMode); applyModeBtn(); load(true); };
-    btnRefresh.onclick = () => load(true);
+    btnToggleMode.onclick = () => { viewMode = (viewMode==="all" ? "finals" : "all"); localStorage.setItem(MODE_KEY, viewMode); applyModeBtn(); load(); };
+    btnRefresh.onclick = () => load();
     btnToggleAuto.onclick = () => {
       auto = !auto;
       btnToggleAuto.textContent = `Auto-Refresh: ${auto ? "On" : "Off"}`;
@@ -137,18 +137,15 @@
       if (!isNaN(d)) return d;
       const base = parseAsUTCish(row.base_iso);
       if (!isNaN(base)) {
-        const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 150;
+        const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 150; // fallback now 150s
         return base + secs * 1000;
       }
       return NaN;
     }
     function isFinalRow(w){ return !String(w.base_iso || "").includes("::"); }
 
-    // LETTER → NUMBER mapping for 32 seeds:
-    const L32 = [..."abcdefghijklmnopqrstuvwxyz".split(""), "aa","ab","ac","ad","ae","af"];
-    const L2N = Object.fromEntries(L32.map((s,i)=>[s, i+1]));
-
     // Build a map per cycle: image_url → original seed (a..af)
+    // Include both R16 and R32 rows to backfill original seed letters cleanly.
     function buildUrlToSeedMap(all){
       const byCycle = new Map(); // cycleBase -> Map(url -> seedLetter)
       for (const r of all){
@@ -172,22 +169,16 @@
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
-
-        const seedLetter = (r._resolved_seed || r.winner_seed || "").toLowerCase();
-        const seedNum = L2N[seedLetter];
-        const seedLabel = seedNum ? `Seed #${seedNum}` : "Seed ?";
-
-        const leftLetters = new Set(["a","c","e","g","i","k","m","o","q","s","u","w","y","aa","ac","ae"]);
-        const isLeft = leftLetters.has(seedLetter);
+        const seed = (r._resolved_seed || r.winner_seed || "").toLowerCase();
+        const isLeft = ["a","c","e","g","i","k","m","o","q","s","u","w","y","aa","ac","ae"].includes(seed);
         const pillClass = isLeft ? "pillA" : "pillB";
-
+        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
         const img = r.image_url || r.winner_url || '';
         const thumb = img ? `<img src="${img}" class="thumb" alt="winner">` : `<span style="color:#666;">—</span>`;
         const decidedTs = computeDecidedAt(r);
         const phase = phaseFromBase(r.base_iso);
-
         return `
           <tr>
             <td>${n}</td>
@@ -202,43 +193,11 @@
       }).join('');
     }
 
-    // ---- NEW: tick the state machine so locks/advances happen even from Winners ----
-    async function stateTick(){
-      try{
-        // Normal GET (no winners param) triggers the lock/advance checks on the Edge function
-        await fetch(`${FUNCTION_URL}?_=${Date.now()}`, {
-          cache: "no-store",
-          mode: "cors",
-          credentials: "omit"
-        });
-      }catch{}
-    }
-
-    // ------------- Robust loader -------------
-    let currentLoadAbort;
-    async function load(force=false){
+    async function load(){
       try {
-        if (currentLoadAbort) currentLoadAbort.abort();
-        currentLoadAbort = new AbortController();
-        const { signal } = currentLoadAbort;
-
-        btnRefresh.disabled = true;
+        const ts = Date.now(); // cache-buster
         metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent = 'Loading… ');
-
-        // 1) advance server state (R32/R16/QF/SF/Final)
-        await stateTick();
-
-        // 2) fetch winners list
-        const ts = Date.now();
-        const res = await fetch(`${FUNCTION_URL}?winners=1&limit=500&_=${ts}`, {
-          cache: "no-store",
-          mode: "cors",
-          credentials: "omit",
-          signal
-        });
-
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
+        const res = await fetch(`${FUNCTION_URL}?winners=1&limit=500&_=${ts}`, { cache: "no-store" });
         const data = await res.json().catch(()=> ({}));
         const all = Array.isArray(data) ? data : (data.winners || []);
 
@@ -249,11 +208,13 @@
           const url = r.image_url || r.winner_url || "";
           const m = mapByCycle.get(root);
           if (m && url && m.has(url)){
-            r._resolved_seed = m.get(url); // letter a..af
+            r._resolved_seed = m.get(url); // a..af
           }
         }
 
+        // filter according to mode
         const rows = viewMode==="finals" ? (all||[]).filter(isFinalRow) : (all||[]);
+        // newest first by decided_at
         rows.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
         render(rows);
 
@@ -267,35 +228,30 @@
           ? metaEl.firstChild.nodeValue = `${prefix}${newestTxt}${tail} `
           : (metaEl.textContent = `${prefix}${newestTxt}${tail} `);
       } catch (e) {
-        console.error("Winners load error:", e);
-        tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:#ef4444;">Error loading winners.</td></tr>`;
-      } finally {
-        btnRefresh.disabled = false;
+        console.error(e);
+        tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:#9aa0a6;">Failed to load winners.</td></tr>`;
+        metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Load error. ' : (metaEl.textContent = 'Load error. ');
       }
     }
 
     async function clearData(){
-      try {
-        const ok = confirm("Delete winners_v2 and reset cycle counts? (Admin)");
-        if (!ok) return;
-        await fetch(`${FUNCTION_URL}?clear=1`, {
-          method:"DELETE",
-          headers:{ "x-admin-key": ADMIN_KEY }
-        });
-        // After clearing, force a tick so a fresh window is ready
-        await stateTick();
-        await load(true);
-      } catch(e){
-        alert("Clear failed.");
+      if(!confirm("⚠️ Permanently delete all winner data?")) return;
+      metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Clearing data… ' : (metaEl.textContent = 'Clearing data… ');
+      const res = await fetch(`${FUNCTION_URL}?clear=1`, {
+        method:"DELETE",
+        headers:{ "x-admin-key": ADMIN_KEY },
+        cache: "no-store"
+      });
+      if(res.ok){ alert("Winner data cleared."); load(); }
+      else {
+        const msg = await res.json().catch(()=>({}));
+        alert("Error: " + (msg.error || "failed to clear"));
       }
     }
 
-    // auto-refresh
     let auto = true;
-    setInterval(async ()=>{ if (auto) await load(false); }, 5000);
-
-    // initial
-    load(true);
+    setInterval(()=>{ if (auto) load(); }, 5_000);
+    load();
   </script>
 </body>
 </html>
