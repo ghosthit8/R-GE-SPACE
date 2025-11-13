@@ -240,8 +240,10 @@
         // R32 rows (rr*) are clickable only before r32_done
         if (item.key.startsWith("rr") && state.r32_done) return;
         if (item.key.startsWith("r") && !item.key.startsWith("rr") && !state.r32_done) return; // R16 locked until r32 done
-        if (item.key.startsWith("q") && !state.r16_done) return;
-        if (item.key.startsWith("s") && !state.mid1_done) return;
+        // QF locked once r16_done is false OR qf_done is true (semis live/final live)
+        if (item.key.startsWith("q") && (!state.r16_done || state.qf_done)) return;
+        // SF locked until mid1_done, and again once sf_done (final live)
+        if (item.key.startsWith("s") && (!state.mid1_done || state.sf_done)) return;
         if (item.key==="final" && !state.mid2_done) return;
         activeMatch = item.key; renderActive();
       });
@@ -277,7 +279,13 @@
       seed_y_count:0, seed_z_count:0, seed_aa_count:0, seed_ab_count:0,
       seed_ac_count:0, seed_ad_count:0, seed_ae_count:0, seed_af_count:0,
 
-      r32_done:false, r16_done:false, mid1_done:false, mid2_done:false,
+      // phase flags
+      r32_done:false,
+      r16_done:false,
+      qf_done:false,
+      sf_done:false,
+      mid1_done:false,
+      mid2_done:false,
 
       q1_a_url:null, q1_b_url:null, q1_a_count:0, q1_b_count:0,
       q2_c_url:null, q2_d_url:null, q2_c_count:0, q2_d_count:0,
@@ -299,11 +307,25 @@
     // start on R32 #1
     let activeMatch = "rr1";
 
+    // Shared phase-live check so we can't late-vote on locked matches
+    function phaseIsLiveForKey(key){
+      let live = true;
+      if (key.startsWith("rr") && state.r32_done) live = false;                         // R32 closed once r32_done
+      if (key.startsWith("r") && !key.startsWith("rr") && !state.r32_done) live = false; // R16 locked until R32 done
+      if (key.startsWith("q") && (!state.r16_done || state.qf_done)) live = false;     // QF only between r16_done and qf_done
+      if (["s1","s2"].includes(key) && (!state.mid1_done || state.sf_done)) live = false; // SF only between mid1_done and sf_done
+      if (key==="final" && !state.mid2_done) live = false;                             // Final only once semis locked
+      return live;
+    }
+
     async function vote(color){
       const base = state.base_iso||"";
       const mem = memRead(base);
       const key = activeMatch;
       if (mem[key]) return;
+
+      // Also block votes if this match is no longer live for this phase
+      if (!phaseIsLiveForKey(activeMatch)) return;
 
       const red = color==="red";
       const inc = (k)=> state[k] = (state[k]||0)+1;
@@ -417,7 +439,8 @@
         const LC = pick(state[lc], state[flc]);
         const RC = pick(state[rc], state[frc]);
         setThumb(k, L, R, LC, RC, fb);
-        thumbs[k].box.classList.toggle("disabled", !state.r16_done);
+        // hidden until R16 done; disabled until R16 done OR once QF is locked (qf_done)
+        thumbs[k].box.classList.toggle("disabled", !state.r16_done || !!state.qf_done);
         thumbs[k].box.classList.toggle("hidden",   !state.r16_done);
       }
 
@@ -429,12 +452,17 @@
         thumbs.s2.box.classList.add("disabled"); thumbs.s2.box.classList.add("hidden");
       }else{
         thumbs.s1.img.src = state.semi_1_left_url || state.semi_1_right_url || placeholder("S1");
+        // still using aggregated seed counts as before
         thumbs.s1.count.textContent = (state.seed_a_count||0) + "-" + (state.seed_b_count||0);
-        thumbs.s1.box.classList.remove("disabled"); thumbs.s1.box.classList.remove("hidden");
+        thumbs.s1.box.classList.remove("hidden");
 
         thumbs.s2.img.src = state.semi_2_left_url || state.semi_2_right_url || placeholder("S2");
         thumbs.s2.count.textContent = (state.seed_c_count||0) + "-" + (state.seed_d_count||0);
-        thumbs.s2.box.classList.remove("disabled"); thumbs.s2.box.classList.remove("hidden");
+        thumbs.s2.box.classList.remove("hidden");
+
+        // disable semis once sf_done / final live
+        thumbs.s1.box.classList.toggle("disabled", !!state.sf_done);
+        thumbs.s2.box.classList.toggle("disabled", !!state.sf_done);
       }
 
       // Final
@@ -495,12 +523,7 @@
       labelActive1.textContent = leftLabel; labelActive2.textContent = rightLabel;
       countActive1.textContent = leftCt; countActive2.textContent = rightCt;
 
-      let phaseLive = true;
-      if (activeMatch.startsWith("rr") && state.r32_done) phaseLive = false;            // R32 closed after lock
-      if (activeMatch.startsWith("r") && !activeMatch.startsWith("rr") && !state.r32_done) phaseLive = false; // R16 locked until R32 done
-      if (activeMatch.startsWith("q") && !state.r16_done) phaseLive = false;
-      if (["s1","s2"].includes(activeMatch) && !state.mid1_done) phaseLive = false;
-      if (activeMatch==="final" && !state.mid2_done) phaseLive = false;
+      const phaseLive = phaseIsLiveForKey(activeMatch);
 
       btnActive1.disabled = !!picked || !phaseLive;
       btnActive2.disabled = !!picked || !phaseLive;
