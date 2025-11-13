@@ -94,8 +94,8 @@
     }
     applyModeBtn();
 
-    btnToggleMode.onclick = () => { viewMode = (viewMode==="all" ? "finals" : "all"); localStorage.setItem(MODE_KEY, viewMode); applyModeBtn(); load(); };
-    btnRefresh.onclick = () => load();
+    btnToggleMode.onclick = () => { viewMode = (viewMode==="all" ? "finals" : "all"); localStorage.setItem(MODE_KEY, viewMode); applyModeBtn(); load(true); };
+    btnRefresh.onclick = () => load(true);
     btnToggleAuto.onclick = () => {
       auto = !auto;
       btnToggleAuto.textContent = `Auto-Refresh: ${auto ? "On" : "Off"}`;
@@ -144,8 +144,11 @@
     }
     function isFinalRow(w){ return !String(w.base_iso || "").includes("::"); }
 
+    // LETTER → NUMBER mapping for 32 seeds:
+    const L32 = [..."abcdefghijklmnopqrstuvwxyz".split(""), "aa","ab","ac","ad","ae","af"];
+    const L2N = Object.fromEntries(L32.map((s,i)=>[s, i+1]));
+
     // Build a map per cycle: image_url → original seed (a..af)
-    // Include both R16 and R32 rows to backfill original seed letters cleanly.
     function buildUrlToSeedMap(all){
       const byCycle = new Map(); // cycleBase -> Map(url -> seedLetter)
       for (const r of all){
@@ -169,16 +172,22 @@
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
-        const seed = (r._resolved_seed || r.winner_seed || "").toLowerCase();
-        const isLeft = ["a","c","e","g","i","k","m","o","q","s","u","w","y","aa","ac","ae"].includes(seed);
+
+        const seedLetter = (r._resolved_seed || r.winner_seed || "").toLowerCase();
+        const seedNum = L2N[seedLetter];
+        const seedLabel = seedNum ? `Seed #${seedNum}` : "Seed ?";
+
+        const leftLetters = new Set(["a","c","e","g","i","k","m","o","q","s","u","w","y","aa","ac","ae"]);
+        const isLeft = leftLetters.has(seedLetter);
         const pillClass = isLeft ? "pillA" : "pillB";
-        const seedLabel = seed ? `Seed ${seed.toUpperCase()}` : (isLeft ? "Seed A" : "Seed B");
+
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
         const img = r.image_url || r.winner_url || '';
         const thumb = img ? `<img src="${img}" class="thumb" alt="winner">` : `<span style="color:#666;">—</span>`;
         const decidedTs = computeDecidedAt(r);
         const phase = phaseFromBase(r.base_iso);
+
         return `
           <tr>
             <td>${n}</td>
@@ -193,11 +202,24 @@
       }).join('');
     }
 
-    async function load(){
+    // ------------- Robust loader (fixes manual Refresh) -------------
+    let currentLoadAbort;
+    async function load(force=false){
       try {
-        const ts = Date.now(); // cache-buster
+        if (currentLoadAbort) currentLoadAbort.abort();
+        currentLoadAbort = new AbortController();
+        const { signal } = currentLoadAbort;
+
+        btnRefresh.disabled = true;
         metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent = 'Loading… ');
-        const res = await fetch(`${FUNCTION_URL}?winners=1&limit=500&_=${ts}`, { cache: "no-store" });
+
+        const ts = Date.now(); // strong cache-buster
+        const res = await fetch(`${FUNCTION_URL}?winners=1&limit=500&_=${ts}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache, no-store, must-revalidate", "Pragma":"no-cache", "Expires":"0" },
+          signal
+        });
+
         const data = await res.json().catch(()=> ({}));
         const all = Array.isArray(data) ? data : (data.winners || []);
 
@@ -208,13 +230,11 @@
           const url = r.image_url || r.winner_url || "";
           const m = mapByCycle.get(root);
           if (m && url && m.has(url)){
-            r._resolved_seed = m.get(url); // a..af
+            r._resolved_seed = m.get(url); // letter a..af
           }
         }
 
-        // filter according to mode
         const rows = viewMode==="finals" ? (all||[]).filter(isFinalRow) : (all||[]);
-        // newest first by decided_at
         rows.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
         render(rows);
 
@@ -228,30 +248,35 @@
           ? metaEl.firstChild.nodeValue = `${prefix}${newestTxt}${tail} `
           : (metaEl.textContent = `${prefix}${newestTxt}${tail} `);
       } catch (e) {
-        console.error(e);
-        tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:#9aa0a6;">Failed to load winners.</td></tr>`;
-        metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Load error. ' : (metaEl.textContent = 'Load error. ');
+        if (e?.name !== "AbortError") {
+          console.error(e);
+          tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:#ef4444;">Error loading winners.</td></tr>`;
+        }
+      } finally {
+        btnRefresh.disabled = false;
       }
     }
 
     async function clearData(){
-      if(!confirm("⚠️ Permanently delete all winner data?")) return;
-      metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Clearing data… ' : (metaEl.textContent = 'Clearing data… ');
-      const res = await fetch(`${FUNCTION_URL}?clear=1`, {
-        method:"DELETE",
-        headers:{ "x-admin-key": ADMIN_KEY },
-        cache: "no-store"
-      });
-      if(res.ok){ alert("Winner data cleared."); load(); }
-      else {
-        const msg = await res.json().catch(()=>({}));
-        alert("Error: " + (msg.error || "failed to clear"));
+      try {
+        const ok = confirm("Delete winners_v2 and reset cycle counts? (Admin)");
+        if (!ok) return;
+        await fetch(`${FUNCTION_URL}?clear=1`, {
+          method:"DELETE",
+          headers:{ "x-admin-key": ADMIN_KEY }
+        });
+        await load(true);
+      } catch(e){
+        alert("Clear failed.");
       }
     }
 
+    // auto-refresh
     let auto = true;
-    setInterval(()=>{ if (auto) load(); }, 5_000);
-    load();
+    setInterval(()=>{ if (auto) load(false); }, 5000);
+
+    // initial
+    load(true);
   </script>
 </body>
 </html>
