@@ -187,8 +187,19 @@
     }
     function pick(a,b){ return (a!=null && a!=="") ? a : b; }
 
+    // ---- letters → numbers mapping for 32 seeds (for any future use) ----
+    const L32 = [..."abcdefghijklmnopqrstuvwxyz".split(""), "aa","ab","ac","ad","ae","af"];
+    const L2N = Object.fromEntries(L32.map((s,i)=>[s, i+1]));
+
+    // For R32 grid: derive absolute seed numbers by slot (rr1..rr16)
+    function r32SeedNumber(key, side){ // side: "left"|"right"
+      const n = Number(key.replace("rr",""));
+      const leftNum  = 2*n - 1;
+      const rightNum = 2*n;
+      return side==="left" ? leftNum : rightNum;
+    }
+
     // ---------- MATCH INDEX ----------
-    // R32 rr1..rr16 (labels already numeric)
     const order = [
       {key:"rr1",  label:"R32 1",  left:"seed_a_url",  right:"seed_b_url",  lct:"seed_a_count",  rct:"seed_b_count"},
       {key:"rr2",  label:"R32 2",  left:"seed_c_url",  right:"seed_d_url",  lct:"seed_c_count",  rct:"seed_d_count"},
@@ -207,7 +218,6 @@
       {key:"rr15", label:"R32 15", left:"seed_ac_url", right:"seed_ad_url", lct:"seed_ac_count", rct:"seed_ad_count"},
       {key:"rr16", label:"R32 16", left:"seed_ae_url", right:"seed_af_url", lct:"seed_ae_count", rct:"seed_af_count"},
 
-      // R16 → QF → SF → Final (unchanged keys)
       {key:"r1", label:"R16 1", left:"seed_a_url", right:"seed_b_url", lct:"seed_a_count", rct:"seed_b_count"},
       {key:"r2", label:"R16 2", left:"seed_c_url", right:"seed_d_url", lct:"seed_c_count", rct:"seed_d_count"},
       {key:"r3", label:"R16 3", left:"seed_e_url", right:"seed_f_url", lct:"seed_e_count", rct:"seed_f_count"},
@@ -306,14 +316,12 @@
       const red = color==="red";
       const inc = (k)=> state[k] = (state[k]||0)+1;
 
-      // Map UI key → server phase:
       const serverPhase = activeMatch.startsWith("rr")
         ? ("r"+activeMatch.slice(2))
         : activeMatch;
 
       const post = { phase: serverPhase, side: red ? "left":"right" };
 
-      // Local optimistic counters
       const map = {
         rr1:["seed_a_count","seed_b_count"],   rr2:["seed_c_count","seed_d_count"],
         rr3:["seed_e_count","seed_f_count"],   rr4:["seed_g_count","seed_h_count"],
@@ -358,9 +366,8 @@
       for (const k in thumbs) thumbs[k].box.classList.toggle("active", k===activeMatch);
     }
 
-    // ---- key change: numeric placeholders (1–32) instead of letters ----
+    // ---- numeric placeholders (1–32) for R32 thumbs ----
     function renderThumbs(){
-      // R32 (pairs → odd numbers as placeholders)
       setThumb("rr1",  state.seed_a_url,  state.seed_b_url,  state.seed_a_count,  state.seed_b_count,  "1");
       setThumb("rr2",  state.seed_c_url,  state.seed_d_url,  state.seed_c_count,  state.seed_d_count,  "3");
       setThumb("rr3",  state.seed_e_url,  state.seed_f_url,  state.seed_e_count,  state.seed_f_count,  "5");
@@ -378,7 +385,6 @@
       setThumb("rr15", state.seed_ac_url, state.seed_ad_url, state.seed_ac_count, state.seed_ad_count, "29");
       setThumb("rr16", state.seed_ae_url, state.seed_af_url, state.seed_ae_count, state.seed_af_count, "31");
 
-      // R16/QF/SF/Final thumbnails use their stored images; fallbacks use "R16"/"QF"/"SF"/"F"
       setThumb("r1", state.seed_a_url, state.seed_b_url, state.seed_a_count, state.seed_b_count, "R16");
       setThumb("r2", state.seed_c_url, state.seed_d_url, state.seed_c_count, state.seed_d_count, "R16");
       setThumb("r3", state.seed_e_url, state.seed_f_url, state.seed_e_count, state.seed_f_count, "R16");
@@ -417,21 +423,38 @@
           leftCt   = state.semi_2_left_count;
           rightCt  = state.semi_2_right_count;
         }
+        labelActive1.textContent = "Winner of QF 1/2";
+        labelActive2.textContent = "Winner of QF 3/4";
       } else if (item.key.startsWith("q")){
         leftUrl  = state[item.left]  ?? state[item.fbLeft];
         rightUrl = state[item.right] ?? state[item.fbRight];
         leftCt   = state[item.lct]   ?? state[item.fbLct];
         rightCt  = state[item.rct]   ?? state[item.fbRct];
+        labelActive1.textContent = "Quarterfinal";
+        labelActive2.textContent = "Quarterfinal";
       } else if (item.key==="final"){
         leftUrl  = state.mid_winner_1_url || state.seed_a_url;
         rightUrl = state.mid_winner_2_url || state.seed_b_url;
         leftCt   = state.seed_a_count;
         rightCt  = state.seed_b_count;
+        labelActive1.textContent = "Finalist";
+        labelActive2.textContent = "Finalist";
       } else {
+        // R32 or R16
         leftUrl  = state[item.left];
         rightUrl = state[item.right];
         leftCt   = state[item.lct];
         rightCt  = state[item.rct];
+
+        if (activeMatch.startsWith("rr")){
+          const nL = r32SeedNumber(activeMatch, "left");
+          const nR = r32SeedNumber(activeMatch, "right");
+          labelActive1.textContent = `Seed #${nL}`;
+          labelActive2.textContent = `Seed #${nR}`;
+        } else {
+          labelActive1.textContent = "Round of 16";
+          labelActive2.textContent = "Round of 16";
+        }
       }
 
       imgActive1.src = pick(leftUrl,  placeholder("L"));
