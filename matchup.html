@@ -148,10 +148,6 @@
 
     const elRemain = document.getElementById("tRemain");
     const elMeta   = document.getElementById("tMeta");
-
-    // we keep dbg for JS but no visual element exists anymore
-    const dbg = { textContent:"" };
-
     const winnerText = document.getElementById("winnerText");
 
     const imgActive1 = document.getElementById("imgActive1");
@@ -188,6 +184,7 @@
     function pick(a,b){ return (a!=null && a!=="") ? a : b; }
 
     // ---------- MATCH INDEX ----------
+    // New R32 (rr1..rr16) — we map rrN → POST phase rN to match server
     const order = [
       {key:"rr1",  label:"R32 1",  left:"seed_a_url",  right:"seed_b_url",  lct:"seed_a_count",  rct:"seed_b_count"},
       {key:"rr2",  label:"R32 2",  left:"seed_c_url",  right:"seed_d_url",  lct:"seed_c_count",  rct:"seed_d_count"},
@@ -206,6 +203,7 @@
       {key:"rr15", label:"R32 15", left:"seed_ac_url", right:"seed_ad_url", lct:"seed_ac_count", rct:"seed_ad_count"},
       {key:"rr16", label:"R32 16", left:"seed_ae_url", right:"seed_af_url", lct:"seed_ae_count", rct:"seed_af_count"},
 
+      // Existing R16 (unchanged keys r1..r8)
       {key:"r1", label:"R16 A–B", left:"seed_a_url", right:"seed_b_url", lct:"seed_a_count", rct:"seed_b_count"},
       {key:"r2", label:"R16 C–D", left:"seed_c_url", right:"seed_d_url", lct:"seed_c_count", rct:"seed_d_count"},
       {key:"r3", label:"R16 E–F", left:"seed_e_url", right:"seed_f_url", lct:"seed_e_count", rct:"seed_f_count"},
@@ -215,11 +213,11 @@
       {key:"r7", label:"R16 M–N", left:"seed_m_url", right:"seed_n_url", lct:"seed_m_count", rct:"seed_n_count"},
       {key:"r8", label:"R16 O–P", left:"seed_o_url", right:"seed_p_url", lct:"seed_o_count", rct:"seed_p_count"},
 
+      // Quarters, Semis, Final
       {key:"q1", label:"QF A–B", left:"q1_a_url", right:"q1_b_url", lct:"q1_a_count", rct:"q1_b_count", fbLeft:"seed_a_url", fbRight:"seed_b_url", fbLct:"seed_a_count", fbRct:"seed_b_count"},
       {key:"q2", label:"QF C–D", left:"q2_c_url", right:"q2_d_url", lct:"q2_c_count", rct:"q2_d_count", fbLeft:"seed_c_url", fbRight:"seed_d_url", fbLct:"seed_c_count", fbRct:"seed_d_count"},
       {key:"q3", label:"QF E–F", left:"q3_e_url", right:"q3_f_url", lct:"q3_e_count", rct:"q3_f_count", fbLeft:"seed_e_url", fbRight:"seed_f_url", fbLct:"seed_e_count", fbRct:"seed_f_count"},
       {key:"q4", label:"QF G–H", left:"q4_g_url", right:"q4_h_url", lct:"q4_g_count", rct:"q4_h_count", fbLeft:"seed_g_url", fbRight:"seed_h_url", fbLct:"seed_g_count", fbRct:"seed_h_count"},
-
       {key:"s1", label:"Semi 1", semi:true},
       {key:"s2", label:"Semi 2", semi:true},
       {key:"final", label:"Final"}
@@ -235,10 +233,11 @@
         <div class="thumb-label"><span>${item.label}</span><span class="thumb-count" id="cnt_${item.key}">0-0</span></div>
       `;
       div.addEventListener("click", ()=>{
+        // R32 rows (rr*) are clickable only before r32_done
         if (item.key.startsWith("rr") && state.r32_done) return;
-        if (item.key.startsWith("r") && !item.key.startsWith("rr") && !state.r32_done) return;
+        if (item.key.startsWith("r") && !item.key.startsWith("rr") && !state.r32_done) return; // R16 locked until r32 done
         if (item.key.startsWith("q") && !state.r16_done) return;
-        if (["s1","s2"].includes(item.key) && !state.mid1_done) return;
+        if (item.key.startsWith("s") && !state.mid1_done) return;
         if (item.key==="final" && !state.mid2_done) return;
         activeMatch = item.key; renderActive();
       });
@@ -255,6 +254,7 @@
     let state = {
       base_iso:null, ends_at:null, period_sec:150,
 
+      // 32 seeds (urls + counts)
       seed_a_url:null, seed_b_url:null, seed_c_url:null, seed_d_url:null,
       seed_e_url:null, seed_f_url:null, seed_g_url:null, seed_h_url:null,
       seed_i_url:null, seed_j_url:null, seed_k_url:null, seed_l_url:null,
@@ -292,6 +292,7 @@
     function memWrite(base,key,val){ const all=(()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")}catch{return{}}})(); all[base]=Object.assign({},all[base]||{}, {[key]:val}); localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
     function pruneMem(keep){ const all=(()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")}catch{return{}}})(); for(const k of Object.keys(all)) if(k!==keep) delete all[k]; localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
 
+    // start on R32 #1
     let activeMatch = "rr1";
 
     async function vote(color){
@@ -303,13 +304,17 @@
       const red = color==="red";
       const inc = (k)=> state[k] = (state[k]||0)+1;
 
+      // Map UI key → server phase:
+      // rr1..rr16 → r1..r16 (R32); others pass through
       const serverPhase = activeMatch.startsWith("rr")
         ? ("r"+activeMatch.slice(2))
         : activeMatch;
 
       const post = { phase: serverPhase, side: red ? "left":"right" };
 
+      // Local optimistic counters
       const map = {
+        // R32
         rr1:["seed_a_count","seed_b_count"],   rr2:["seed_c_count","seed_d_count"],
         rr3:["seed_e_count","seed_f_count"],   rr4:["seed_g_count","seed_h_count"],
         rr5:["seed_i_count","seed_j_count"],   rr6:["seed_k_count","seed_l_count"],
@@ -319,6 +324,7 @@
         rr13:["seed_y_count","seed_z_count"],  rr14:["seed_aa_count","seed_ab_count"],
         rr15:["seed_ac_count","seed_ad_count"],rr16:["seed_ae_count","seed_af_count"],
 
+        // R16 → unchanged
         r1:["seed_a_count","seed_b_count"], r2:["seed_c_count","seed_d_count"],
         r3:["seed_e_count","seed_f_count"], r4:["seed_g_count","seed_h_count"],
         r5:["seed_i_count","seed_j_count"], r6:["seed_k_count","seed_l_count"],
@@ -354,6 +360,7 @@
     }
 
     function renderThumbs(){
+      // R32
       setThumb("rr1",  state.seed_a_url,  state.seed_b_url,  state.seed_a_count,  state.seed_b_count, "A");
       setThumb("rr2",  state.seed_c_url,  state.seed_d_url,  state.seed_c_count,  state.seed_d_count, "C");
       setThumb("rr3",  state.seed_e_url,  state.seed_f_url,  state.seed_e_count,  state.seed_f_count, "E");
@@ -371,13 +378,13 @@
       setThumb("rr15", state.seed_ac_url, state.seed_ad_url, state.seed_ac_count, state.seed_ad_count, "AC");
       setThumb("rr16", state.seed_ae_url, state.seed_af_url, state.seed_ae_count, state.seed_af_count, "AE");
 
-      // Freeze R32 after done
+      // Freeze R32 thumbnails after r32_done
       for (let i=1;i<=16;i++){
         const k = "rr"+i;
         thumbs[k].box.classList.toggle("disabled", !!state.r32_done);
       }
 
-      // R16
+      // R16 (hidden until r32_done)
       setThumb("r1", state.seed_a_url, state.seed_b_url, state.seed_a_count, state.seed_b_count,"A");
       setThumb("r2", state.seed_c_url, state.seed_d_url, state.seed_c_count, state.seed_d_count,"C");
       setThumb("r3", state.seed_e_url, state.seed_f_url, state.seed_e_count, state.seed_f_count,"E");
@@ -393,7 +400,7 @@
         thumbs[k].box.classList.toggle("disabled", !state.r32_done || !!state.r16_done);
       }
 
-      // Quarters
+      // Quarters (prefer snapshots), hidden until r16_done
       const q = [
         ["q1","q1_a_url","q1_b_url","q1_a_count","q1_b_count","seed_a_url","seed_b_url","seed_a_count","seed_b_count","A"],
         ["q2","q2_c_url","q2_d_url","q2_c_count","q2_d_count","seed_c_url","seed_d_url","seed_c_count","seed_d_count","C"],
@@ -473,7 +480,7 @@
         if (state.mid1_done){ leftImg = state.semi_1_left_url || placeholder("?"); rightImg = state.semi_1_right_url || placeholder("?"); leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0; }
         leftLabel="Semi 1 — Left"; rightLabel="Semi 1 — Right";
       } else if (activeMatch==="s2"){
-        if (state.mid1_done){ leftImg = state.semi_2_left_url || placeholder("?"); rightImg = state.semi_2_right_url || placeholder("?"); leftCt = state.seed_c_count||0; rightCt=state.seed_d_count||0; }
+        if (state.mid1_done){ leftImg = state.semi_2_left_url || state.semi_2_right_url || placeholder("?"); rightImg = state.semi_2_right_url || placeholder("?"); leftCt = state.seed_c_count||0; rightCt=state.seed_d_count||0; }
         leftLabel="Semi 2 — Left"; rightLabel="Semi 2 — Right";
       } else {
         if (state.mid2_done){ leftImg = state.mid_winner_1_url || placeholder("?"); rightImg = state.mid_winner_2_url || placeholder("?"); leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0; }
@@ -485,8 +492,8 @@
       countActive1.textContent = leftCt; countActive2.textContent = rightCt;
 
       let phaseLive = true;
-      if (activeMatch.startsWith("rr") && state.r32_done) phaseLive = false;
-      if (activeMatch.startsWith("r") && !activeMatch.startsWith("rr") && !state.r32_done) phaseLive = false;
+      if (activeMatch.startsWith("rr") && state.r32_done) phaseLive = false;            // R32 closed after lock
+      if (activeMatch.startsWith("r") && !activeMatch.startsWith("rr") && !state.r32_done) phaseLive = false; // R16 locked until R32 done
       if (activeMatch.startsWith("q") && !state.r16_done) phaseLive = false;
       if (["s1","s2"].includes(activeMatch) && !state.mid1_done) phaseLive = false;
       if (activeMatch==="final" && !state.mid2_done) phaseLive = false;
@@ -506,6 +513,7 @@
         state = Object.assign(state, s || {});
         elMeta.textContent = `period=${state.period_sec||150}s • base=${state.base_iso||"--"}`;
 
+        // smooth active match progression
         if (!state.r32_done && !activeMatch.startsWith("rr")) activeMatch = "rr1";
         if (state.r32_done && !state.r16_done && (activeMatch.startsWith("rr") || activeMatch.startsWith("q") || activeMatch.startsWith("s") || activeMatch==="final")) activeMatch = "r1";
         if (state.r16_done && !state.mid1_done && activeMatch.startsWith("r")) activeMatch = "q1";
@@ -513,9 +521,7 @@
         if (state.mid2_done && activeMatch!=="final") activeMatch="final";
 
         renderActive();
-        dbg.textContent = "debug: ok " + new Date().toLocaleTimeString();
       }catch(e){
-        dbg.textContent = "debug: GET error → " + (e.message||JSON.stringify(e));
         renderActive();
       }
     }
@@ -552,9 +558,11 @@
       requestAnimationFrame(tick);
     }
 
+    // controls
     forceBtn.addEventListener('click', ()=> fetchState(true));
     resetBtn.addEventListener('click', ()=> fetchState(true));
 
+    // realtime
     supabase.channel('cycles-v2-live')
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'cycles_v2' }, async ()=>{ await fetchState(true); })
       .subscribe();
@@ -563,6 +571,7 @@
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'art_queue', filter:'status=in.(locked,used)' }, async ()=>{ await fetchState(true); })
       .subscribe();
 
+    // boot
     fetchState(true).then(()=>{
       setTimeout(()=>fetchState(true), 600);
       setTimeout(()=>fetchState(true), 1500);
