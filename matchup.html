@@ -65,11 +65,8 @@
     <div class="header">
       <div class="row">
         <div class="timer" id="tRemain">150.0</div>
-        <div class="state" id="tMeta">syncing…</div>
       </div>
       <div class="row">
-        <button id="forceQueue" class="btn ghost">Pull Now</button>
-        <button id="resetPair" class="btn ghost">Reset Pair</button>
         <a class="backbtn" href="menu.html">← Menu</a>
         <a class="linkbtn" href="winners.html">Winners</a>
       </div>
@@ -147,7 +144,6 @@
     if (!RSID){ RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
 
     const elRemain = document.getElementById("tRemain");
-    const elMeta   = document.getElementById("tMeta");
     const winnerText = document.getElementById("winnerText");
 
     const imgActive1 = document.getElementById("imgActive1");
@@ -169,8 +165,6 @@
     const fullImg  = document.getElementById("fullImg");
     const btnClose = document.getElementById("closeFull"); btnClose.onclick = ()=> overlay.style.display='none';
 
-    const forceBtn = document.getElementById("forceQueue");
-    const resetBtn = document.getElementById("resetPair");
     const grid = document.getElementById("thumbGrid");
 
     function openFull(which){
@@ -511,7 +505,6 @@
         const data = await res.json();
         const s = (data && typeof data==="object" && "state" in data) ? data.state : data;
         state = Object.assign(state, s || {});
-        elMeta.textContent = `period=${state.period_sec||150}s • base=${state.base_iso||"--"}`;
 
         // smooth active match progression
         if (!state.r32_done && !activeMatch.startsWith("rr")) activeMatch = "rr1";
@@ -557,10 +550,6 @@
 
       requestAnimationFrame(tick);
     }
-
-    // controls
-    forceBtn.addEventListener('click', ()=> fetchState(true));
-    resetBtn.addEventListener('click', ()=> fetchState(true));
 
     // realtime
     supabase.channel('cycles-v2-live')
