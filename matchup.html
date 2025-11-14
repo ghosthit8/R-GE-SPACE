@@ -32,8 +32,42 @@
     .thumb { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); cursor:pointer; }
     .thumb.disabled { opacity:.55; cursor:default; }
     .thumb.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(57,255,20,.3); }
-    .thumb-img { width:100%; aspect-ratio:3/4; background:#0b0f13; display:grid; place-items:center; }
-    .thumb-img img { width:100%; height:100%; object-fit:cover; }
+
+    /* THUMB IMAGE: DIAGONAL SPLIT (BOTH COMPETITORS) */
+    .thumb-img {
+      position:relative;
+      width:100%;
+      aspect-ratio:3/4;
+      background:#0b0f13;
+      overflow:hidden;
+    }
+    .thumb-img img {
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .thumb-img.diag img.half {
+      position:absolute;
+      inset:0;
+    }
+    .thumb-img.diag img.left {
+      clip-path:polygon(0 0, 100% 0, 0 100%);
+    }
+    .thumb-img.diag img.right {
+      clip-path:polygon(100% 0, 100% 100%, 0 100%);
+    }
+    /* subtle dividing line */
+    .thumb-img.diag::before {
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:linear-gradient(135deg, rgba(0,0,0,0.75) 48%, rgba(57,255,20,0.7) 50%, rgba(0,0,0,0.75) 52%);
+      mix-blend-mode:screen;
+      opacity:0.5;
+    }
+
     .thumb-label { padding:6px 8px 8px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
     .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
     .ghostBox { width:100%; height:100%; display:grid; place-items:center; color:#3b3b3b; font-weight:700; font-size:13px; letter-spacing:.08em; }
@@ -223,7 +257,10 @@
       const div = document.createElement("div");
       div.className = "thumb"; div.id = "thumb_"+item.key;
       div.innerHTML = `
-        <div class="thumb-img"><img id="img_${item.key}" alt="${item.label}"></div>
+        <div class="thumb-img diag">
+          <img class="half left" id="imgL_${item.key}" alt="${item.label} left">
+          <img class="half right" id="imgR_${item.key}" alt="${item.label} right">
+        </div>
         <div class="thumb-label"><span>${item.label}</span><span class="thumb-count" id="cnt_${item.key}">0-0</span></div>
       `;
       div.addEventListener("click", ()=>{
@@ -238,7 +275,8 @@
       grid.appendChild(div);
       thumbs[item.key] = {
         box:div,
-        img: div.querySelector("#img_"+item.key),
+        imgL: div.querySelector("#imgL_"+item.key),
+        imgR: div.querySelector("#imgR_"+item.key),
         count: div.querySelector("#cnt_"+item.key)
       };
     }
@@ -346,7 +384,8 @@
 
     function setThumb(key,leftUrl,rightUrl,leftCt,rightCt,fallback){
       const th = thumbs[key]; if (!th) return;
-      th.img.src = leftUrl || rightUrl || placeholder(fallback||"?");
+      th.imgL.src = leftUrl || placeholder(fallback||"?");
+      th.imgR.src = rightUrl || placeholder(fallback||"?");
       th.count.textContent = (leftCt??0) + "-" + (rightCt??0);
     }
     function markActive(){
@@ -413,26 +452,36 @@
 
       // Semis
       if (!state.mid1_done){
-        thumbs.s1.img.src = placeholder("S1"); thumbs.s1.count.textContent = "0-0";
+        thumbs.s1.imgL.src = placeholder("S1");
+        thumbs.s1.imgR.src = placeholder("S1");
+        thumbs.s1.count.textContent = "0-0";
         thumbs.s1.box.classList.add("disabled"); thumbs.s1.box.classList.add("hidden");
-        thumbs.s2.img.src = placeholder("S2"); thumbs.s2.count.textContent = "0-0";
+
+        thumbs.s2.imgL.src = placeholder("S2");
+        thumbs.s2.imgR.src = placeholder("S2");
+        thumbs.s2.count.textContent = "0-0";
         thumbs.s2.box.classList.add("disabled"); thumbs.s2.box.classList.add("hidden");
       }else{
-        thumbs.s1.img.src = state.semi_1_left_url || state.semi_1_right_url || placeholder("S1");
+        thumbs.s1.imgL.src = state.semi_1_left_url  || placeholder("S1");
+        thumbs.s1.imgR.src = state.semi_1_right_url || placeholder("S1");
         thumbs.s1.count.textContent = (state.seed_a_count||0) + "-" + (state.seed_b_count||0);
         thumbs.s1.box.classList.remove("disabled"); thumbs.s1.box.classList.remove("hidden");
 
-        thumbs.s2.img.src = state.semi_2_left_url || state.semi_2_right_url || placeholder("S2");
+        thumbs.s2.imgL.src = state.semi_2_left_url  || placeholder("S2");
+        thumbs.s2.imgR.src = state.semi_2_right_url || placeholder("S2");
         thumbs.s2.count.textContent = (state.seed_c_count||0) + "-" + (state.seed_d_count||0);
         thumbs.s2.box.classList.remove("disabled"); thumbs.s2.box.classList.remove("hidden");
       }
 
       // Final
       if (!state.mid2_done){
-        thumbs.final.img.src = placeholder("F"); thumbs.final.count.textContent = "0-0";
+        thumbs.final.imgL.src = placeholder("F");
+        thumbs.final.imgR.src = placeholder("F");
+        thumbs.final.count.textContent = "0-0";
         thumbs.final.box.classList.add("disabled"); thumbs.final.box.classList.add("hidden");
       }else{
-        thumbs.final.img.src = state.mid_winner_1_url || state.mid_winner_2_url || placeholder("F");
+        thumbs.final.imgL.src = state.mid_winner_1_url || placeholder("F");
+        thumbs.final.imgR.src = state.mid_winner_2_url || placeholder("F");
         thumbs.final.count.textContent = (state.seed_a_count||0) + "-" + (state.seed_b_count||0);
         thumbs.final.box.classList.remove("disabled"); thumbs.final.box.classList.remove("hidden");
       }
@@ -471,13 +520,25 @@
         leftLabel = find.label.split(" ")[0] + " — Left";
         rightLabel= find.label.split(" ")[0] + " — Right";
       } else if (activeMatch==="s1"){
-        if (state.mid1_done){ leftImg = state.semi_1_left_url || placeholder("?"); rightImg = state.semi_1_right_url || placeholder("?"); leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0; }
+        if (state.mid1_done){
+          leftImg  = state.semi_1_left_url  || placeholder("?");
+          rightImg = state.semi_1_right_url || placeholder("?");
+          leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0;
+        }
         leftLabel="Semi 1 — Left"; rightLabel="Semi 1 — Right";
       } else if (activeMatch==="s2"){
-        if (state.mid1_done){ leftImg = state.semi_2_left_url || state.semi_2_right_url || placeholder("?"); rightImg = state.semi_2_right_url || placeholder("?"); leftCt = state.seed_c_count||0; rightCt=state.seed_d_count||0; }
+        if (state.mid1_done){
+          leftImg  = state.semi_2_left_url  || placeholder("?");
+          rightImg = state.semi_2_right_url || placeholder("?");
+          leftCt = state.seed_c_count||0; rightCt=state.seed_d_count||0;
+        }
         leftLabel="Semi 2 — Left"; rightLabel="Semi 2 — Right";
       } else {
-        if (state.mid2_done){ leftImg = state.mid_winner_1_url || placeholder("?"); rightImg = state.mid_winner_2_url || placeholder("?"); leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0; }
+        if (state.mid2_done){
+          leftImg  = state.mid_winner_1_url || placeholder("?");
+          rightImg = state.mid_winner_2_url || placeholder("?");
+          leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0;
+        }
         leftLabel="Final — Left"; rightLabel="Final — Right";
       }
 
