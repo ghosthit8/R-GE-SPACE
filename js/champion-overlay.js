@@ -137,7 +137,7 @@
     font-weight: 700;
     letter-spacing: 0.04em;
   }
-  /* typewriter neon tagline */
+  /* typewriter neon tagline — now wraps on mobile */
   .champion-tagline {
     font-size: 12px;
     color: #39ff14;
@@ -146,7 +146,9 @@
     letter-spacing: 0.04em;
     margin-top: 4px;
     overflow: hidden;
-    white-space: nowrap;
+    display: inline-block;
+    max-width: 100%;
+    white-space: normal;
     border-right: 2px solid #39ff14;
     animation:
       champion-typing 4.5s steps(40, end) 0.4s 1 both,
