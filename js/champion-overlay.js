@@ -1,6 +1,6 @@
 // js/champion-overlay.js
 (() => {
-  // --- 1. Inject CSS into <head> (keeps matchup.html small) ---
+  // --- 1. Inject CSS into <head> ---
   const css = `
   /* === CHAMPION OVERLAY (injected) === */
   .champion-overlay {
@@ -137,9 +137,13 @@
     font-weight: 700;
     letter-spacing: 0.04em;
   }
+  /* typewriter neon tagline */
   .champion-tagline {
     font-size: 12px;
-    color: #9ca3af;
+    color: #39ff14;
+    font-family: "Source Code Pro", ui-monospace, SFMono-Regular,
+      Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    letter-spacing: 0.04em;
     margin-top: 4px;
     overflow: hidden;
     white-space: nowrap;
@@ -155,13 +159,6 @@
   @keyframes champion-blink {
     0%, 100% { border-color: #39ff14; }
     50%      { border-color: transparent; }
-  }
-  .champion-footer {
-    margin-top: 14px;
-    font-size: 11px;
-    color: #6b7280;
-    display: flex;
-    justify-content: space-between;
   }
   @media (max-width: 520px) {
     .champion-main {
@@ -197,10 +194,6 @@
             Glory to the machine. Your art devours the bracket...
           </div>
         </div>
-      </div>
-      <div class="champion-footer">
-        <span class="champion-sub">Cycle complete</span>
-        <span class="champion-sub">Long live the winner</span>
       </div>
     </div>
   `;
@@ -293,7 +286,7 @@
     stopConfetti();
   }
 
-  // Exposed global: call this from matchup when you have a final winner
+  // Exposed global: matchup calls this when final is decided
   window.openChampionOverlay = function(label, imageUrl) {
     if (imgEl && imageUrl) {
       imgEl.src = imageUrl;
