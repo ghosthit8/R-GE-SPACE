@@ -115,11 +115,11 @@
     <!-- ACTIVE MATCH -->
     <div class="card" id="activeTop">
       <div class="imgBox">
-        <img id="imgActive1" alt="Active left">
+        <img id="imgActive1" alt="Active top">
         <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
       </div>
       <div class="bar">
-        <div class="label" id="labelActive1">Left</div>
+        <div class="label" id="labelActive1">Top</div>
         <div class="counts" id="countActive1">0</div>
         <button class="vote" id="btnActive1">Vote</button>
       </div>
@@ -127,11 +127,11 @@
 
     <div class="card" id="activeBottom">
       <div class="imgBox">
-        <img id="imgActive2" alt="Active right">
+        <img id="imgActive2" alt="Active bottom">
         <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
       </div>
       <div class="bar">
-        <div class="label" id="labelActive2">Right</div>
+        <div class="label" id="labelActive2">Bottom</div>
         <div class="counts" id="countActive2">0</div>
         <button class="vote" id="btnActive2">Vote</button>
       </div>
@@ -267,8 +267,8 @@
       div.className = "thumb"; div.id = "thumb_"+item.key;
       div.innerHTML = `
         <div class="thumb-img diag">
-          <img class="half left" id="imgL_${item.key}" alt="${item.label} left">
-          <img class="half right" id="imgR_${item.key}" alt="${item.label} right">
+          <img class="half left" id="imgL_${item.key}" alt="${item.label} top">
+          <img class="half right" id="imgR_${item.key}" alt="${item.label} bottom">
         </div>
         <div class="thumb-label"><span>${item.label}</span><span class="thumb-count" id="cnt_${item.key}">0-0</span></div>
       `;
@@ -536,7 +536,7 @@
       const mem = memRead(base);
       const picked = mem[activeMatch];
 
-      let leftImg=placeholder("?"), rightImg=placeholder("?"), leftCt=0, rightCt=0, leftLabel="Left", rightLabel="Right";
+      let leftImg=placeholder("?"), rightImg=placeholder("?"), leftCt=0, rightCt=0, leftLabel="Top", rightLabel="Bottom";
 
       const find = order.find(o=>o.key===activeMatch);
       if (find && !find.semi && find.key!=="final"){
@@ -546,29 +546,29 @@
         const RC = pick(state[find.rct], state[find.fbRct]);
         leftImg=L||placeholder("?"); rightImg=R||placeholder("?");
         leftCt=LC||0; rightCt=RC||0;
-        leftLabel = find.label.split(" ")[0] + " — Left";
-        rightLabel= find.label.split(" ")[0] + " — Right";
+        leftLabel = find.label.split(" ")[0] + " — Top";
+        rightLabel= find.label.split(" ")[0] + " — Bottom";
       } else if (activeMatch==="s1"){
         if (state.mid1_done){
           leftImg  = state.semi_1_left_url  || placeholder("?");
           rightImg = state.semi_1_right_url || placeholder("?");
           leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0;
         }
-        leftLabel="Semi 1 — Left"; rightLabel="Semi 1 — Right";
+        leftLabel="Semi 1 — Top"; rightLabel="Semi 1 — Bottom";
       } else if (activeMatch==="s2"){
         if (state.mid1_done){
           leftImg  = state.semi_2_left_url  || placeholder("?");
           rightImg = state.semi_2_right_url || placeholder("?");
           leftCt = state.seed_c_count||0; rightCt=state.seed_d_count||0;
         }
-        leftLabel="Semi 2 — Left"; rightLabel="Semi 2 — Right";
+        leftLabel="Semi 2 — Top"; rightLabel="Semi 2 — Bottom";
       } else {
         if (state.mid2_done){
           leftImg  = state.mid_winner_1_url || placeholder("?");
           rightImg = state.mid_winner_2_url || placeholder("?");
           leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0;
         }
-        leftLabel="Final — Left"; rightLabel="Final — Right";
+        leftLabel="Final — Top"; rightLabel="Final — Bottom";
       }
 
       imgActive1.src = leftImg; imgActive2.src = rightImg;
