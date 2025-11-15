@@ -172,6 +172,9 @@
     <img id="fullImg" src="">
   </div>
 
+  <!-- NEW: champion overlay JS (injects cyberpunk overlay + confetti) -->
+  <script src="js/champion-overlay.js"></script>
+
   <script>
     // === config ===
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
@@ -586,9 +589,38 @@
       }
     }
 
-    // ---------- TICK ----------
+    // ---------- TICK + CHAMPION OVERLAY ----------
     let phaseSync = { r32:false, r16:false, q:false, s:false, f:false };
     let lastFlags={r32:false, r16:false, mid1:false, mid2:false};
+
+    // guard so overlay shows once per cycle
+    let championOverlayShown = false;
+
+    function showChampionOverlayIfReady(){
+      if (championOverlayShown) return;
+      if (typeof window.openChampionOverlay !== "function") return;
+      if (!state.mid2_done) return;
+
+      const leftUrl  = state.mid_winner_1_url || null;
+      const rightUrl = state.mid_winner_2_url || null;
+      if (!leftUrl && !rightUrl) return;
+
+      const leftCount  = state.seed_a_count ?? 0;
+      const rightCount = state.seed_b_count ?? 0;
+
+      let winnerUrl = leftUrl || rightUrl;
+      let winnerLabel = labelActive1.textContent || "Champion";
+
+      if (rightCount > leftCount) {
+        winnerUrl = rightUrl || winnerUrl;
+        winnerLabel = labelActive2.textContent || winnerLabel;
+      }
+
+      const cleanLabel = winnerLabel.split(" •")[0];
+
+      window.openChampionOverlay(cleanLabel, winnerUrl);
+      championOverlayShown = true;
+    }
 
     function tick(){
       if (!state?.ends_at) return requestAnimationFrame(tick);
@@ -614,6 +646,11 @@
       if (ms <= Q_MS  && state.r16_done && !state.mid1_done && !phaseSync.q){ phaseSync.q=true; fetchState(true); }
       if (ms <= S_MS  && state.mid1_done && !state.mid2_done && !phaseSync.s){ phaseSync.s=true; fetchState(true); }
       if (ms <= 0     && state.mid2_done && !phaseSync.f){ phaseSync.f=true; fetchState(true); }
+
+      // when final hits 0 and pairing is ready, fire champion overlay once
+      if (ms <= 0 && state.mid2_done && !championOverlayShown) {
+        showChampionOverlayIfReady();
+      }
 
       requestAnimationFrame(tick);
     }
