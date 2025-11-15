@@ -209,3 +209,53 @@ body::before {
 @media (max-width:560px){
   #toast.toast{ right:50% !important; transform:translateX(50%) !important; }
 }
+/* ===== MAKE ALL TEXT NEON GREEN ===== */
+
+/* Labels under the big images */
+.label {
+  color: var(--accent) !important;
+}
+
+/* Vote counts */
+.counts {
+  color: var(--accent) !important;
+}
+
+/* Thumbnails: label + 0-0 score */
+.thumb-label span,
+.thumb-count {
+  color: var(--accent) !important;
+}
+
+/* Section titles */
+.thumbs-title,
+.winner,
+.final-footer,
+.hint {
+  color: var(--accent) !important;
+}
+
+/* "Final" label inside the final box */
+.final-card .label {
+  color: var(--accent) !important;
+}
+
+/* Timer numbers */
+.timer {
+  color: var(--accent) !important;
+}
+
+/* Buttons (text only, not background) */
+.btn,
+.linkbtn,
+.backbtn,
+.vote {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+
+/* Fullscreen close button */
+.fullscreen-overlay button {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
