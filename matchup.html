@@ -275,10 +275,25 @@
       div.addEventListener("click", ()=>{
         // R32 rows (rr*) are clickable only before r32_done
         if (item.key.startsWith("rr") && state.r32_done) return;
-        if (item.key.startsWith("r") && !item.key.startsWith("rr") && !state.r32_done) return; // R16 locked until r32 done
-        if (item.key.startsWith("q") && !state.r16_done) return;
-        if (item.key.startsWith("s") && !state.mid1_done) return;
+
+        // R16: only between r32_done and r16_done
+        if (item.key.startsWith("r") && !item.key.startsWith("rr")) {
+          if (!state.r32_done || state.r16_done) return;
+        }
+
+        // Quarters: only between r16_done and mid1_done (semis)
+        if (item.key.startsWith("q")) {
+          if (!state.r16_done || state.mid1_done) return;
+        }
+
+        // Semis: only between mid1_done and mid2_done (final pairing)
+        if (item.key.startsWith("s")) {
+          if (!state.mid1_done || state.mid2_done) return;
+        }
+
+        // Final: only once mid2_done flips
         if (item.key==="final" && !state.mid2_done) return;
+
         activeMatch = item.key; renderActive();
       });
       grid.appendChild(div);
@@ -439,6 +454,7 @@
       for (let i=1;i<=8;i++){
         const k = "r"+i;
         thumbs[k].box.classList.toggle("hidden", !state.r32_done);
+        // R16 disabled until R32 done, and again after R16 done
         thumbs[k].box.classList.toggle("disabled", !state.r32_done || !!state.r16_done);
       }
 
@@ -455,7 +471,8 @@
         const LC = pick(state[lc], state[flc]);
         const RC = pick(state[rc], state[frc]);
         setThumb(k, L, R, LC, RC, fb);
-        thumbs[k].box.classList.toggle("disabled", !state.r16_done);
+        // QF disabled before R16 done, and after semis (mid1) done
+        thumbs[k].box.classList.toggle("disabled", !state.r16_done || !!state.mid1_done);
         thumbs[k].box.classList.toggle("hidden",   !state.r16_done);
       }
 
@@ -474,12 +491,15 @@
         thumbs.s1.imgL.src = state.semi_1_left_url  || placeholder("S1");
         thumbs.s1.imgR.src = state.semi_1_right_url || placeholder("S1");
         thumbs.s1.count.textContent = (state.seed_a_count||0) + "-" + (state.seed_b_count||0);
-        thumbs.s1.box.classList.remove("disabled"); thumbs.s1.box.classList.remove("hidden");
+        // Semis disabled once final pairing (mid2) is done
+        thumbs.s1.box.classList.toggle("disabled", !!state.mid2_done);
+        thumbs.s1.box.classList.remove("hidden");
 
         thumbs.s2.imgL.src = state.semi_2_left_url  || placeholder("S2");
         thumbs.s2.imgR.src = state.semi_2_right_url || placeholder("S2");
         thumbs.s2.count.textContent = (state.seed_c_count||0) + "-" + (state.seed_d_count||0);
-        thumbs.s2.box.classList.remove("disabled"); thumbs.s2.box.classList.remove("hidden");
+        thumbs.s2.box.classList.toggle("disabled", !!state.mid2_done);
+        thumbs.s2.box.classList.remove("hidden");
       }
 
       // Final
@@ -555,12 +575,25 @@
       labelActive1.textContent = leftLabel; labelActive2.textContent = rightLabel;
       countActive1.textContent = leftCt; countActive2.textContent = rightCt;
 
+      // PHASE LIVE RULES:
+      // R32: only while !r32_done
+      // R16: only while r32_done && !r16_done
+      // QF:  only while r16_done && !mid1_done
+      // S:   only while mid1_done && !mid2_done
+      // F:   only while mid2_done
       let phaseLive = true;
-      if (activeMatch.startsWith("rr") && state.r32_done) phaseLive = false;            // R32 closed after lock
-      if (activeMatch.startsWith("r") && !activeMatch.startsWith("rr") && !state.r32_done) phaseLive = false; // R16 locked until R32 done
-      if (activeMatch.startsWith("q") && !state.r16_done) phaseLive = false;
-      if (["s1","s2"].includes(activeMatch) && !state.mid1_done) phaseLive = false;
-      if (activeMatch==="final" && !state.mid2_done) phaseLive = false;
+
+      if (activeMatch.startsWith("rr")) {
+        if (state.r32_done) phaseLive = false;
+      } else if (activeMatch.startsWith("r") && !activeMatch.startsWith("rr")) {
+        if (!state.r32_done || state.r16_done) phaseLive = false;
+      } else if (activeMatch.startsWith("q")) {
+        if (!state.r16_done || state.mid1_done) phaseLive = false;
+      } else if (["s1","s2"].includes(activeMatch)) {
+        if (!state.mid1_done || state.mid2_done) phaseLive = false;
+      } else if (activeMatch==="final") {
+        if (!state.mid2_done) phaseLive = false;
+      }
 
       btnActive1.disabled = !!picked || !phaseLive;
       btnActive2.disabled = !!picked || !phaseLive;
