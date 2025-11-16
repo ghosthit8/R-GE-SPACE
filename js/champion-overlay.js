@@ -137,23 +137,24 @@
     font-weight: 700;
     letter-spacing: 0.04em;
   }
-  /* typewriter neon tagline — now wraps on mobile */
+
+  /* === NEW FIXED 2-LINE TYPEWRITER TAGLINE === */
   .champion-tagline {
     font-size: 12px;
     color: #39ff14;
-    font-family: "Source Code Pro", ui-monospace, SFMono-Regular,
-      Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: "Source Code Pro", ui-monospace, monospace;
     letter-spacing: 0.04em;
     margin-top: 4px;
     overflow: hidden;
     display: inline-block;
     max-width: 100%;
-    white-space: normal;
+    white-space: pre-wrap;     /* allows <br> to work */
     border-right: 2px solid #39ff14;
     animation:
       champion-typing 4.5s steps(40, end) 0.4s 1 both,
       champion-blink 0.95s step-end infinite;
   }
+
   @keyframes champion-typing {
     from { width: 0; }
     to   { width: 100%; }
@@ -162,6 +163,7 @@
     0%, 100% { border-color: #39ff14; }
     50%      { border-color: transparent; }
   }
+
   @media (max-width: 520px) {
     .champion-main {
       flex-direction: column;
@@ -192,9 +194,13 @@
         <div class="champion-text">
           <div class="champion-title">CHAMPION</div>
           <div class="champion-label" id="championLabel">#1 Seed</div>
+
+          <!-- NEW FIXED TWO-LINE TAGLINE -->
           <div class="champion-tagline" id="championTagline">
-            Glory to the machine. Your art devours the bracket...
+            Glory to the machine. Your art devours<br>
+            the bracket...
           </div>
+
         </div>
       </div>
     </div>
@@ -273,7 +279,7 @@
     resizeCanvas();
     initParticles();
     if (rafId) cancelAnimationFrame(rafId);
-    rafId = window.requestAnimationFrame(drawParticles);
+    rafId = requestAnimationFrame(drawParticles);
   }
 
   function stopConfetti() {
@@ -288,35 +294,25 @@
     stopConfetti();
   }
 
-  // Exposed global: matchup calls this when final is decided
+  // EXPORTED FUNCTION
   window.openChampionOverlay = function(label, imageUrl) {
-    if (imgEl && imageUrl) {
-      imgEl.src = imageUrl;
-    }
-    if (labelEl) {
-      labelEl.textContent = label || "Champion";
-    }
+    if (imgEl && imageUrl) imgEl.src = imageUrl;
+    if (labelEl) labelEl.textContent = label || "Champion";
 
-    // restart typewriter animation each time
-    if (taglineEl) {
-      taglineEl.style.animation = "none";
-      // force reflow
-      void taglineEl.offsetWidth;
-      taglineEl.style.animation = "";
-    }
+    // restart typewriter animation
+    taglineEl.style.animation = "none";
+    void taglineEl.offsetWidth;
+    taglineEl.style.animation = "";
 
     overlay.classList.add("active");
     startConfetti();
   };
 
-  if (closeBtn) {
-    closeBtn.addEventListener("click", closeOverlay);
-  }
+  closeBtn.addEventListener("click", closeOverlay);
 
-  document.addEventListener("keydown", (evt) => {
-    if (evt.key === "Escape" && overlay.classList.contains("active")) {
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && overlay.classList.contains("active"))
       closeOverlay();
-    }
   });
 
   window.addEventListener("resize", resizeCanvas);
