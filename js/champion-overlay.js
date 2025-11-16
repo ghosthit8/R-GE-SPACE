@@ -138,7 +138,7 @@
     letter-spacing: 0.04em;
   }
 
-  /* === NEW FIXED 2-LINE TYPEWRITER TAGLINE === */
+  /* Neon typewriter tagline, 2 fixed lines */
   .champion-tagline {
     font-size: 12px;
     color: #39ff14;
@@ -148,7 +148,7 @@
     overflow: hidden;
     display: inline-block;
     max-width: 100%;
-    white-space: pre-wrap;     /* allows <br> to work */
+    white-space: normal;        /* ignore indentation, respect <br> */
     border-right: 2px solid #39ff14;
     animation:
       champion-typing 4.5s steps(40, end) 0.4s 1 both,
@@ -194,13 +194,7 @@
         <div class="champion-text">
           <div class="champion-title">CHAMPION</div>
           <div class="champion-label" id="championLabel">#1 Seed</div>
-
-          <!-- NEW FIXED TWO-LINE TAGLINE -->
-          <div class="champion-tagline" id="championTagline">
-            Glory to the machine. Your art devours<br>
-            the bracket...
-          </div>
-
+          <div class="champion-tagline" id="championTagline">Glory to the machine. Your art devours<br>the bracket...</div>
         </div>
       </div>
     </div>
@@ -295,7 +289,7 @@
   }
 
   // EXPORTED FUNCTION
-  window.openChampionOverlay = function(label, imageUrl) {
+  window.openChampionOverlay = function (label, imageUrl) {
     if (imgEl && imageUrl) imgEl.src = imageUrl;
     if (labelEl) labelEl.textContent = label || "Champion";
 
@@ -310,9 +304,10 @@
 
   closeBtn.addEventListener("click", closeOverlay);
 
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && overlay.classList.contains("active"))
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlay.classList.contains("active")) {
       closeOverlay();
+    }
   });
 
   window.addEventListener("resize", resizeCanvas);
