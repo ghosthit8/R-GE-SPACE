@@ -138,7 +138,7 @@
     letter-spacing: 0.04em;
   }
 
-  /* Neon typewriter tagline, 2 fixed lines */
+  /* Neon typewriter tagline – tuned for 2 lines */
   .champion-tagline {
     font-size: 12px;
     color: #39ff14;
@@ -148,6 +148,7 @@
     overflow: hidden;
     display: inline-block;
     max-width: 100%;
+    line-height: 1.3;
     white-space: normal;        /* ignore indentation, respect <br> */
     border-right: 2px solid #39ff14;
     animation:
@@ -162,6 +163,13 @@
   @keyframes champion-blink {
     0%, 100% { border-color: #39ff14; }
     50%      { border-color: transparent; }
+  }
+
+  /* Slightly smaller on narrow phones to keep 2 lines */
+  @media (max-width: 420px) {
+    .champion-tagline {
+      font-size: 11px;
+    }
   }
 
   @media (max-width: 520px) {
@@ -194,7 +202,7 @@
         <div class="champion-text">
           <div class="champion-title">CHAMPION</div>
           <div class="champion-label" id="championLabel">#1 Seed</div>
-          <div class="champion-tagline" id="championTagline">Glory to the machine. Your art devours<br>the bracket...</div>
+          <div class="champion-tagline" id="championTagline">Glory to the machine.<br>Your art devours the bracket...</div>
         </div>
       </div>
     </div>
@@ -266,7 +274,7 @@
       ctx.restore();
     }
 
-    rafId = window.requestAnimationFrame(drawParticles);
+    rafId = requestAnimationFrame(drawParticles);
   }
 
   function startConfetti() {
