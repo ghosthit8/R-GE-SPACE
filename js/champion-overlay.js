@@ -138,37 +138,37 @@
     letter-spacing: 0.04em;
   }
 
-  /* Neon typewriter tagline – exactly two lines */
+  /* Neon typewriter tagline with JS-controlled two-line typing */
   .champion-tagline {
     font-size: 12px;
     color: #39ff14;
     font-family: "Source Code Pro", ui-monospace, monospace;
     letter-spacing: 0.04em;
     margin-top: 4px;
-    overflow: hidden;
     display: inline-block;
     max-width: 100%;
     line-height: 1.3;
-    border-right: 2px solid #39ff14;
-    animation:
-      champion-typing 4.5s steps(40, end) 0.4s 1 both,
-      champion-blink 0.95s step-end infinite;
+    position: relative;
   }
-  .champion-tagline span {
-    display: block;          /* forces a new line for each */
-    white-space: nowrap;     /* prevent each line from wrapping again */
+  .champion-line {
+    display: block;
+    white-space: nowrap; /* each line stays on one row */
+  }
+  .champion-cursor {
+    display: inline-block;
+    margin-left: 2px;
+    width: 0.7em;
+    text-align: center;
+    color: #39ff14;
+    font-weight: 700;
+    text-shadow: 0 0 8px rgba(57,255,20,0.9);
+    animation: champion-cursor-blink 0.9s steps(1, end) infinite;
+  }
+  @keyframes champion-cursor-blink {
+    0%, 49%   { opacity: 1; }
+    50%, 100% { opacity: 0; }
   }
 
-  @keyframes champion-typing {
-    from { width: 0; }
-    to   { width: 100%; }
-  }
-  @keyframes champion-blink {
-    0%, 100% { border-color: #39ff14; }
-    50%      { border-color: transparent; }
-  }
-
-  /* Tiny tweak on narrow phones so the long line fits */
   @media (max-width: 420px) {
     .champion-tagline {
       font-size: 11px;
@@ -206,8 +206,8 @@
           <div class="champion-title">CHAMPION</div>
           <div class="champion-label" id="championLabel">#1 Seed</div>
           <div class="champion-tagline" id="championTagline">
-            <span>Glory to the machine. Your art devours</span>
-            <span>the bracket...</span>
+            <span class="champion-line" id="champLine1"></span>
+            <span class="champion-line" id="champLine2"></span><span class="champion-cursor" id="champCursor">█</span>
           </div>
         </div>
       </div>
@@ -215,14 +215,68 @@
   `;
   document.body.appendChild(overlay);
 
-  const imgEl = overlay.querySelector("#championImage");
-  const labelEl = overlay.querySelector("#championLabel");
-  const taglineEl = overlay.querySelector("#championTagline");
-  const closeBtn = overlay.querySelector(".champion-close");
-  const canvas = overlay.querySelector("#championConfetti");
-  const ctx = canvas.getContext("2d");
+  const imgEl      = overlay.querySelector("#championImage");
+  const labelEl    = overlay.querySelector("#championLabel");
+  const line1El    = overlay.querySelector("#champLine1");
+  const line2El    = overlay.querySelector("#champLine2");
+  const cursorEl   = overlay.querySelector("#champCursor");
+  const closeBtn   = overlay.querySelector(".champion-close");
+  const canvas     = overlay.querySelector("#championConfetti");
+  const ctx        = canvas.getContext("2d");
 
-  // --- 3. Confetti engine ---
+  // --- 3. Typewriter config (speed A, cinematic) ---
+  const LINE1_TEXT = "Glory to the machine. Your art devours";
+  const LINE2_TEXT = "the bracket...";
+  const TYPE_DELAY = 60;   // ms per character (slow/cinematic)
+  const LINE_PAUSE = 500;  // pause between line 1 and line 2
+
+  let typeTimer = null;
+
+  function runTypewriter() {
+    if (!line1El || !line2El) return;
+    // reset
+    line1El.textContent = "";
+    line2El.textContent = "";
+    if (cursorEl) cursorEl.style.visibility = "visible";
+
+    if (typeTimer) {
+      clearTimeout(typeTimer);
+      typeTimer = null;
+    }
+
+    let i = 0;
+    let j = 0;
+    let phase = 1; // 1 = line1, 2 = pause, 3 = line2
+
+    function step() {
+      if (phase === 1) {
+        if (i < LINE1_TEXT.length) {
+          line1El.textContent = LINE1_TEXT.slice(0, i + 1);
+          i++;
+          typeTimer = setTimeout(step, TYPE_DELAY);
+        } else {
+          phase = 2;
+          typeTimer = setTimeout(() => {
+            phase = 3;
+            step();
+          }, LINE_PAUSE);
+        }
+      } else if (phase === 3) {
+        if (j < LINE2_TEXT.length) {
+          line2El.textContent = LINE2_TEXT.slice(0, j + 1);
+          j++;
+          typeTimer = setTimeout(step, TYPE_DELAY);
+        } else {
+          // done typing, just let cursor keep blinking
+          typeTimer = null;
+        }
+      }
+    }
+
+    step();
+  }
+
+  // --- 4. Confetti engine ---
   let particles = [];
   let rafId = null;
 
@@ -296,24 +350,24 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  // --- 4. Open/close overlay ---
+  // --- 5. Open/close overlay ---
   function closeOverlay() {
     overlay.classList.remove("active");
     stopConfetti();
+    if (typeTimer) {
+      clearTimeout(typeTimer);
+      typeTimer = null;
+    }
   }
 
-  // EXPORTED FUNCTION
+  // EXPORTED FUNCTION – called from matchup when final decides
   window.openChampionOverlay = function(label, imageUrl) {
     if (imgEl && imageUrl) imgEl.src = imageUrl;
     if (labelEl) labelEl.textContent = label || "Champion";
 
-    // restart typewriter animation
-    taglineEl.style.animation = "none";
-    void taglineEl.offsetWidth;
-    taglineEl.style.animation = "";
-
     overlay.classList.add("active");
     startConfetti();
+    runTypewriter();
   };
 
   closeBtn.addEventListener("click", closeOverlay);
