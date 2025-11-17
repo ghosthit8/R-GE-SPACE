@@ -138,7 +138,7 @@
     letter-spacing: 0.04em;
   }
 
-  /* Neon typewriter tagline with JS-controlled two-line typing */
+  /* Neon typewriter tagline with moving block cursor */
   .champion-tagline {
     font-size: 12px;
     color: #39ff14;
@@ -148,11 +148,10 @@
     display: inline-block;
     max-width: 100%;
     line-height: 1.3;
-    position: relative;
   }
   .champion-line {
-    display: block;
-    white-space: nowrap; /* each line stays on one row */
+    display: block;          /* each line on its own row */
+    white-space: nowrap;     /* don't wrap within a line */
   }
   .champion-cursor {
     display: inline-block;
@@ -207,7 +206,8 @@
           <div class="champion-label" id="championLabel">#1 Seed</div>
           <div class="champion-tagline" id="championTagline">
             <span class="champion-line" id="champLine1"></span>
-            <span class="champion-line" id="champLine2"></span><span class="champion-cursor" id="champCursor">█</span>
+            <span class="champion-line" id="champLine2"></span>
+            <span class="champion-cursor" id="champCursor">█</span>
           </div>
         </div>
       </div>
@@ -215,29 +215,33 @@
   `;
   document.body.appendChild(overlay);
 
-  const imgEl      = overlay.querySelector("#championImage");
-  const labelEl    = overlay.querySelector("#championLabel");
-  const line1El    = overlay.querySelector("#champLine1");
-  const line2El    = overlay.querySelector("#champLine2");
-  const cursorEl   = overlay.querySelector("#champCursor");
-  const closeBtn   = overlay.querySelector(".champion-close");
-  const canvas     = overlay.querySelector("#championConfetti");
-  const ctx        = canvas.getContext("2d");
+  const imgEl    = overlay.querySelector("#championImage");
+  const labelEl  = overlay.querySelector("#championLabel");
+  const line1El  = overlay.querySelector("#champLine1");
+  const line2El  = overlay.querySelector("#champLine2");
+  const cursorEl = overlay.querySelector("#champCursor");
+  const closeBtn = overlay.querySelector(".champion-close");
+  const canvas   = overlay.querySelector("#championConfetti");
+  const ctx      = canvas.getContext("2d");
 
-  // --- 3. Typewriter config (speed A, cinematic) ---
+  // --- 3. Typewriter config (Speed A: cinematic) ---
   const LINE1_TEXT = "Glory to the machine. Your art devours";
   const LINE2_TEXT = "the bracket...";
-  const TYPE_DELAY = 60;   // ms per character (slow/cinematic)
-  const LINE_PAUSE = 500;  // pause between line 1 and line 2
+  const TYPE_DELAY = 60;   // ms per character
+  const LINE_PAUSE = 500;  // pause between lines
 
   let typeTimer = null;
 
   function runTypewriter() {
-    if (!line1El || !line2El) return;
-    // reset
+    if (!line1El || !line2El || !cursorEl) return;
+
+    // Reset text
     line1El.textContent = "";
     line2El.textContent = "";
-    if (cursorEl) cursorEl.style.visibility = "visible";
+    cursorEl.style.visibility = "visible";
+
+    // Start cursor after line1 initially
+    line1El.appendChild(cursorEl);
 
     if (typeTimer) {
       clearTimeout(typeTimer);
@@ -246,28 +250,33 @@
 
     let i = 0;
     let j = 0;
-    let phase = 1; // 1 = line1, 2 = pause, 3 = line2
+    let phase = 1; // 1 = typing line1, 2 = pause, 3 = typing line2
 
     function step() {
       if (phase === 1) {
         if (i < LINE1_TEXT.length) {
           line1El.textContent = LINE1_TEXT.slice(0, i + 1);
+          line1El.appendChild(cursorEl); // cursor follows end of line1
           i++;
           typeTimer = setTimeout(step, TYPE_DELAY);
         } else {
+          // finished line1, pause, then move to line2
           phase = 2;
           typeTimer = setTimeout(() => {
             phase = 3;
+            // move cursor down to start of line2
+            line2El.appendChild(cursorEl);
             step();
           }, LINE_PAUSE);
         }
       } else if (phase === 3) {
         if (j < LINE2_TEXT.length) {
           line2El.textContent = LINE2_TEXT.slice(0, j + 1);
+          line2El.appendChild(cursorEl); // cursor follows line2 as it grows
           j++;
           typeTimer = setTimeout(step, TYPE_DELAY);
         } else {
-          // done typing, just let cursor keep blinking
+          // done; cursor just keeps blinking where it is
           typeTimer = null;
         }
       }
