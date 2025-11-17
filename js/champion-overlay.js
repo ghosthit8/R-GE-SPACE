@@ -138,7 +138,7 @@
     letter-spacing: 0.04em;
   }
 
-  /* Neon typewriter tagline – tuned for 2 lines */
+  /* Neon typewriter tagline – exactly two lines */
   .champion-tagline {
     font-size: 12px;
     color: #39ff14;
@@ -149,11 +149,14 @@
     display: inline-block;
     max-width: 100%;
     line-height: 1.3;
-    white-space: normal;        /* ignore indentation, respect <br> */
     border-right: 2px solid #39ff14;
     animation:
       champion-typing 4.5s steps(40, end) 0.4s 1 both,
       champion-blink 0.95s step-end infinite;
+  }
+  .champion-tagline span {
+    display: block;          /* forces a new line for each */
+    white-space: nowrap;     /* prevent each line from wrapping again */
   }
 
   @keyframes champion-typing {
@@ -165,7 +168,7 @@
     50%      { border-color: transparent; }
   }
 
-  /* Slightly smaller on narrow phones to keep 2 lines */
+  /* Tiny tweak on narrow phones so the long line fits */
   @media (max-width: 420px) {
     .champion-tagline {
       font-size: 11px;
@@ -202,7 +205,10 @@
         <div class="champion-text">
           <div class="champion-title">CHAMPION</div>
           <div class="champion-label" id="championLabel">#1 Seed</div>
-          <div class="champion-tagline" id="championTagline">Glory to the machine.<br>Your art devours the bracket...</div>
+          <div class="champion-tagline" id="championTagline">
+            <span>Glory to the machine. Your art devours</span>
+            <span>the bracket...</span>
+          </div>
         </div>
       </div>
     </div>
@@ -274,14 +280,14 @@
       ctx.restore();
     }
 
-    rafId = requestAnimationFrame(drawParticles);
+    rafId = window.requestAnimationFrame(drawParticles);
   }
 
   function startConfetti() {
     resizeCanvas();
     initParticles();
     if (rafId) cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(drawParticles);
+    rafId = window.requestAnimationFrame(drawParticles);
   }
 
   function stopConfetti() {
@@ -297,7 +303,7 @@
   }
 
   // EXPORTED FUNCTION
-  window.openChampionOverlay = function (label, imageUrl) {
+  window.openChampionOverlay = function(label, imageUrl) {
     if (imgEl && imageUrl) imgEl.src = imageUrl;
     if (labelEl) labelEl.textContent = label || "Champion";
 
