@@ -54,7 +54,8 @@
     }
 
     /* Cyberpunk buttons that match your global .btn style */
-    a.btn,button.btn{
+    a.btn,
+    button.btn{
       display:inline-flex;
       align-items:center;
       gap:8px;
@@ -71,7 +72,8 @@
       letter-spacing:.08em;
       transition:.18s ease;
     }
-    a.btn:hover,button.btn:hover{
+    a.btn:hover,
+    button.btn:hover{
       box-shadow:0 0 10px var(--accent);
       background:#050805;
     }
@@ -195,6 +197,68 @@
       box-shadow:0 0 10px rgba(57,255,20,.4);
     }
 
+    /* description button */
+    .descBtn{
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--accent);
+      background:#020602;
+      color:var(--accent);
+      font-size:12px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .descBtn:hover{
+      background:#041104;
+      box-shadow:0 0 6px var(--accent);
+    }
+
+    /* description modal */
+    .desc-modal{
+      position:fixed;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      background:rgba(0,0,0,0.88);
+      z-index:9999;
+    }
+    .desc-modal-inner{
+      max-width:380px;
+      width:90%;
+      background:var(--card);
+      border-radius:14px;
+      border:1px solid var(--accent);
+      padding:12px 14px;
+      color:var(--fg);
+      box-shadow:0 0 20px rgba(57,255,20,.4);
+    }
+    .desc-modal-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:8px;
+      font-weight:700;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+    .desc-modal-close{
+      border:none;
+      background:transparent;
+      color:var(--accent);
+      cursor:pointer;
+      font-size:16px;
+    }
+    .desc-modal-body{
+      font-size:14px;
+      color:var(--fg);
+      max-height:260px;
+      overflow-y:auto;
+      white-space:pre-wrap;
+    }
+
     @media (max-width:560px){
       th.cycle,td.cycle{display:none;}
       table{font-size:13px;}
@@ -232,20 +296,34 @@
               <th>Phase</th>
               <th class="cycle">Cycle</th>
               <th>Winner</th>
+              <th>Piece Name</th>
+              <th>Description</th>
+              <th>Artist</th>
               <th>Thumbnail</th>
               <th>Score</th>
               <th>Decided By</th>
             </tr>
           </thead>
           <tbody id="body">
-            <tr><td colspan="8" style="padding:18px;color:var(--muted);">Loading winners…</td></tr>
+            <tr><td colspan="11" style="padding:18px;color:var(--muted);">Loading winners…</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- Fullscreen image viewer (new) -->
+  <!-- Piece description modal -->
+  <div id="descModal" class="desc-modal">
+    <div class="desc-modal-inner">
+      <div class="desc-modal-header">
+        <span id="descTitle">Piece description</span>
+        <button id="descClose" class="desc-modal-close">✕</button>
+      </div>
+      <div id="descBody" class="desc-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Fullscreen image viewer -->
   <div id="fsView" style="
     position:fixed;
     inset:0;
@@ -253,7 +331,7 @@
     display:none;
     align-items:center;
     justify-content:center;
-    z-index:9999;
+    z-index:9998;
     backdrop-filter:blur(4px);
   ">
     <img id="fsImg" src="" alt="fullscreen winner" style="
@@ -278,26 +356,47 @@
     const btnToggleMode = document.getElementById('toggleMode');
     const btnClear = document.getElementById('clear');
 
-    // fullscreen overlay elements (new)
-    const fsView = document.getElementById('fsView');
-    const fsImg  = document.getElementById('fsImg');
+    // fullscreen overlay elements
+    const fsView = document.getElementById("fsView");
+    const fsImg  = document.getElementById("fsImg");
 
-    // close fullscreen on tap (new)
-    fsView.addEventListener('click', () => {
-      fsView.style.display = 'none';
-      fsImg.src = '';
-    });
+    fsView.onclick = () => {
+      fsView.style.display = "none";
+      fsImg.src = "";
+    };
 
-    // enable click-to-fullscreen on all .thumb elements (new)
     function enableThumbFullscreen() {
-      document.querySelectorAll('.thumb').forEach(thumb => {
-        thumb.style.cursor = 'pointer';
+      document.querySelectorAll(".thumb").forEach(thumb => {
+        thumb.style.cursor = "pointer";
         thumb.onclick = () => {
           fsImg.src = thumb.src;
-          fsView.style.display = 'flex';
+          fsView.style.display = "flex";
         };
       });
     }
+
+    // description modal elements
+    const descModal = document.getElementById('descModal');
+    const descTitleEl = document.getElementById('descTitle');
+    const descBodyEl = document.getElementById('descBody');
+    const descCloseBtn = document.getElementById('descClose');
+    let descStore = [];
+    let descTitleStore = [];
+
+    function openDesc(idx){
+      const title = descTitleStore[idx] || 'Piece description';
+      const txt = (descStore[idx] || '').trim();
+      descTitleEl.textContent = title;
+      descBodyEl.textContent = txt || 'No description provided yet.';
+      descModal.style.display = 'flex';
+    }
+    function closeDesc(){
+      descModal.style.display = 'none';
+    }
+    descCloseBtn.addEventListener('click', closeDesc);
+    descModal.addEventListener('click', (e) => {
+      if (e.target === descModal) closeDesc();
+    });
 
     // persistent view mode
     const MODE_KEY = "winners_mode_v2"; // "all" | "finals"
@@ -367,7 +466,7 @@
       return NaN;
     }
 
-    function isFinalRow(w){ 
+    function isFinalRow(w){
       return !String(w.base_iso || "").includes("::");
     }
 
@@ -388,7 +487,7 @@
       return byCycle;
     }
 
-    // NEW: map a..af → 1..32
+    // map a..af → 1..32
     function seedLetterToNumber(letter) {
       const list = [
         "a","b","c","d","e","f","g","h",
@@ -402,9 +501,11 @@
 
     function render(rows){
       if(!rows || rows.length===0){
-        tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:var(--muted);">No winners yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
         return;
       }
+      descStore = [];
+      descTitleStore = [];
       const N = rows.length;
       tbody.innerHTML = rows.map((r, idx) => {
         const n = N - idx;
@@ -415,6 +516,13 @@
         // letters → numbers
         const num = seedLetterToNumber(seed);
         const seedLabel = num ? `Seed #${num}` : "Seed ?";
+
+        const pieceName = r.piece_name || "";
+        const artistName = r.artist_name || "";
+        const pieceDesc = r.piece_description || r.description || "";
+
+        descStore[idx] = pieceDesc || "";
+        descTitleStore[idx] = pieceName || seedLabel || "Piece description";
 
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
@@ -429,13 +537,16 @@
             <td>${phase}</td>
             <td class="cycle">${r.base_iso || "—"}</td>
             <td><span class="${pillClass}">${seedLabel}</span></td>
+            <td>${pieceName || "—"}</td>
+            <td><button class="descBtn" onclick="openDesc(${idx})">🔍</button></td>
+            <td>${artistName || "—"}</td>
             <td>${thumb}</td>
             <td class="score">${score}</td>
             <td>${by}</td>
           </tr>`;
       }).join('');
 
-      // hook up fullscreen click handlers for new thumbnails
+      // hook up fullscreen click handlers for thumbnails
       enableThumbFullscreen();
     }
 
