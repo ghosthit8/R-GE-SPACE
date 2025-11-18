@@ -4,37 +4,209 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Rage Space — Winners</title>
+
+  <!-- Global neon / scanline styles -->
+  <link rel="stylesheet" href="style.css">
+
   <style>
-    :root { --fg:#e5e7eb; --bg:#0b0d0f; --accent:#39ff14; --muted:#98a2b3; --card:#0f1318; --line:#20242a; }
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif}
-    .wrap{max-width:780px;margin:0 auto;padding:16px 12px 24px}
-    h1{margin:0 0 10px;font-size:20px;font-weight:800;letter-spacing:.5px}
-    .top{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
-    a.btn,button.btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:#131920;color:var(--fg);font-weight:700;text-decoration:none;cursor:pointer}
-    .meta{color:var(--muted);font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .tz{padding:2px 8px;border-radius:999px;background:#0b1220;border:1px solid #1a2636;color:#cbd5e1;font-weight:700;font-size:11px;letter-spacing:.06em}
-    .seg{display:inline-block;margin-left:6px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:11px;color:#cbd5e1;background:#0b1220}
-    .card{border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden}
-    .table-wrap{overflow-x:auto}
-    table{width:100%;border-collapse:collapse;font-size:14px}
-    th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
-    th{color:#cbd5e1;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
-    .pillA{background:#2a1212;border:1px solid #4c2222;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-    .pillB{background:#0f1f33;border:1px solid #20344d;display:inline-block;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-    .score{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
-    .cycle{word-break:break-all;color:#cbd5e1;opacity:.9}
-    .thumb{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+    :root {
+      /* tie into your global neon variables */
+      --fg: var(--green);
+      --bg: #000;
+      --accent: var(--green);
+      --muted: #6aff6a;
+      --card: #050505;
+      --line: #133313;
+    }
+
+    html,body{
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
+    }
+
+    .wrap{
+      max-width:780px;
+      margin:0 auto;
+      padding:16px 12px 24px;
+      position:relative;
+      z-index:2; /* sit above scanlines */
+    }
+
+    /* glitch title is defined in style.css, this just tweaks spacing */
+    h1{
+      margin:0 0 10px;
+      font-size:22px;
+      font-weight:800;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+    }
+
+    .top{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:8px;
+      flex-wrap:wrap;
+    }
+
+    /* Cyberpunk buttons that match your global .btn style */
+    a.btn,button.btn{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 14px;
+      border-radius:12px;
+      border:1px solid var(--accent);
+      background:#010101;
+      color:var(--accent);
+      font-weight:700;
+      text-decoration:none;
+      cursor:pointer;
+      font-size:14px;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      transition:.18s ease;
+    }
+    a.btn:hover,button.btn:hover{
+      box-shadow:0 0 10px var(--accent);
+      background:#050805;
+    }
+
+    .meta{
+      color:var(--muted);
+      font-size:12px;
+      margin-bottom:8px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
+    .tz{
+      padding:2px 10px;
+      border-radius:999px;
+      background:#020602;
+      border:1px solid var(--accent);
+      color:var(--accent);
+      font-weight:700;
+      font-size:11px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+    }
+
+    .seg{
+      display:inline-block;
+      margin-left:6px;
+      padding:2px 10px;
+      border:1px dashed var(--accent);
+      border-radius:999px;
+      font-size:11px;
+      color:var(--accent);
+      background:#020202;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+    }
+
+    .card{
+      border:1px solid var(--accent);
+      background:var(--card);
+      border-radius:16px;
+      overflow:hidden;
+      box-shadow:
+        0 0 18px rgba(57,255,20,.25),
+        0 0 40px rgba(0,0,0,.9) inset;
+      position:relative;
+      z-index:2;
+    }
+
+    .table-wrap{overflow-x:auto;}
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:14px;
+      color:var(--fg);
+    }
+
+    th,td{
+      padding:10px 12px;
+      border-bottom:1px solid rgba(57,255,20,.25);
+      text-align:left;
+      vertical-align:middle;
+    }
+
+    th{
+      color:var(--accent);
+      font-weight:700;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      white-space:nowrap;
+      background:rgba(0,0,0,.7);
+    }
+
+    /* winner pills – red vs blue glow, but text stays neon green */
+    .pillA,
+    .pillB{
+      display:inline-block;
+      padding:4px 12px;
+      border-radius:999px;
+      font-weight:800;
+      font-size:12px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:var(--accent);
+      border:1px solid var(--accent);
+      box-shadow:0 0 8px rgba(57,255,20,.6);
+    }
+
+    .pillA{
+      background:radial-gradient(circle at 0% 0%, rgba(255,0,51,.45), #140307);
+    }
+
+    .pillB{
+      background:radial-gradient(circle at 100% 0%, rgba(0,140,255,.4), #020812);
+    }
+
+    .score{
+      font-variant-numeric:tabular-nums;
+      white-space:nowrap;
+      font-weight:700;
+      color:var(--accent);
+    }
+
+    .cycle{
+      word-break:break-all;
+      color:var(--muted);
+      opacity:.9;
+      font-size:11px;
+    }
+
+    .thumb{
+      width:42px;
+      height:42px;
+      object-fit:cover;
+      border-radius:6px;
+      border:1px solid var(--accent);
+      box-shadow:0 0 10px rgba(57,255,20,.4);
+    }
+
     @media (max-width:560px){
-      th.cycle,td.cycle{display:none}
-      table{font-size:13px}
-      th,td{padding:8px 10px}
+      th.cycle,td.cycle{display:none;}
+      table{font-size:13px;}
+      th,td{padding:8px 10px;}
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="top">
-      <h1>Winners Log</h1>
+      <!-- glitch-title class + data-text uses your cyberpunk title effect -->
+      <h1 class="glitch-title" data-text="Winners Log">Winners Log</h1>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <a class="btn" href="matchup.html">← Back</a>
         <button class="btn" id="refresh">Refresh</button>
@@ -66,7 +238,7 @@
             </tr>
           </thead>
           <tbody id="body">
-            <tr><td colspan="8" style="padding:18px;color:#9aa0a6;">Loading winners…</td></tr>
+            <tr><td colspan="8" style="padding:18px;color:var(--muted);">Loading winners…</td></tr>
           </tbody>
         </table>
       </div>
@@ -189,7 +361,7 @@
 
     function render(rows){
       if(!rows || rows.length===0){
-        tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="padding:18px;color:var(--muted);">No winners yet.</td></tr>`;
         return;
       }
       const N = rows.length;
@@ -199,7 +371,7 @@
         const isLeft = ["a","c","e","g","i","k","m","o","q","s","u","w","y","aa","ac","ae"].includes(seed);
         const pillClass = isLeft ? "pillA" : "pillB";
 
-        // *** CHANGED: letters → numbers ***
+        // letters → numbers
         const num = seedLetterToNumber(seed);
         const seedLabel = num ? `Seed #${num}` : "Seed ?";
 
