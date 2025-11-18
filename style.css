@@ -259,132 +259,81 @@ body::before {
   color: var(--accent) !important;
   border-color: var(--accent) !important;
 }
-/* === Neon Cyberpunk Glitch Title + CRT Scanlines === */
+/* === Neon glitch + CRT scanlines, single line === */
 .glitch-title {
   position: relative;
   font-size: 26px;
   font-weight: 800;
-  color: #39ff14;
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 2px;
   margin-bottom: 18px;
 
-  /* neon glow */
+  color: #39ff14;
   text-shadow:
-    0 0 6px #39ff14,
-    0 0 12px #39ff14,
-    0 0 18px #39ff14;
+    0 0 4px #39ff14,
+    0 0 8px #39ff14,
+    0 0 14px #39ff14;
 
-  animation: flicker 2.4s infinite alternate;
-  overflow: hidden; 
+  animation: title-flicker 2.4s infinite alternate;
+  overflow: hidden; /* keeps scanlines inside */
 }
 
-/* glitch layers */
-.glitch-title::before,
-.glitch-title::after {
+/* slight duplicate for a tiny glitch wobble */
+.glitch-title::before {
   content: attr(data-text);
   position: absolute;
-  top: 0; 
-  left: 0;
-  width: 100%;
+  inset: 0;
   pointer-events: none;
+
+  color: #39ff14;
+  opacity: 0.55;
+  text-shadow:
+    0 0 6px #39ff14,
+    0 0 12px #39ff14;
+
+  animation: title-glitch 1.6s infinite steps(2, end);
 }
 
-.glitch-title::before {
-  color: #ff0033;
-  z-index: -1;
-  animation: glitch-red 1.8s infinite linear alternate-reverse;
-}
-
+/* CRT scanline overlay */
 .glitch-title::after {
-  color: #00eaff;
-  z-index: -2;
-  mix-blend-mode: screen;
-  animation: glitch-blue 2.1s infinite linear alternate;
-}
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 
-/* === CRT scan lines overlay === */
-.glitch-title::after,
-.glitch-title::before {
-  clip-path: inset(0 0 0 0);
-}
-
-.glitch-title::before,
-.glitch-title::after,
-.glitch-title {
-  position: relative;
-}
-
-.glitch-title::before,
-.glitch-title::after {
-  mix-blend-mode: screen;
-}
-
-/* animated scanline layer */
-.glitch-title::selection { background: transparent; }
-
-.glitch-title::before,
-.glitch-title::after {}
-
-.glitch-title::after {
-  position: relative;
-}
-
-.glitch-title::before { }
-
-.glitch-title::before,
-.glitch-title::after { }
-
-.glitch-title::before { }
-
-/* === SCANLINE MASK === */
-.glitch-title::after {
-  animation: glitch-blue 2.1s infinite linear alternate, scanlines 6s linear infinite;
-}
-
-.glitch-title::before {
-  animation: glitch-red 1.8s infinite linear alternate;
-}
-
-.glitch-title::after {
   background-image:
     repeating-linear-gradient(
       to bottom,
       rgba(0,0,0,0) 0px,
       rgba(0,0,0,0) 2px,
-      rgba(0,0,0,0.15) 3px
+      rgba(0,0,0,0.25) 3px
     );
   background-size: 100% 4px;
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+
+  animation: title-scanlines 5s linear infinite;
 }
 
-/* === Flicker + glitch animations === */
-@keyframes flicker {
+/* subtle brightness flicker */
+@keyframes title-flicker {
   0%   { opacity: 0.8; filter: brightness(1); }
   50%  { opacity: 1;   filter: brightness(1.25); }
   100% { opacity: 0.85; filter: brightness(1.1); }
 }
 
-@keyframes glitch-red {
+/* tiny horizontal jitter */
+@keyframes title-glitch {
   0%   { transform: translate(0,0); }
-  20%  { transform: translate(-2px,-1px); }
-  40%  { transform: translate(-1px,1px); }
-  60%  { transform: translate(-3px,0); }
-  80%  { transform: translate(-2px,2px); }
+  25%  { transform: translate(-1px,0); }
+  50%  { transform: translate(1px,0); }
+  75%  { transform: translate(-0.5px,0); }
   100% { transform: translate(0,0); }
 }
 
-@keyframes glitch-blue {
-  0%   { transform: translate(0,0); }
-  20%  { transform: translate(2px,1px); }
-  40%  { transform: translate(1px,-1px); }
-  60%  { transform: translate(3px,0); }
-  80%  { transform: translate(2px,-2px); }
-  100% { transform: translate(0,0); }
-}
-
-/* === scanlines animation === */
-@keyframes scanlines {
-  0% { background-position: 0 -100%; }
+/* move scanlines up/down slowly */
+@keyframes title-scanlines {
+  0%   { background-position: 0 -100%; }
   100% { background-position: 0 100%; }
 }
