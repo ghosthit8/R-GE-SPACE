@@ -215,6 +215,17 @@
       box-shadow:0 0 6px var(--accent);
     }
 
+    /* artist profile link */
+    .artist-link{
+      color:var(--accent);
+      text-decoration:none;
+      font-weight:600;
+    }
+    .artist-link:hover{
+      text-decoration:underline;
+      text-shadow:0 0 6px var(--accent);
+    }
+
     /* description modal */
     .desc-modal{
       position:fixed;
@@ -536,6 +547,8 @@
         const pieceName = r.piece_name || "";
         // use username-only for artist display
         const artistName = displayArtist(r.artist_name || "");
+        const artistHref = artistName ? `profile.html?u=${encodeURIComponent(artistName)}` : null;
+        const artistCell = artistName ? `<a class="artist-link" href="${artistHref}">${artistName}</a>` : "—";
         const pieceDesc = r.piece_description || r.description || "";
 
         descStore[idx] = pieceDesc || "";
@@ -556,7 +569,7 @@
             <td><span class="${pillClass}">${seedLabel}</span></td>
             <td>${pieceName || "—"}</td>
             <td><button class="descBtn" onclick="openDesc(${idx})">🔍</button></td>
-            <td>${artistName || "—"}</td>
+            <td>${artistCell}</td>
             <td>${thumb}</td>
             <td class="score">${score}</td>
             <td>${by}</td>
