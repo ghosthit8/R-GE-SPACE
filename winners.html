@@ -360,30 +360,34 @@
     const fsView = document.getElementById("fsView");
     const fsImg  = document.getElementById("fsImg");
 
-    fsView.onclick = () => {
-      fsView.style.display = "none";
-      fsImg.src = "";
-    };
-
-    function enableThumbFullscreen() {
-      document.querySelectorAll(".thumb").forEach(thumb => {
-        thumb.style.cursor = "pointer";
-        thumb.onclick = () => {
-          fsImg.src = thumb.src;
-          fsView.style.display = "flex";
-        };
-      });
-    }
-
     // description modal elements
-    const descModal = document.getElementById('descModal');
-    const descTitleEl = document.getElementById('descTitle');
-    const descBodyEl = document.getElementById('descBody');
+    const descModal    = document.getElementById('descModal');
+    const descTitleEl  = document.getElementById('descTitle');
+    const descBodyEl   = document.getElementById('descBody');
     const descCloseBtn = document.getElementById('descClose');
     let descStore = [];
     let descTitleStore = [];
 
+    if (fsView) {
+      fsView.addEventListener('click', () => {
+        fsView.style.display = 'none';
+        if (fsImg) fsImg.src = '';
+      });
+    }
+
+    function enableThumbFullscreen() {
+      if (!fsView || !fsImg) return;
+      document.querySelectorAll('.thumb').forEach(thumb => {
+        thumb.style.cursor = 'pointer';
+        thumb.onclick = () => {
+          fsImg.src = thumb.src;
+          fsView.style.display = 'flex';
+        };
+      });
+    }
+
     function openDesc(idx){
+      if (!descModal || !descTitleEl || !descBodyEl) return;
       const title = descTitleStore[idx] || 'Piece description';
       const txt = (descStore[idx] || '').trim();
       descTitleEl.textContent = title;
@@ -391,12 +395,15 @@
       descModal.style.display = 'flex';
     }
     function closeDesc(){
+      if (!descModal) return;
       descModal.style.display = 'none';
     }
-    descCloseBtn.addEventListener('click', closeDesc);
-    descModal.addEventListener('click', (e) => {
-      if (e.target === descModal) closeDesc();
-    });
+    if (descCloseBtn) descCloseBtn.addEventListener('click', closeDesc);
+    if (descModal) {
+      descModal.addEventListener('click', (e) => {
+        if (e.target === descModal) closeDesc();
+      });
+    }
 
     // persistent view mode
     const MODE_KEY = "winners_mode_v2"; // "all" | "finals"
@@ -487,7 +494,7 @@
       return byCycle;
     }
 
-    // map a..af → 1..32
+    // NEW: map a..af → 1..32
     function seedLetterToNumber(letter) {
       const list = [
         "a","b","c","d","e","f","g","h",
@@ -501,7 +508,7 @@
 
     function render(rows){
       if(!rows || rows.length===0){
-        tbody.innerHTML = `<tr><td colspan="11" style="padding:18px;color:#9aa0a6;">No winners yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" style="padding:18px;color:var(--muted);">No winners yet.</td></tr>`;
         return;
       }
       descStore = [];
@@ -546,7 +553,6 @@
           </tr>`;
       }).join('');
 
-      // hook up fullscreen click handlers for thumbnails
       enableThumbFullscreen();
     }
 
