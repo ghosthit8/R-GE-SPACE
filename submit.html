@@ -111,12 +111,11 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 
       <hr class="sep">
 
-      <!-- NEW: piece metadata -->
+      <!-- Piece metadata -->
       <div class="small" style="margin-bottom:4px;">Optional: tell us about this piece</div>
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">
         <input id="pieceName" class="input" placeholder="Piece name / title">
         <textarea id="pieceDesc" class="input" rows="3" placeholder="Describe this piece (vibe, medium, story, etc.)"></textarea>
-        <input id="artistName" class="input" placeholder="Artist / username">
       </div>
 
       <label class="row small" style="align-items:flex-start">
@@ -181,6 +180,8 @@ const btnSignOut = document.getElementById('btnSignOut');
 const authMsg = document.getElementById('authMsg');
 
 const pickZone = document.getElementById('pickZone');
+const pieceNameInput = document.getElementById('pieceName');
+const pieceDescInput = document.getElementById('pieceDesc');
 const btnPick = document.getElementById('btnPick');
 const fileInput = document.getElementById('fileInput');
 const urlInput = document.getElementById('urlInput');
@@ -189,9 +190,6 @@ const previewHint = document.getElementById('previewHint');
 const imgPreview = document.getElementById('imgPreview');
 
 const consent = document.getElementById('consent');
-const pieceNameInput = document.getElementById('pieceName');      // NEW
-const pieceDescInput = document.getElementById('pieceDesc');      // NEW
-const artistNameInput = document.getElementById('artistName');    // NEW
 const btnSubmit = document.getElementById('btnSubmit');
 const submitMsg = document.getElementById('submitMsg');
 
@@ -224,6 +222,10 @@ function setPreview(src){
 async function uid(){
   const { data:{session} } = await supabase.auth.getSession();
   return session?.user?.id || null;
+}
+async function currentUser(){
+  const { data:{session} } = await supabase.auth.getSession();
+  return session?.user || null;
 }
 function paintAuth(id){
   if (id){ authBadge.textContent='logged in'; authBadge.style.color=varGreen(); }
@@ -273,7 +275,6 @@ urlInput.addEventListener('input', ()=>{
     picked.file = null; fileInput.value='';
     fileName.textContent = 'Using pasted URL';
     previewHint.textContent = picked.url;
-    // quick sanity check for image URL
     const im = new Image();
     im.onload = ()=> setPreview(picked.url);
     im.onerror = ()=> { setPreview(''); toast('URL is not an image'); };
@@ -341,15 +342,13 @@ async function uploadToStorage(userId, file){
   const dt=(performance.now()-t0).toFixed(0);
   if (error) throw error;
 
-  // Public URL first; if that fails to load later, fall back to signed URL
   const { data:pub } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
   let url = pub?.publicUrl || null;
 
-  // Optional quick HEAD check — browsers limit CORS, so we’ll also offer a signed URL fallback unconditionally
   try{
-    const { data:signed } = await supabase.storage.from(BUCKET).createSignedUrl(data.path, 60*60*24*7); // 7 days
+    const { data:signed } = await supabase.storage.from(BUCKET).createSignedUrl(data.path, 60*60*24*7);
     if (signed?.signedUrl) url = url || signed.signedUrl;
-  }catch(e){ /* ignore if bucket is public and signed not needed */ }
+  }catch(e){}
 
   log('IMG: uploaded ', url, `(${dt}ms)`);
   return url;
@@ -377,7 +376,6 @@ async function callEdge(){
 function normalize(s){
   try { log('[EDGE] raw state', JSON.stringify(s)); } catch {}
 
-  // ✅ Prefer ends_at (what your edge returns), then fall back
   const phaseEnd =
     s.ends_at || s.endsAt || s.phase_end_at || s.phaseEndAt || s.next_at || s.next_iso || s.base_iso || null;
 
@@ -394,7 +392,6 @@ function normalize(s){
   : (typeof s.next_ms==='number')       ? Math.ceil(s.next_ms/1000)
   : null;
 
-  // ✅ If server gives null/0, derive from ends_at
   if ((remaining==null || remaining<=0) && phaseEnd){
     const ms = Date.parse(phaseEnd) - Date.now();
     if (!isNaN(ms)) remaining = Math.max(0, Math.ceil(ms/1000));
@@ -407,8 +404,8 @@ function normalize(s){
 /* ---------- Timer state ---------- */
 let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
 
-/* ---------- Stage display (placeholder) ---------- */
-function computeStage(){ return 'R32'; } // leave as-is for now
+/* ---------- Stage display ---------- */
+function computeStage(){ return 'R32'; }
 
 /* ---------- Sync ---------- */
 async function syncState(){
@@ -416,7 +413,6 @@ async function syncState(){
     const s = normalize(await callEdge());
     const __prev = serverPhaseEndISO;
 
-    // ✅ Store a real server end instant your loop can use
     serverPhaseEndISO = s.phase_end_at || s.ends_at || s.endsAt || null;
     if (!serverPhaseEndISO && s.base_iso) serverPhaseEndISO = s.base_iso;
 
@@ -459,7 +455,6 @@ function loop(){
   raf = requestAnimationFrame(loop);
 }
 
-/* Keep your style of periodic logging */
 log('TIMER: interval 3 set @ 30000ms');
 const int3 = setInterval(()=> syncState().catch(()=>{}), 30000);
 log('TIMER: timeout 4 set @ 0ms');
@@ -467,12 +462,16 @@ setTimeout(()=>{ log('TIMER: timeout 4 run 0.0ms'); }, 0);
 
 /* ---------- Submit handler ---------- */
 btnSubmit.addEventListener('click', async ()=>{
-  submitMsg.textContent='';
-  const id = await uid();
-  if (!id) return toast('Log in to submit');
+  submitMsg.textContent = '';
+
+  // use full user object so we can grab email/display name
+  const user = await currentUser();
+  if (!user) return toast('Log in to submit');
+  const id = user.id;
+
   if (!consent.checked) return toast('Please consent to the rules');
 
-  let finalUrl = (picked.url||'').trim();
+  let finalUrl = (picked.url || '').trim();
   try{
     if (picked.file){
       toast('Uploading…');
@@ -480,10 +479,14 @@ btnSubmit.addEventListener('click', async ()=>{
     }
     if (!finalUrl) return toast('Pick a file or paste a URL');
 
-    // NEW: grab piece metadata
     const piece_name = (pieceNameInput.value || '').trim();
     const piece_description = (pieceDescInput.value || '').trim();
-    const artist_name = (artistNameInput.value || '').trim();
+
+    // derive artist name automatically: prefer display name, then email, then uid
+    const artist_name =
+      (user.user_metadata && (user.user_metadata.display_name || user.user_metadata.full_name)) ||
+      user.email ||
+      user.id;
 
     const { error } = await supabase.from('art_queue').insert({
       image_url: finalUrl,
@@ -500,9 +503,8 @@ btnSubmit.addEventListener('click', async ()=>{
     previewHint.textContent = '';
     setPreview('');
     consent.checked = false;
-    pieceNameInput.value = '';   // NEW reset
-    pieceDescInput.value = '';   // NEW reset
-    artistNameInput.value = '';  // NEW reset
+    pieceNameInput.value = '';
+    pieceDescInput.value = '';
 
     toast('✅ Art queued for next round');
     submitMsg.textContent = 'Art queued for next round.';
@@ -549,7 +551,6 @@ async function renderQueue(){
       </div>
     `).join('');
 
-    // Image load logs + 404 cleanup
     queueGrid.querySelectorAll('img').forEach(img=>{
       img.addEventListener('load', ()=> log('IMG: loaded  ', img.src));
       img.addEventListener('error', ()=> {
@@ -608,7 +609,6 @@ const queueChannel = supabase.channel('queue-watch')
   })
   .subscribe();
 
-// Clean up
 window.addEventListener('beforeunload', ()=> { try { supabase.removeChannel(queueChannel); } catch {} });
 
 /* ---------- Round start watch ---------- */
@@ -631,14 +631,11 @@ __watchRoundStart();
   paintAuth(await uid());
   supabase.auth.onAuthStateChange((_e, session)=> paintAuth(session?.user?.id || null));
 
-  // First paint
   await Promise.all([renderQueue(), syncState()]);
   loop();
 
-  // Safety poll (kept)
   setInterval(()=> renderQueue().catch(()=>{}), 5000);
 
-  // Refresh on visibility regain (kept)
   document.addEventListener('visibilitychange', ()=>{
     if (document.visibilityState === 'visible') {
       renderQueue().catch(()=>{});
