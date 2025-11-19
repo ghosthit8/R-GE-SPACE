@@ -464,7 +464,7 @@ setTimeout(()=>{ log('TIMER: timeout 4 run 0.0ms'); }, 0);
 btnSubmit.addEventListener('click', async ()=>{
   submitMsg.textContent = '';
 
-  // use full user object so we can grab email/display name
+  // use full user object so we can grab metadata / email
   const user = await currentUser();
   if (!user) return toast('Log in to submit');
   const id = user.id;
@@ -482,10 +482,13 @@ btnSubmit.addEventListener('click', async ()=>{
     const piece_name = (pieceNameInput.value || '').trim();
     const piece_description = (pieceDescInput.value || '').trim();
 
-    // derive artist name automatically: prefer display name, then email, then uid
+    // 🎨 artist_name: prefer username, then display_name/full_name, then email prefix, then uid
+    const meta = user.user_metadata || user.raw_user_meta_data || {};
     const artist_name =
-      (user.user_metadata && (user.user_metadata.display_name || user.user_metadata.full_name)) ||
-      user.email ||
+      meta.username ||
+      meta.display_name ||
+      meta.full_name ||
+      (user.email ? user.email.split("@")[0] : null) ||
       user.id;
 
     const { error } = await supabase.from('art_queue').insert({
