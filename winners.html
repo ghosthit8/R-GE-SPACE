@@ -462,6 +462,15 @@
       return map[suf] || suf.toUpperCase();
     }
 
+    // NEW: turn email into username-only for display
+    function displayArtist(raw){
+      if (!raw) return "";
+      const s = String(raw);
+      const at = s.indexOf("@");
+      if (at > 0) return s.slice(0, at);
+      return s;
+    }
+
     function computeDecidedAt(row){
       const d = parseAsUTCish(row.decided_at);
       if (!isNaN(d)) return d;
@@ -494,7 +503,7 @@
       return byCycle;
     }
 
-    // NEW: map a..af → 1..32
+    // map a..af → 1..32
     function seedLetterToNumber(letter) {
       const list = [
         "a","b","c","d","e","f","g","h",
@@ -525,7 +534,8 @@
         const seedLabel = num ? `Seed #${num}` : "Seed ?";
 
         const pieceName = r.piece_name || "";
-        const artistName = r.artist_name || "";
+        // use username-only for artist display
+        const artistName = displayArtist(r.artist_name || "");
         const pieceDesc = r.piece_description || r.description || "";
 
         descStore[idx] = pieceDesc || "";
