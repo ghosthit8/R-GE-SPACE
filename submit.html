@@ -45,8 +45,9 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 
 /* Queue grid */
 .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px}
-.thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#ff3aa0; min-height:120px}
-.thumb img{display:block; width:100%; height:100%; object-fit:cover}
+.thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#050505; min-height:120px}
+.thumb img,
+.thumb video{display:block; width:100%; height:100%; object-fit:cover}
 .thumb .idx{
   position:absolute; top:6px; left:6px; font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
   background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35)
@@ -90,9 +91,9 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       <div id="pickZone" class="drop">
         <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
         <div id="fileName" class="small">
-          jpg / png / webp / mp4 — 10MB max. Tip: drag &amp; drop or paste (Ctrl/⌘+V)
+          jpg / png / webp / mp4 — 200MB max. Tip: drag &amp; drop or paste (Ctrl/⌘+V)
         </div>
-        <!-- NOW ALLOWS IMAGE + VIDEO -->
+        <!-- IMAGE + VIDEO -->
         <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
         <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
         <div class="preview">
@@ -158,6 +159,10 @@ const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 const BUCKET = 'art-uploads';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/* ---------- SIZE LIMIT (200MB) ---------- */
+const MAX_MB = 200;
+const MAX_BYTES = MAX_MB * 1024 * 1024;
+
 /* ---------- Elements ---------- */
 const authBadge = document.getElementById('authBadge');
 const toastEl = document.getElementById('toast');
@@ -194,6 +199,14 @@ function setPreview(src){
 function isImageFile(f){ return (f.type || "").startsWith("image/"); }
 function isVideoFile(f){ return (f.type || "").startsWith("video/"); }
 function isMediaFile(f){ return isImageFile(f) || isVideoFile(f); }
+function isVideoUrl(url){
+  if (!url) return false;
+  const clean = url.split("?")[0].toLowerCase();
+  return clean.endsWith(".mp4") ||
+         clean.endsWith(".webm") ||
+         clean.endsWith(".mov") ||
+         clean.endsWith(".m4v");
+}
 
 /* ---------- Auth minimal ---------- */
 async function uid(){
@@ -229,8 +242,8 @@ fileInput.addEventListener('change', ()=>{
     toast('File must be an image or video');
     fileInput.value=''; return;
   }
-  if (f.size > 10*1024*1024){
-    toast('Max 10MB');
+  if (f.size > MAX_BYTES){
+    toast(`Max ${MAX_MB}MB`);
     fileInput.value=''; return;
   }
 
@@ -243,7 +256,7 @@ fileInput.addEventListener('change', ()=>{
     setPreview(URL.createObjectURL(f));
     previewHint.textContent = 'Image selected — ready to upload';
   } else {
-    fileName.textContent = labelBase.replace(/^/, '');
+    fileName.textContent = labelBase;
     setPreview('');
     previewHint.textContent = 'Video selected — ready to upload';
   }
@@ -272,7 +285,7 @@ pickZone.addEventListener('drop', (e)=>{
   const f = e.dataTransfer?.files?.[0];
   if (!f) return;
   if (!isMediaFile(f)) return toast('File must be an image or video');
-  if (f.size > 10*1024*1024) return toast('Max 10MB');
+  if (f.size > MAX_BYTES) return toast(`Max ${MAX_MB}MB`);
 
   picked.file = f; picked.url='';
   fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
@@ -289,7 +302,7 @@ pickZone.addEventListener('drop', (e)=>{
   }
 });
 
-/* Paste (image only – browsers don’t paste video files anyway) */
+/* Paste (image only) */
 window.addEventListener('paste', (e)=>{
   try{
     const items = e.clipboardData?.items || [];
@@ -297,7 +310,7 @@ window.addEventListener('paste', (e)=>{
       if (it.kind === 'file'){
         const f = it.getAsFile();
         if (f && isImageFile(f)){
-          if (f.size > 10*1024*1024) return toast('Max 10MB');
+          if (f.size > MAX_BYTES) return toast(`Max ${MAX_MB}MB`);
           picked.file = f; picked.url='';
           fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
           fileName.textContent = `${f.name||'pasted-image'} — ${bytesToMB(f.size)} MB`;
@@ -355,7 +368,7 @@ function normalize(s){
 }
 
 /* ---------- Timer ---------- */
-let paused=false, serverPhaseEndISO=null, remainingSec=null, lastSyncAt=0;
+let serverPhaseEndISO=null, remainingSec=null, lastSyncAt=0;
 
 async function syncState(){
   try{
@@ -415,7 +428,7 @@ btnSubmit.addEventListener('click', async ()=>{
 
     picked = {file:null, url:''};
     fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-    fileName.textContent = 'jpg / png / webp / mp4 — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
+    fileName.textContent = 'jpg / png / webp / mp4 — 200MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
     previewHint.textContent = '';
     setPreview('');
     consent.checked = false;
@@ -453,12 +466,19 @@ async function renderQueue(){
     queueEmpty.style.display = 'none';
     queueCount.textContent = `(${data.length})`;
 
-    queueGrid.innerHTML = data.map((r,i)=>`
-      <div class="thumb" data-id="${r.id}" title="${r.image_url}">
-        <span class="idx">#${i+1}</span>
-        <img src="${r.image_url}" alt="queued art ${i+1}"/>
-      </div>
-    `).join('');
+    queueGrid.innerHTML = data.map((r,i)=>{
+      const url = r.image_url || "";
+      const isVid = isVideoUrl(url);
+      const media = isVid
+        ? `<video src="${url}#t=0.2" muted playsinline></video>`
+        : `<img src="${url}" alt="queued art ${i+1}"/>`;
+      return `
+        <div class="thumb" data-id="${r.id}" title="${url}">
+          <span class="idx">#${i+1}</span>
+          ${media}
+        </div>
+      `;
+    }).join('');
   }catch(e){ toast('Queue failed to load'); }
 }
 
@@ -466,6 +486,11 @@ async function renderQueue(){
 (async()=>{
   paintAuth(await uid());
   supabase.auth.onAuthStateChange((_e, session)=> paintAuth(session?.user?.id || null));
+  queueToggle.addEventListener('click', ()=>{
+    const open = queuePanel.style.display === 'block';
+    queuePanel.style.display = open ? 'none' : 'block';
+    queueToggle.textContent = open ? 'Expand ▼' : 'Collapse ▲';
+  });
   await Promise.all([renderQueue(), syncState()]);
   loop();
 })();
