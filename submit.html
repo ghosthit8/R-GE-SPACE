@@ -22,94 +22,95 @@ body{
   color:var(--ink);
   font:14px/1.45 system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
 }
-.wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 80px}
-h1{margin:0 0 12px; font-size:24px; letter-spacing:.6px}
-.header{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:18px 14px 80px}
+h1{margin:0 0 12px;font-size:24px;letter-spacing:.6px}
+.header{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .badge{
-  border:1px solid var(--border); padding:6px 10px;
-  border-radius:12px; color:var(--ink); font-size:12px;
+  border:1px solid var(--border);padding:6px 10px;
+  border-radius:12px;color:var(--ink);font-size:12px;
 }
 .btn{
-  display:inline-flex; align-items:center; gap:8px; justify-content:center;
+  display:inline-flex;align-items:center;gap:8px;justify-content:center;
   text-decoration:none;
-  border:1px solid var(--border); border-radius:14px;
-  padding:10px 14px; font-weight:600;
-  background:linear-gradient(180deg, rgba(57,255,20,.08), rgba(57,255,20,.02));
+  border:1px solid var(--border);border-radius:14px;
+  padding:10px 14px;font-weight:600;
+  background:linear-gradient(180deg,rgba(57,255,20,.08),rgba(57,255,20,.02));
   color:var(--green);
-  transition:box-shadow .2s ease, transform .08s ease;
+  transition:box-shadow .2s ease,transform .08s ease;
   cursor:pointer;
 }
 .btn:hover{box-shadow:0 0 14px rgba(57,255,20,.22)}
-.btn.big{font-size:18px; padding:16px 18px}
+.btn.big{font-size:18px;padding:16px 18px}
 .btn.ghost{opacity:.9}
-.btn[disabled]{opacity:.45; cursor:not-allowed; box-shadow:none}
+.btn[disabled]{opacity:.45;cursor:not-allowed;box-shadow:none}
 
 .input{
-  width:100%; border:1px solid var(--border); border-radius:12px;
-  background:#0b0b0b; color:var(--ink);
-  padding:10px 12px; font-size:14px;
+  width:100%;border:1px solid var(--border);border-radius:12px;
+  background:#0b0b0b;color:var(--ink);
+  padding:10px 12px;font-size:14px;
 }
+textarea.input{resize:vertical;min-height:70px}
 .hidden{display:none !important}
 .card{
-  border:1px solid var(--border); border-radius:18px;
+  border:1px solid var(--border);border-radius:18px;
   background:rgba(9,9,9,.6);
   padding:16px;
 }
-.row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
-.small{font-size:12px; color:var(--muted)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.small{font-size:12px;color:var(--muted)}
 .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
-.center{display:flex; justify-content:center; align-items:center; gap:12px}
-hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
+.center{display:flex;justify-content:center;align-items:center;gap:12px}
+hr.sep{border:0;border-top:1px dashed var(--border);margin:16px 0}
 
 /* Queue grid */
-.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
 .thumb{
-  position:relative; border:1px solid var(--border); border-radius:12px;
-  overflow:hidden; background:#111; min-height:120px;
+  position:relative;border:1px solid var(--border);border-radius:12px;
+  overflow:hidden;background:#111;min-height:120px;
 }
 .thumb img,
-.thumb video{display:block; width:100%; height:100%; object-fit:cover}
+.thumb video{display:block;width:100%;height:100%;object-fit:cover}
 .thumb .idx{
-  position:absolute; top:6px; left:6px;
-  font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
+  position:absolute;top:6px;left:6px;
+  font:700 12px/1 ui-monospace,monospace;color:#c9c9c9;
   background:rgba(0,0,0,.55);
-  padding:4px 6px; border-radius:10px;
+  padding:4px 6px;border-radius:10px;
   border:1px solid rgba(57,255,20,.35);
 }
 
 /* Timer */
 .timer .row{justify-content:space-between}
 .clock{
-  display:inline-flex; min-width:36px; height:26px;
-  align-items:center; justify-content:center;
-  border:1px solid var(--border); border-radius:10px;
+  display:inline-flex;min-width:36px;height:26px;
+  align-items:center;justify-content:center;
+  border:1px solid var(--border);border-radius:10px;
   padding:0 10px;
 }
 
 /* Toast */
 .toast{
-  position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
-  background:rgba(0,0,0,.85); color:var(--ink);
-  border:1px solid var(--border); padding:10px 12px;
+  position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
+  background:rgba(0,0,0,.85);color:var(--ink);
+  border:1px solid var(--border);padding:10px 12px;
   border-radius:12px;
-  opacity:0; pointer-events:none;
-  transition:opacity .2s ease, transform .2s ease;
+  opacity:0;pointer-events:none;
+  transition:opacity .2s ease,transform .2s ease;
   z-index:999;
 }
-.toast.show{opacity:1; transform:translateX(-50%) translateY(-4px)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
 
 /* Drop zone */
 .drop{
-  border:1px dashed var(--border); border-radius:14px;
-  padding:14px; text-align:center;
+  border:1px dashed var(--border);border-radius:14px;
+  padding:14px;text-align:center;
   background:rgba(57,255,20,.03);
 }
 .drop.drag{background:rgba(57,255,20,.08)}
 .preview{
-  margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
 }
 .preview img{
-  max-height:120px; border-radius:10px; border:1px solid var(--border);
+  max-height:120px;border-radius:10px;border:1px solid var(--border);
 }
 </style>
 </head>
@@ -128,7 +129,7 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       <div id="pickZone" class="drop">
         <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
         <div id="fileName" class="small">
-          jpg / png / webp / mp4 — 50MB max. Drag, drop or paste (Ctrl/⌘+V)
+          jpg / png / webp / mp4 — 200MB max. Drag, drop or paste (Ctrl/⌘+V)
         </div>
         <!-- IMAGE + VIDEO -->
         <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
@@ -171,16 +172,16 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 
     <!-- Queue -->
     <div class="card" style="margin-top:16px">
-      <div class="row" style="justify-content:space-between; align-items:center">
+      <div class="row" style="justify-content:space-between;align-items:center">
         <strong>📜 In the Queue</strong>
         <div class="row small" style="gap:8px">
           <span id="queueCount" class="small"></span>
           <button id="queueToggle" class="btn ghost" style="padding:6px 10px">Expand ▼</button>
         </div>
       </div>
-      <div id="queuePanel" style="display:none; margin-top:12px">
+      <div id="queuePanel" style="display:none;margin-top:12px">
         <div id="queue" class="grid"></div>
-        <div id="queueEmpty" class="small" style="margin-top:6px; display:none">No items in queue.</div>
+        <div id="queueEmpty" class="small" style="margin-top:6px;display:none">No items in queue.</div>
       </div>
       <div class="small" style="margin-top:6px">Oldest first → next in</div>
     </div>
@@ -197,62 +198,60 @@ const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 const BUCKET = "art-uploads";
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ---------- Config ---------- */
-const MAX_MB = 50;              // practical Supabase per-file limit
+/* ---------- Config (200MB max) ---------- */
+const MAX_MB = 200;
 const MAX_BYTES = MAX_MB * 1024 * 1024;
 
 /* ---------- Elements ---------- */
-const authBadge = document.getElementById("authBadge");
-const toastEl = document.getElementById("toast");
-const pickZone = document.getElementById("pickZone");
+const authBadge   = document.getElementById("authBadge");
+const toastEl     = document.getElementById("toast");
+const pickZone    = document.getElementById("pickZone");
 const pieceNameInput = document.getElementById("pieceName");
 const pieceDescInput = document.getElementById("pieceDesc");
-const btnPick = document.getElementById("btnPick");
-const fileInput = document.getElementById("fileInput");
-const urlInput = document.getElementById("urlInput");
-const fileName = document.getElementById("fileName");
+const btnPick     = document.getElementById("btnPick");
+const fileInput   = document.getElementById("fileInput");
+const urlInput    = document.getElementById("urlInput");
+const fileName    = document.getElementById("fileName");
 const previewHint = document.getElementById("previewHint");
-const imgPreview = document.getElementById("imgPreview");
-const consent = document.getElementById("consent");
-const btnSubmit = document.getElementById("btnSubmit");
-const submitMsg = document.getElementById("submitMsg");
-const queuePanel = document.getElementById("queuePanel");
+const imgPreview  = document.getElementById("imgPreview");
+const consent     = document.getElementById("consent");
+const btnSubmit   = document.getElementById("btnSubmit");
+const submitMsg   = document.getElementById("submitMsg");
+const queuePanel  = document.getElementById("queuePanel");
 const queueToggle = document.getElementById("queueToggle");
-const queueCount = document.getElementById("queueCount");
-const queueGrid = document.getElementById("queue");
-const queueEmpty = document.getElementById("queueEmpty");
-const clockEl = document.getElementById("clock");
+const queueCount  = document.getElementById("queueCount");
+const queueGrid   = document.getElementById("queue");
+const queueEmpty  = document.getElementById("queueEmpty");
+const clockEl     = document.getElementById("clock");
 
-const log = (...a) => console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
+const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`,...a);
 
 /* ---------- Utils ---------- */
-function toast(msg, ms = 2000) {
+function toast(msg, ms=2000){
   toastEl.textContent = msg;
   toastEl.classList.add("show");
-  setTimeout(() => toastEl.classList.remove("show"), ms);
+  setTimeout(()=>toastEl.classList.remove("show"), ms);
 }
-function bytesToMB(n) {
-  return (n / (1024 * 1024)).toFixed(2);
-}
-function show(el){ el.classList.remove("hidden"); }
-function hide(el){ el.classList.add("hidden"); }
+function bytesToMB(n){return (n/(1024*1024)).toFixed(2);}
+function show(el){el.classList.remove("hidden");}
+function hide(el){el.classList.add("hidden");}
 
-function setPreview(src) {
-  if (src) {
+function setPreview(src){
+  if(src){
     imgPreview.src = src;
     show(imgPreview);
-  } else {
+  }else{
     imgPreview.removeAttribute("src");
     hide(imgPreview);
   }
 }
 
-function isImageFile(f){ return (f.type || "").startsWith("image/"); }
-function isVideoFile(f){ return (f.type || "").startsWith("video/"); }
-function isMediaFile(f){ return isImageFile(f) || isVideoFile(f); }
+function isImageFile(f){return (f.type||"").startsWith("image/");}
+function isVideoFile(f){return (f.type||"").startsWith("video/");}
+function isMediaFile(f){return isImageFile(f)||isVideoFile(f);}
 
 function isVideoUrl(url){
-  if (!url) return false;
+  if(!url) return false;
   const clean = url.split("?")[0].toLowerCase();
   return clean.endsWith(".mp4") ||
          clean.endsWith(".webm") ||
@@ -261,47 +260,47 @@ function isVideoUrl(url){
 }
 
 /* ---------- Auth ---------- */
-async function uid() {
-  const { data:{session} } = await supabase.auth.getSession();
+async function uid(){
+  const {data:{session}} = await supabase.auth.getSession();
   return session?.user?.id || null;
 }
-async function getCurrentUser() {
-  const { data:{user} } = await supabase.auth.getUser();
+async function getCurrentUser(){
+  const {data:{user}} = await supabase.auth.getUser();
   return user || null;
 }
-function paintAuth(id) {
-  if (id) {
+function paintAuth(id){
+  if(id){
     authBadge.textContent = "logged in";
     authBadge.style.color = "#39ff14";
-  } else {
+  }else{
     authBadge.textContent = "not logged in";
     authBadge.style.color = "#ff6b6b";
   }
 }
 
 /* ---------- Pick flow ---------- */
-let picked = { file:null, url:"" };
+let picked = {file:null,url:""};
 
-btnPick.addEventListener("click", () => {
-  if (!picked.file && !picked.url) {
+btnPick.addEventListener("click",()=>{
+  if(!picked.file && !picked.url){
     fileInput.click();
-  } else {
+  }else{
     urlInput.classList.toggle("hidden");
-    if (!urlInput.classList.contains("hidden")) urlInput.focus();
+    if(!urlInput.classList.contains("hidden")) urlInput.focus();
   }
 });
 
-fileInput.addEventListener("change", () => {
+fileInput.addEventListener("change",()=>{
   const f = fileInput.files?.[0];
-  if (!f) return;
+  if(!f) return;
 
-  if (!isMediaFile(f)) {
+  if(!isMediaFile(f)){
     toast("File must be an image or video");
     fileInput.value = "";
     return;
   }
-  if (f.size > MAX_BYTES) {
-    toast(`File too big for server (max ~${MAX_MB}MB)`);
+  if(f.size > MAX_BYTES){
+    toast(`File too big (max ${MAX_MB}MB)`);
     fileInput.value = "";
     return;
   }
@@ -311,55 +310,53 @@ fileInput.addEventListener("change", () => {
   urlInput.value = "";
   urlInput.classList.add("hidden");
 
-  const labelBase = `${f.name} — ${bytesToMB(f.size)} MB`;
-  fileName.textContent = labelBase;
+  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
 
-  if (isImageFile(f)) {
+  if(isImageFile(f)){
     setPreview(URL.createObjectURL(f));
     previewHint.textContent = "Image selected — ready to upload";
-  } else {
+  }else{
     setPreview("");
     previewHint.textContent = "Video selected — ready to upload";
   }
 });
 
-urlInput.addEventListener("input", () => {
+urlInput.addEventListener("input",()=>{
   picked.url = urlInput.value.trim();
-  if (picked.url) {
+  if(picked.url){
     picked.file = null;
     fileInput.value = "";
     fileName.textContent = "Using pasted URL";
     previewHint.textContent = picked.url;
 
-    // Try image preview; if it's not an image it'll just fail silently
     const im = new Image();
-    im.onload = () => setPreview(picked.url);
-    im.onerror = () => setPreview("");
+    im.onload = ()=>setPreview(picked.url);
+    im.onerror = ()=>setPreview("");
     im.src = picked.url;
-  } else {
+  }else{
     previewHint.textContent = "";
     setPreview("");
   }
 });
 
 /* Drag & drop */
-["dragenter", "dragover"].forEach(ev => {
-  pickZone.addEventListener(ev, e => {
+["dragenter","dragover"].forEach(ev=>{
+  pickZone.addEventListener(ev,e=>{
     e.preventDefault();
     pickZone.classList.add("drag");
   });
 });
-["dragleave", "drop"].forEach(ev => {
-  pickZone.addEventListener(ev, e => {
+["dragleave","drop"].forEach(ev=>{
+  pickZone.addEventListener(ev,e=>{
     e.preventDefault();
     pickZone.classList.remove("drag");
   });
 });
-pickZone.addEventListener("drop", e => {
+pickZone.addEventListener("drop",e=>{
   const f = e.dataTransfer?.files?.[0];
-  if (!f) return;
-  if (!isMediaFile(f)) return toast("File must be an image or video");
-  if (f.size > MAX_BYTES) return toast(`File too big for server (max ~${MAX_MB}MB)`);
+  if(!f) return;
+  if(!isMediaFile(f)) return toast("File must be an image or video");
+  if(f.size > MAX_BYTES) return toast(`File too big (max ${MAX_MB}MB)`);
 
   picked.file = f;
   picked.url = "";
@@ -367,28 +364,27 @@ pickZone.addEventListener("drop", e => {
   urlInput.value = "";
   urlInput.classList.add("hidden");
 
-  const labelBase = `${f.name} — ${bytesToMB(f.size)} MB`;
-  fileName.textContent = labelBase;
+  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
 
-  if (isImageFile(f)) {
+  if(isImageFile(f)){
     setPreview(URL.createObjectURL(f));
     previewHint.textContent = "Ready to upload (dropped image)";
-  } else {
+  }else{
     setPreview("");
     previewHint.textContent = "Ready to upload (dropped video)";
   }
 });
 
-/* Paste (images only – browsers don't paste video files as File anyway) */
-window.addEventListener("paste", e => {
-  try {
+/* Paste (images only – browsers don't paste video files as File) */
+window.addEventListener("paste",e=>{
+  try{
     const items = e.clipboardData?.items || [];
-    for (const it of items) {
-      if (it.kind === "file") {
+    for(const it of items){
+      if(it.kind === "file"){
         const f = it.getAsFile();
-        if (f && isImageFile(f)) {
-          if (f.size > MAX_BYTES) {
-            toast(`File too big for server (max ~${MAX_MB}MB)`);
+        if(f && isImageFile(f)){
+          if(f.size > MAX_BYTES){
+            toast(`File too big (max ${MAX_MB}MB)`);
             return;
           }
           picked.file = f;
@@ -403,45 +399,45 @@ window.addEventListener("paste", e => {
         }
       }
     }
-  } catch {}
+  }catch{}
 });
 
 /* ---------- Upload to storage ---------- */
-async function uploadToStorage(userId, file) {
+async function uploadToStorage(userId,file){
   const d = new Date();
   const path = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${crypto.randomUUID()}-${file.name}`;
-  log("UPLOAD start", path, "size", file.size);
+  log("UPLOAD start",path,"size",file.size);
 
-  const { data, error } = await supabase
+  const {data,error} = await supabase
     .storage
     .from(BUCKET)
-    .upload(path, file, { cacheControl:"3600", upsert:false });
+    .upload(path,file,{cacheControl:"3600",upsert:false});
 
-  if (error) {
-    console.error("UPLOAD error", error);
+  if(error){
+    console.error("UPLOAD error",error);
     throw error;
   }
 
-  const { data:pub } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
+  const {data:pub} = supabase.storage.from(BUCKET).getPublicUrl(data.path);
   let url = pub?.publicUrl || null;
 
-  try {
-    const { data:signed } = await supabase
+  try{
+    const {data:signed} = await supabase
       .storage
       .from(BUCKET)
-      .createSignedUrl(data.path, 60 * 60 * 24 * 7);
-    if (signed?.signedUrl) url = url || signed.signedUrl;
-  } catch(e) {
-    console.warn("SIGNED URL error (non-fatal)", e);
+      .createSignedUrl(data.path,60*60*24*7);
+    if(signed?.signedUrl) url = url || signed.signedUrl;
+  }catch(e){
+    console.warn("SIGNED URL error (non-fatal)",e);
   }
 
-  log("UPLOAD ok", url);
+  log("UPLOAD ok",url);
   return url;
 }
 
 /* ---------- Edge/timer ---------- */
 async function callEdge(){
-  const res = await fetch(EDGE_URL, {
+  const res = await fetch(EDGE_URL,{
     method:"GET",
     headers:{
       "Content-Type":"application/json",
@@ -450,9 +446,9 @@ async function callEdge(){
     }
   });
   const raw = await res.text();
-  let j = null;
-  try { j = JSON.parse(raw); } catch {}
-  if (!res.ok) throw new Error((j && j.error) || raw || "edge error");
+  let j=null;
+  try{j=JSON.parse(raw);}catch{}
+  if(!res.ok) throw new Error((j&&j.error)||raw||"edge error");
   return j?.state || j || {};
 }
 function normalizeTimer(state){
@@ -462,21 +458,21 @@ function normalizeTimer(state){
     state.next_at || state.next_iso || state.base_iso || null;
 
   const period =
-    typeof state.period_sec === "number" ? state.period_sec :
-    typeof state.period     === "number" ? state.period     :
+    typeof state.period_sec==="number" ? state.period_sec :
+    typeof state.period    ==="number" ? state.period    :
     20;
 
   let remaining =
-    typeof state.remaining_sec === "number" ? state.remaining_sec :
-    typeof state.remaining     === "number" ? state.remaining     :
+    typeof state.remaining_sec==="number" ? state.remaining_sec :
+    typeof state.remaining    ==="number" ? state.remaining    :
     null;
 
-  if ((remaining == null || remaining <= 0) && phaseEnd) {
+  if((remaining==null || remaining<=0) && phaseEnd){
     const ms = Date.parse(phaseEnd) - Date.now();
-    if (!isNaN(ms)) remaining = Math.max(0, Math.ceil(ms / 1000));
+    if(!isNaN(ms)) remaining = Math.max(0,Math.ceil(ms/1000));
   }
 
-  return { phase_end_at:phaseEnd, period_sec:period, remaining_sec:remaining };
+  return {phase_end_at:phaseEnd,period_sec:period,remaining_sec:remaining};
 }
 
 let serverPhaseEndISO = null;
@@ -484,32 +480,32 @@ let remainingSec = null;
 let lastSyncAt = 0;
 
 async function syncState(){
-  try {
+  try{
     const s = normalizeTimer(await callEdge());
     serverPhaseEndISO = s.phase_end_at || null;
     remainingSec = s.remaining_sec;
     lastSyncAt = Date.now();
-  } catch(e) {
-    console.error("Timer sync failed", e);
+  }catch(e){
+    console.error("Timer sync failed",e);
     toast("Timer sync failed");
   }
 }
 
 /* ---------- Queue render ---------- */
 async function renderQueue(){
-  try {
-    const { data, error } = await supabase
+  try{
+    const {data,error} = await supabase
       .from("art_queue")
       .select("id,image_url,created_at")
       .eq("status","pending")
-      .order("created_at",{ ascending:true });
+      .order("created_at",{ascending:true});
 
-    if (error) {
-      console.error("QUEUE load error", error);
+    if(error){
+      console.error("QUEUE load error",error);
       throw error;
     }
 
-    if (!data || !data.length) {
+    if(!data || !data.length){
       queueGrid.innerHTML = "";
       queueEmpty.style.display = "block";
       queueCount.textContent = "(0)";
@@ -519,7 +515,7 @@ async function renderQueue(){
     queueEmpty.style.display = "none";
     queueCount.textContent = `(${data.length})`;
 
-    queueGrid.innerHTML = data.map((row, i) => {
+    queueGrid.innerHTML = data.map((row,i)=>{
       const url = row.image_url || "";
       const isVid = isVideoUrl(url);
       const mediaTag = isVid
@@ -532,43 +528,43 @@ async function renderQueue(){
         </div>
       `;
     }).join("");
-  } catch(e) {
+  }catch(e){
     toast("Queue failed to load");
   }
 }
 
 /* ---------- Submit handler ---------- */
-btnSubmit.addEventListener("click", async () => {
+btnSubmit.addEventListener("click",async()=>{
   submitMsg.textContent = "";
 
   let user;
-  try {
+  try{
     user = await getCurrentUser();
-  } catch(e) {
-    console.error("AUTH error", e);
+  }catch(e){
+    console.error("AUTH error",e);
     toast("Auth check failed");
     submitMsg.textContent = "Submit failed.";
     return;
   }
-  if (!user) {
+  if(!user){
     toast("Log in to submit");
     return;
   }
 
-  if (!consent.checked) {
+  if(!consent.checked){
     toast("Please consent to the rules");
     return;
   }
 
   let finalUrl = (picked.url || "").trim();
 
-  try {
-    if (picked.file) {
+  try{
+    if(picked.file){
       toast("Uploading…");
-      finalUrl = await uploadToStorage(user.id, picked.file);
+      finalUrl = await uploadToStorage(user.id,picked.file);
     }
 
-    if (!finalUrl) {
+    if(!finalUrl){
       toast("Pick a file or paste a URL");
       return;
     }
@@ -584,7 +580,7 @@ btnSubmit.addEventListener("click", async () => {
       (user.email ? user.email.split("@")[0] : null) ||
       user.id;
 
-    const { error } = await supabase.from("art_queue").insert({
+    const {error} = await supabase.from("art_queue").insert({
       image_url: finalUrl,
       status: "pending",
       piece_name,
@@ -592,13 +588,13 @@ btnSubmit.addEventListener("click", async () => {
       artist_name
     });
 
-    if (error) {
-      console.error("QUEUE insert error", error);
+    if(error){
+      console.error("QUEUE insert error",error);
       throw error;
     }
 
     // Reset UI
-    picked = { file:null, url:"" };
+    picked = {file:null,url:""};
     fileInput.value = "";
     urlInput.value = "";
     urlInput.classList.add("hidden");
@@ -614,8 +610,8 @@ btnSubmit.addEventListener("click", async () => {
     await renderQueue();
     queuePanel.style.display = "block";
     queueToggle.textContent = "Collapse ▲";
-  } catch(e) {
-    console.error("SUBMIT error", e);
+  }catch(e){
+    console.error("SUBMIT error",e);
     const msg = e?.message || "Submit failed.";
     toast(msg);
     submitMsg.textContent = msg;
@@ -623,12 +619,12 @@ btnSubmit.addEventListener("click", async () => {
 });
 
 /* ---------- Queue toggle ---------- */
-queueToggle.addEventListener("click", () => {
+queueToggle.addEventListener("click",()=>{
   const open = queuePanel.style.display !== "none";
-  if (open) {
+  if(open){
     queuePanel.style.display = "none";
     queueToggle.textContent = "Expand ▼";
-  } else {
+  }else{
     queuePanel.style.display = "block";
     queueToggle.textContent = "Collapse ▲";
   }
@@ -636,11 +632,11 @@ queueToggle.addEventListener("click", () => {
 
 /* ---------- Timer loop ---------- */
 function loop(){
-  if (typeof remainingSec === "number") {
+  if(typeof remainingSec === "number"){
     const elapsed = (Date.now() - lastSyncAt) / 1000;
-    const sec = Math.max(0, Math.ceil(remainingSec - elapsed));
+    const sec = Math.max(0,Math.ceil(remainingSec - elapsed));
     clockEl.textContent = String(sec);
-    if (sec <= 0 || Date.now() - lastSyncAt > 5000) {
+    if(sec<=0 || Date.now() - lastSyncAt > 5000){
       syncState();
     }
   }
@@ -648,18 +644,16 @@ function loop(){
 }
 
 /* ---------- Boot ---------- */
-(async () => {
+(async()=>{
   paintAuth(await uid());
-  supabase.auth.onAuthStateChange((_e, session) =>
+  supabase.auth.onAuthStateChange((_e,session)=>
     paintAuth(session?.user?.id || null)
   );
-  await Promise.all([renderQueue(), syncState()]);
+  await Promise.all([renderQueue(),syncState()]);
   loop();
 
   // Auto-refresh queue every 10s so items disappear when the tournament consumes them
-  setInterval(() => {
-    renderQueue();
-  }, 10000);
+  setInterval(()=>{renderQueue();},10000);
 })();
 </script>
 
