@@ -46,8 +46,7 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 /* Queue grid */
 .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px}
 .thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#ff3aa0; min-height:120px}
-.thumb img,
-.thumb video{display:block; width:100%; height:100%; object-fit:cover}
+.thumb img{display:block; width:100%; height:100%; object-fit:cover}
 .thumb .idx{
   position:absolute; top:6px; left:6px; font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
   background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35)
@@ -86,11 +85,14 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       </div>
     </div>
 
-    <!-- MINIMAL UPLOADER (auth panel removed) -->
+    <!-- MINIMAL UPLOADER -->
     <div class="card" style="margin-top:16px">
       <div id="pickZone" class="drop">
         <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
-        <div id="fileName" class="small">image (jpg / png / webp) or video — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
+        <div id="fileName" class="small">
+          jpg / png / webp / mp4 — 10MB max. Tip: drag &amp; drop or paste (Ctrl/⌘+V)
+        </div>
+        <!-- NOW ALLOWS IMAGE + VIDEO -->
         <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
         <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
         <div class="preview">
@@ -189,6 +191,9 @@ function setPreview(src){
   if (src){ imgPreview.src = src; show(imgPreview); }
   else { imgPreview.removeAttribute('src'); hide(imgPreview); }
 }
+function isImageFile(f){ return (f.type || "").startsWith("image/"); }
+function isVideoFile(f){ return (f.type || "").startsWith("video/"); }
+function isMediaFile(f){ return isImageFile(f) || isVideoFile(f); }
 
 /* ---------- Auth minimal ---------- */
 async function uid(){
@@ -206,6 +211,7 @@ function paintAuth(id){
 
 /* ---------- Pick flow ---------- */
 let picked = { file:null, url:'' };
+
 btnPick.addEventListener('click', ()=>{
   if (!picked.file && !picked.url){
     fileInput.click();
@@ -219,28 +225,25 @@ fileInput.addEventListener('change', ()=>{
   const f = fileInput.files?.[0];
   if (!f) return;
 
-  const isImage = f.type.startsWith('image/');
-  const isVideo = f.type.startsWith('video/');
-
-  if (!isImage && !isVideo){
+  if (!isMediaFile(f)){
     toast('File must be an image or video');
-    fileInput.value='';
-    return;
+    fileInput.value=''; return;
   }
   if (f.size > 10*1024*1024){
     toast('Max 10MB');
-    fileInput.value='';
-    return;
+    fileInput.value=''; return;
   }
 
   picked.file = f; picked.url = '';
   urlInput.value = ''; urlInput.classList.add('hidden');
-  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
 
-  if (isImage){
+  const labelBase = `${f.name} — ${bytesToMB(f.size)} MB`;
+  if (isImageFile(f)){
+    fileName.textContent = labelBase;
     setPreview(URL.createObjectURL(f));
-    previewHint.textContent = 'Ready to upload';
+    previewHint.textContent = 'Image selected — ready to upload';
   } else {
+    fileName.textContent = labelBase.replace(/^/, '');
     setPreview('');
     previewHint.textContent = 'Video selected — ready to upload';
   }
@@ -249,7 +252,6 @@ fileInput.addEventListener('change', ()=>{
 urlInput.addEventListener('input', ()=>{
   picked.url = urlInput.value.trim();
   if (picked.url) {
-    // URL mode is still image-only for now
     picked.file = null; fileInput.value='';
     fileName.textContent = 'Using pasted URL';
     previewHint.textContent = picked.url;
@@ -269,34 +271,32 @@ urlInput.addEventListener('input', ()=>{
 pickZone.addEventListener('drop', (e)=>{
   const f = e.dataTransfer?.files?.[0];
   if (!f) return;
-
-  const isImage = f.type.startsWith('image/');
-  const isVideo = f.type.startsWith('video/');
-
-  if (!isImage && !isVideo) return toast('File must be an image or video');
+  if (!isMediaFile(f)) return toast('File must be an image or video');
   if (f.size > 10*1024*1024) return toast('Max 10MB');
 
   picked.file = f; picked.url='';
   fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
 
-  if (isImage){
+  const labelBase = `${f.name} — ${bytesToMB(f.size)} MB`;
+  if (isImageFile(f)){
+    fileName.textContent = labelBase;
     setPreview(URL.createObjectURL(f));
-    previewHint.textContent = 'Ready to upload (dropped)';
+    previewHint.textContent = 'Ready to upload (dropped image)';
   } else {
+    fileName.textContent = labelBase;
     setPreview('');
     previewHint.textContent = 'Video selected — ready to upload (dropped)';
   }
 });
 
-/* Paste */
+/* Paste (image only – browsers don’t paste video files anyway) */
 window.addEventListener('paste', (e)=>{
   try{
     const items = e.clipboardData?.items || [];
     for (const it of items){
       if (it.kind === 'file'){
         const f = it.getAsFile();
-        if (f && f.type.startsWith('image/')){
+        if (f && isImageFile(f)){
           if (f.size > 10*1024*1024) return toast('Max 10MB');
           picked.file = f; picked.url='';
           fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
@@ -415,7 +415,7 @@ btnSubmit.addEventListener('click', async ()=>{
 
     picked = {file:null, url:''};
     fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-    fileName.textContent = 'image (jpg / png / webp) or video — 10MB max';
+    fileName.textContent = 'jpg / png / webp / mp4 — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
     previewHint.textContent = '';
     setPreview('');
     consent.checked = false;
@@ -428,6 +428,7 @@ btnSubmit.addEventListener('click', async ()=>{
     queuePanel.style.display = 'block';
     queueToggle.textContent = 'Collapse ▲';
   }catch(e){
+    console.error(e);
     toast(e?.message || 'Submit failed');
     submitMsg.textContent = 'Submit failed.';
   }
@@ -452,19 +453,12 @@ async function renderQueue(){
     queueEmpty.style.display = 'none';
     queueCount.textContent = `(${data.length})`;
 
-    queueGrid.innerHTML = data.map((r,i)=>{
-      const url = r.image_url || '';
-      const isVideo = /\.(mp4|webm|mov|m4v)$/i.test(url);
-      const media = isVideo
-        ? `<video src="${url}#t=0.2" muted playsinline></video>`
-        : `<img src="${url}" alt="queued art ${i+1}"/>`;
-      return `
-        <div class="thumb" data-id="${r.id}" title="${url}">
-          <span class="idx">#${i+1}</span>
-          ${media}
-        </div>
-      `;
-    }).join('');
+    queueGrid.innerHTML = data.map((r,i)=>`
+      <div class="thumb" data-id="${r.id}" title="${r.image_url}">
+        <span class="idx">#${i+1}</span>
+        <img src="${r.image_url}" alt="queued art ${i+1}"/>
+      </div>
+    `).join('');
   }catch(e){ toast('Queue failed to load'); }
 }
 
