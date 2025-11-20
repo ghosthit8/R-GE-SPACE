@@ -6,6 +6,7 @@
 <title>Rage Space — Submit</title>
 <link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tus-js-client@4.1.0/dist/tus.js"></script>
 <style>
 :root{
   --green:#39ff14; --green2:#7dff62; --ink:#e5e5e5;
@@ -16,385 +17,469 @@
 html,body{height:100%}
 body{
   margin:0;
-  background:
-    radial-gradient(1200px 900px at 50% -10%,rgba(57,255,20,.08),transparent 60%),
-    #000;
+  background:radial-gradient(1200px 900px at 50% -10%,rgba(57,255,20,.08),transparent 60%), #000;
   color:var(--ink);
   font:14px/1.45 system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
 }
-.wrap{max-width:var(--maxw);margin:0 auto;padding:18px 14px 80px}
-h1{margin:0 0 12px;font-size:24px;letter-spacing:.6px}
-.header{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.badge{
-  border:1px solid var(--border);padding:6px 10px;
-  border-radius:12px;color:var(--ink);font-size:12px;
+.wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 80px}
+h1,h2,h3{font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--green); margin:0 0 8px}
+h1{font-size:20px;}
+h2{font-size:14px; margin-top:20px;}
+p{margin:0 0 10px; color:#d0ffd0}
+small{font-size:11px; color:var(--muted)}
+a{color:var(--green2); text-decoration:none}
+a:hover{text-decoration:underline}
+card, .card{
+  display:block;
+  background:radial-gradient(900px 600px at 10% -10%,rgba(57,255,20,.14),transparent 60%), #060606;
+  border-radius:14px;
+  border:1px solid var(--border);
+  padding:14px 14px 16px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.8), 0 18px 40px rgba(0,0,0,.85);
+  position:relative;
+  overflow:hidden;
 }
+.card::before{
+  content:"";
+  position:absolute; inset:-40%;
+  background:
+    repeating-linear-gradient(0deg,rgba(0,0,0,.0) 0,rgba(0,0,0,.0) 1px,rgba(0,255,0,.02) 2px,rgba(0,255,0,.02) 3px),
+    repeating-linear-gradient(90deg,rgba(0,0,0,.0) 0,rgba(0,0,0,.0) 1px,rgba(0,255,0,.018) 2px,rgba(0,255,0,.018) 3px);
+  mix-blend-mode:soft-light;
+  opacity:.28;
+  pointer-events:none;
+}
+.card-inner{position:relative; z-index:1}
+label{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); margin-bottom:4px}
+.input, .selectlike{
+  width:100%;
+  padding:8px 10px;
+  border-radius:9px;
+  border:1px solid #234223;
+  background:rgba(5,10,5,.95);
+  color:var(--ink);
+  font:13px system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
+}
+.input::placeholder{color:#5faa5f}
+.input:focus{outline:none; box-shadow:0 0 0 1px #39ff14aa, 0 0 0 3px #39ff141a; border-color:#39ff14;}
+.row{display:flex; gap:10px; align-items:flex-end;}
+.row>.col{flex:1}
+.row>.col-2{flex:2}
 .btn{
-  display:inline-flex;align-items:center;gap:8px;justify-content:center;
-  text-decoration:none;
-  border:1px solid var(--border);border-radius:14px;
-  padding:10px 14px;font-weight:600;
-  background:linear-gradient(180deg,rgba(57,255,20,.08),rgba(57,255,20,.02));
-  color:var(--green);
-  transition:box-shadow .2s ease,transform .08s ease;
-  cursor:pointer;
+  appearance:none; border:none; border-radius:999px;
+  background:radial-gradient(circle at 0 0,#5bff3c,transparent 55%), linear-gradient(90deg,#39ff14,#7dff62);
+  color:#000; font-size:13px; font-weight:600; padding:8px 16px;
+  text-transform:uppercase; letter-spacing:.12em;
+  cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.75);
+  display:inline-flex; align-items:center; gap:6px;
 }
-.btn:hover{box-shadow:0 0 14px rgba(57,255,20,.22)}
-.btn.big{font-size:18px;padding:16px 18px}
-.btn.ghost{opacity:.9}
-.btn[disabled]{opacity:.45;cursor:not-allowed;box-shadow:none}
+.btn[disabled]{opacity:.5; cursor:default}
+.btn-secondary{
+  background:radial-gradient(circle at 0 0,#222,transparent 55%), linear-gradient(90deg,#111,#222);
+  color:var(--ink); border:1px solid #333;
+}
+.badge{
+  display:inline-flex; align-items:center; gap:4px; padding:2px 8px;
+  border-radius:999px; border:1px solid #234223; background:rgba(0,0,0,.86);
+  font-size:11px; text-transform:uppercase; letter-spacing:.13em; color:var(--muted);
+}
+.badge-dot{width:7px; height:7px; border-radius:999px; background:#555;}
+.badge-dot.on{background:#39ff14;}
+hr{border:none; border-top:1px solid #1f331f; margin:14px 0;}
 
-.input{
-  width:100%;border:1px solid var(--border);border-radius:12px;
-  background:#0b0b0b;color:var(--ink);
-  padding:10px 12px;font-size:14px;
-}
-textarea.input{resize:vertical;min-height:70px}
-.hidden{display:none !important}
-.card{
-  border:1px solid var(--border);border-radius:18px;
-  background:rgba(9,9,9,.6);
-  padding:16px;
-}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.small{font-size:12px;color:var(--muted)}
-.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
-.center{display:flex;justify-content:center;align-items:center;gap:12px}
-hr.sep{border:0;border-top:1px dashed var(--border);margin:16px 0}
-
-/* Queue grid */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
-.thumb{
-  position:relative;border:1px solid var(--border);border-radius:12px;
-  overflow:hidden;background:#111;min-height:120px;
-}
-.thumb img,
-.thumb video{display:block;width:100%;height:100%;object-fit:cover}
-.thumb .idx{
-  position:absolute;top:6px;left:6px;
-  font:700 12px/1 ui-monospace,monospace;color:#c9c9c9;
-  background:rgba(0,0,0,.55);
-  padding:4px 6px;border-radius:10px;
-  border:1px solid rgba(57,255,20,.35);
-}
-
-/* Timer */
-.timer .row{justify-content:space-between}
-.clock{
-  display:inline-flex;min-width:36px;height:26px;
-  align-items:center;justify-content:center;
-  border:1px solid var(--border);border-radius:10px;
-  padding:0 10px;
-}
-
-/* Toast */
-.toast{
-  position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
-  background:rgba(0,0,0,.85);color:var(--ink);
-  border:1px solid var(--border);padding:10px 12px;
+.pick-zone{
   border-radius:12px;
-  opacity:0;pointer-events:none;
-  transition:opacity .2s ease,transform .2s ease;
-  z-index:999;
+  border:1px dashed #316431;
+  background:rgba(0,0,0,.78);
+  padding:10px 10px 12px;
+  display:flex; gap:10px;
 }
-.toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+.pick-main{flex:1; min-width:0;}
+.pick-title{font-size:12px; text-transform:uppercase; letter-spacing:.16em; color:var(--muted); margin-bottom:6px}
+.pick-desc{font-size:12px; color:#d6ffd6}
+.pick-actions{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; align-items:center;}
+.pick-label{font-size:11px; color:var(--muted)}
+.pick-file-name{font-size:12px; color:var(--green2); margin-top:4px; word-break:break-all;}
+.pick-preview{
+  width:108px; height:108px; border-radius:11px;
+  border:1px solid #234223;
+  overflow:hidden; position:relative;
+  background:radial-gradient(circle at 30% 0,rgba(57,255,20,.4),transparent 55%), #020302;
+  flex-shrink:0;
+}
+.pick-preview-inner{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;}
+.pick-preview-inner img,
+.pick-preview-inner video{max-width:100%; max-height:100%; object-fit:cover; display:block;}
+.pick-preview-inner video{background:#000;}
+.pick-preview-hint{
+  position:absolute; left:0; right:0; bottom:0;
+  background:linear-gradient(to top,rgba(0,0,0,.75),rgba(0,0,0,.0));
+  padding:6px 7px 7px;
+  font-size:11px; color:#c0ffc0;
+}
 
-/* Drop zone */
-.drop{
-  border:1px dashed var(--border);border-radius:14px;
-  padding:14px;text-align:center;
-  background:rgba(57,255,20,.03);
+.chip{
+  display:inline-flex; align-items:center; gap:6px;
+  border-radius:999px; padding:4px 9px;
+  background:rgba(0,0,0,.9); border:1px solid #233523;
+  font-size:11px; color:#b0ffb0;
 }
-.drop.drag{background:rgba(57,255,20,.08)}
-.preview{
-  margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+.chip svg{width:14px; height:14px;}
+
+.queue{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:10px; margin-top:10px;
 }
-.preview img{
-  max-height:120px;border-radius:10px;border:1px solid var(--border);
+.queue-item{
+  position:relative;
+  border-radius:11px;
+  border:1px solid #234223;
+  overflow:hidden;
+  background:#020302;
 }
+.queue-thumb{
+  width:100%; aspect-ratio:1/1; object-fit:cover; display:block;
+  background:#000;
+}
+.queue-meta{
+  padding:6px 8px 7px; font-size:11px; color:#b8ffb8;
+  display:flex; justify-content:space-between; align-items:center; gap:4px;
+}
+.queue-meta span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.queue-meta small{font-size:10px; color:#7aff7a;}
+.queue-badge{
+  position:absolute; left:6px; top:6px;
+  font-size:10px; text-transform:uppercase; letter-spacing:.14em;
+  padding:2px 6px; border-radius:999px;
+  background:rgba(0,0,0,.86); color:#a8ffa8; border:1px solid #2b4c2b;
+}
+
+.clock-pill{
+  position:fixed; right:10px; top:10px;
+  border-radius:999px; padding:4px 10px;
+  background:rgba(0,0,0,.9); border:1px solid #2b4c2b;
+  font-size:11px; color:#b0ffb0; display:flex; align-items:center; gap:6px;
+  z-index:9999;
+}
+.clock-pill strong{font-size:13px; color:var(--green2);}
+
+.msg{margin-top:8px; font-size:12px; color:#f8cfff;}
+.msg.ok{color:#b6ffb6;}
+
+.header-row{
+  display:flex; justify-content:space-between; align-items:center; gap:10px;
+  margin-bottom:10px;
+  flex-wrap:wrap;
+}
+nav a{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:11px; text-transform:uppercase; letter-spacing:.13em;
+  padding:4px 10px; border-radius:999px;
+  border:1px solid #234223; background:rgba(0,0,0,.9);
+}
+nav a span.icon{
+  width:10px; height:10px; border-radius:999px; background:radial-gradient(circle at 30% 0,#39ff14,transparent 60%), #000;
+  box-shadow:0 0 6px rgba(57,255,20,.8);
+}
+nav a.active{border-color:#39ff14; color:#39ff14;}
+nav a.active span.icon{background:radial-gradient(circle at 30% 0,#39ff14,transparent 60%), #39ff14;}
+
+.input-ghost{
+  background:transparent;
+  border:1px dashed #2a4a2a;
+  color:#c8ffc8;
+}
+.input-ghost::placeholder{color:#557f55;}
+
+.meta-line{font-size:11px; color:var(--muted); margin-top:4px;}
+.meta-line strong{color:var(--green2)}
+
+.badge-auth{
+  font-size:10px; padding:3px 8px; border-radius:999px;
+  border:1px solid #444; background:rgba(0,0,0,.8); color:#aaa;
+  text-transform:uppercase; letter-spacing:.15em;
+}
+
+@media (max-width:600px){
+  .pick-zone{flex-direction:column-reverse;}
+  .pick-preview{width:100%; height:auto; aspect-ratio:1/1;}
+}
+footer{
+  max-width:var(--maxw); margin:0 auto; padding:10px 14px 16px;
+  font-size:10px; color:#6f996f; text-align:center;
+}
+footer a{color:#9fff9f;}
+.hidden{display:none !important;}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="header">
-      <h1 style="color:var(--green)">SUBMIT ART</h1>
-      <div class="row">
-        <span id="authBadge" class="badge small">not logged in</span>
-        <a class="btn ghost" href="./menu.html">← Menu</a>
-      </div>
+<div class="wrap">
+  <div class="header-row">
+    <div>
+      <h1>Submit to the Machine</h1>
+      <p style="font-size:12px; max-width:420px;">Feed the bracket with your art &amp; clips. Images and videos battle live in Rage Space. The Machine decides who survives.</p>
+      <div class="meta-line"><strong>Supported:</strong> jpg, png, webp, mp4 — up to <strong>200MB</strong>. NSFW is allowed, but <strong>no minors / real death / doxxing / hate propaganda.</strong></div>
     </div>
-
-    <!-- Uploader -->
-    <div class="card" style="margin-top:16px">
-      <div id="pickZone" class="drop">
-        <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
-        <div id="fileName" class="small">
-          jpg / png / webp / mp4 — 200MB max. Drag, drop or paste (Ctrl/⌘+V)
-        </div>
-        <!-- IMAGE + VIDEO -->
-        <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
-        <input id="urlInput" type="url" class="input hidden" placeholder="https://image-or-video.example/file">
-        <div class="preview">
-          <img id="imgPreview" alt="" class="hidden">
-          <div class="small mono" id="previewHint"></div>
-        </div>
-      </div>
-
-      <hr class="sep">
-
-      <!-- Piece metadata -->
-      <div class="small" style="margin-bottom:4px;">Optional: tell us about this piece</div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">
-        <input id="pieceName" class="input" placeholder="Piece name / title">
-        <textarea id="pieceDesc" class="input" rows="3" placeholder="Describe this piece (vibe, medium, story, etc.)"></textarea>
-      </div>
-
-      <label class="row small" style="align-items:flex-start">
-        <input id="consent" type="checkbox">
-        <span>I am 18+, no cp, no Nazi BS.</span>
-      </label>
-
-      <div class="center" style="margin-top:10px">
-        <button id="btnSubmit" class="btn">✅ Submit</button>
-        <span id="submitMsg" class="small"></span>
-      </div>
-    </div>
-
-    <!-- Live tournament status -->
-    <div class="card" style="margin-top:16px">
-      <div class="timer">
-        <div class="row">
-          <span>🕒 Next Tournament in:</span>
-          <span id="clock" class="clock">—</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Queue -->
-    <div class="card" style="margin-top:16px">
-      <div class="row" style="justify-content:space-between;align-items:center">
-        <strong>📜 In the Queue</strong>
-        <div class="row small" style="gap:8px">
-          <span id="queueCount" class="small"></span>
-          <button id="queueToggle" class="btn ghost" style="padding:6px 10px">Expand ▼</button>
-        </div>
-      </div>
-      <div id="queuePanel" style="display:none;margin-top:12px">
-        <div id="queue" class="grid"></div>
-        <div id="queueEmpty" class="small" style="margin-top:6px;display:none">No items in queue.</div>
-      </div>
-      <div class="small" style="margin-top:6px">Oldest first → next in</div>
-    </div>
+    <nav>
+      <a href="index.html"><span class="icon"></span> <span>Matchup</span></a>
+      <a href="winners.html"><span class="icon"></span> <span>Winners</span></a>
+      <span id="auth-badge" class="badge-auth">checking auth…</span>
+    </nav>
   </div>
 
-  <div id="toast" class="toast"></div>
+  <div class="card">
+    <div class="card-inner">
+      <div class="row" style="margin-bottom:12px;">
+        <div class="col">
+          <label>Artist handle</label>
+          <input id="artist-name" class="input input-ghost" placeholder="@handle or name (optional)"/>
+        </div>
+        <div class="col">
+          <label>Title</label>
+          <input id="piece-name" class="input input-ghost" placeholder="Piece title (optional)"/>
+        </div>
+      </div>
+
+      <div class="pick-zone" id="pick-zone">
+        <div class="pick-main">
+          <div class="pick-title">Upload image or video</div>
+          <div class="pick-desc">
+            Drop a file, paste an image, or paste a direct URL. Videos auto-mute and loop in battle.
+          </div>
+          <div class="pick-actions">
+            <button id="btn-pick" class="btn btn-secondary" type="button">
+              <span>Pick file</span>
+            </button>
+            <span class="pick-label">
+              or paste image / URL →
+            </span>
+            <input id="url-input" class="input hidden" placeholder="https:// direct image / video URL"/>
+          </div>
+          <div class="pick-file-name" id="file-name">
+            jpg / png / webp / mp4 — 200MB max. Tip: drag &amp; drop or paste (Ctrl/⌘+V)
+          </div>
+        </div>
+        <div class="pick-preview">
+          <div class="pick-preview-inner" id="preview-inner">
+            <span style="font-size:11px; color:#6f9f6f; text-align:center; padding:0 8px;">
+              No media yet<br/>Drop / pick / paste to preview
+            </span>
+          </div>
+          <div class="pick-preview-hint" id="preview-hint">Idle</div>
+        </div>
+      </div>
+
+      <hr/>
+
+      <div class="row">
+        <div class="col">
+          <label>Queue status</label>
+          <div class="chip">
+            <svg viewBox="0 0 40 40">
+              <circle cx="20" cy="20" r="18" fill="none" stroke="#163816" stroke-width="2"/>
+              <path d="M10 20 L18 26 L30 12" fill="none" stroke="#39ff14" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span id="queue-label">Loading queue…</span>
+          </div>
+        </div>
+        <div class="col" style="text-align:right;">
+          <label>&nbsp;</label>
+          <button id="btn-submit" class="btn" type="button">
+            <span>Submit to queue</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="submit-msg" class="msg"></div>
+
+      <h2 style="margin-top:18px;">Currently in queue</h2>
+      <div id="queue" class="queue"></div>
+      <small style="display:block; margin-top:6px; color:#7aff7a;">
+        The Machine pulls from this queue when it needs fresh victims. Your piece may not appear immediately if the bracket is already full.
+      </small>
+    </div>
+  </div>
+</div>
+
+<div class="clock-pill">
+  <span>Cycle</span>
+  <strong id="clock">--</strong>
+</div>
+
+<footer>
+  Rage Space alpha. Expect bugs, glitches, and resets. Feedback: <a href="mailto:ghosthit8@gmail.com">ghosthit8@gmail.com</a>
+</footer>
 
 <script>
-/* ---------- Supabase ---------- */
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
-const BUCKET = "art-uploads";
+const BUCKET = 'art-uploads';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ---------- Config (200MB max) ---------- */
+/* ---------- SIZE LIMIT (200MB) ---------- */
 const MAX_MB = 200;
 const MAX_BYTES = MAX_MB * 1024 * 1024;
 
-/* ---------- Elements ---------- */
-const authBadge   = document.getElementById("authBadge");
-const toastEl     = document.getElementById("toast");
-const pickZone    = document.getElementById("pickZone");
-const pieceNameInput = document.getElementById("pieceName");
-const pieceDescInput = document.getElementById("pieceDesc");
-const btnPick     = document.getElementById("btnPick");
-const fileInput   = document.getElementById("fileInput");
-const urlInput    = document.getElementById("urlInput");
-const fileName    = document.getElementById("fileName");
-const previewHint = document.getElementById("previewHint");
-const imgPreview  = document.getElementById("imgPreview");
-const consent     = document.getElementById("consent");
-const btnSubmit   = document.getElementById("btnSubmit");
-const submitMsg   = document.getElementById("submitMsg");
-const queuePanel  = document.getElementById("queuePanel");
-const queueToggle = document.getElementById("queueToggle");
-const queueCount  = document.getElementById("queueCount");
-const queueGrid   = document.getElementById("queue");
-const queueEmpty  = document.getElementById("queueEmpty");
-const clockEl     = document.getElementById("clock");
+/* ---------- DOM ---------- */
+const btnPick      = document.getElementById('btn-pick');
+const btnSubmit    = document.getElementById('btn-submit');
+const pickZone     = document.getElementById('pick-zone');
+const fileInput    = document.createElement('input');
+fileInput.type = 'file';
+fileInput.accept = 'image/*,video/*';
 
-const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`,...a);
+const urlInput     = document.getElementById('url-input');
+const fileName     = document.getElementById('file-name');
+const previewInner = document.getElementById('preview-inner');
+const previewHint  = document.getElementById('preview-hint');
+const queueGrid    = document.getElementById('queue');
+const queueLabel   = document.getElementById('queue-label');
+const submitMsg    = document.getElementById('submit-msg');
+const authBadge    = document.getElementById('auth-badge');
+const clockEl      = document.getElementById('clock');
 
-/* ---------- Utils ---------- */
-function toast(msg, ms=2000){
-  toastEl.textContent = msg;
-  toastEl.classList.add("show");
-  setTimeout(()=>toastEl.classList.remove("show"), ms);
+/* ---------- Helpers ---------- */
+function toast(msg, ok=false){
+  submitMsg.textContent = msg;
+  submitMsg.className = ok ? 'msg ok' : 'msg';
 }
-function bytesToMB(n){return (n/(1024*1024)).toFixed(2);}
-function show(el){el.classList.remove("hidden");}
-function hide(el){el.classList.add("hidden");}
-
-function setPreview(src){
-  if(src){
-    imgPreview.src = src;
-    show(imgPreview);
-  }else{
-    imgPreview.removeAttribute("src");
-    hide(imgPreview);
+function bytesToMB(bytes){
+  return (bytes / (1024*1024)).toFixed(1);
+}
+function isImageFile(f){
+  return f && f.type && f.type.startsWith('image/');
+}
+function isVideoFile(f){
+  return f && f.type && f.type.startsWith('video/');
+}
+function isMediaFile(f){
+  return isImageFile(f) || isVideoFile(f);
+}
+function isValidUrl(str){
+  try{ new URL(str); return true; }catch{return false;}
+}
+function setPreview(src, isVideo=false){
+  previewInner.innerHTML = '';
+  if (!src){
+    previewInner.innerHTML = `<span style="font-size:11px; color:#6f9f6f; text-align:center; padding:0 8px;">No media yet<br/>Drop / pick / paste to preview</span>`;
+    return;
+  }
+  if (isVideo){
+    const v = document.createElement('video');
+    v.src = src;
+    v.muted = true;
+    v.loop = true;
+    v.playsInline = true;
+    v.autoplay = true;
+    v.controls = false;
+    previewInner.appendChild(v);
+  } else {
+    const img = document.createElement('img');
+    img.src = src;
+    previewInner.appendChild(img);
   }
 }
 
-function isImageFile(f){return (f.type||"").startsWith("image/");}
-function isVideoFile(f){return (f.type||"").startsWith("video/");}
-function isMediaFile(f){return isImageFile(f)||isVideoFile(f);}
-
-function isVideoUrl(url){
-  if(!url) return false;
-  const clean = url.split("?")[0].toLowerCase();
-  return clean.endsWith(".mp4") ||
-         clean.endsWith(".webm") ||
-         clean.endsWith(".mov") ||
-         clean.endsWith(".m4v");
-}
-
 /* ---------- Auth ---------- */
-async function uid(){
-  const {data:{session}} = await supabase.auth.getSession();
-  return session?.user?.id || null;
-}
-async function getCurrentUser(){
-  const {data:{user}} = await supabase.auth.getUser();
-  return user || null;
+async function currentUser(){
+  const { data:{session} } = await supabase.auth.getSession();
+  return session?.user || null;
 }
 function paintAuth(id){
-  if(id){
-    authBadge.textContent = "logged in";
-    authBadge.style.color = "#39ff14";
-  }else{
-    authBadge.textContent = "not logged in";
-    authBadge.style.color = "#ff6b6b";
+  if (id){
+    authBadge.textContent='logged in';
+    authBadge.style.color='#39ff14';
+  } else {
+    authBadge.textContent='not logged in';
+    authBadge.style.color='#ff6b6b';
   }
 }
 
 /* ---------- Pick flow ---------- */
-let picked = {file:null,url:""};
+let picked = { file:null, url:'' };
 
-btnPick.addEventListener("click",()=>{
-  if(!picked.file && !picked.url){
+btnPick.addEventListener('click', ()=>{
+  if (!picked.file && !picked.url){
     fileInput.click();
-  }else{
-    urlInput.classList.toggle("hidden");
-    if(!urlInput.classList.contains("hidden")) urlInput.focus();
+  } else {
+    urlInput.classList.toggle('hidden');
+    if (!urlInput.classList.contains('hidden')){
+      urlInput.focus();
+    }
   }
 });
 
-fileInput.addEventListener("change",()=>{
+fileInput.addEventListener('change', ()=>{
   const f = fileInput.files?.[0];
-  if(!f) return;
+  if (!f) return;
+  if (!isMediaFile(f)) return toast('File must be an image or video');
+  if (f.size > MAX_BYTES) return toast(`Max ${MAX_MB}MB`);
 
-  if(!isMediaFile(f)){
-    toast("File must be an image or video");
-    fileInput.value = "";
-    return;
-  }
-  if(f.size > MAX_BYTES){
-    toast(`File too big (max ${MAX_MB}MB)`);
-    fileInput.value = "";
-    return;
-  }
+  picked.file = f; picked.url='';
+  urlInput.value=''; urlInput.classList.add('hidden');
 
-  picked.file = f;
-  picked.url = "";
-  urlInput.value = "";
-  urlInput.classList.add("hidden");
-
-  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-
-  if(isImageFile(f)){
-    setPreview(URL.createObjectURL(f));
-    previewHint.textContent = "Image selected — ready to upload";
-  }else{
-    setPreview("");
-    previewHint.textContent = "Video selected — ready to upload";
-  }
-});
-
-urlInput.addEventListener("input",()=>{
-  picked.url = urlInput.value.trim();
-  if(picked.url){
-    picked.file = null;
-    fileInput.value = "";
-    fileName.textContent = "Using pasted URL";
-    previewHint.textContent = picked.url;
-
-    const im = new Image();
-    im.onload = ()=>setPreview(picked.url);
-    im.onerror = ()=>setPreview("");
-    im.src = picked.url;
-  }else{
-    previewHint.textContent = "";
-    setPreview("");
+  const labelBase = `${f.name} — ${bytesToMB(f.size)} MB`;
+  if (isImageFile(f)){
+    fileName.textContent = labelBase;
+    setPreview(URL.createObjectURL(f), false);
+    previewHint.textContent = 'Image selected — ready to upload';
+  } else {
+    fileName.textContent = labelBase;
+    setPreview(URL.createObjectURL(f), true);
+    previewHint.textContent = 'Video selected — ready to upload';
   }
 });
 
 /* Drag & drop */
-["dragenter","dragover"].forEach(ev=>{
-  pickZone.addEventListener(ev,e=>{
-    e.preventDefault();
-    pickZone.classList.add("drag");
-  });
+pickZone.addEventListener('dragover', (e)=>{
+  e.preventDefault();
+  pickZone.style.borderColor = '#39ff14';
 });
-["dragleave","drop"].forEach(ev=>{
-  pickZone.addEventListener(ev,e=>{
-    e.preventDefault();
-    pickZone.classList.remove("drag");
-  });
+pickZone.addEventListener('dragleave', (e)=>{
+  e.preventDefault();
+  pickZone.style.borderColor = '#316431';
 });
-pickZone.addEventListener("drop",e=>{
+pickZone.addEventListener('drop', (e)=>{
+  e.preventDefault();
+  pickZone.style.borderColor = '#316431';
   const f = e.dataTransfer?.files?.[0];
-  if(!f) return;
-  if(!isMediaFile(f)) return toast("File must be an image or video");
-  if(f.size > MAX_BYTES) return toast(`File too big (max ${MAX_MB}MB)`);
+  if (!f) return;
+  if (!isMediaFile(f)) { toast('File must be an image or video'); return; }
+  if (f.size > MAX_BYTES) { toast(`Max ${MAX_MB}MB`); return; }
 
-  picked.file = f;
-  picked.url = "";
-  fileInput.value = "";
-  urlInput.value = "";
-  urlInput.classList.add("hidden");
+  picked.file = f; picked.url='';
+  fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
 
-  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-
-  if(isImageFile(f)){
-    setPreview(URL.createObjectURL(f));
-    previewHint.textContent = "Ready to upload (dropped image)";
-  }else{
-    setPreview("");
-    previewHint.textContent = "Ready to upload (dropped video)";
+  const labelBase = `${f.name} — ${bytesToMB(f.size)} MB`;
+  if (isImageFile(f)){
+    fileName.textContent = labelBase;
+    setPreview(URL.createObjectURL(f), false);
+    previewHint.textContent = 'Ready to upload (dropped image)';
+  } else {
+    fileName.textContent = labelBase;
+    setPreview(URL.createObjectURL(f), true);
+    previewHint.textContent = 'Video selected — ready to upload (dropped)';
   }
 });
 
-/* Paste (images only – browsers don't paste video files as File) */
-window.addEventListener("paste",e=>{
+/* Paste (image only) */
+window.addEventListener('paste', (e)=>{
   try{
     const items = e.clipboardData?.items || [];
-    for(const it of items){
-      if(it.kind === "file"){
+    for (const it of items){
+      if (it.kind === 'file'){
         const f = it.getAsFile();
-        if(f && isImageFile(f)){
-          if(f.size > MAX_BYTES){
-            toast(`File too big (max ${MAX_MB}MB)`);
+        if (f && isImageFile(f)){
+          if (f.size > MAX_BYTES){
+            toast(`Max ${MAX_MB}MB`);
             return;
           }
-          picked.file = f;
-          picked.url = "";
-          fileInput.value = "";
-          urlInput.value = "";
-          urlInput.classList.add("hidden");
-          fileName.textContent = `${f.name || "pasted-image"} — ${bytesToMB(f.size)} MB`;
-          setPreview(URL.createObjectURL(f));
-          previewHint.textContent = "Ready to upload (pasted image)";
+          picked.file = f; picked.url='';
+          fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+          fileName.textContent = `${f.name||'pasted-image'} — ${bytesToMB(f.size)} MB`;
+          setPreview(URL.createObjectURL(f), false);
+          previewHint.textContent = 'Ready to upload (pasted image)';
           return;
         }
       }
@@ -402,261 +487,335 @@ window.addEventListener("paste",e=>{
   }catch{}
 });
 
-/* ---------- Upload to storage ---------- */
-async function uploadToStorage(userId,file){
+/* URL input change */
+urlInput.addEventListener('change', ()=>{
+  const val = urlInput.value.trim();
+  if (!val) return;
+  if (!isValidUrl(val)){
+    toast('Invalid URL');
+    return;
+  }
+  picked.url = val;
+  picked.file = null;
+  fileInput.value='';
+  const short = val.length>60 ? val.slice(0,57)+'…' : val;
+  fileName.textContent = short;
+  const lower = val.toLowerCase();
+  const isVid = lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.includes('video');
+  setPreview(val, isVid);
+  previewHint.textContent = isVid ? 'Remote video — will be proxied by the Machine' : 'Remote image — will be proxied by the Machine';
+});
+
+/* ---------- Upload (Resumable via TUS) ---------- */
+async function uploadToStorage(userId, file){
   const d = new Date();
-  const path = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${crypto.randomUUID()}-${file.name}`;
-  log("UPLOAD start",path,"size",file.size);
+  const uuid = (crypto.randomUUID?.() || Math.random().toString(36).slice(2));
+  const objectPath = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${uuid}-${file.name}`;
 
-  const {data,error} = await supabase
-    .storage
-    .from(BUCKET)
-    .upload(path,file,{cacheControl:"3600",upsert:false});
+  // Get current auth session for access token
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session || !session.access_token) throw new Error('Not logged in');
 
-  if(error){
-    console.error("UPLOAD error",error);
-    throw error;
+  // Use direct storage hostname for resumable uploads
+  const projectId = 'tuqvpcevrhciursxrgav';
+  const endpoint = `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`;
+
+  // Ensure tus is available
+  if (!window.tus || !window.tus.Upload) {
+    console.error('tus-js-client not loaded');
+    throw new Error('Upload library missing');
   }
 
-  const {data:pub} = supabase.storage.from(BUCKET).getPublicUrl(data.path);
+  // Wrap TUS upload in a Promise so we can await it
+  await new Promise((resolve, reject) => {
+    const upload = new window.tus.Upload(file, {
+      endpoint,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${session.access_token}`,
+        'x-upsert': 'false'
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      chunkSize: 6 * 1024 * 1024, // 6MB chunks (required)
+      metadata: {
+        bucketName: BUCKET,
+        objectName: objectPath,
+        contentType: file.type || 'application/octet-stream',
+        cacheControl: '3600'
+      },
+      onError(error) {
+        console.error('TUS upload failed', error);
+        reject(error);
+      },
+      onProgress(bytesUploaded, bytesTotal) {
+        try {
+          const pct = ((bytesUploaded / bytesTotal) * 100).toFixed(1);
+          submitMsg.textContent = `Uploading… ${pct}%`;
+        } catch (e) {}
+      },
+      onSuccess() {
+        resolve();
+      }
+    });
+
+    upload.start();
+  });
+
+  // After the resumable upload completes, we can construct the public URL
+  const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(objectPath);
   let url = pub?.publicUrl || null;
-
-  try{
-    const {data:signed} = await supabase
-      .storage
+  try {
+    const { data: signed } = await supabase.storage
       .from(BUCKET)
-      .createSignedUrl(data.path,60*60*24*7);
-    if(signed?.signedUrl) url = url || signed.signedUrl;
-  }catch(e){
-    console.warn("SIGNED URL error (non-fatal)",e);
-  }
-
-  log("UPLOAD ok",url);
+      .createSignedUrl(objectPath, 60*60*24*7);
+    if (signed?.signedUrl) url = url || signed.signedUrl;
+  } catch {}
   return url;
 }
 
-/* ---------- Edge/timer ---------- */
+/* ---------- Edge/timer normalize ---------- */
 async function callEdge(){
-  const res = await fetch(EDGE_URL,{
-    method:"GET",
-    headers:{
-      "Content-Type":"application/json",
-      "Authorization":`Bearer ${SUPABASE_ANON_KEY}`,
-      "apikey":SUPABASE_ANON_KEY
-    }
+  const res = await fetch(EDGE_URL, {
+    method:'GET',
+    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`, 'apikey':SUPABASE_ANON_KEY }
   });
-  const raw = await res.text();
-  let j=null;
-  try{j=JSON.parse(raw);}catch{}
-  if(!res.ok) throw new Error((j&&j.error)||raw||"edge error");
-  return j?.state || j || {};
-}
-function normalizeTimer(state){
-  const phaseEnd =
-    state.ends_at || state.endsAt ||
-    state.phase_end_at || state.phaseEndAt ||
-    state.next_at || state.next_iso || state.base_iso || null;
-
-  const period =
-    typeof state.period_sec==="number" ? state.period_sec :
-    typeof state.period    ==="number" ? state.period    :
-    20;
-
-  let remaining =
-    typeof state.remaining_sec==="number" ? state.remaining_sec :
-    typeof state.remaining    ==="number" ? state.remaining    :
-    null;
-
-  if((remaining==null || remaining<=0) && phaseEnd){
-    const ms = Date.parse(phaseEnd) - Date.now();
-    if(!isNaN(ms)) remaining = Math.max(0,Math.ceil(ms/1000));
+  if (!res.ok){
+    console.warn('edge timer error', res.status);
+    return null;
   }
-
-  return {phase_end_at:phaseEnd,period_sec:period,remaining_sec:remaining};
+  const data = await res.json();
+  return data || null;
 }
 
-let serverPhaseEndISO = null;
-let remainingSec = null;
+let lastPhase = null;
 let lastSyncAt = 0;
+
+function paintClock(payload){
+  try{
+    const phase = payload?.phase || null;
+    const remaining = payload?.remaining || 0;
+    lastPhase = phase;
+    const sec = Math.max(0, Math.round(remaining));
+    clockEl.textContent = String(sec);
+  }catch(e){
+    console.error(e);
+  }
+}
 
 async function syncState(){
   try{
-    const s = normalizeTimer(await callEdge());
-    serverPhaseEndISO = s.phase_end_at || null;
-    remainingSec = s.remaining_sec;
+    const data = await callEdge();
     lastSyncAt = Date.now();
+    if (data?.clock){
+      clockEl.textContent = String(Math.max(0,Math.round(data.clock)));
+    }
+    if (Array.isArray(data?.queuePreview)){
+      paintQueue(data.queuePreview);
+    } else {
+      loadQueue();
+    }
   }catch(e){
-    console.error("Timer sync failed",e);
-    toast("Timer sync failed");
+    console.error('sync error', e);
   }
 }
 
-/* ---------- Queue render ---------- */
-async function renderQueue(){
-  try{
-    const {data,error} = await supabase
-      .from("art_queue")
-      .select("id,image_url,created_at")
-      .eq("status","pending")
-      .order("created_at",{ascending:true});
-
-    if(error){
-      console.error("QUEUE load error",error);
-      throw error;
-    }
-
-    if(!data || !data.length){
-      queueGrid.innerHTML = "";
-      queueEmpty.style.display = "block";
-      queueCount.textContent = "(0)";
-      return;
-    }
-
-    queueEmpty.style.display = "none";
-    queueCount.textContent = `(${data.length})`;
-
-    queueGrid.innerHTML = data.map((row,i)=>{
-      const url = row.image_url || "";
-      const isVid = isVideoUrl(url);
-      const mediaTag = isVid
-        ? `<video src="${url}" muted playsinline></video>`
-        : `<img src="${url}" alt="queued art ${i+1}">`;
-      return `
-        <div class="thumb" data-id="${row.id}" title="${url}">
-          <span class="idx">#${i+1}</span>
-          ${mediaTag}
-        </div>
-      `;
-    }).join("");
-  }catch(e){
-    toast("Queue failed to load");
-  }
-}
-
-/* ---------- Submit handler ---------- */
-btnSubmit.addEventListener("click",async()=>{
-  submitMsg.textContent = "";
-
-  let user;
-  try{
-    user = await getCurrentUser();
-  }catch(e){
-    console.error("AUTH error",e);
-    toast("Auth check failed");
-    submitMsg.textContent = "Submit failed.";
-    return;
-  }
-  if(!user){
-    toast("Log in to submit");
-    return;
-  }
-
-  if(!consent.checked){
-    toast("Please consent to the rules");
-    return;
-  }
-
-  let finalUrl = (picked.url || "").trim();
-
-  try{
-    if(picked.file){
-      toast("Uploading…");
-      finalUrl = await uploadToStorage(user.id,picked.file);
-    }
-
-    if(!finalUrl){
-      toast("Pick a file or paste a URL");
-      return;
-    }
-
-    const piece_name = (pieceNameInput.value || "").trim();
-    const piece_description = (pieceDescInput.value || "").trim();
-
-    const meta = user.user_metadata || user.raw_user_meta_data || {};
-    const artist_name =
-      meta.username ||
-      meta.display_name ||
-      meta.full_name ||
-      (user.email ? user.email.split("@")[0] : null) ||
-      user.id;
-
-    const {error} = await supabase.from("art_queue").insert({
-      image_url: finalUrl,
-      status: "pending",
-      piece_name,
-      piece_description,
-      artist_name
-    });
-
-    if(error){
-      console.error("QUEUE insert error",error);
-      throw error;
-    }
-
-    // Reset UI
-    picked = {file:null,url:""};
-    fileInput.value = "";
-    urlInput.value = "";
-    urlInput.classList.add("hidden");
-    fileName.textContent = `jpg / png / webp / mp4 — ${MAX_MB}MB max. Drag, drop or paste (Ctrl/⌘+V)`;
-    previewHint.textContent = "";
-    setPreview("");
-    consent.checked = false;
-    pieceNameInput.value = "";
-    pieceDescInput.value = "";
-
-    toast("✅ Art queued for next round");
-    submitMsg.textContent = "Art queued for next round.";
-    await renderQueue();
-    queuePanel.style.display = "block";
-    queueToggle.textContent = "Collapse ▲";
-  }catch(e){
-    console.error("SUBMIT error",e);
-    const msg = e?.message || "Submit failed.";
-    toast(msg);
-    submitMsg.textContent = msg;
-  }
-});
-
-/* ---------- Queue toggle ---------- */
-queueToggle.addEventListener("click",()=>{
-  const open = queuePanel.style.display !== "none";
-  if(open){
-    queuePanel.style.display = "none";
-    queueToggle.textContent = "Expand ▼";
-  }else{
-    queuePanel.style.display = "block";
-    queueToggle.textContent = "Collapse ▲";
-  }
-});
-
-/* ---------- Timer loop ---------- */
 function loop(){
-  if(typeof remainingSec === "number"){
+  if (lastSyncAt){
     const elapsed = (Date.now() - lastSyncAt) / 1000;
-    const sec = Math.max(0,Math.ceil(remainingSec - elapsed));
+    const remainingSec = parseFloat(clockEl.textContent)||0;
+    const sec = Math.max(0, Math.ceil(remainingSec - elapsed));
     clockEl.textContent = String(sec);
-    if(sec<=0 || Date.now() - lastSyncAt > 5000){
-      syncState();
-    }
+    if (sec<=0 || Date.now()-lastSyncAt>5000) syncState();
   }
   requestAnimationFrame(loop);
 }
 
-/* ---------- Boot ---------- */
-(async()=>{
-  paintAuth(await uid());
-  supabase.auth.onAuthStateChange((_e,session)=>
-    paintAuth(session?.user?.id || null)
-  );
-  await Promise.all([renderQueue(),syncState()]);
-  loop();
+/* ---------- Submit ---------- */
+btnSubmit.addEventListener('click', async ()=>{
+  submitMsg.textContent = '';
+  const user = await currentUser();
+  if (!user){
+    toast('Log in to submit');
+    return;
+  }
 
-  // Auto-refresh queue every 10s so items disappear when the tournament consumes them
-  setInterval(()=>{renderQueue();},10000);
+  let finalUrl = null;
+
+  if (picked.url){
+    finalUrl = picked.url;
+  } else if (picked.file){
+    toast('Uploading…');
+    try{
+      finalUrl = await uploadToStorage(user.id, picked.file);
+    }catch(e){
+      console.error(e);
+      toast('Upload failed. Try again.');
+      return;
+    }
+  }
+
+  if (!finalUrl){
+    toast('Pick a file or paste a URL');
+    return;
+  }
+
+  const piece_name = (document.getElementById('piece-name').value || '').trim();
+  const artist_name = (document.getElementById('artist-name').value || '').trim();
+
+  const payload = {
+    image_url: finalUrl,
+    status: 'pending'
+  };
+  if (piece_name) payload.piece_name = piece_name;
+  if (artist_name) payload.artist_name = artist_name;
+
+  try{
+    const { error } = await supabase.from('art_queue').insert(payload);
+    if (error) throw error;
+
+    picked = {file:null, url:''};
+    fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+    fileName.textContent = 'jpg / png / webp / mp4 — 200MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
+    setPreview('', false);
+    previewHint.textContent = 'Idle';
+    toast('Submitted to queue. Glory to the Machine.', true);
+    loadQueue();
+  }catch(e){
+    console.error(e);
+    toast('Error submitting to queue');
+  }
+});
+
+/* ---------- Queue render ---------- */
+function paintQueue(items){
+  if (!Array.isArray(items) || !items.length){
+    queueGrid.innerHTML = '<div style="font-size:12px; color:#7aff7a;">Queue is currently empty. Your submission can take the throne.</div>';
+    queueLabel.textContent = '0 in queue';
+    return;
+  }
+  queueLabel.textContent = `${items.length} in queue`;
+  queueGrid.innerHTML = items.map(it=>{
+    const url = it.image_url || '';
+    const isVid = typeof url==='string' && url.toLowerCase().match(/\\.(mp4|webm|mov)(\\?|$)/);
+    const safeTitle = (it.piece_name || 'untitled').slice(0,40);
+    const created = it.created_at ? new Date(it.created_at) : null;
+    const timeLabel = created ? created.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
+    const artist = (it.artist_name || '').slice(0,32);
+
+    const thumb = isVid
+      ? `<video class="queue-thumb" src="${url}" muted playsinline></video>`
+      : `<img class="queue-thumb" src="${url}" alt="queued art"/>`;
+
+    return `
+      <div class="queue-item">
+        ${thumb}
+        <div class="queue-badge">${isVid ? 'video' : 'image'}</div>
+        <div class="queue-meta">
+          <span title="${safeTitle}">${safeTitle}</span>
+          <small>${artist || timeLabel || ''}</small>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ---------- Initial load ---------- */
+async function loadQueue(){
+  try{
+    const { data, error } = await supabase
+      .from('art_queue')
+      .select('*')
+      .order('created_at', { ascending:false })
+      .limit(24);
+    if (error) throw error;
+    paintQueue(data||[]);
+  }catch(e){
+    console.error(e);
+    queueLabel.textContent = 'queue unavailable';
+  }
+}
+
+(async function init(){
+  try{
+    const user = await currentUser();
+    paintAuth(user?.id || null);
+  }catch(e){ console.error(e); paintAuth(null); }
+  await loadQueue();
+  await syncState();
+  requestAnimationFrame(loop);
+})();
+
+/* ---------- Tiny debug console (optional) ---------- */
+(function(){
+  const lsKey = 'rage_submit_debug_v1';
+  let enabled = false;
+  try{ enabled = localStorage.getItem(lsKey)==='1'; }catch{}
+
+  const floatBtn = document.createElement('button');
+  floatBtn.textContent = 'dbg';
+  floatBtn.type = 'button';
+  floatBtn.style.cssText = `
+    position: fixed; right: 8px; bottom: 8px;
+    z-index: 2147483647;
+    padding: 4px 8px; font-size: 10px;
+    border-radius: 999px;
+    border: 1px solid #2b4c2b;
+    background: rgba(0,0,0,.9);
+    color: #8aff8a;
+    text-transform: uppercase;
+    letter-spacing: .16em;
+  `;
+  document.body.appendChild(floatBtn);
+
+  // --- panel wrapper (starts hidden) ---
+  const wrap = document.createElement('div');
+  wrap.id = 'dbg';
+  wrap.style.cssText = `
+    position: fixed; right: 0; bottom: 0; left: 0;
+    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
+    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
+  `;
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
+  bar.innerHTML = `
+    <span style="font-weight:bold;">debug</span>
+    <button type="button" data-act="clear" style="margin-left:auto; font-size:11px;">clear</button>
+    <button type="button" data-act="close" style="font-size:11px;">close</button>
+  `;
+  const logBox = document.createElement('div');
+  logBox.style.cssText = 'padding:6px 8px; white-space:pre-wrap; word-break:break-word; max-height:calc(45vh - 30px); overflow:auto;';
+  wrap.appendChild(bar);
+  wrap.appendChild(logBox);
+  document.body.appendChild(wrap);
+
+  function setEnabled(on){
+    enabled = !!on;
+    wrap.style.display = enabled ? 'block' : 'none';
+    floatBtn.style.opacity = enabled ? '1' : '.35';
+    try{ localStorage.setItem(lsKey, enabled ? '1':'0'); }catch{}
+  }
+
+  floatBtn.addEventListener('click', ()=> setEnabled(!enabled));
+  bar.addEventListener('click', (e)=>{
+    const act = e.target.getAttribute('data-act');
+    if (act==='clear'){ logBox.textContent=''; }
+    if (act==='close'){ setEnabled(false); }
+  });
+
+  function log(...args){
+    if (!enabled) return;
+    const line = args.map(a=>{
+      if (typeof a==='object') return JSON.stringify(a);
+      return String(a);
+    }).join(' ');
+    logBox.textContent += line + '\\n';
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  window.__submitDbg = { log };
 })();
 </script>
-
-<script src="js/auth-guard.js" type="module"></script>
 </body>
 </html>
