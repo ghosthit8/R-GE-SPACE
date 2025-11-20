@@ -15,8 +15,10 @@
 *{box-sizing:border-box}
 html,body{height:100%}
 body{
-  margin:0; background:radial-gradient(1200px 900px at 50% -10%,rgba(57,255,20,.08),transparent 60%), #000;
-  color:var(--ink); font:14px/1.45 system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
+  margin:0;
+  background:radial-gradient(1200px 900px at 50% -10%,rgba(57,255,20,.08),transparent 60%), #000;
+  color:var(--ink);
+  font:14px/1.45 system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
 }
 .wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 80px}
 h1{margin:0 0 12px; font-size:24px; letter-spacing:.6px}
@@ -26,13 +28,18 @@ h1{margin:0 0 12px; font-size:24px; letter-spacing:.6px}
   display:inline-flex; align-items:center; gap:8px; justify-content:center; text-decoration:none;
   border:1px solid var(--border); border-radius:14px; padding:10px 14px; font-weight:600;
   background:linear-gradient(180deg, rgba(57,255,20,.08), rgba(57,255,20,.02));
-  color:var(--green); transition:box-shadow .2s ease, transform .08s ease; cursor:pointer;
+  color:var(--green);
+  transition:box-shadow .2s ease, transform .08s ease;
+  cursor:pointer;
 }
 .btn:hover{box-shadow:0 0 14px rgba(57,255,20,.22)}
 .btn.big{font-size:18px; padding:16px 18px}
 .btn.ghost{opacity:.9}
 .btn[disabled]{opacity:.45; cursor:not-allowed; box-shadow:none}
-.input{width:100%; border:1px solid var(--border); border-radius:12px; background:#0b0b0b; color:var(--ink); padding:10px 12px; font-size:14px}
+.input{
+  width:100%; border:1px solid var(--border); border-radius:12px;
+  background:#0b0b0b; color:var(--ink); padding:10px 12px; font-size:14px;
+}
 .hidden{display:none !important}
 
 .card{border:1px solid var(--border); border-radius:18px; background:rgba(9,9,9,.6); padding:16px}
@@ -45,20 +52,41 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 
 /* Queue grid */
 .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px}
-.thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#ff3aa0; min-height:120px}
-.thumb img{display:block; width:100%; height:100%; object-fit:cover}
+.thumb{
+  position:relative;
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+  background:#050505;
+  min-height:120px;
+}
+.thumb img,
+.thumb video{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
 .thumb .idx{
-  position:absolute; top:6px; left:6px; font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
-  background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35)
+  position:absolute; top:6px; left:6px;
+  font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
+  background:rgba(0,0,0,.55); padding:4px 6px;
+  border-radius:10px; border:1px solid rgba(57,255,20,.35)
 }
 
 /* Timer card */
 .timer .row{justify-content:space-between}
-.clock,.stage{display:inline-flex; min-width:36px; height:26px; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:10px; padding:0 10px}
+.clock,.stage{
+  display:inline-flex; min-width:36px; height:26px;
+  align-items:center; justify-content:center;
+  border:1px solid var(--border); border-radius:10px; padding:0 10px;
+}
 
+/* Toast */
 .toast{
   position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
-  background:rgba(0,0,0,.85); color:var(--ink); border:1px solid var(--border); padding:10px 12px; border-radius:12px;
+  background:rgba(0,0,0,.85); color:var(--ink);
+  border:1px solid var(--border); padding:10px 12px; border-radius:12px;
   opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
 }
 .toast.show{opacity:1; transform:translateX(-50%) translateY(-4px)}
@@ -85,12 +113,15 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       </div>
     </div>
 
-    <!-- MINIMAL UPLOADER (auth panel removed) -->
+    <!-- Uploader -->
     <div class="card" style="margin-top:16px">
       <div id="pickZone" class="drop">
         <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
-        <div id="fileName" class="small">jpg / png / webp — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
-        <input id="fileInput" type="file" accept="image/*" class="hidden">
+        <div id="fileName" class="small">
+          jpg / png / webp / mp4 — 200MB max. Tip: drag &amp; drop or paste (Ctrl/⌘+V)
+        </div>
+        <!-- allow images + videos -->
+        <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
         <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
         <div class="preview">
           <img id="imgPreview" alt="" class="hidden">
@@ -100,7 +131,6 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 
       <hr class="sep">
 
-      <!-- Piece metadata -->
       <div class="small" style="margin-bottom:4px;">Optional: tell us about this piece</div>
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">
         <input id="pieceName" class="input" placeholder="Piece name / title">
@@ -118,7 +148,7 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       </div>
     </div>
 
-    <!-- Live tournament status -->
+    <!-- Timer -->
     <div class="card" style="margin-top:16px">
       <div class="timer">
         <div class="row">
@@ -155,6 +185,10 @@ const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 const BUCKET = 'art-uploads';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/* ---------- SIZE LIMIT (200MB) ---------- */
+const MAX_MB = 200;
+const MAX_BYTES = MAX_MB * 1024 * 1024;
+
 /* ---------- Elements ---------- */
 const authBadge = document.getElementById('authBadge');
 const toastEl = document.getElementById('toast');
@@ -180,7 +214,11 @@ const clockEl = document.getElementById('clock');
 const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
 
 /* ---------- Utils ---------- */
-function toast(msg, ms=1600){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
+function toast(msg, ms=2000){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(()=>toastEl.classList.remove('show'), ms);
+}
 function bytesToMB(n){ return (n/(1024*1024)).toFixed(2); }
 function show(el){ el.classList.remove('hidden'); }
 function hide(el){ el.classList.add('hidden'); }
@@ -188,8 +226,19 @@ function setPreview(src){
   if (src){ imgPreview.src = src; show(imgPreview); }
   else { imgPreview.removeAttribute('src'); hide(imgPreview); }
 }
+function isImageFile(f){ return (f.type || "").startsWith("image/"); }
+function isVideoFile(f){ return (f.type || "").startsWith("video/"); }
+function isMediaFile(f){ return isImageFile(f) || isVideoFile(f); }
+function isVideoUrl(url){
+  if (!url) return false;
+  const clean = url.split("?")[0].toLowerCase();
+  return clean.endsWith(".mp4") ||
+         clean.endsWith(".webm") ||
+         clean.endsWith(".mov") ||
+         clean.endsWith(".m4v");
+}
 
-/* ---------- Auth minimal ---------- */
+/* ---------- Auth ---------- */
 async function uid(){
   const { data:{session} } = await supabase.auth.getSession();
   return session?.user?.id || null;
@@ -199,12 +248,18 @@ async function currentUser(){
   return session?.user || null;
 }
 function paintAuth(id){
-  if (id){ authBadge.textContent='logged in'; authBadge.style.color='#39ff14'; }
-  else   { authBadge.textContent='not logged in'; authBadge.style.color='#ff6b6b'; }
+  if (id){
+    authBadge.textContent='logged in';
+    authBadge.style.color='#39ff14';
+  } else {
+    authBadge.textContent='not logged in';
+    authBadge.style.color='#ff6b6b';
+  }
 }
 
 /* ---------- Pick flow ---------- */
 let picked = { file:null, url:'' };
+
 btnPick.addEventListener('click', ()=>{
   if (!picked.file && !picked.url){
     fileInput.click();
@@ -213,17 +268,35 @@ btnPick.addEventListener('click', ()=>{
     if (!urlInput.classList.contains('hidden')) urlInput.focus();
   }
 });
+
 fileInput.addEventListener('change', ()=>{
   const f = fileInput.files?.[0];
   if (!f) return;
-  if (!f.type.startsWith('image/')){ toast('File must be an image'); fileInput.value=''; return; }
-  if (f.size > 10*1024*1024){ toast('Max 10MB'); fileInput.value=''; return; }
+
+  if (!isMediaFile(f)){
+    toast('File must be an image or video');
+    fileInput.value=''; return;
+  }
+  if (f.size > MAX_BYTES){
+    toast(`Max ${MAX_MB}MB`);
+    fileInput.value=''; return;
+  }
+
   picked.file = f; picked.url = '';
   urlInput.value = ''; urlInput.classList.add('hidden');
-  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  setPreview(URL.createObjectURL(f));
-  previewHint.textContent = 'Ready to upload';
+
+  const labelBase = `${f.name} — ${bytesToMB(f.size)} MB`;
+  if (isImageFile(f)){
+    fileName.textContent = labelBase;
+    setPreview(URL.createObjectURL(f));
+    previewHint.textContent = 'Image selected — ready to upload';
+  } else {
+    fileName.textContent = labelBase;
+    setPreview('');
+    previewHint.textContent = 'Video selected — ready to upload';
+  }
 });
+
 urlInput.addEventListener('input', ()=>{
   picked.url = urlInput.value.trim();
   if (picked.url) {
@@ -241,29 +314,42 @@ urlInput.addEventListener('input', ()=>{
 });
 
 /* Drag/drop */
-['dragenter','dragover'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.add('drag');}));
-['dragleave','drop'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.remove('drag');}));
+['dragenter','dragover'].forEach(ev=>{
+  pickZone.addEventListener(ev, e=>{ e.preventDefault(); pickZone.classList.add('drag'); });
+});
+['dragleave','drop'].forEach(ev=>{
+  pickZone.addEventListener(ev, e=>{ e.preventDefault(); pickZone.classList.remove('drag'); });
+});
 pickZone.addEventListener('drop', (e)=>{
   const f = e.dataTransfer?.files?.[0];
   if (!f) return;
-  if (!f.type.startsWith('image/')) return toast('File must be an image');
-  if (f.size > 10*1024*1024) return toast('Max 10MB');
+  if (!isMediaFile(f)) return toast('File must be an image or video');
+  if (f.size > MAX_BYTES) return toast(`Max ${MAX_MB}MB`);
+
   picked.file = f; picked.url='';
   fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  setPreview(URL.createObjectURL(f));
-  previewHint.textContent = 'Ready to upload (dropped)';
+
+  const labelBase = `${f.name} — ${bytesToMB(f.size)} MB`;
+  if (isImageFile(f)){
+    fileName.textContent = labelBase;
+    setPreview(URL.createObjectURL(f));
+    previewHint.textContent = 'Ready to upload (dropped image)';
+  } else {
+    fileName.textContent = labelBase;
+    setPreview('');
+    previewHint.textContent = 'Video selected — ready to upload (dropped)';
+  }
 });
 
-/* Paste */
+/* Paste (image only) */
 window.addEventListener('paste', (e)=>{
   try{
     const items = e.clipboardData?.items || [];
     for (const it of items){
       if (it.kind === 'file'){
         const f = it.getAsFile();
-        if (f && f.type.startsWith('image/')){
-          if (f.size > 10*1024*1024) return toast('Max 10MB');
+        if (f && isImageFile(f)){
+          if (f.size > MAX_BYTES) return toast(`Max ${MAX_MB}MB`);
           picked.file = f; picked.url='';
           fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
           fileName.textContent = `${f.name||'pasted-image'} — ${bytesToMB(f.size)} MB`;
@@ -279,23 +365,32 @@ window.addEventListener('paste', (e)=>{
 /* ---------- Upload ---------- */
 async function uploadToStorage(userId, file){
   const d=new Date();
-  const path = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${crypto.randomUUID()}-${file.name}`;
-  const { data, error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl:'3600', upsert:false });
+  const uuid = (crypto.randomUUID?.() || Math.random().toString(36).slice(2));
+  const path = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${uuid}-${file.name}`;
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, file, { cacheControl:'3600', upsert:false });
   if (error) throw error;
   const { data:pub } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
   let url = pub?.publicUrl || null;
   try{
-    const { data:signed } = await supabase.storage.from(BUCKET).createSignedUrl(data.path, 60*60*24*7);
+    const { data:signed } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(data.path, 60*60*24*7);
     if (signed?.signedUrl) url = url || signed.signedUrl;
   }catch{}
   return url;
 }
 
-/* ---------- Edge/timer normalize ---------- */
+/* ---------- Edge/timer ---------- */
 async function callEdge(){
   const res = await fetch(EDGE_URL, {
     method:'GET',
-    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`, 'apikey':SUPABASE_ANON_KEY }
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':`Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey':SUPABASE_ANON_KEY
+    }
   });
   const raw = await res.text();
   let j=null; try{ j=JSON.parse(raw); }catch{}
@@ -304,7 +399,8 @@ async function callEdge(){
 }
 function normalize(s){
   const phaseEnd =
-    s.ends_at || s.endsAt || s.phase_end_at || s.phaseEndAt || s.next_at || s.next_iso || s.base_iso || null;
+    s.ends_at || s.endsAt || s.phase_end_at || s.phaseEndAt ||
+    s.next_at || s.next_iso || s.base_iso || null;
   const period =
     (typeof s.period_sec==='number') ? s.period_sec
   : (typeof s.period==='number')     ? s.period
@@ -320,8 +416,8 @@ function normalize(s){
   return { phase_end_at: phaseEnd, period_sec: period, remaining_sec: remaining };
 }
 
-/* ---------- Timer ---------- */
-let paused=false, serverPhaseEndISO=null, remainingSec=null, lastSyncAt=0;
+/* ---------- Timer loop ---------- */
+let serverPhaseEndISO=null, remainingSec=null, lastSyncAt=0;
 
 async function syncState(){
   try{
@@ -329,10 +425,11 @@ async function syncState(){
     serverPhaseEndISO = s.phase_end_at || null;
     remainingSec = s.remaining_sec;
     lastSyncAt = Date.now();
-  }catch(e){ toast('Timer sync failed'); }
+  }catch(e){
+    console.error(e);
+    toast('Timer sync failed');
+  }
 }
-
-/* render loop */
 function loop(){
   if (typeof remainingSec === 'number') {
     const elapsed = (Date.now() - lastSyncAt) / 1000;
@@ -343,13 +440,19 @@ function loop(){
   requestAnimationFrame(loop);
 }
 
-/* ---------- Submit handler ---------- */
+/* ---------- Submit ---------- */
 btnSubmit.addEventListener('click', async ()=>{
   submitMsg.textContent = '';
   const user = await currentUser();
-  if (!user) return toast('Log in to submit');
+  if (!user){
+    toast('Log in to submit');
+    return;
+  }
   const id = user.id;
-  if (!consent.checked) return toast('Please consent to the rules');
+  if (!consent.checked){
+    toast('Please consent to the rules');
+    return;
+  }
 
   let finalUrl = (picked.url || '').trim();
   try{
@@ -357,31 +460,29 @@ btnSubmit.addEventListener('click', async ()=>{
       toast('Uploading…');
       finalUrl = await uploadToStorage(id, picked.file);
     }
-    if (!finalUrl) return toast('Pick a file or paste a URL');
+    if (!finalUrl){
+      toast('Pick a file or paste a URL');
+      return;
+    }
 
     const piece_name = (pieceNameInput.value || '').trim();
     const piece_description = (pieceDescInput.value || '').trim();
 
-    const meta = user.user_metadata || user.raw_user_meta_data || {};
-    const artist_name =
-      meta.username ||
-      meta.display_name ||
-      meta.full_name ||
-      (user.email ? user.email.split("@")[0] : null) ||
-      user.id;
-
-    const { error } = await supabase.from('art_queue').insert({
+    // Minimal payload that matches your art_queue schema
+    const payload = {
       image_url: finalUrl,
-      status: 'pending',
-      piece_name,
-      piece_description,
-      artist_name
-    });
+      status: 'pending'
+    };
+    // Later if you add columns, wire them here:
+    // payload.piece_name = piece_name;
+    // payload.piece_description = piece_description;
+
+    const { error } = await supabase.from('art_queue').insert(payload);
     if (error) throw error;
 
     picked = {file:null, url:''};
     fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-    fileName.textContent = 'jpg / png / webp — 10MB max';
+    fileName.textContent = 'jpg / png / webp / mp4 — 200MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
     previewHint.textContent = '';
     setPreview('');
     consent.checked = false;
@@ -394,12 +495,13 @@ btnSubmit.addEventListener('click', async ()=>{
     queuePanel.style.display = 'block';
     queueToggle.textContent = 'Collapse ▲';
   }catch(e){
+    console.error(e);
     toast(e?.message || 'Submit failed');
     submitMsg.textContent = 'Submit failed.';
   }
 });
 
-/* ---------- Queue render ---------- */
+/* ---------- Queue ---------- */
 async function renderQueue(){
   try{
     const { data, error } = await supabase
@@ -418,23 +520,259 @@ async function renderQueue(){
     queueEmpty.style.display = 'none';
     queueCount.textContent = `(${data.length})`;
 
-    queueGrid.innerHTML = data.map((r,i)=>`
-      <div class="thumb" data-id="${r.id}" title="${r.image_url}">
-        <span class="idx">#${i+1}</span>
-        <img src="${r.image_url}" alt="queued art ${i+1}"/>
-      </div>
-    `).join('');
-  }catch(e){ toast('Queue failed to load'); }
+    queueGrid.innerHTML = data.map((r,i)=>{
+      const url = r.image_url || "";
+      const isVid = isVideoUrl(url);
+      const media = isVid
+        ? `<video src="${url}#t=0.2" muted playsinline></video>`
+        : `<img src="${url}" alt="queued art ${i+1}"/>`;
+      return `
+        <div class="thumb" data-id="${r.id}" title="${url}">
+          <span class="idx">#${i+1}</span>
+          ${media}
+        </div>
+      `;
+    }).join('');
+  }catch(e){
+    console.error(e);
+    toast('Queue failed to load');
+  }
 }
 
 /* ---------- Boot ---------- */
 (async()=>{
   paintAuth(await uid());
   supabase.auth.onAuthStateChange((_e, session)=> paintAuth(session?.user?.id || null));
+
+  queueToggle.addEventListener('click', ()=>{
+    const open = queuePanel.style.display === 'block';
+    queuePanel.style.display = open ? 'none' : 'block';
+    queueToggle.textContent = open ? 'Expand ▼' : 'Collapse ▲';
+  });
+
   await Promise.all([renderQueue(), syncState()]);
   loop();
 })();
 </script>
 <script src="js/auth-guard.js" type="module"></script>
+
+<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
+<script>
+(function () {
+  const MAX_LINES = 2000;
+  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
+
+  // --- create floating button OUTSIDE the hidden panel ---
+  const floatBtn = document.createElement('button');
+  floatBtn.id = 'dbgFloatingBtn';
+  floatBtn.textContent = '🐛 Debug';
+  floatBtn.style.cssText = `
+    position: fixed; right: 8px; bottom: 8px;
+    z-index: 2147483647; background:#000; color:#0f0;
+    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
+    font: 12px/1.1 monospace; cursor:pointer;
+  `;
+  document.body.appendChild(floatBtn);
+
+  // --- panel wrapper (starts hidden) ---
+  const wrap = document.createElement('div');
+  wrap.id = 'dbg';
+  wrap.style.cssText = `
+    position: fixed; right: 0; bottom: 0; left: 0;
+    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
+    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
+  `;
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
+  bar.innerHTML = `
+    <span style="color:#6f6">Rage Debug</span>
+    <label>Filter:
+      <select id="dbgFilter">
+        <option value="">All</option>
+        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
+        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
+        <option>ERR</option><option>WARN</option><option>LOG</option>
+      </select>
+    </label>
+    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
+    <button id="dbgCopy">Copy</button>
+    <button id="dbgDownload">Download</button>
+    <button id="dbgClear">Clear</button>
+    <span style="margin-left:auto"></span>
+    <button id="dbgClose">✕</button>
+  `;
+
+  const list = document.createElement('div');
+  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
+
+  wrap.appendChild(bar); wrap.appendChild(list);
+  document.body.appendChild(wrap);
+
+  // button wiring
+  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
+  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
+  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
+
+  // controls
+  const filterSel  = bar.querySelector('#dbgFilter');
+  const recordChk  = bar.querySelector('#dbgRecord');
+  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
+  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
+  bar.querySelector('#dbgDownload').onclick = () => {
+    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
+    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
+    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  };
+
+  // ring buffer + rendering
+  let buffer = [];
+  function push(kind, msg, extra) {
+    if (!recordChk.checked) return;
+    const ts = new Date().toLocaleTimeString();
+    const line = `[${ts}] ${kind}: ${msg}`;
+    buffer.push({kind, line, extra});
+    if (buffer.length > MAX_LINES) buffer.shift();
+    const f = filterSel.value;
+    if (!f || f === kind) addLine({kind, line});
+  }
+  function addLine(r){
+    const div = document.createElement('div');
+    div.textContent = r.line;
+    if (r.kind === 'ERR') div.style.color = '#f88';
+    else if (r.kind === 'WARN') div.style.color = '#ff8';
+    else if (r.kind === 'EDGE') div.style.color = '#8ff';
+    else if (r.kind === 'NET')  div.style.color = '#8cf';
+    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
+    list.appendChild(div); list.scrollTop = list.scrollHeight;
+  }
+  function render(){
+    list.innerHTML = '';
+    const f = filterSel.value;
+    for (const r of buffer) if (!f || f === r.kind) addLine(r);
+  }
+  filterSel.onchange = render;
+
+  // console hooks
+  const _log = console.log, _warn = console.warn, _err = console.error;
+  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
+  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
+  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
+
+  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
+  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
+
+  // visibility & UI observers
+  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
+  const q = (id) => document.getElementById(id);
+
+  function observeText(id, kind) {
+    const el = q(id); if (!el) return;
+    let last = el.textContent;
+    const mo = new MutationObserver(() => {
+      if (el.textContent !== last) {
+        last = el.textContent;
+        push(kind, `${id} → ${last}`);
+      }
+    });
+    mo.observe(el, {childList:true, characterData:true, subtree:true});
+  }
+  observeText('phaseKey', 'STAGE');
+  observeText('state', 'STAGE');
+
+  (function watchClock(){
+    const el = q('clock'); if (!el) return;
+    let last = el.textContent, lastAt = performance.now();
+    const mo = new MutationObserver(() => {
+      const now = performance.now();
+      if (el.textContent !== last) {
+        const dt = ((now - lastAt)/1000).toFixed(2);
+        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
+        last = el.textContent; lastAt = now;
+      }
+    });
+    mo.observe(el, {childList:true, characterData:true, subtree:true});
+  })();
+
+  // fetch tracer
+  const _fetch = window.fetch.bind(window);
+  window.fetch = async function(url, opts = {}) {
+    const start = performance.now();
+    const method = (opts && opts.method) || 'GET';
+    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
+    push(tag, `${method} ${url}`);
+    try {
+      const res = await _fetch(url, opts);
+      const ms = (performance.now() - start).toFixed(0);
+      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
+      return res;
+    } catch (e) {
+      const ms = (performance.now() - start).toFixed(0);
+      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
+      throw e;
+    }
+  };
+
+  // timers & rAF
+  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
+  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
+  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
+
+  const timers = new Map();
+  window.setInterval = function(fn, ms, ...rest){
+    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
+  };
+  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
+  window.setTimeout  = function(fn, ms, ...rest){
+    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
+  };
+  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
+  window.requestAnimationFrame = function(fn){
+    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
+  };
+  window.cancelAnimationFrame = function(id){ _caf(id); };
+
+  // image load tracing
+  function hookImg(img){
+    if (!img || img.__dbgHooked) return;
+    img.__dbgHooked = true;
+    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
+    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
+  }
+  Array.from(document.images).forEach(hookImg);
+  const imgObs = new MutationObserver((ms)=>{
+    for (const m of ms) for (const n of m.addedNodes) {
+      if (n.tagName === 'IMG') hookImg(n);
+      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
+    }
+  });
+  imgObs.observe(document.documentElement, {childList:true, subtree:true});
+
+  // bracket observer
+  const brows = document.getElementById('brows');
+  if (brows) {
+    const mo = new MutationObserver((ms)=>{
+      let adds = 0, rems = 0;
+      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
+      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
+    });
+    mo.observe(brows, {childList:true, subtree:false});
+  }
+
+  // public helpers
+  window.RageDebug = {
+    log: (k, m) => push(k||'LOG', m||''),
+    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
+    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
+    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
+  };
+
+  // small banner
+  (console.log||(()=>{}))('Debugger ready');
+})();
+</script>
+<!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
