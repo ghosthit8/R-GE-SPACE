@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
+   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Rage Space — Matchup (32-up → 2-up)</title>
   <style>
@@ -10,95 +10,94 @@
   <link rel="stylesheet" href="style.css"/>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
-<style>
-  :root { --fg:#e5e7eb; --bg:#0b0f13; --accent:#39ff14; --muted:#8b8b8b; --card:#0f1318; --border:#20242a; }
-  html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
-  .wrap { max-width:700px; margin:0 auto; padding:16px 12px 96px; }
-  h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
-  .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-  .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid var(--border); border-radius:12px; background:var(--card); }
-  .state { color:var(--muted); font-size:12px; }
+  <style>
+    :root { --fg:#e5e7eb; --bg:#0b0f13; --accent:#39ff14; --muted:#8b8b8b; --card:#0f1318; --border:#20242a; }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
+    .wrap { max-width:700px; margin:0 auto; padding:16px 12px 96px; }
+    h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
+    .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid var(--border); border-radius:12px; background:var(--card); }
+    .state { color:var(--muted); font-size:12px; }
 
-  .card { margin-top:12px; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:var(--card); }
-  .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
-  .imgBox img,
-  .imgBox video { width:100%; height:100%; object-fit:cover; display:block; }
-  .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
-  .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid var(--border); }
-  .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
-  .counts { font-variant-numeric: tabular-nums; font-weight:700; }
-  .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
-  .btn.ghost { color:#a0aec0; }
-  button.vote { padding:10px 14px; }
-  button.vote:disabled { opacity:.6; cursor:default; }
+    .card { margin-top:12px; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:var(--card); }
+    .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
+    .imgBox img { width:100%; height:100%; object-fit:cover; display:block; }
+    .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
+    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid var(--border); }
+    .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
+    .counts { font-variant-numeric: tabular-nums; font-weight:700; }
+    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
+    .btn.ghost { color:#a0aec0; }
+    button.vote { padding:10px 14px; }
+    button.vote:disabled { opacity:.6; cursor:default; }
 
-  .thumbs-wrap { margin-top:16px; }
-  .thumbs-title { font-size:12px; opacity:.6; margin-bottom:6px; }
-  .thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
-  .thumb { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); cursor:pointer; }
-  .thumb.disabled { opacity:.55; cursor:default; }
-  .thumb.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(57,255,20,.3); }
+    .thumbs-wrap { margin-top:16px; }
+    .thumbs-title { font-size:12px; opacity:.6; margin-bottom:6px; }
+    .thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .thumb { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); cursor:pointer; }
+    .thumb.disabled { opacity:.55; cursor:default; }
+    .thumb.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(57,255,20,.3); }
 
-  /* THUMB IMAGE: DIAGONAL SPLIT (BOTH COMPETITORS) */
-  .thumb-img {
-    position:relative;
-    width:100%;
-    aspect-ratio:3/4;
-    background:#0b0f13;
-    overflow:hidden;
-  }
-  .thumb-img img {
-    width:100%;
-    height:100%;
-    object-fit:cover;
-    display:block;
-  }
-  .thumb-img.diag img.half {
-    position:absolute;
-    inset:0;
-  }
-  .thumb-img.diag img.left {
-    clip-path:polygon(0 0, 100% 0, 0 100%);
-  }
-  .thumb-img.diag img.right {
-    clip-path:polygon(100% 0, 100% 100%, 0 100%);
-  }
-  /* subtle dividing line */
-  .thumb-img.diag::before {
-    content:"";
-    position:absolute;
-    inset:0;
-    pointer-events:none;
-    background:linear-gradient(135deg, rgba(0,0,0,0.75) 48%, rgba(57,255,20,0.7) 50%, rgba(0,0,0,0.75) 52%);
-    mix-blend-mode:screen;
-    opacity:0.5;
-  }
+    /* THUMB IMAGE: DIAGONAL SPLIT (BOTH COMPETITORS) */
+    .thumb-img {
+      position:relative;
+      width:100%;
+      aspect-ratio:3/4;
+      background:#0b0f13;
+      overflow:hidden;
+    }
+    .thumb-img img {
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .thumb-img.diag img.half {
+      position:absolute;
+      inset:0;
+    }
+    .thumb-img.diag img.left {
+      clip-path:polygon(0 0, 100% 0, 0 100%);
+    }
+    .thumb-img.diag img.right {
+      clip-path:polygon(100% 0, 100% 100%, 0 100%);
+    }
+    /* subtle dividing line */
+    .thumb-img.diag::before {
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:linear-gradient(135deg, rgba(0,0,0,0.75) 48%, rgba(57,255,20,0.7) 50%, rgba(0,0,0,0.75) 52%);
+      mix-blend-mode:screen;
+      opacity:0.5;
+    }
 
-  .thumb-label { padding:6px 8px 8px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
-  .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
-  .ghostBox { width:100%; height:100%; display:grid; place-items:center; color:#3b3b3b; font-weight:700; font-size:13px; letter-spacing:.08em; }
+    .thumb-label { padding:6px 8px 8px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
+    .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
+    .ghostBox { width:100%; height:100%; display:grid; place-items:center; color:#3b3b3b; font-weight:700; font-size:13px; letter-spacing:.08em; }
 
-  .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
-  .winner b { color:#39ff14; }
+    .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
+    .winner b { color:#39ff14; }
 
-  .final-card { margin-top:14px; }
-  .final-inner { display:flex; gap:12px; flex-wrap:wrap; padding:12px; }
-  .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed var(--border); border-radius:10px; padding:8px; text-align:center; }
-  .final-slot .label { display:block; margin-bottom:4px; }
-  .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#000; border-radius:8px; overflow:hidden; display:grid; place-items:center; }
-  .final-slot .thumb-final img { width:100%; height:100%; object-fit:cover; }
-  .final-footer { padding:0 12px 12px; font-size:12px; color:#9aa0a6; }
+    .final-card { margin-top:14px; }
+    .final-inner { display:flex; gap:12px; flex-wrap:wrap; padding:12px; }
+    .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed var(--border); border-radius:10px; padding:8px; text-align:center; }
+    .final-slot .label { display:block; margin-bottom:4px; }
+    .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#000; border-radius:8px; overflow:hidden; display:grid; place-items:center; }
+    .final-slot .thumb-final img { width:100%; height:100%; object-fit:cover; }
+    .final-footer { padding:0 12px 12px; font-size:12px; color:#9aa0a6; }
 
-  .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
-  .fullscreen-overlay img,
-  .fullscreen-overlay video { max-width:90%; max-height:90%; border-radius:8px; }
-  .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
-  .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
+    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
+    .fullscreen-overlay img { max-width:90%; max-height:90%; border-radius:8px; }
+    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
+    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
 
-  .hidden { display: none !important; }
-</style>
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    .hidden { display: none !important; }
+  </style>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
 <body>
   <div class="wrap">
     <h1 class="glitch-title" data-text="ART BATTLE. Faction I.">ART BATTLE. Faction I.</h1>
@@ -117,7 +116,6 @@
     <div class="card" id="activeTop">
       <div class="imgBox">
         <img id="imgActive1" alt="Active top">
-        <video id="vidActive1" class="hidden" playsinline controls></video>
         <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
       </div>
       <div class="bar">
@@ -130,7 +128,6 @@
     <div class="card" id="activeBottom">
       <div class="imgBox">
         <img id="imgActive2" alt="Active bottom">
-        <video id="vidActive2" class="hidden" playsinline controls></video>
         <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
       </div>
       <div class="bar">
@@ -173,10 +170,9 @@
   <div class="fullscreen-overlay" id="overlay">
     <button id="closeFull">✕ Close</button>
     <img id="fullImg" src="">
-    <video id="fullVideo" class="hidden" playsinline controls></video>
   </div>
 
-  <!-- champion overlay JS (cyberpunk confetti winner) -->
+  <!-- NEW: champion overlay JS (injects cyberpunk overlay + confetti) -->
   <script src="js/champion-overlay.js"></script>
 
   <script>
@@ -188,18 +184,13 @@
 
     const RSID_KEY = "rsid_v2";
     let RSID = localStorage.getItem(RSID_KEY);
-    if (!RSID){
-      RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now());
-      localStorage.setItem(RSID_KEY, RSID);
-    }
+    if (!RSID){ RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
 
     const elRemain = document.getElementById("tRemain");
     const winnerText = document.getElementById("winnerText");
 
     const imgActive1 = document.getElementById("imgActive1");
     const imgActive2 = document.getElementById("imgActive2");
-    const vidActive1 = document.getElementById("vidActive1");
-    const vidActive2 = document.getElementById("vidActive2");
     const labelActive1 = document.getElementById("labelActive1");
     const labelActive2 = document.getElementById("labelActive2");
     const countActive1 = document.getElementById("countActive1");
@@ -215,69 +206,14 @@
 
     const overlay  = document.getElementById("overlay");
     const fullImg  = document.getElementById("fullImg");
-    const fullVideo = document.getElementById("fullVideo");
-    const btnClose = document.getElementById("closeFull");
-    btnClose.onclick = () => {
-      overlay.style.display='none';
-      fullImg.src = "";
-      fullVideo.pause();
-      fullVideo.removeAttribute("src");
-      fullVideo.load();
-    };
+    const btnClose = document.getElementById("closeFull"); btnClose.onclick = ()=> overlay.style.display='none';
 
     const grid = document.getElementById("thumbGrid");
 
-    function isVideoUrl(url){
-      if (!url) return false;
-      const clean = url.split("?")[0].toLowerCase();
-      return clean.endsWith(".mp4") ||
-             clean.endsWith(".webm") ||
-             clean.endsWith(".mov") ||
-             clean.endsWith(".m4v");
-    }
-
     function openFull(which){
-      let url = "";
-      let fromVideo = false;
-
-      if (which === "active1"){
-        if (!imgActive1.classList.contains("hidden") && imgActive1.src){
-          url = imgActive1.src;
-        } else if (!vidActive1.classList.contains("hidden") && (vidActive1.currentSrc || vidActive1.src)){
-          url = vidActive1.currentSrc || vidActive1.src;
-          fromVideo = true;
-        }
-      } else if (which === "active2"){
-        if (!imgActive2.classList.contains("hidden") && imgActive2.src){
-          url = imgActive2.src;
-        } else if (!vidActive2.classList.contains("hidden") && (vidActive2.currentSrc || vidActive2.src)){
-          url = vidActive2.currentSrc || vidActive2.src;
-          fromVideo = true;
-        }
-      }
-
-      if (!url) return;
-
-      const videoLike = fromVideo || isVideoUrl(url);
-
-      if (videoLike){
-        fullImg.classList.add("hidden");
-        fullImg.removeAttribute("src");
-        fullVideo.classList.remove("hidden");
-        fullVideo.src = url;
-        overlay.style.display = 'flex';
-        fullVideo.currentTime = 0;
-        fullVideo.play().catch(()=>{});
-      } else {
-        fullVideo.pause();
-        fullVideo.classList.add("hidden");
-        fullVideo.removeAttribute("src");
-        fullImg.classList.remove("hidden");
-        fullImg.src = url;
-        overlay.style.display = 'flex';
-      }
+      const url = which==="active1" ? imgActive1.src : which==="active2" ? imgActive2.src : "";
+      fullImg.src = url; overlay.style.display = 'flex';
     }
-
     function placeholder(letter){
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960"><rect width="100%" height="100%" fill="#000"/><text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace" text-anchor="middle" dominant-baseline="middle">${letter}</text></svg>`;
       return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
@@ -324,6 +260,52 @@
       {key:"final", label:"Final"}
     ];
 
+    // Build grid
+    const thumbs = {};
+    function makeThumb(item){
+      const div = document.createElement("div");
+      div.className = "thumb"; div.id = "thumb_"+item.key;
+      div.innerHTML = `
+        <div class="thumb-img diag">
+          <img class="half left" id="imgL_${item.key}" alt="${item.label} top">
+          <img class="half right" id="imgR_${item.key}" alt="${item.label} bottom">
+        </div>
+        <div class="thumb-label"><span>${item.label}</span><span class="thumb-count" id="cnt_${item.key}">0-0</span></div>
+      `;
+      div.addEventListener("click", ()=>{
+        // R32 rows (rr*) are clickable only before r32_done
+        if (item.key.startsWith("rr") && state.r32_done) return;
+
+        // R16: only between r32_done and r16_done
+        if (item.key.startsWith("r") && !item.key.startsWith("rr")) {
+          if (!state.r32_done || state.r16_done) return;
+        }
+
+        // Quarters: only between r16_done and mid1_done (semis)
+        if (item.key.startsWith("q")) {
+          if (!state.r16_done || state.mid1_done) return;
+        }
+
+        // Semis: only between mid1_done and mid2_done (final pairing)
+        if (item.key.startsWith("s")) {
+          if (!state.mid1_done || state.mid2_done) return;
+        }
+
+        // Final: only once mid2_done flips
+        if (item.key==="final" && !state.mid2_done) return;
+
+        activeMatch = item.key; renderActive();
+      });
+      grid.appendChild(div);
+      thumbs[item.key] = {
+        box:div,
+        imgL: div.querySelector("#imgL_"+item.key),
+        imgR: div.querySelector("#imgR_"+item.key),
+        count: div.querySelector("#cnt_"+item.key)
+      };
+    }
+    order.forEach(makeThumb);
+
     // ---------- STATE ----------
     let state = {
       base_iso:null, ends_at:null, period_sec:150,
@@ -357,96 +339,81 @@
       semi_1_left_url:null, semi_1_right_url:null, semi_1_left_count:0, semi_1_right_count:0,
       semi_2_left_url:null, semi_2_right_url:null, semi_2_left_count:0, semi_2_right_count:0,
 
-      mid_winner_1_url:null, mid_winner_2_url:null
+      mid_winner_1_url:null, mid_winner_2_url:null,
     };
 
     // vote memory
     const VOTE_MEMORY_KEY="rs_vote_memory_v3";
-    function memRead(base){
-      try{
-        return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")[base]||{};
-      }catch{
-        return {};
-      }
-    }
-    function memWrite(base,key,val){
-      const all = (()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")}catch{return{}}})();
-      all[base] = Object.assign({}, all[base]||{}, {[key]:val});
-      localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all));
-    }
-    function pruneMem(keep){
-      const all = (()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")}catch{return{}}})();
-      for(const k of Object.keys(all)) if(k!==keep) delete all[k];
-      localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all));
-    }
+    function memRead(base){ try{ return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")[base]||{} }catch{return{}} }
+    function memWrite(base,key,val){ const all=(()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")}catch{return{}}})(); all[base]=Object.assign({},all[base]||{}, {[key]:val}); localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
+    function pruneMem(keep){ const all=(()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")}catch{return{}}})(); for(const k of Object.keys(all)) if(k!==keep) delete all[k]; localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
 
     // start on R32 #1
     let activeMatch = "rr1";
 
-    // ---------- THUMBS ----------
-    const thumbs = {};
-    function makeThumb(item){
-      const div = document.createElement("div");
-      div.className = "thumb";
-      div.id = "thumb_"+item.key;
-      div.innerHTML = `
-        <div class="thumb-img diag">
-          <img class="half left" id="imgL_${item.key}" alt="${item.label} top">
-          <img class="half right" id="imgR_${item.key}" alt="${item.label} bottom">
-        </div>
-        <div class="thumb-label">
-          <span>${item.label}</span>
-          <span class="thumb-count" id="cnt_${item.key}">0-0</span>
-        </div>
-      `;
-      div.addEventListener("click", ()=>{
-        // R32 rows (rr*) are clickable only before r32_done
-        if (item.key.startsWith("rr") && state.r32_done) return;
+    async function vote(color){
+      const base = state.base_iso||"";
+      const mem = memRead(base);
+      const key = activeMatch;
+      if (mem[key]) return;
 
-        // R16: only between r32_done and r16_done
-        if (item.key.startsWith("r") && !item.key.startsWith("rr")) {
-          if (!state.r32_done || state.r16_done) return;
-        }
+      const red = color==="red";
+      const inc = (k)=> state[k] = (state[k]||0)+1;
 
-        // Quarters: only between r16_done and mid1_done (semis)
-        if (item.key.startsWith("q")) {
-          if (!state.r16_done || state.mid1_done) return;
-        }
+      // Map UI key → server phase:
+      // rr1..rr16 → r1..r16 (R32); others pass through
+      const serverPhase = activeMatch.startsWith("rr")
+        ? ("r"+activeMatch.slice(2))
+        : activeMatch;
 
-        // Semis: only between mid1_done and mid2_done (final pairing)
-        if (item.key.startsWith("s")) {
-          if (!state.mid1_done || state.mid2_done) return;
-        }
+      const post = { phase: serverPhase, side: red ? "left":"right" };
 
-        // Final: only once mid2_done flips
-        if (item.key==="final" && !state.mid2_done) return;
+      // Local optimistic counters
+      const map = {
+        // R32
+        rr1:["seed_a_count","seed_b_count"],   rr2:["seed_c_count","seed_d_count"],
+        rr3:["seed_e_count","seed_f_count"],   rr4:["seed_g_count","seed_h_count"],
+        rr5:["seed_i_count","seed_j_count"],   rr6:["seed_k_count","seed_l_count"],
+        rr7:["seed_m_count","seed_n_count"],   rr8:["seed_o_count","seed_p_count"],
+        rr9:["seed_q_count","seed_r_count"],   rr10:["seed_s_count","seed_t_count"],
+        rr11:["seed_u_count","seed_v_count"],  rr12:["seed_w_count","seed_x_count"],
+        rr13:["seed_y_count","seed_z_count"],  rr14:["seed_aa_count","seed_ab_count"],
+        rr15:["seed_ac_count","seed_ad_count"],rr16:["seed_ae_count","seed_af_count"],
 
-        activeMatch = item.key;
-        renderActive();
-      });
-      grid.appendChild(div);
-      thumbs[item.key] = {
-        box:div,
-        imgL: div.querySelector("#imgL_"+item.key),
-        imgR: div.querySelector("#imgR_"+item.key),
-        count: div.querySelector("#cnt_"+item.key)
+        // R16 → unchanged
+        r1:["seed_a_count","seed_b_count"], r2:["seed_c_count","seed_d_count"],
+        r3:["seed_e_count","seed_f_count"], r4:["seed_g_count","seed_h_count"],
+        r5:["seed_i_count","seed_j_count"], r6:["seed_k_count","seed_l_count"],
+        r7:["seed_m_count","seed_n_count"], r8:["seed_o_count","seed_p_count"],
+
+        q1:["seed_a_count","seed_b_count"], q2:["seed_c_count","seed_d_count"],
+        q3:["seed_e_count","seed_f_count"], q4:["seed_g_count","seed_h_count"],
+        s1:["seed_a_count","seed_b_count"], s2:["seed_c_count","seed_d_count"],
+        final:["seed_a_count","seed_b_count"]
       };
+      const arr = map[activeMatch];
+      if (arr){ inc(red?arr[0]:arr[1]); renderActive(); }
+
+      try{
+        const res = await fetch(FUNCTION_URL, { method:"POST", headers:{"Content-Type":"application/json","x-rsid":RSID}, body: JSON.stringify(post) });
+        if (!res.ok){ await fetchState(true); return; }
+        const s = await res.json().catch(()=> ({}));
+        Object.assign(state, s||{});
+        memWrite(base,key,color);
+        renderActive();
+      }catch{ await fetchState(true); }
     }
-    order.forEach(makeThumb);
+    btnActive1.onclick = ()=> vote("red");
+    btnActive2.onclick = ()=> vote("blue");
 
     function setThumb(key,leftUrl,rightUrl,leftCt,rightCt,fallback){
-      const th = thumbs[key];
-      if (!th) return;
-      const L = isVideoUrl(leftUrl) ? null : leftUrl;
-      const R = isVideoUrl(rightUrl) ? null : rightUrl;
-      th.imgL.src = L || placeholder(fallback||"?");
-      th.imgR.src = R || placeholder(fallback||"?");
-      th.count.textContent = (leftCt ?? 0) + "-" + (rightCt ?? 0);
+      const th = thumbs[key]; if (!th) return;
+      th.imgL.src = leftUrl || placeholder(fallback||"?");
+      th.imgR.src = rightUrl || placeholder(fallback||"?");
+      th.count.textContent = (leftCt??0) + "-" + (rightCt??0);
     }
     function markActive(){
-      for (const k in thumbs){
-        thumbs[k].box.classList.toggle("active", k===activeMatch);
-      }
+      for (const k in thumbs) thumbs[k].box.classList.toggle("active", k===activeMatch);
     }
 
     function renderThumbs(){
@@ -496,7 +463,7 @@
         ["q1","q1_a_url","q1_b_url","q1_a_count","q1_b_count","seed_a_url","seed_b_url","seed_a_count","seed_b_count","A"],
         ["q2","q2_c_url","q2_d_url","q2_c_count","q2_d_count","seed_c_url","seed_d_url","seed_c_count","seed_d_count","C"],
         ["q3","q3_e_url","q3_f_url","q3_e_count","q3_f_count","seed_e_url","seed_f_url","seed_e_count","seed_f_count","E"],
-        ["q4","q4_g_url","q4_h_url","q4_g_count","q4_h_count","seed_g_url","seed_h_url","seed_g_count","seed_h_count","G"]
+        ["q4","q4_g_url","q4_h_url","q4_g_count","q4_h_count","seed_g_url","seed_h_url","seed_g_count","seed_h_count","G"],
       ];
       for (const [k,lu,ru,lc,rc,flu,fru,flc,frc,fb] of q){
         const L = pick(state[lu], state[flu]);
@@ -509,178 +476,104 @@
         thumbs[k].box.classList.toggle("hidden",   !state.r16_done);
       }
 
-      // Semis thumbs (just show placeholders or semi URLs if present)
-      if (thumbs.s1){
-        const Ls1 = state.semi_1_left_url;
-        const Rs1 = state.semi_1_right_url;
-        setThumb("s1", Ls1, Rs1, state.semi_1_left_count, state.semi_1_right_count, "S1");
-        thumbs.s1.box.classList.toggle("hidden", !state.mid1_done);
-        thumbs.s1.box.classList.toggle("disabled", !state.mid1_done || !!state.mid2_done);
-      }
-      if (thumbs.s2){
-        const Ls2 = state.semi_2_left_url;
-        const Rs2 = state.semi_2_right_url;
-        setThumb("s2", Ls2, Rs2, state.semi_2_left_count, state.semi_2_right_count, "S2");
-        thumbs.s2.box.classList.toggle("hidden", !state.mid1_done);
-        thumbs.s2.box.classList.toggle("disabled", !state.mid1_done || !!state.mid2_done);
+      // Semis
+      if (!state.mid1_done){
+        thumbs.s1.imgL.src = placeholder("S1");
+        thumbs.s1.imgR.src = placeholder("S1");
+        thumbs.s1.count.textContent = "0-0";
+        thumbs.s1.box.classList.add("disabled"); thumbs.s1.box.classList.add("hidden");
+
+        thumbs.s2.imgL.src = placeholder("S2");
+        thumbs.s2.imgR.src = placeholder("S2");
+        thumbs.s2.count.textContent = "0-0";
+        thumbs.s2.box.classList.add("disabled"); thumbs.s2.box.classList.add("hidden");
+      }else{
+        thumbs.s1.imgL.src = state.semi_1_left_url  || placeholder("S1");
+        thumbs.s1.imgR.src = state.semi_1_right_url || placeholder("S1");
+        thumbs.s1.count.textContent = (state.seed_a_count||0) + "-" + (state.seed_b_count||0);
+        // Semis disabled once final pairing (mid2) is done
+        thumbs.s1.box.classList.toggle("disabled", !!state.mid2_done);
+        thumbs.s1.box.classList.remove("hidden");
+
+        thumbs.s2.imgL.src = state.semi_2_left_url  || placeholder("S2");
+        thumbs.s2.imgR.src = state.semi_2_right_url || placeholder("S2");
+        thumbs.s2.count.textContent = (state.seed_c_count||0) + "-" + (state.seed_d_count||0);
+        thumbs.s2.box.classList.toggle("disabled", !!state.mid2_done);
+        thumbs.s2.box.classList.remove("hidden");
       }
 
-      // Final thumb just mirrors final winners
-      if (thumbs.final){
-        const Lf = state.mid_winner_1_url;
-        const Rf = state.mid_winner_2_url;
-        setThumb("final", Lf, Rf, state.seed_a_count, state.seed_b_count, "F");
-        thumbs.final.box.classList.toggle("hidden", !state.mid2_done);
-        thumbs.final.box.classList.toggle("disabled", !state.mid2_done);
+      // Final
+      if (!state.mid2_done){
+        thumbs.final.imgL.src = placeholder("F");
+        thumbs.final.imgR.src = placeholder("F");
+        thumbs.final.count.textContent = "0-0";
+        thumbs.final.box.classList.add("disabled"); thumbs.final.box.classList.add("hidden");
+      }else{
+        thumbs.final.imgL.src = state.mid_winner_1_url || placeholder("F");
+        thumbs.final.imgR.src = state.mid_winner_2_url || placeholder("F");
+        thumbs.final.count.textContent = (state.seed_a_count||0) + "-" + (state.seed_b_count||0);
+        thumbs.final.box.classList.remove("disabled"); thumbs.final.box.classList.remove("hidden");
       }
+
+      markActive();
     }
 
-    // ---------- ACTIVE RENDER + MEDIA SWAP ----------
-
-    // NEW: track current media so we don't keep resetting videos every poll
-    let active1Url = null;
-    let active2Url = null;
-    let active1IsVideo = false;
-    let active2IsVideo = false;
-
-    function setActiveMedia(slot, url){
-      const imgEl = slot === 1 ? imgActive1 : imgActive2;
-      const vidEl = slot === 1 ? vidActive1 : vidActive2;
-      const prevUrl   = slot === 1 ? active1Url : active2Url;
-      const prevVideo = slot === 1 ? active1IsVideo : active2IsVideo;
-
-      // If nothing for this slot
-      if (!url){
-        if (prevUrl !== null){
-          imgEl.removeAttribute("src");
-          imgEl.classList.remove("hidden");
-          vidEl.pause();
-          vidEl.classList.add("hidden");
-          vidEl.removeAttribute("src");
-          vidEl.load();
-          if (slot === 1){
-            active1Url = null;
-            active1IsVideo = false;
-          } else {
-            active2Url = null;
-            active2IsVideo = false;
-          }
-        }
-        return;
-      }
-
-      const videoLike = isVideoUrl(url);
-
-      // If URL + media type are unchanged, do not reset the element
-      if (url === prevUrl && videoLike === prevVideo){
-        return;
-      }
-
-      if (videoLike){
-        imgEl.classList.add("hidden");
-        imgEl.removeAttribute("src");
-        vidEl.classList.remove("hidden");
-        vidEl.src = url;
-        vidEl.load();
-      } else {
-        vidEl.pause();
-        vidEl.classList.add("hidden");
-        vidEl.removeAttribute("src");
-        vidEl.load();
-        imgEl.classList.remove("hidden");
-        imgEl.src = url;
-      }
-
-      if (slot === 1){
-        active1Url = url;
-        active1IsVideo = videoLike;
-      } else {
-        active2Url = url;
-        active2IsVideo = videoLike;
-      }
-    }
-
-    function getMatchConfig(key){
-      // R32/R16/QF: use order entry
-      const base = order.find(o => o.key === key);
-      if (base && !base.semi && key !== "final"){
-        return {
-          leftUrl: state[base.left] || null,
-          rightUrl: state[base.right] || null,
-          leftCt: state[base.lct] ?? 0,
-          rightCt: state[base.rct] ?? 0
-        };
-      }
-      if (key === "s1"){
-        return {
-          leftUrl: state.semi_1_left_url || null,
-          rightUrl: state.semi_1_right_url || null,
-          leftCt: state.semi_1_left_count ?? 0,
-          rightCt: state.semi_1_right_count ?? 0
-        };
-      }
-      if (key === "s2"){
-        return {
-          leftUrl: state.semi_2_left_url || null,
-          rightUrl: state.semi_2_right_url || null,
-          leftCt: state.semi_2_left_count ?? 0,
-          rightCt: state.semi_2_right_count ?? 0
-        };
-      }
-      if (key === "final"){
-        return {
-          leftUrl: state.mid_winner_1_url || null,
-          rightUrl: state.mid_winner_2_url || null,
-          leftCt: state.seed_a_count ?? 0,
-          rightCt: state.seed_b_count ?? 0
-        };
-      }
-      // default
-      return {
-        leftUrl: null,
-        rightUrl: null,
-        leftCt: 0,
-        rightCt: 0
-      };
-    }
-
-    function updateFinalBox(){
-      const leftUrl  = state.mid_winner_1_url || state.semi_1_left_url || null;
-      const rightUrl = state.mid_winner_2_url || state.semi_2_right_url || null;
-      finalImg1.src = leftUrl || placeholder("?");
-      finalImg2.src = rightUrl || placeholder("?");
-      if (state.mid2_done){
-        finalLeftLabel.textContent = "Champion";
-        finalRightLabel.textContent = "Runner-up";
-        finalFooter.textContent = "Final decided.";
-      } else if (state.mid1_done){
-        finalLeftLabel.textContent = "Winner of Semi 1";
-        finalRightLabel.textContent = "Winner of Semi 2";
-        finalFooter.textContent = "Final pairing locked. Waiting for 0s…";
-      } else {
-        finalLeftLabel.textContent = "Winner of Semi 1";
-        finalRightLabel.textContent = "Winner of Semi 2";
-        finalFooter.textContent = "Waiting for semis to decide…";
-      }
+    function renderFinalBox(){
+      finalImg1.src = state.mid_winner_1_url || placeholder("?");
+      finalImg2.src = state.mid_winner_2_url || placeholder("?");
+      if (state.mid2_done) finalFooter.textContent = "Final is live — decides at 0s.";
+      else if (state.mid1_done) finalFooter.textContent = "Semis live — final soon.";
+      else if (state.r16_done) finalFooter.textContent = "Quarters live — semis soon.";
+      else if (state.r32_done) finalFooter.textContent = "R16 live — quarters at 60s.";
+      else finalFooter.textContent = "R32 live — R16 at 90s.";
     }
 
     function renderActive(){
-      const base = state.base_iso || "";
+      renderThumbs();
+      renderFinalBox();
+
+      const base = state.base_iso||"";
       const mem = memRead(base);
-      const picked = mem[activeMatch] || null;
+      const picked = mem[activeMatch];
 
-      const cfg = getMatchConfig(activeMatch);
-      const leftImg  = cfg.leftUrl  || "";
-      const rightImg = cfg.rightUrl || "";
-      const leftCt   = cfg.leftCt ?? 0;
-      const rightCt  = cfg.rightCt ?? 0;
+      let leftImg=placeholder("?"), rightImg=placeholder("?"), leftCt=0, rightCt=0, leftLabel="Top", rightLabel="Bottom";
 
-      setActiveMedia(1, leftImg);
-      setActiveMedia(2, rightImg);
-      labelActive1.textContent = "Top";
-      labelActive2.textContent = "Bottom";
-      countActive1.textContent = leftCt;
-      countActive2.textContent = rightCt;
+      const find = order.find(o=>o.key===activeMatch);
+      if (find && !find.semi && find.key!=="final"){
+        const L = pick(state[find.left], state[find.fbLeft]);
+        const R = pick(state[find.right], state[find.fbRight]);
+        const LC = pick(state[find.lct], state[find.fbLct]);
+        const RC = pick(state[find.rct], state[find.fbRct]);
+        leftImg=L||placeholder("?"); rightImg=R||placeholder("?");
+        leftCt=LC||0; rightCt=RC||0;
+        leftLabel = find.label.split(" ")[0] + " — Top";
+        rightLabel= find.label.split(" ")[0] + " — Bottom";
+      } else if (activeMatch==="s1"){
+        if (state.mid1_done){
+          leftImg  = state.semi_1_left_url  || placeholder("?");
+          rightImg = state.semi_1_right_url || placeholder("?");
+          leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0;
+        }
+        leftLabel="Semi 1 — Top"; rightLabel="Semi 1 — Bottom";
+      } else if (activeMatch==="s2"){
+        if (state.mid1_done){
+          leftImg  = state.semi_2_left_url  || placeholder("?");
+          rightImg = state.semi_2_right_url || placeholder("?");
+          leftCt = state.seed_c_count||0; rightCt=state.seed_d_count||0;
+        }
+        leftLabel="Semi 2 — Top"; rightLabel="Semi 2 — Bottom";
+      } else {
+        if (state.mid2_done){
+          leftImg  = state.mid_winner_1_url || placeholder("?");
+          rightImg = state.mid_winner_2_url || placeholder("?");
+          leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0;
+        }
+        leftLabel="Final — Top"; rightLabel="Final — Bottom";
+      }
+
+      imgActive1.src = leftImg; imgActive2.src = rightImg;
+      labelActive1.textContent = leftLabel; labelActive2.textContent = rightLabel;
+      countActive1.textContent = leftCt; countActive2.textContent = rightCt;
 
       // PHASE LIVE RULES:
       // R32: only while !r32_done
@@ -706,82 +599,7 @@
       btnActive2.disabled = !!picked || !phaseLive;
       if (picked==="red")  labelActive1.textContent += " • you voted";
       if (picked==="blue") labelActive2.textContent += " • you voted";
-
-      renderThumbs();
-      markActive();
-      updateFinalBox();
     }
-
-    // ---------- VOTING ----------
-    async function vote(color){
-      const base = state.base_iso||"";
-      const mem = memRead(base);
-      const key = activeMatch;
-      if (mem[key]) return;
-
-      const red = color==="red";
-      const inc = (k)=> state[k] = (state[k]||0)+1;
-
-      // Map UI key → server phase:
-      // rr1..rr16 → r1..r16 (R32); others pass through
-      const serverPhase = activeMatch.startsWith("rr")
-        ? ("r"+activeMatch.slice(2))
-        : activeMatch;
-
-      const post = { phase: serverPhase, side: red ? "left":"right" };
-
-      // Local optimistic counters
-      const map = {
-        // R32
-        rr1:["seed_a_count","seed_b_count"],   rr2:["seed_c_count","seed_d_count"],
-        rr3:["seed_e_count","seed_f_count"],   rr4:["seed_g_count","seed_h_count"],
-        rr5:["seed_i_count","seed_j_count"],   rr6:["seed_k_count","seed_l_count"],
-        rr7:["seed_m_count","seed_n_count"],   rr8:["seed_o_count","seed_p_count"],
-        rr9:["seed_q_count","seed_r_count"],   rr10:["seed_s_count","seed_t_count"],
-        rr11:["seed_u_count","seed_v_count"],  rr12:["seed_w_count","seed_x_count"],
-        rr13:["seed_y_count","seed_z_count"],  rr14:["seed_aa_count","seed_ab_count"],
-        rr15:["seed_ac_count","seed_ad_count"],rr16:["seed_ae_count","seed_af_count"],
-
-        // R16 → unchanged
-        r1:["seed_a_count","seed_b_count"], r2:["seed_c_count","seed_d_count"],
-        r3:["seed_e_count","seed_f_count"], r4:["seed_g_count","seed_h_count"],
-        r5:["seed_i_count","seed_j_count"], r6:["seed_k_count","seed_l_count"],
-        r7:["seed_m_count","seed_n_count"], r8:["seed_o_count","seed_p_count"],
-
-        q1:["seed_a_count","seed_b_count"], q2:["seed_c_count","seed_d_count"],
-        q3:["seed_e_count","seed_f_count"], q4:["seed_g_count","seed_h_count"],
-        s1:["seed_a_count","seed_b_count"], s2:["seed_c_count","seed_d_count"],
-        final:["seed_a_count","seed_b_count"]
-      };
-      const arr = map[activeMatch];
-      if (arr){
-        inc(red ? arr[0] : arr[1]);
-        renderActive();
-      }
-
-      try{
-        const res = await fetch(FUNCTION_URL, {
-          method:"POST",
-          headers:{
-            "Content-Type":"application/json",
-            "x-rsid":RSID
-          },
-          body: JSON.stringify(post)
-        });
-        if (!res.ok){
-          await fetchState(true);
-          return;
-        }
-        const s = await res.json().catch(()=> ({}));
-        Object.assign(state, s||{});
-        memWrite(base,key,color);
-        renderActive();
-      }catch{
-        await fetchState(true);
-      }
-    }
-    btnActive1.onclick = ()=> vote("red");
-    btnActive2.onclick = ()=> vote("blue");
 
     // ---------- NET ----------
     async function fetchState(force=false){
@@ -805,9 +623,11 @@
     }
 
     // ---------- TICK + CHAMPION OVERLAY ----------
-    let championOverlayShown = false;
+    let phaseSync = { r32:false, r16:false, q:false, s:false, f:false };
     let lastFlags={r32:false, r16:false, mid1:false, mid2:false};
-    let lastPoll = 0;
+
+    // guard so overlay shows once per cycle
+    let championOverlayShown = false;
 
     function showChampionOverlayIfReady(){
       if (championOverlayShown) return;
@@ -830,44 +650,60 @@
       }
 
       const cleanLabel = winnerLabel.split(" •")[0];
+
       window.openChampionOverlay(cleanLabel, winnerUrl);
       championOverlayShown = true;
     }
 
     function tick(){
-      if (state && state.ends_at){
-        const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
-        elRemain.textContent = (ms/1000).toFixed(1);
-      }
+      if (!state?.ends_at) return requestAnimationFrame(tick);
+      const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
+      elRemain.textContent = (ms/1000).toFixed(1);
 
-      // auto jump activeMatch when flags flip
+      const R32_MS = 120_000, R16_MS = 90_000, Q_MS = 60_000, S_MS = 30_000;
+
       if (state.r32_done && !lastFlags.r32){ activeMatch="r1"; }
       if (state.r16_done && !lastFlags.r16){ activeMatch="q1"; }
       if (state.mid1_done && !lastFlags.mid1){ activeMatch="s1"; }
       if (state.mid2_done && !lastFlags.mid2){ activeMatch="final"; }
 
-      lastFlags = {
-        r32: !!state.r32_done,
-        r16: !!state.r16_done,
-        mid1: !!state.mid1_done,
-        mid2: !!state.mid2_done
-      };
+      lastFlags = { r32: !!state.r32_done, r16: !!state.r16_done, mid1: !!state.mid1_done, mid2: !!state.mid2_done };
 
-      const now = Date.now();
-      if (now - lastPoll > 2000){
-        lastPoll = now;
-        fetchState(false);
+      if (ms <= R32_MS + 250 && !state.r32_done) winnerText.textContent = 'R32 just locked — R16 live.';
+      if (ms <= R16_MS + 250 && state.r32_done && !state.r16_done) winnerText.textContent = 'R16 just locked — quarters live.';
+      if (ms <= Q_MS  + 250 && state.r16_done && !state.mid1_done) winnerText.textContent = 'Quarters just locked — semis live.';
+      if (ms <= S_MS  + 250 && state.mid1_done && !state.mid2_done) winnerText.textContent = 'Semis just locked — final live.';
+
+      if (ms <= R32_MS && !state.r32_done && !phaseSync.r32){ phaseSync.r32=true; fetchState(true); }
+      if (ms <= R16_MS && state.r32_done && !state.r16_done && !phaseSync.r16){ phaseSync.r16=true; fetchState(true); }
+      if (ms <= Q_MS  && state.r16_done && !state.mid1_done && !phaseSync.q){ phaseSync.q=true; fetchState(true); }
+      if (ms <= S_MS  && state.mid1_done && !state.mid2_done && !phaseSync.s){ phaseSync.s=true; fetchState(true); }
+      if (ms <= 0     && state.mid2_done && !phaseSync.f){ phaseSync.f=true; fetchState(true); }
+
+      // when final hits 0 and pairing is ready, fire champion overlay once
+      if (ms <= 0 && state.mid2_done && !championOverlayShown) {
+        showChampionOverlayIfReady();
       }
 
-      showChampionOverlayIfReady();
       requestAnimationFrame(tick);
     }
 
-    // ---------- BOOT ----------
-    (async ()=>{
-      await fetchState(true);
-      requestAnimationFrame(tick);
-    })();
+    // realtime
+    supabase.channel('cycles-v2-live')
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'cycles_v2' }, async ()=>{ await fetchState(true); })
+      .subscribe();
+
+    supabase.channel('matchup-sync')
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'art_queue', filter:'status=in.(locked,used)' }, async ()=>{ await fetchState(true); })
+      .subscribe();
+
+    // boot
+    fetchState(true).then(()=>{
+      setTimeout(()=>fetchState(true), 600);
+      setTimeout(()=>fetchState(true), 1500);
+      tick();
+    });
   </script>
+  <script src="js/auth-guard.js" type="module"></script>
 </body>
 </html>
