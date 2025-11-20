@@ -536,21 +536,47 @@
     }
 
     // ---------- ACTIVE RENDER + MEDIA SWAP ----------
+
+    // NEW: track current media so we don't keep resetting videos every poll
+    let active1Url = null;
+    let active2Url = null;
+    let active1IsVideo = false;
+    let active2IsVideo = false;
+
     function setActiveMedia(slot, url){
       const imgEl = slot === 1 ? imgActive1 : imgActive2;
       const vidEl = slot === 1 ? vidActive1 : vidActive2;
+      const prevUrl   = slot === 1 ? active1Url : active2Url;
+      const prevVideo = slot === 1 ? active1IsVideo : active2IsVideo;
 
+      // If nothing for this slot
       if (!url){
-        imgEl.removeAttribute("src");
-        imgEl.classList.remove("hidden");
-        vidEl.pause();
-        vidEl.classList.add("hidden");
-        vidEl.removeAttribute("src");
-        vidEl.load();
+        if (prevUrl !== null){
+          imgEl.removeAttribute("src");
+          imgEl.classList.remove("hidden");
+          vidEl.pause();
+          vidEl.classList.add("hidden");
+          vidEl.removeAttribute("src");
+          vidEl.load();
+          if (slot === 1){
+            active1Url = null;
+            active1IsVideo = false;
+          } else {
+            active2Url = null;
+            active2IsVideo = false;
+          }
+        }
         return;
       }
 
-      if (isVideoUrl(url)){
+      const videoLike = isVideoUrl(url);
+
+      // If URL + media type are unchanged, do not reset the element
+      if (url === prevUrl && videoLike === prevVideo){
+        return;
+      }
+
+      if (videoLike){
         imgEl.classList.add("hidden");
         imgEl.removeAttribute("src");
         vidEl.classList.remove("hidden");
@@ -563,6 +589,14 @@
         vidEl.load();
         imgEl.classList.remove("hidden");
         imgEl.src = url;
+      }
+
+      if (slot === 1){
+        active1Url = url;
+        active1IsVideo = videoLike;
+      } else {
+        active2Url = url;
+        active2IsVideo = videoLike;
       }
     }
 
