@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -188,7 +189,6 @@
       font-size:11px;
     }
 
-    /* used for both image and video thumbs */
     .thumb{
       width:42px;
       height:42px;
@@ -196,8 +196,6 @@
       border-radius:6px;
       border:1px solid var(--accent);
       box-shadow:0 0 10px rgba(57,255,20,.4);
-      display:block;
-      background:#000;
     }
 
     /* description button */
@@ -273,10 +271,6 @@
       white-space:pre-wrap;
     }
 
-    .hidden{
-      display:none !important;
-    }
-
     @media (max-width:560px){
       th.cycle,td.cycle{display:none;}
       table{font-size:13px;}
@@ -341,7 +335,7 @@
     </div>
   </div>
 
-  <!-- Fullscreen image / video viewer -->
+  <!-- Fullscreen image viewer -->
   <div id="fsView" style="
     position:fixed;
     inset:0;
@@ -352,22 +346,6 @@
     z-index:9998;
     backdrop-filter:blur(4px);
   ">
-    <button id="fsClose" style="
-      position:absolute;
-      top:16px;
-      right:16px;
-      border:1px solid var(--accent);
-      background:#000;
-      color:var(--accent);
-      border-radius:999px;
-      padding:4px 10px;
-      cursor:pointer;
-      font-weight:700;
-      font-size:12px;
-      text-transform:uppercase;
-      letter-spacing:.12em;
-    ">Close ✕</button>
-
     <img id="fsImg" src="" alt="fullscreen winner" style="
       max-width:90%;
       max-height:90%;
@@ -375,15 +353,6 @@
       border-radius:14px;
       box-shadow:0 0 20px var(--accent);
     ">
-
-    <video id="fsVideo" class="hidden" playsinline controls style="
-      max-width:90%;
-      max-height:90%;
-      border:2px solid var(--accent);
-      border-radius:14px;
-      box-shadow:0 0 20px var(--accent);
-      background:#000;
-    "></video>
   </div>
 
   <script>
@@ -400,10 +369,8 @@
     const btnClear = document.getElementById('clear');
 
     // fullscreen overlay elements
-    const fsView  = document.getElementById("fsView");
-    const fsImg   = document.getElementById("fsImg");
-    const fsVideo = document.getElementById("fsVideo");
-    const fsClose = document.getElementById("fsClose");
+    const fsView = document.getElementById("fsView");
+    const fsImg  = document.getElementById("fsImg");
 
     // description modal elements
     const descModal    = document.getElementById('descModal');
@@ -413,76 +380,20 @@
     let descStore = [];
     let descTitleStore = [];
 
-    function closeFs(){
-      if (!fsView) return;
-      fsView.style.display = 'none';
-      if (fsImg){
-        fsImg.src = '';
-        fsImg.classList.remove('hidden');
-      }
-      if (fsVideo){
-        fsVideo.pause();
-        fsVideo.removeAttribute('src');
-        fsVideo.load();
-        fsVideo.classList.add('hidden');
-      }
-    }
-
     if (fsView) {
-      fsView.addEventListener('click', (e) => {
-        // close if click on backdrop
-        if (e.target === fsView) closeFs();
+      fsView.addEventListener('click', () => {
+        fsView.style.display = 'none';
+        if (fsImg) fsImg.src = '';
       });
-    }
-    if (fsClose){
-      fsClose.addEventListener('click', (e) => {
-        e.stopPropagation();
-        closeFs();
-      });
-    }
-
-    function isVideoUrl(url){
-      if (!url) return false;
-      const clean = url.split("?")[0].toLowerCase();
-      return clean.endsWith(".mp4") ||
-             clean.endsWith(".webm") ||
-             clean.endsWith(".mov") ||
-             clean.endsWith(".m4v");
     }
 
     function enableThumbFullscreen() {
-      if (!fsView || (!fsImg && !fsVideo)) return;
+      if (!fsView || !fsImg) return;
       document.querySelectorAll('.thumb').forEach(thumb => {
         thumb.style.cursor = 'pointer';
         thumb.onclick = () => {
-          // figure out if this thumb is a video or image
-          const tag = thumb.tagName.toLowerCase();
-          const src = thumb.currentSrc || thumb.src || "";
-          const videoLike = (tag === "video") || isVideoUrl(src);
-
-          if (videoLike && fsVideo){
-            // show video in overlay
-            if (fsImg){
-              fsImg.src = "";
-              fsImg.classList.add("hidden");
-            }
-            fsVideo.classList.remove("hidden");
-            fsVideo.src = src;
-            fsView.style.display = 'flex';
-            fsVideo.currentTime = 0;
-            fsVideo.play().catch(()=>{});
-          } else if (fsImg) {
-            // show image in overlay
-            if (fsVideo){
-              fsVideo.pause();
-              fsVideo.classList.add("hidden");
-              fsVideo.removeAttribute("src");
-              fsVideo.load();
-            }
-            fsImg.classList.remove("hidden");
-            fsImg.src = src;
-            fsView.style.display = 'flex';
-          }
+          fsImg.src = thumb.src;
+          fsView.style.display = 'flex';
         };
       });
     }
@@ -646,17 +557,8 @@
 
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
-        const url = r.image_url || r.winner_url || '';
-
-        let thumb = `<span style="color:#666;">—</span>`;
-        if (url){
-          if (isVideoUrl(url)){
-            thumb = `<video src="${url}" class="thumb" muted playsinline></video>`;
-          } else {
-            thumb = `<img src="${url}" class="thumb" alt="winner">`;
-          }
-        }
-
+        const img = r.image_url || r.winner_url || '';
+        const thumb = img ? `<img src="${img}" class="thumb" alt="winner">` : `<span style="color:#666;">—</span>`;
         const decidedTs = computeDecidedAt(r);
         const phase = phaseFromBase(r.base_iso);
         return `
