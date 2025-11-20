@@ -120,6 +120,7 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
         <div id="fileName" class="small">
           jpg / png / webp / mp4 — 200MB max. Tip: drag &amp; drop or paste (Ctrl/⌘+V)
         </div>
+        <!-- allow images + videos -->
         <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
         <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
         <div class="preview">
@@ -364,7 +365,8 @@ window.addEventListener('paste', (e)=>{
 /* ---------- Upload ---------- */
 async function uploadToStorage(userId, file){
   const d=new Date();
-  const path = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}-${file.name}`;
+  const uuid = (crypto.randomUUID?.() || Math.random().toString(36).slice(2));
+  const path = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${uuid}-${file.name}`;
   const { data, error } = await supabase.storage
     .from(BUCKET)
     .upload(path, file, { cacheControl:'3600', upsert:false });
@@ -463,16 +465,15 @@ btnSubmit.addEventListener('click', async ()=>{
       return;
     }
 
-    // meta fields (optional, for later use)
     const piece_name = (pieceNameInput.value || '').trim();
     const piece_description = (pieceDescInput.value || '').trim();
 
-    // minimal payload so we don't clash with table schema
+    // Minimal payload that matches your art_queue schema
     const payload = {
       image_url: finalUrl,
       status: 'pending'
     };
-    // if you add columns later, you can wire them here:
+    // Later if you add columns, wire them here:
     // payload.piece_name = piece_name;
     // payload.piece_description = piece_description;
 
