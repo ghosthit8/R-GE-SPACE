@@ -154,17 +154,9 @@ hr{border:none; border-top:1px solid #1f331f; margin:14px 0;}
   background:rgba(0,0,0,.86); color:#a8ffa8; border:1px solid #2b4c2b;
 }
 
-.clock-pill{
-  position:fixed; right:10px; top:10px;
-  border-radius:999px; padding:4px 10px;
-  background:rgba(0,0,0,.9); border:1px solid #2b4c2b;
-  font-size:11px; color:#b0ffb0; display:flex; align-items:center; gap:6px;
-  z-index:9999;
+clock-pill{
+  display:none;
 }
-.clock-pill strong{font-size:13px; color:var(--green2);}
-
-.msg{margin-top:8px; font-size:12px; color:#f8cfff;}
-.msg.ok{color:#b6ffb6;}
 
 .header-row{
   display:flex; justify-content:space-between; align-items:center; gap:10px;
@@ -292,6 +284,17 @@ footer a{color:#9fff9f;}
 
       <div id="submit-msg" class="msg"></div>
 
+      <!-- NEXT TOURNAMENT TIMER -->
+      <div class="row" style="margin-top:14px;">
+        <div class="col">
+          <label>Next tournament in</label>
+          <div class="chip">
+            <span id="clock">--</span>
+            <span style="font-size:11px;text-transform:none;letter-spacing:0;">seconds</span>
+          </div>
+        </div>
+      </div>
+
       <h2 style="margin-top:18px;">Currently in queue</h2>
       <div id="queue" class="queue"></div>
       <small style="display:block; margin-top:6px; color:#7aff7a;">
@@ -299,11 +302,6 @@ footer a{color:#9fff9f;}
       </small>
     </div>
   </div>
-</div>
-
-<div class="clock-pill">
-  <span>Cycle</span>
-  <strong id="clock">--</strong>
 </div>
 
 <footer>
@@ -512,21 +510,17 @@ async function uploadToStorage(userId, file){
   const uuid = (crypto.randomUUID?.() || Math.random().toString(36).slice(2));
   const objectPath = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${uuid}-${file.name}`;
 
-  // Get current auth session for access token
   const { data: { session } } = await supabase.auth.getSession();
   if (!session || !session.access_token) throw new Error('Not logged in');
 
-  // Use direct storage hostname for resumable uploads
   const projectId = 'tuqvpcevrhciursxrgav';
   const endpoint = `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`;
 
-  // Ensure tus is available
   if (!window.tus || !window.tus.Upload) {
     console.error('tus-js-client not loaded');
     throw new Error('Upload library missing');
   }
 
-  // Wrap TUS upload in a Promise so we can await it
   await new Promise((resolve, reject) => {
     const upload = new window.tus.Upload(file, {
       endpoint,
@@ -537,7 +531,7 @@ async function uploadToStorage(userId, file){
       },
       uploadDataDuringCreation: true,
       removeFingerprintOnSuccess: true,
-      chunkSize: 6 * 1024 * 1024, // 6MB chunks (required)
+      chunkSize: 6 * 1024 * 1024,
       metadata: {
         bucketName: BUCKET,
         objectName: objectPath,
@@ -562,7 +556,6 @@ async function uploadToStorage(userId, file){
     upload.start();
   });
 
-  // After the resumable upload completes, we can construct the public URL
   const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(objectPath);
   let url = pub?.publicUrl || null;
   try {
@@ -574,7 +567,7 @@ async function uploadToStorage(userId, file){
   return url;
 }
 
-/* ---------- Edge/timer normalize ---------- */
+/* ---------- Edge/timer ---------- */
 async function callEdge(){
   const res = await fetch(EDGE_URL, {
     method:'GET',
@@ -588,26 +581,13 @@ async function callEdge(){
   return data || null;
 }
 
-let lastPhase = null;
 let lastSyncAt = 0;
-
-function paintClock(payload){
-  try{
-    const phase = payload?.phase || null;
-    const remaining = payload?.remaining || 0;
-    lastPhase = phase;
-    const sec = Math.max(0, Math.round(remaining));
-    clockEl.textContent = String(sec);
-  }catch(e){
-    console.error(e);
-  }
-}
 
 async function syncState(){
   try{
     const data = await callEdge();
     lastSyncAt = Date.now();
-    if (data?.clock){
+    if (data?.clock !== undefined){
       clockEl.textContent = String(Math.max(0,Math.round(data.clock)));
     }
     if (Array.isArray(data?.queuePreview)){
@@ -697,7 +677,7 @@ function paintQueue(items){
   queueLabel.textContent = `${items.length} in queue`;
   queueGrid.innerHTML = items.map(it=>{
     const url = it.image_url || '';
-    const isVid = typeof url==='string' && url.toLowerCase().match(/\\.(mp4|webm|mov)(\\?|$)/);
+    const isVid = typeof url==='string' && url.toLowerCase().match(/\.(mp4|webm|mov)(\?|$)/);
     const safeTitle = (it.piece_name || 'untitled').slice(0,40);
     const created = it.created_at ? new Date(it.created_at) : null;
     const timeLabel = created ? created.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
@@ -768,7 +748,6 @@ async function loadQueue(){
   `;
   document.body.appendChild(floatBtn);
 
-  // --- panel wrapper (starts hidden) ---
   const wrap = document.createElement('div');
   wrap.id = 'dbg';
   wrap.style.cssText = `
@@ -810,7 +789,7 @@ async function loadQueue(){
       if (typeof a==='object') return JSON.stringify(a);
       return String(a);
     }).join(' ');
-    logBox.textContent += line + '\\n';
+    logBox.textContent += line + '\n';
     logBox.scrollTop = logBox.scrollHeight;
   }
 
