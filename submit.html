@@ -327,7 +327,16 @@ function normalize(s){
 
 /* ---------- Timer ---------- */
 let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
-function computeStage(){ return 'R32'; }
+
+/* 👇 NEW: derive stage label from periodSec */
+function computeStage(){
+  const p = periodSec || 0;
+  if (p >= 120) return 'R32';
+  if (p >= 90)  return 'R16';
+  if (p >= 60)  return 'QF';
+  if (p >= 30)  return 'SF';
+  return 'Final';
+}
 
 async function syncState(){
   try{
