@@ -125,10 +125,6 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
           <span>🕒 Tournament Clock</span>
           <span id="clock" class="clock">—</span>
         </div>
-        <div class="row">
-          <span>🏷️ Current Round</span>
-          <span id="stage" class="stage">—</span>
-        </div>
       </div>
     </div>
 
@@ -180,7 +176,6 @@ const queueCount = document.getElementById('queueCount');
 const queueGrid = document.getElementById('queue');
 const queueEmpty = document.getElementById('queueEmpty');
 const clockEl = document.getElementById('clock');
-const stageEl = document.getElementById('stage');
 
 const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
 
@@ -326,26 +321,14 @@ function normalize(s){
 }
 
 /* ---------- Timer ---------- */
-let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
-
-/* 👇 NEW: derive stage label from periodSec */
-function computeStage(){
-  const p = periodSec || 0;
-  if (p >= 120) return 'R32';
-  if (p >= 90)  return 'R16';
-  if (p >= 60)  return 'QF';
-  if (p >= 30)  return 'SF';
-  return 'Final';
-}
+let paused=false, serverPhaseEndISO=null, remainingSec=null, lastSyncAt=0;
 
 async function syncState(){
   try{
     const s = normalize(await callEdge());
     serverPhaseEndISO = s.phase_end_at || null;
     remainingSec = s.remaining_sec;
-    periodSec = s.period_sec ?? 20;
     lastSyncAt = Date.now();
-    stageEl.textContent = computeStage();
   }catch(e){ toast('Timer sync failed'); }
 }
 
