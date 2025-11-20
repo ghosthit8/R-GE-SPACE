@@ -46,7 +46,8 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 /* Queue grid */
 .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px}
 .thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#ff3aa0; min-height:120px}
-.thumb img{display:block; width:100%; height:100%; object-fit:cover}
+.thumb img,
+.thumb video{display:block; width:100%; height:100%; object-fit:cover}
 .thumb .idx{
   position:absolute; top:6px; left:6px; font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
   background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35)
@@ -89,8 +90,8 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
     <div class="card" style="margin-top:16px">
       <div id="pickZone" class="drop">
         <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
-        <div id="fileName" class="small">jpg / png / webp — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
-        <input id="fileInput" type="file" accept="image/*" class="hidden">
+        <div id="fileName" class="small">image (jpg / png / webp) or video — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
+        <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
         <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
         <div class="preview">
           <img id="imgPreview" alt="" class="hidden">
@@ -213,20 +214,42 @@ btnPick.addEventListener('click', ()=>{
     if (!urlInput.classList.contains('hidden')) urlInput.focus();
   }
 });
+
 fileInput.addEventListener('change', ()=>{
   const f = fileInput.files?.[0];
   if (!f) return;
-  if (!f.type.startsWith('image/')){ toast('File must be an image'); fileInput.value=''; return; }
-  if (f.size > 10*1024*1024){ toast('Max 10MB'); fileInput.value=''; return; }
+
+  const isImage = f.type.startsWith('image/');
+  const isVideo = f.type.startsWith('video/');
+
+  if (!isImage && !isVideo){
+    toast('File must be an image or video');
+    fileInput.value='';
+    return;
+  }
+  if (f.size > 10*1024*1024){
+    toast('Max 10MB');
+    fileInput.value='';
+    return;
+  }
+
   picked.file = f; picked.url = '';
   urlInput.value = ''; urlInput.classList.add('hidden');
   fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  setPreview(URL.createObjectURL(f));
-  previewHint.textContent = 'Ready to upload';
+
+  if (isImage){
+    setPreview(URL.createObjectURL(f));
+    previewHint.textContent = 'Ready to upload';
+  } else {
+    setPreview('');
+    previewHint.textContent = 'Video selected — ready to upload';
+  }
 });
+
 urlInput.addEventListener('input', ()=>{
   picked.url = urlInput.value.trim();
   if (picked.url) {
+    // URL mode is still image-only for now
     picked.file = null; fileInput.value='';
     fileName.textContent = 'Using pasted URL';
     previewHint.textContent = picked.url;
@@ -246,13 +269,24 @@ urlInput.addEventListener('input', ()=>{
 pickZone.addEventListener('drop', (e)=>{
   const f = e.dataTransfer?.files?.[0];
   if (!f) return;
-  if (!f.type.startsWith('image/')) return toast('File must be an image');
+
+  const isImage = f.type.startsWith('image/');
+  const isVideo = f.type.startsWith('video/');
+
+  if (!isImage && !isVideo) return toast('File must be an image or video');
   if (f.size > 10*1024*1024) return toast('Max 10MB');
+
   picked.file = f; picked.url='';
   fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
   fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  setPreview(URL.createObjectURL(f));
-  previewHint.textContent = 'Ready to upload (dropped)';
+
+  if (isImage){
+    setPreview(URL.createObjectURL(f));
+    previewHint.textContent = 'Ready to upload (dropped)';
+  } else {
+    setPreview('');
+    previewHint.textContent = 'Video selected — ready to upload (dropped)';
+  }
 });
 
 /* Paste */
@@ -381,7 +415,7 @@ btnSubmit.addEventListener('click', async ()=>{
 
     picked = {file:null, url:''};
     fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-    fileName.textContent = 'jpg / png / webp — 10MB max';
+    fileName.textContent = 'image (jpg / png / webp) or video — 10MB max';
     previewHint.textContent = '';
     setPreview('');
     consent.checked = false;
@@ -418,12 +452,19 @@ async function renderQueue(){
     queueEmpty.style.display = 'none';
     queueCount.textContent = `(${data.length})`;
 
-    queueGrid.innerHTML = data.map((r,i)=>`
-      <div class="thumb" data-id="${r.id}" title="${r.image_url}">
-        <span class="idx">#${i+1}</span>
-        <img src="${r.image_url}" alt="queued art ${i+1}"/>
-      </div>
-    `).join('');
+    queueGrid.innerHTML = data.map((r,i)=>{
+      const url = r.image_url || '';
+      const isVideo = /\.(mp4|webm|mov|m4v)$/i.test(url);
+      const media = isVideo
+        ? `<video src="${url}#t=0.2" muted playsinline></video>`
+        : `<img src="${url}" alt="queued art ${i+1}"/>`;
+      return `
+        <div class="thumb" data-id="${r.id}" title="${url}">
+          <span class="idx">#${i+1}</span>
+          ${media}
+        </div>
+      `;
+    }).join('');
   }catch(e){ toast('Queue failed to load'); }
 }
 
