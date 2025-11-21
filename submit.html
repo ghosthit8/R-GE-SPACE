@@ -93,7 +93,7 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
     <div class="card" style="margin-top:16px">
       <div id="pickZone" class="drop">
         <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
-        <div id="fileName" class="small">jpg / png / webp / mp4 / webm — 100MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
+        <div id="fileName" class="small">jpg / png / webp / mp4 / webm — 50MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
         <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
         <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
         <div class="preview">
@@ -163,6 +163,7 @@ const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 const BUCKET = 'art-uploads';
+const MAX_MB = 50; // client-side cap to stay under Supabase file size limit
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ---------- Elements ---------- */
@@ -223,7 +224,7 @@ function updatePreviewForFile(f){
   }
 }
 
-/* ---------- Auth helpers (no magic-link UI) ---------- */
+/* ---------- Auth helpers ---------- */
 async function uid(){
   const { data:{session} } = await supabase.auth.getSession();
   return session?.user?.id || null;
@@ -282,8 +283,8 @@ fileInput.addEventListener('change', ()=>{
     fileInput.value='';
     return;
   }
-  if (f.size > 100*1024*1024){
-    toast('Max 100MB');
+  if (f.size > MAX_MB*1024*1024){
+    toast(`Max ${MAX_MB}MB`);
     fileInput.value='';
     return;
   }
@@ -318,7 +319,7 @@ pickZone.addEventListener('drop', (e)=>{
   const isImage = f.type.startsWith('image/');
   const isVideo = f.type.startsWith('video/');
   if (!isImage && !isVideo) return toast('File must be an image or video');
-  if (f.size > 100*1024*1024) return toast('Max 100MB');
+  if (f.size > MAX_MB*1024*1024) return toast(`Max ${MAX_MB}MB`);
   picked.file = f; picked.url='';
   fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
   fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
@@ -333,7 +334,7 @@ window.addEventListener('paste', (e)=>{
       if (it.kind === 'file'){
         const f = it.getAsFile();
         if (f && f.type.startsWith('image/')){
-          if (f.size > 100*1024*1024) { toast('Max 100MB'); return; }
+          if (f.size > MAX_MB*1024*1024) { toast(`Max ${MAX_MB}MB`); return; }
           picked.file = f; picked.url='';
           fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
           fileName.textContent = `${f.name||'pasted-image'} — ${bytesToMB(f.size)} MB`;
@@ -498,6 +499,9 @@ btnSubmit.addEventListener('click', async ()=>{
   let finalUrl = (picked.url||'').trim();
   try{
     if (picked.file){
+      if (picked.file.size > MAX_MB*1024*1024) {
+        return toast(`Max ${MAX_MB}MB`);
+      }
       toast('Uploading…');
       finalUrl = await uploadToStorage(id, picked.file);
     }
@@ -508,7 +512,7 @@ btnSubmit.addEventListener('click', async ()=>{
       status: 'pending',
       piece_name: pieceName || null,
       piece_description: pieceDesc || null,
-      artist_name: artistName || null   // << new field
+      artist_name: artistName || null
     };
 
     const { error } = await supabase.from('art_queue').insert(payload);
@@ -516,7 +520,7 @@ btnSubmit.addEventListener('click', async ()=>{
 
     picked = {file:null, url:''};
     fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-    fileName.textContent = 'jpg / png / webp / mp4 / webm — 100MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
+    fileName.textContent = 'jpg / png / webp / mp4 / webm — 50MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
     previewHint.textContent = '';
     setPreview('');
     consent.checked = false;
