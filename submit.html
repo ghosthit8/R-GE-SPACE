@@ -1,276 +1,788 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Rage Space — Submit</title>
-<link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<meta charset="utf-8">
+<title>Rage Space — Submit Art</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root{
-  --green:#39ff14; --green2:#7dff62; --ink:#e5e5e5;
-  --bg:#000; --card:#090909; --border:#153b16; --muted:#8aff8a;
-  --maxw:860px;
+  --bg:#020a02;
+  --bg2:#040d04;
+  --accent:#39ff14;
+  --accent-soft:rgba(57,255,20,0.14);
+  --accent-soft-2:rgba(57,255,20,0.06);
+  --accent-strong:rgba(57,255,20,0.35);
+  --danger:#ff0033;
+  --danger-soft:rgba(255,0,51,0.15);
+  --text:#e5ffe5;
+  --text-soft:#9eea9e;
+  --border:#184818;
+  --border-strong:#42ff42;
+  --shadow:0 0 18px rgba(0,0,0,0.9);
+  --radius-lg:18px;
+  --radius-md:12px;
+  --radius-sm:8px;
+  --scanline:linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.35) 0px,
+    rgba(0,0,0,0.35) 1px,
+    rgba(0,255,90,0.03) 2px,
+    rgba(0,0,0,0.35) 3px,
+    rgba(0,0,0,0.35) 4px
+  );
+  --glow-soft:0 0 22px rgba(57,255,20,0.22);
+  --glow-strong:0 0 32px rgba(57,255,20,0.52);
+  --font-main:system-ui,-apple-system,BlinkMacSystemFont,"SF Pro Text",Segoe UI,Roboto,sans-serif;
+  --font-mono:"IBM Plex Mono","JetBrains Mono","SF Mono",ui-monospace,Menlo,monospace;
 }
-*{box-sizing:border-box}
-html,body{height:100%}
+*,
+*::before,
+*::after{
+  box-sizing:border-box;
+}
+html,body{
+  margin:0;
+  padding:0;
+  background:#000;
+  color:var(--text);
+  font-family:var(--font-main);
+}
 body{
-  margin:0; background:radial-gradient(1200px 900px at 50% -10%,rgba(57,255,20,.08),transparent 60%), #000;
-  color:var(--ink); font:14px/1.45 system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
+  min-height:100vh;
+  background:
+    radial-gradient(circle at top,rgba(57,255,20,0.18),transparent 60%),
+    radial-gradient(circle at bottom,rgba(0,0,0,0.9),#000),
+    var(--bg);
+  color:var(--text);
 }
-.wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 80px}
-h1{margin:0 0 12px; font-size:24px; letter-spacing:.6px}
-.header{display:flex; align-items:center; justify-content:space-between; gap:10px}
-.badge{border:1px solid var(--border); padding:6px 10px; border-radius:12px; color:var(--ink)}
-.btn{
-  display:inline-flex; align-items:center; gap:8px; justify-content:center; text-decoration:none;
-  border:1px solid var(--border); border-radius:14px; padding:10px 14px; font-weight:600;
-  background:linear-gradient(180deg, rgba(57,255,20,.08), rgba(57,255,20,.02));
-  color:var(--green); transition:box-shadow .2s ease, transform .08s ease; cursor:pointer;
+.app-shell{
+  max-width:960px;
+  margin:0 auto;
+  padding:16px 14px 32px;
 }
-.btn:hover{box-shadow:0 0 14px rgba(57,255,20,.22)}
-.btn.big{font-size:18px; padding:16px 18px}
-.btn.ghost{opacity:.9}
-.btn[disabled]{opacity:.45; cursor:not-allowed; box-shadow:none}
-.input{width:100%; border:1px solid var(--border); border-radius:12px; background:#0b0b0b; color:var(--ink); padding:10px 12px; font-size:14px}
-.hidden{display:none !important}
-
-.card{border:1px solid var(--border); border-radius:18px; background:rgba(9,9,9,.6); padding:16px}
-.row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
-.small{font-size:12px; color:var(--muted)}
-.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
-.center{display:flex; justify-content:center; align-items:center; gap:12px}
-
-hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
-
-/* Queue grid */
-.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px}
-.thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#ff3aa0; min-height:120px}
-.thumb img{display:block; width:100%; height:100%; object-fit:cover}
-.thumb .idx{
-  position:absolute; top:6px; left:6px; font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
-  background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35)
+.header-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:18px;
 }
-
-/* Timer card */
-.timer .row{justify-content:space-between}
-.clock{
-  display:inline-flex; min-width:36px; height:26px; align-items:center; justify-content:center;
-  border:1px solid var(--border); border-radius:10px; padding:0 10px;
+.page-title{
+  font-size:28px;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color:var(--accent);
+  text-shadow:0 0 12px rgba(57,255,20,0.7);
 }
-
-.toast{
-  position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
-  background:rgba(0,0,0,.85); color:var(--ink); border:1px solid var(--border); padding:10px 12px; border-radius:12px;
-  opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
+.header-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
 }
-.toast.show{opacity:1; transform:translateX(-50%) translateY(-4px)}
-
-/* Drop zone */
-.drop{
-  border:1px dashed var(--border); border-radius:14px; padding:14px; text-align:center;
-  background:rgba(57,255,20,.03);
+.badge-pill{
+  border-radius:999px;
+  border:1px solid var(--border);
+  padding:5px 11px;
+  font-size:11px;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background:radial-gradient(circle at top,rgba(57,255,20,0.18),rgba(5,22,5,0.7));
+  box-shadow:var(--glow-soft);
 }
-.drop.drag{background:rgba(57,255,20,.08)}
+.badge-dot{
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background:var(--accent);
+  box-shadow:0 0 10px rgba(57,255,20,1);
+}
+.btn-ghost{
+  border-radius:999px;
+  border:1px solid var(--border);
+  padding:5px 13px;
+  font-size:12px;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  background:linear-gradient(120deg,rgba(8,28,8,0.9),rgba(2,8,2,0.95));
+  color:var(--text-soft);
+  cursor:pointer;
+  box-shadow:var(--shadow);
+}
+.btn-ghost .caret{
+  font-size:13px;
+}
+.btn-ghost:active{
+  transform:translateY(1px);
+  box-shadow:none;
+}
+.main-card{
+  border-radius:var(--radius-lg);
+  border:1px solid var(--border);
+  box-shadow:var(--shadow);
+  background:
+    linear-gradient(145deg,rgba(3,14,3,0.98),rgba(7,28,7,0.98)),
+    var(--scanline);
+  padding:18px 16px 16px;
+  position:relative;
+  overflow:hidden;
+}
+.main-card::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background-image:repeating-linear-gradient(
+    to bottom,
+    rgba(57,255,20,0.06) 0px,
+    rgba(57,255,20,0.02) 1px,
+    transparent 2px,
+    transparent 3px
+  );
+  mix-blend-mode:soft-light;
+  opacity:0.7;
+  pointer-events:none;
+}
+.main-card-inner{
+  position:relative;
+  z-index:1;
+}
+.section-title{
+  font-size:15px;
+  text-transform:uppercase;
+  letter-spacing:0.16em;
+  color:var(--text-soft);
+  margin-bottom:8px;
+}
+.section-subtitle{
+  font-size:13px;
+  color:var(--text-soft);
+  opacity:0.8;
+  margin-bottom:14px;
+}
+.upload-shell{
+  border-radius:var(--radius-md);
+  border:1px solid var(--border);
+  padding:12px 12px 14px;
+  background:radial-gradient(circle at top left,rgba(57,255,20,0.12),rgba(3,14,3,0.96));
+  box-shadow:0 0 0 1px rgba(57,255,20,0.05);
+  position:relative;
+}
+.upload-shell::before{
+  content:"QUEUE INJECTION PORT";
+  position:absolute;
+  top:7px;
+  right:12px;
+  font-size:9px;
+  text-transform:uppercase;
+  letter-spacing:0.16em;
+  color:rgba(158,234,158,0.45);
+}
+.pick-zone{
+  border-radius:var(--radius-md);
+  border:1px dashed var(--border-strong);
+  padding:15px 12px;
+  text-align:center;
+  background:radial-gradient(circle at top,rgba(57,255,20,0.06),rgba(4,15,4,0.95));
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+}
+.pick-zone:hover{
+  border-style:solid;
+  box-shadow:var(--glow-soft);
+}
+.pick-icon{
+  font-size:22px;
+}
+.pick-label{
+  font-size:16px;
+  text-transform:uppercase;
+  letter-spacing:0.14em;
+}
+.pick-sub{
+  font-size:12px;
+  color:var(--text-soft);
+}
+.pick-sub strong{
+  color:var(--accent);
+}
+.hidden-input{
+  display:none;
+}
 .preview{
-  margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  margin-top:12px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:6px;
 }
-.preview img{max-height:120px; border-radius:10px; border:1px solid var(--border)}
-.authRow{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+.preview img, .preview video{max-height:120px; border-radius:10px; border:1px solid var(--border)}
+.preview img{
+  box-shadow:0 0 0 1px rgba(57,255,20,0.24);
+}
+.preview video{
+  box-shadow:0 0 0 1px rgba(57,255,20,0.24);
+  width:100%;
+  max-width:100%;
+  background:#000;
+}
+.preview .small{
+  font-size:11px;
+  color:var(--text-soft);
+  opacity:0.9;
+}
+.mono{
+  font-family:var(--font-mono);
+}
+.form-grid{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  margin-top:18px;
+}
+.field-block{
+  border-radius:var(--radius-md);
+  border:1px solid var(--border);
+  padding:11px 11px 9px;
+  background:radial-gradient(circle at top,rgba(57,255,20,0.05),rgba(3,12,3,0.98));
+}
+.field-label{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.16em;
+  color:var(--text-soft);
+  margin-bottom:4px;
+}
+.help-text{
+  font-size:11px;
+  color:var(--text-soft);
+  opacity:0.85;
+  margin-top:3px;
+}
+.input,
+.textarea{
+  width:100%;
+  border-radius:10px;
+  border:1px solid var(--border);
+  padding:8px 10px;
+  font-size:14px;
+  font-family:var(--font-main);
+  background:linear-gradient(135deg,rgba(5,14,5,0.9),rgba(2,8,2,0.96));
+  color:var(--text);
+  outline:none;
+  box-shadow:0 0 0 1px rgba(57,255,20,0.07);
+}
+.input:focus,
+.textarea:focus{
+  border-color:var(--border-strong);
+  box-shadow:var(--glow-soft);
+}
+.textarea{
+  min-height:72px;
+  resize:vertical;
+}
+.checkbox-row{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  margin-top:10px;
+}
+.checkbox-row input[type="checkbox"]{
+  width:18px;
+  height:18px;
+  border-radius:4px;
+  border:1px solid var(--border);
+  accent-color:var(--accent);
+}
+.checkbox-row label{
+  font-size:12px;
+  color:var(--text-soft);
+}
+.btn-primary{
+  margin-top:16px;
+  width:100%;
+  border-radius:999px;
+  padding:10px 16px;
+  border:1px solid rgba(57,255,20,0.7);
+  background:radial-gradient(circle at top,rgba(57,255,20,0.35),rgba(1,10,1,0.9));
+  color:#021002;
+  font-weight:600;
+  font-size:14px;
+  text-transform:uppercase;
+  letter-spacing:0.18em;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  cursor:pointer;
+  box-shadow:var(--glow-strong);
+}
+.btn-primary[disabled]{
+  opacity:0.5;
+  cursor:default;
+  box-shadow:none;
+}
+.btn-primary .icon{
+  font-size:16px;
+}
+.submit-status{
+  margin-top:6px;
+  font-size:11px;
+  color:var(--text-soft);
+}
+.submit-status.error{
+  color:var(--danger);
+}
+.meta-row{
+  margin-top:18px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.meta-item{
+  border-radius:var(--radius-md);
+  border:1px solid var(--border);
+  padding:8px 10px 7px;
+  background:linear-gradient(135deg,rgba(2,8,2,0.96),rgba(4,12,4,0.98));
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.meta-label{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.16em;
+  color:var(--text-soft);
+}
+.meta-value{
+  font-size:13px;
+  font-family:var(--font-mono);
+  color:var(--accent);
+}
+.meta-pill{
+  border-radius:999px;
+  border:1px solid var(--border);
+  padding:4px 9px;
+  font-size:10px;
+  letter-spacing:0.16em;
+  text-transform:uppercase;
+  color:var(--text-soft);
+  background:linear-gradient(120deg,rgba(5,18,5,0.96),rgba(3,10,3,0.96));
+}
+.footer-row{
+  margin-top:18px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.footer-link-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.footer-link{
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:0.14em;
+  color:var(--accent);
+  text-decoration:none;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.footer-link .chevron{
+  font-size:14px;
+}
+.footer-clock{
+  border-radius:999px;
+  border:1px solid var(--border);
+  padding:6px 10px;
+  font-size:12px;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  background:linear-gradient(120deg,rgba(5,18,5,0.96),rgba(3,8,3,0.96));
+}
+.footer-clock-label{
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:0.18em;
+  color:var(--text-soft);
+}
+.footer-clock-value{
+  font-family:var(--font-mono);
+  font-size:13px;
+  color:var(--accent);
+}
+.toast{
+  position:fixed;
+  left:50%;
+  bottom:18px;
+  transform:translateX(-50%);
+  max-width:440px;
+  width:calc(100% - 32px);
+  border-radius:999px;
+  border:1px solid var(--border-strong);
+  padding:9px 14px;
+  background:radial-gradient(circle at top,rgba(57,255,20,0.32),rgba(3,10,3,0.98));
+  color:var(--text);
+  font-size:12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  box-shadow:var(--glow-soft);
+  pointer-events:none;
+  opacity:0;
+  transition:opacity 0.18s ease-out, transform 0.18s ease-out;
+}
+.toast.visible{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+.toast.hidden-internal{
+  opacity:0;
+}
+.toast-message{
+  font-family:var(--font-mono);
+}
+.toast-tag{
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:0.16em;
+  color:var(--bg);
+  background:var(--accent);
+  padding:2px 6px;
+  border-radius:999px;
+}
+.inline-badge{
+  border-radius:999px;
+  border:1px solid var(--border);
+  padding:2px 6px;
+  font-size:10px;
+  letter-spacing:0.16em;
+  text-transform:uppercase;
+  color:var(--text-soft);
+}
+.queue-section{
+  margin-top:16px;
+  border-radius:var(--radius-md);
+  border:1px solid var(--border);
+  padding:9px 10px 8px;
+  background:linear-gradient(135deg,rgba(4,10,4,0.98),rgba(3,8,3,0.98));
+}
+.queue-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.queue-title{
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:0.18em;
+  color:var(--text-soft);
+}
+.queue-pill{
+  border-radius:999px;
+  border:1px solid var(--border);
+  padding:2px 7px;
+  font-size:11px;
+  font-family:var(--font-mono);
+  color:var(--accent);
+}
+.queue-body{
+  margin-top:7px;
+  font-size:11px;
+  color:var(--text-soft);
+}
+.queue-empty{
+  opacity:0.7;
+}
+.hidden{
+  display:none !important;
+}
+@media (min-width:720px){
+  .form-grid{
+    flex-direction:row;
+  }
+  .form-grid > .field-block{
+    flex:1;
+  }
+}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="header">
-      <h1 style="color:var(--green)">SUBMIT ART</h1>
-      <div class="row">
-        <span id="authBadge" class="badge small">not logged in</span>
-        <a class="btn ghost" href="./menu.html">← Menu</a>
+<div class="app-shell">
+  <header class="header-row">
+    <div class="page-title">Submit Art</div>
+    <div class="header-actions">
+      <div class="badge-pill" id="authStatus">
+        <span class="badge-dot"></span>
+        <span id="authLabel">checking auth…</span>
       </div>
+      <button class="btn-ghost" id="btnMenu">
+        <span>← Menu</span>
+        <span class="caret">▾</span>
+      </button>
     </div>
+  </header>
 
-    <!-- Minimal uploader -->
-    <div class="card" style="margin-top:16px">
-      <div id="pickZone" class="drop">
-        <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
-        <div id="fileName" class="small">jpg / png / webp / mp4 / webm — 50MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
-        <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
-        <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
+  <main class="main-card">
+    <div class="main-card-inner">
+      <div class="section-title">Upload or Paste Art</div>
+      <div class="section-subtitle">Drop your piece into the machine. It will enter the next available tournament queue.</div>
+
+      <section class="upload-shell">
+        <label class="pick-zone" id="pickZone">
+          <div class="pick-icon">⬆️</div>
+          <div class="pick-label">Upload or Paste Art</div>
+          <div class="pick-sub" id="fileName">image or video — 100MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
+          <input id="fileInput" class="hidden-input" type="file" accept="image/*,video/*">
+        </label>
+
         <div class="preview">
           <img id="imgPreview" alt="" class="hidden">
+          <video id="videoPreview" class="hidden" playsinline controls></video>
           <div class="small mono" id="previewHint"></div>
         </div>
-      </div>
 
-      <hr class="sep">
-
-      <!-- NEW: piece title + description -->
-      <div class="small" style="margin-bottom:6px">Optional details</div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
-        <div>
-          <label for="pieceTitle" class="small" style="display:block;margin-bottom:4px">Piece title</label>
-          <input id="pieceTitle" class="input" maxlength="120" placeholder="e.g., Neon Cathedral">
+        <div class="field-block" style="margin-top:10px;">
+          <div class="field-label">Or remote URL (images & videos)</div>
+          <input id="urlInput" class="input" placeholder="https://image.example/your-art.jpg" autocomplete="off">
+          <div class="help-text mono">Paste a direct link to the file. Data-hoarding encouraged; hot-linking is not.</div>
         </div>
-        <div>
-          <label for="pieceDesc" class="small" style="display:block;margin-bottom:4px">Description</label>
-          <textarea id="pieceDesc" class="input" rows="3" maxlength="500" placeholder="Tell people about this piece…"></textarea>
+      </section>
+
+      <section class="form-grid">
+        <div class="field-block">
+          <div class="field-label">Optional details</div>
+          <label class="field-label" style="margin-top:4px;">Piece title</label>
+          <input id="titleInput" class="input" placeholder="Untitled rage object">
+          <label class="field-label" style="margin-top:10px;">Description</label>
+          <textarea id="descInput" class="textarea" placeholder="What is this piece devouring?"></textarea>
+          <div class="help-text">These show up on the winners page and future profile views. Keep it weird, keep it yours.</div>
         </div>
-      </div>
 
-      <label class="row small" style="align-items:flex-start">
-        <input id="consent" type="checkbox">
-        <span>I am 18+, no sexual minors, no Nazi BS.</span>
-      </label>
+        <div class="field-block">
+          <div class="field-label">Content rules</div>
+          <div class="help-text">Rage Space is 18+ and aggressively anti-fascist.</div>
+          <div class="checkbox-row">
+            <input id="chkConsent" type="checkbox">
+            <label for="chkConsent">
+              I am 18+, and this piece contains <strong>no sexualized minors, no real-death gore, no doxxing, and no Nazi / organized hate propaganda.</strong>
+            </label>
+          </div>
+          <div class="help-text" style="margin-top:6px;">
+            Violations get hard-banned + permanent art exile. Don’t test the machine.
+          </div>
+        </div>
+      </section>
 
-      <div class="center" style="margin-top:10px">
-        <button id="btnSubmit" class="btn">✅ Submit</button>
-        <span id="submitMsg" class="small"></span>
-      </div>
+      <button class="btn-primary" id="btnSubmit">
+        <span class="icon">✅</span>
+        <span>Submit</span>
+      </button>
+      <div class="submit-status" id="submitStatus"></div>
+
+      <section class="meta-row">
+        <div class="meta-item">
+          <div>
+            <div class="meta-label">Tournament Clock</div>
+            <div class="meta-value" id="clockLabel">--</div>
+          </div>
+          <div class="meta-pill">Next bracket cutover</div>
+        </div>
+
+        <div class="meta-item">
+          <div>
+            <div class="meta-label">Queue Status</div>
+            <div class="meta-value" id="queueStatus">checking…</div>
+          </div>
+          <div class="meta-pill">Art waiting to battle</div>
+        </div>
+      </section>
+
+      <section class="queue-section">
+        <div class="queue-header">
+          <div class="queue-title">In the Queue</div>
+          <div class="queue-pill" id="queueCount">(0)</div>
+        </div>
+        <div class="queue-body">
+          <div class="queue-empty" id="queueEmpty">Your piece will appear here once it’s fully uploaded and accepted.</div>
+          <div id="queueList"></div>
+        </div>
+      </section>
+
+      <section class="footer-row">
+        <div class="footer-link-row">
+          <a href="matchup.html" class="footer-link">
+            <span class="chevron">⟶</span>
+            <span>Watch the current tournament</span>
+          </a>
+          <div class="footer-clock">
+            <span class="footer-clock-label">Until next tournament</span>
+            <span class="footer-clock-value" id="footerClock">--</span>
+          </div>
+        </div>
+      </section>
     </div>
+  </main>
+</div>
 
-    <!-- Live tournament clock (no round label) -->
-    <div class="card" style="margin-top:16px">
-      <div class="timer">
-        <div class="row">
-          <span>🕒 Tournament Clock</span>
-          <span id="clock" class="clock">—</span>
-        </div>
-      </div>
-    </div>
+<div class="toast" id="toast">
+  <div class="toast-message" id="toastMsg"></div>
+  <div class="toast-tag">submit.art</div>
+</div>
 
-    <!-- Queue (collapsible) -->
-    <div class="card" style="margin-top:16px">
-      <div class="row" style="justify-content:space-between; align-items:center">
-        <strong>📜 In the Queue</strong>
-        <div class="row small" style="gap:8px">
-          <span id="queueCount" class="small"></span>
-          <button id="queueToggle" class="btn ghost" style="padding:6px 10px">Expand ▼</button>
-        </div>
-      </div>
-      <div id="queuePanel" style="display:none; margin-top:12px">
-        <div id="queue" class="grid"></div>
-        <div id="queueEmpty" class="small" style="margin-top:6px; display:none">No items in queue.</div>
-      </div>
-      <div class="small" style="margin-top:6px">Oldest first → next in</div>
-    </div>
-  </div>
-
-  <div id="toast" class="toast"></div>
-
+<script src="https://unpkg.com/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
 <script>
-/* ---------- Supabase + constants ---------- */
-const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
-const BUCKET = 'art-uploads';
-const MAX_MB = 50; // client-side cap to stay under Supabase file size limit
+const SUPABASE_URL = 'https://tuqvpcevrhciursxrgav.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbRJQxe8y0UcRSBv_3_1VKC4xwJHxgXGN_RJQ6XURp4';
+
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ---------- Elements ---------- */
-const authBadge = document.getElementById('authBadge');
-const toastEl = document.getElementById('toast');
+const MAX_MB = 100;
+const MAX_BYTES = MAX_MB * 1024 * 1024;
 
-const pickZone = document.getElementById('pickZone');
-const btnPick = document.getElementById('btnPick');
-const fileInput = document.getElementById('fileInput');
-const urlInput = document.getElementById('urlInput');
-const fileName = document.getElementById('fileName');
-const previewHint = document.getElementById('previewHint');
-const imgPreview = document.getElementById('imgPreview');
+const BUCKET = 'art-uploads';
+const QUEUE_TABLE = 'art_queue';
+const TIMER_ENDPOINT = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
-const titleInput = document.getElementById('pieceTitle');
-const descInput  = document.getElementById('pieceDesc');
+function q(id){ return document.getElementById(id); }
 
-const consent = document.getElementById('consent');
-const btnSubmit = document.getElementById('btnSubmit');
-const submitMsg = document.getElementById('submitMsg');
+const pickZone = q('pickZone');
+const fileInput = q('fileInput');
+const urlInput = q('urlInput');
+const fileName = q('fileName');
+const imgPreview = q('imgPreview');
+const videoPreview = q('videoPreview');
+const previewHint = q('previewHint');
+const chkConsent = q('chkConsent');
+const btnSubmit = q('btnSubmit');
+const submitStatus = q('submitStatus');
+const clockLabel = q('clockLabel');
+const footerClock = q('footerClock');
+const queueStatus = q('queueStatus');
+const queueCount = q('queueCount');
+const queueEmpty = q('queueEmpty');
+const queueList = q('queueList');
+const toastEl = q('toast');
+const toastMsg = q('toastMsg');
+const authStatus = q('authStatus');
+const authLabel = q('authLabel');
+const btnMenu = q('btnMenu');
+const titleInput = q('titleInput');
+const descInput = q('descInput');
 
-const queuePanel = document.getElementById('queuePanel');
-const queueToggle = document.getElementById('queueToggle');
-const queueCount = document.getElementById('queueCount');
-const queueGrid = document.getElementById('queue');
-const queueEmpty = document.getElementById('queueEmpty');
+let toastTimeout = null;
+let picked = { file:null, url:'' };
+let clockState = { remaining_sec:null, period_sec:null };
+let isSubmitting = false;
 
-const clockEl = document.getElementById('clock');
+function log(...args){
+  try{
+    const stamp = new Date().toLocaleTimeString();
+    console.log(`[${stamp}] SUBMIT:`, ...args);
+  }catch{}
+}
 
-/* ---------- Debugger (kept) ---------- */
-const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
-log('LOG: Debugger ready');
+function showToast(msg){
+  toastMsg.textContent = msg;
+  toastEl.classList.add('visible');
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(()=>{
+    toastEl.classList.remove('visible');
+  }, 3200);
+}
+const toast = showToast;
 
-/* ---------- Utils ---------- */
-function toast(msg, ms=1600){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
-function bytesToMB(n){ return (n/(1024*1024)).toFixed(2); }
-const varGreen = ()=> getComputedStyle(document.documentElement).getPropertyValue('--green') || '#39ff14';
+function bytesToMB(bytes){
+  return Math.round((bytes/1024/1024)*10)/10;
+}
+
 function show(el){ el.classList.remove('hidden'); }
 function hide(el){ el.classList.add('hidden'); }
-function setPreview(src){
-  if (src){ imgPreview.src = src; show(imgPreview); }
-  else { imgPreview.removeAttribute('src'); hide(imgPreview); }
-}
-
-/* helper: update preview based on image vs video */
-function updatePreviewForFile(f){
-  const isImage = f.type.startsWith('image/');
-  const isVideo = f.type.startsWith('video/');
-  if (isImage){
-    setPreview(URL.createObjectURL(f));
-    previewHint.textContent = 'Ready to upload';
-  } else if (isVideo){
-    setPreview('');
-    previewHint.textContent = `Video selected: ${f.name} — ${bytesToMB(f.size)} MB`;
+function setPreview(src, kind='image'){
+  if (!imgPreview && !videoPreview) return;
+  if (!src){
+    if (imgPreview){ imgPreview.removeAttribute('src'); hide(imgPreview); }
+    if (videoPreview){
+      try{ videoPreview.pause(); }catch(e){}
+      videoPreview.removeAttribute('src');
+      try{ videoPreview.load(); }catch(e){}
+      hide(videoPreview);
+    }
+    return;
+  }
+  if (kind === 'video'){
+    if (imgPreview) hide(imgPreview);
+    if (videoPreview){ videoPreview.src = src; show(videoPreview); }
   } else {
-    setPreview('');
-    previewHint.textContent = '';
+    if (videoPreview){
+      try{ videoPreview.pause(); }catch(e){}
+      hide(videoPreview);
+    }
+    if (imgPreview){ imgPreview.src = src; show(imgPreview); }
   }
 }
 
-/* ---------- Auth helpers ---------- */
-async function uid(){
-  const { data:{session} } = await supabase.auth.getSession();
-  return session?.user?.id || null;
-}
-function paintAuth(id){
-  if (id){ authBadge.textContent='logged in'; authBadge.style.color=varGreen(); }
-  else   { authBadge.textContent='not logged in'; authBadge.style.color='#ff6b6b'; authBadge.style.borderColor='#3b1616'; }
+function setSubmitMsg(msg, isError=false){
+  submitStatus.textContent = msg||'';
+  submitStatus.classList.toggle('error', !!isError);
 }
 
-/* NEW: resolve the current user's display username for artist_name */
-async function currentUsername() {
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
-  if (!user) return null;
+/* ---------- Auth + nav ---------- */
+btnMenu.addEventListener('click', ()=>{
+  window.location.href = 'index.html';
+});
 
-  // Try profiles.username first
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (!error && data?.username) return data.username;
-  } catch (e) {
-    console.warn('[submit] profiles lookup failed', e);
-  }
-
-  // Fallback: email prefix
-  const email = user.email || user.user_metadata?.email;
-  if (typeof email === 'string') {
-    const at = email.indexOf('@');
-    return at > 0 ? email.slice(0, at) : email;
-  }
-  return null;
+async function currentUser(){
+  const { data:{ user }, error } = await supabase.auth.getUser();
+  if (error) log('auth getUser error', error);
+  return user||null;
 }
 
-/* ---------- Pick flow (file or URL) ---------- */
-let picked = { file:null, url:'' };
+async function currentUsername(userId){
+  if (!userId) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error){ log('profiles lookup error', error); return null; }
+  return data?.username || null;
+}
 
-btnPick.addEventListener('click', ()=>{
-  if (!picked.file && !picked.url){
-    fileInput.click();
-  } else {
-    urlInput.classList.toggle('hidden');
-    if (!urlInput.classList.contains('hidden')) urlInput.focus();
+async function initAuth(){
+  try{
+    const user = await currentUser();
+    if (user){
+      authLabel.textContent = 'logged in';
+      authStatus.querySelector('.badge-dot').style.background = 'var(--accent)';
+    } else {
+      authLabel.textContent = 'guest — log in';
+      authStatus.querySelector('.badge-dot').style.background = 'var(--danger)';
+    }
+  }catch(e){
+    authLabel.textContent = 'auth error';
   }
+}
+initAuth();
+
+/* ---------- File picking / URL / preview ---------- */
+
+pickZone.addEventListener('click', (e)=>{
+  if (e.target === urlInput) return;
+  fileInput.click();
 });
 
 fileInput.addEventListener('change', ()=>{
@@ -283,7 +795,7 @@ fileInput.addEventListener('change', ()=>{
     fileInput.value='';
     return;
   }
-  if (f.size > MAX_MB*1024*1024){
+  if (f.size > MAX_BYTES){
     toast(`Max ${MAX_MB}MB`);
     fileInput.value='';
     return;
@@ -291,66 +803,92 @@ fileInput.addEventListener('change', ()=>{
   picked.file = f; picked.url = '';
   urlInput.value = ''; urlInput.classList.add('hidden');
   fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  updatePreviewForFile(f);
+  const kind = isVideo ? 'video' : 'image';
+  setPreview(URL.createObjectURL(f), kind);
+  previewHint.textContent = isVideo ? 'Ready to upload (video)' : 'Ready to upload';
 });
 
-urlInput.addEventListener('input', ()=>{
-  picked.url = urlInput.value.trim();
-  if (picked.url) {
-    picked.file = null; fileInput.value='';
-    fileName.textContent = 'Using pasted URL';
-    previewHint.textContent = picked.url;
-    const im = new Image();
-    im.onload = ()=> setPreview(picked.url);
-    im.onerror = ()=> { setPreview(''); toast('URL is not an image'); };
-    im.src = picked.url;
-  } else {
-    previewHint.textContent='';
-    setPreview('');
-  }
+['dragenter','dragover'].forEach(ev=>{
+  pickZone.addEventListener(ev, (e)=>{
+    e.preventDefault();
+    pickZone.style.borderStyle = 'solid';
+  });
 });
-
-/* Drag & Drop */
-['dragenter','dragover'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.add('drag');}));
-['dragleave','drop'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.remove('drag');}));
+['dragleave','drop'].forEach(ev=>{
+  pickZone.addEventListener(ev, (e)=>{
+    e.preventDefault();
+    pickZone.style.borderStyle = 'dashed';
+  });
+});
 pickZone.addEventListener('drop', (e)=>{
   const f = e.dataTransfer?.files?.[0];
   if (!f) return;
   const isImage = f.type.startsWith('image/');
   const isVideo = f.type.startsWith('video/');
   if (!isImage && !isVideo) return toast('File must be an image or video');
-  if (f.size > MAX_MB*1024*1024) return toast(`Max ${MAX_MB}MB`);
+  if (f.size > MAX_BYTES) return toast(`Max ${MAX_MB}MB`);
   picked.file = f; picked.url='';
   fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+  const kind = isVideo ? 'video' : 'image';
   fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  updatePreviewForFile(f);
+  setPreview(URL.createObjectURL(f), kind);
+  previewHint.textContent = isVideo ? 'Ready to upload (dropped video)' : 'Ready to upload (dropped image)';
 });
 
-/* Paste support (clipboard image or URL text) */
+urlInput.addEventListener('input', ()=>{
+  const v = urlInput.value.trim();
+  if (v){
+    picked.url = v;
+    picked.file = null;
+    fileInput.value = '';
+    fileName.textContent = 'Using remote URL';
+    const isVid = /\.(mp4|webm|mov|m4v|ogg)(\?\S*)?$/i.test(v);
+    const isImg = /\.(png|jpe?g|webp|gif)(\?\S*)?$/i.test(v);
+    if (isVid || isImg){
+      setPreview(v, isVid?'video':'image');
+      previewHint.textContent = v;
+    } else {
+      setPreview(null);
+      previewHint.textContent = 'URL set (no preview)';
+    }
+  } else {
+    picked.url='';
+    fileName.textContent = 'image or video — 100MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
+    setPreview(null);
+    previewHint.textContent='';
+  }
+});
+
 window.addEventListener('paste', (e)=>{
   try{
     const items = e.clipboardData?.items || [];
     for (const it of items){
       if (it.kind === 'file'){
         const f = it.getAsFile();
-        if (f && f.type.startsWith('image/')){
-          if (f.size > MAX_MB*1024*1024) { toast(`Max ${MAX_MB}MB`); return; }
+        if (f){
+          const isImage = f.type.startsWith('image/');
+          const isVideo = f.type.startsWith('video/');
+          if (!isImage && !isVideo) continue;
+          if (f.size > MAX_BYTES) { toast(`Max ${MAX_MB}MB`); return; }
           picked.file = f; picked.url='';
           fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-          fileName.textContent = `${f.name||'pasted-image'} — ${bytesToMB(f.size)} MB`;
-          setPreview(URL.createObjectURL(f));
-          previewHint.textContent = 'Ready to upload (pasted image)';
+          const kind = isVideo ? 'video' : 'image';
+          fileName.textContent = `${f.name||'pasted-file'} — ${bytesToMB(f.size)} MB`;
+          setPreview(URL.createObjectURL(f), kind);
+          previewHint.textContent = isVideo ? 'Ready to upload (pasted video)' : 'Ready to upload (pasted image)';
           return;
         }
       } else if (it.kind === 'string'){
         it.getAsString((txt)=>{
           const s = (txt||'').trim();
-          if (/^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i.test(s)){
+          const isImg = /^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i.test(s);
+          const isVid = /^https?:\/\/\S+\.(mp4|webm|mov|m4v|ogg)(\?\S*)?$/i.test(s);
+          if (isImg || isVid){
             picked.url = s; picked.file = null;
             urlInput.value = s; urlInput.classList.remove('hidden');
             fileInput.value = '';
             fileName.textContent = 'Using pasted URL';
-            setPreview(s);
+            setPreview(s, isVid ? 'video' : 'image');
             previewHint.textContent = s;
           }
         });
@@ -363,535 +901,189 @@ window.addEventListener('paste', (e)=>{
 async function uploadToStorage(userId, file){
   const d=new Date();
   const path = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${crypto.randomUUID()}-${file.name}`;
-  const t0=performance.now();
-  const { data, error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl:'3600', upsert:false });
-  const dt=(performance.now()-t0).toFixed(0);
+  log('Uploading to bucket', path, 'sizeMB=', bytesToMB(file.size));
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
   if (error) throw error;
+  const { data:pub, error:pubErr } = supabase
+    .storage
+    .from(BUCKET)
+    .getPublicUrl(data.path);
+  if (pubErr) throw pubErr;
+  log('Upload complete path=', data.path, 'publicUrl=', pub.publicUrl);
+  return pub.publicUrl;
+}
 
-  const { data:pub } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
-  let url = pub?.publicUrl || null;
+/* ---------- Queue + clock ---------- */
 
+async function refreshQueue(){
   try{
-    const { data:signed } = await supabase.storage.from(BUCKET).createSignedUrl(data.path, 60*60*24*7);
-    if (signed?.signedUrl) url = url || signed.signedUrl;
-  }catch(e){}
-
-  log('IMG: uploaded ', url, `(${dt}ms)`);
-  return url;
-}
-
-/* ---------- Edge call + timer normalize ---------- */
-async function callEdge(){
-  const t0 = performance.now();
-  log('EDGE: GET', EDGE_URL);
-  const res = await fetch(EDGE_URL, {
-    method:'GET',
-    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`, 'apikey':SUPABASE_ANON_KEY }
-  });
-  const raw = await res.text();
-  const dt = (performance.now()-t0).toFixed(0);
-  log(`EDGE: GET ${EDGE_URL} → ${res.status} (${dt}ms)`);
-  const preview = raw.length>200 ? raw.slice(0,200)+'…' : raw;
-  log('EDGE: body ~200b =', preview);
-
-  let j=null; try{ j=JSON.parse(raw); }catch(e){ log('EDGE: JSON parse error', String(e)); }
-  if (!res.ok) throw new Error((j&&j.error)||raw||'edge error');
-  return j?.state || j || {};
-}
-
-function normalize(s){
-  try { log('[EDGE] raw state', JSON.stringify(s)); } catch {}
-
-  const phaseEnd =
-    s.ends_at || s.endsAt || s.phase_end_at || s.phaseEndAt || s.next_at || s.next_iso || s.base_iso || null;
-
-  const period =
-    (typeof s.period_sec==='number') ? s.period_sec
-  : (typeof s.period==='number')     ? s.period
-  : (typeof s.period_s==='number')   ? s.period_s
-  : 20;
-
-  let remaining =
-    (typeof s.remaining_sec==='number') ? s.remaining_sec
-  : (typeof s.remaining==='number')     ? s.remaining
-  : (typeof s.remaining_ms==='number')  ? Math.ceil(s.remaining_ms/1000)
-  : (typeof s.next_ms==='number')       ? Math.ceil(s.next_ms/1000)
-  : null;
-
-  if ((remaining==null || remaining<=0) && phaseEnd){
-    const ms = Date.parse(phaseEnd) - Date.now();
-    if (!isNaN(ms)) remaining = Math.max(0, Math.ceil(ms/1000));
-  }
-
-  try { log('[EDGE] normalized', JSON.stringify({phase_end_at:phaseEnd, period_sec:period, remaining_sec:remaining, paused:!!s.paused})); } catch {}
-  return { phase_end_at: phaseEnd, period_sec: period, paused: !!s.paused, remaining_sec: remaining };
-}
-
-/* ---------- Timer state ---------- */
-let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
-
-/* ---------- Sync ---------- */
-async function syncState(){
-  try{
-    const s = normalize(await callEdge());
-    const __prev = serverPhaseEndISO;
-
-    serverPhaseEndISO = s.phase_end_at || s.ends_at || s.endsAt || null;
-    if (!serverPhaseEndISO && s.base_iso) serverPhaseEndISO = s.base_iso;
-
-    remainingSec = s.remaining_sec;
-    periodSec = s.period_sec ?? 20;
-    paused = !!s.paused;
-    lastSyncAt = Date.now();
-
-    if (__prev && serverPhaseEndISO && __prev !== serverPhaseEndISO) {
-      try { await renderQueue(); } catch {}
+    queueStatus.textContent = 'loading…';
+    const { data, error } = await supabase
+      .from(QUEUE_TABLE)
+      .select('id,image_url,created_at,status')
+      .order('created_at',{ascending:true})
+      .limit(20);
+    if (error) throw error;
+    const pending = (data||[]).filter(r=>r.status==='pending');
+    queueCount.textContent = `(${pending.length})`;
+    if (pending.length === 0){
+      queueEmpty.classList.remove('hidden');
+      queueList.innerHTML = '';
+      queueStatus.textContent = 'empty — your piece goes straight in';
+    } else {
+      queueEmpty.classList.add('hidden');
+      queueList.innerHTML = pending.map(row=>{
+        const d = new Date(row.created_at);
+        return `<div class="mono" style="margin-top:2px;">• ${d.toLocaleTimeString()} — queued item</div>`;
+      }).join('');
+      queueStatus.textContent = `${pending.length} pending`;
     }
-
-    log('CLOCK: clock — →', (typeof remainingSec==='number')?remainingSec:'—', `(Δdom ${(performance.now()/1000).toFixed(2)}s)`);
   }catch(e){
-    console.error(e);
-    toast('Timer sync failed');
+    log('queue load error', e);
+    queueStatus.textContent = 'error loading queue';
   }
 }
 
-/* ---------- Render loop ---------- */
-let raf;
-function loop(){
-  if (typeof remainingSec === 'number') {
-    const elapsed = (Date.now() - lastSyncAt) / 1000;
-    const sec = Math.max(0, Math.ceil(remainingSec - elapsed));
-    clockEl.textContent = String(sec);
-    if (sec<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
-  } else if (serverPhaseEndISO) {
-    const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
-    const sec = Math.ceil(rem/1000);
-    clockEl.textContent = String(sec);
-    if (rem<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
-  } else {
-    const elapsed = Math.floor(((Date.now()% (periodSec*1000)))/1000);
-    const sec = Math.max(0, periodSec - elapsed);
-    clockEl.textContent = String(sec);
-    if (Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
+async function refreshClock(){
+  try{
+    const res = await fetch(TIMER_ENDPOINT,{method:'GET'});
+    if (!res.ok) throw new Error('timer fetch failed');
+    const raw = await res.json();
+    log('[CLOCK] raw', raw);
+    const remaining = raw?.normalized?.remaining_sec ?? raw?.remaining_sec;
+    const period = raw?.normalized?.period_sec ?? raw?.period_sec;
+    clockState.remaining_sec = typeof remaining === 'number' ? remaining : null;
+    clockState.period_sec = typeof period === 'number' ? period : null;
+    updateClockLabels();
+  }catch(e){
+    log('timer error', e);
+    clockLabel.textContent = '--';
+    footerClock.textContent = '--';
   }
-  raf = requestAnimationFrame(loop);
 }
 
-/* Keep your style of periodic logging */
-log('TIMER: interval 3 set @ 30000ms');
-const int3 = setInterval(()=> syncState().catch(()=>{}), 30000);
-log('TIMER: timeout 4 set @ 0ms');
-setTimeout(()=>{ log('TIMER: timeout 4 run 0.0ms'); }, 0);
+function formatSeconds(sec){
+  if (sec == null || isNaN(sec)) return '--';
+  const s = Math.max(0,Math.floor(sec));
+  const m = Math.floor(s/60);
+  const r = s%60;
+  return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+}
+
+function updateClockLabels(){
+  const txt = formatSeconds(clockState.remaining_sec);
+  clockLabel.textContent = txt;
+  footerClock.textContent = txt;
+}
+
+setInterval(()=>{
+  if (clockState.remaining_sec == null) return;
+  clockState.remaining_sec = Math.max(0,clockState.remaining_sec-1);
+  updateClockLabels();
+},1000);
+
+refreshClock();
+refreshQueue();
+setInterval(refreshClock,20000);
+setInterval(refreshQueue,20000);
 
 /* ---------- Submit handler ---------- */
+
 btnSubmit.addEventListener('click', async ()=>{
-  submitMsg.textContent='';
-  const id = await uid();
-  if (!id) return toast('Log in to submit');
-  if (!consent.checked) return toast('Please consent to the rules');
+  if (isSubmitting) return;
+  setSubmitMsg('');
+  const consentOk = chkConsent.checked;
+  if (!consentOk){
+    toast('You must confirm the content rules.');
+    setSubmitMsg('Check the content rules box to continue.', true);
+    return;
+  }
 
-  const pieceName = (titleInput?.value || '').trim();
-  const pieceDesc = (descInput?.value || '').trim();
+  const user = await currentUser();
+  if (!user){
+    toast('Log in to submit art.');
+    setSubmitMsg('Log in via index page, then return here.', true);
+    return;
+  }
 
-  // NEW: lookup username to store in artist_name
-  const artistName = await currentUsername();
+  const username = await currentUsername(user.id);
+  if (!username){
+    toast('Set a username first (profile page).');
+    setSubmitMsg('Missing username. Visit profile page, then come back.', true);
+    return;
+  }
 
-  let finalUrl = (picked.url||'').trim();
+  if (!picked.file && !picked.url){
+    toast('Pick a file or paste a URL first.');
+    setSubmitMsg('No art selected yet.', true);
+    return;
+  }
+
+  let fileUrl = picked.url || '';
   try{
+    isSubmitting = true;
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Submitting…';
+    setSubmitMsg('Uploading to the machine…');
+
     if (picked.file){
-      if (picked.file.size > MAX_MB*1024*1024) {
-        return toast(`Max ${MAX_MB}MB`);
+      if (picked.file.size > MAX_BYTES){
+        throw new Error(`File is too large. Max ${MAX_MB}MB.`);
       }
-      toast('Uploading…');
-      finalUrl = await uploadToStorage(id, picked.file);
+      fileUrl = await uploadToStorage(user.id, picked.file);
     }
-    if (!finalUrl) return toast('Pick a file or paste a URL');
 
-    const payload = {
-      image_url: finalUrl,
-      status: 'pending',
-      piece_name: pieceName || null,
-      piece_description: pieceDesc || null,
-      artist_name: artistName || null
-    };
+    if (!fileUrl){
+      throw new Error('No file URL resolved.');
+    }
 
-    const { error } = await supabase.from('art_queue').insert(payload);
-    if (error) throw error;
+    const title = titleInput.value.trim() || null;
+    const description = descInput.value.trim() || null;
 
-    picked = {file:null, url:''};
-    fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-    fileName.textContent = 'jpg / png / webp / mp4 / webm — 50MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
+    const { error:insertError } = await supabase
+      .from(QUEUE_TABLE)
+      .insert({
+        image_url: fileUrl,
+        status: 'pending',
+        submitted_by: user.id,
+        submitted_username: username,
+        piece_title: title,
+        piece_description: description
+      });
+
+    if (insertError) throw insertError;
+
+    toast('Submitted to queue. Glory to the machine.');
+    setSubmitMsg('Submitted successfully. Your piece is waiting in the queue.');
+    picked.file = null;
+    picked.url = '';
+    fileInput.value = '';
+    urlInput.value = '';
+    urlInput.classList.remove('hidden');
+    fileName.textContent = 'image or video — 100MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
+    setPreview(null);
     previewHint.textContent = '';
-    setPreview('');
-    consent.checked = false;
-    if (titleInput) titleInput.value = '';
-    if (descInput)  descInput.value  = '';
+    chkConsent.checked = false;
+    titleInput.value = '';
+    descInput.value = '';
 
-    toast('✅ Art queued for next round');
-    submitMsg.textContent = 'Art queued for next round.';
-    await renderQueue();
-    if (queuePanel && queuePanel.style.display === 'none') {
-      queuePanel.style.display = 'block'; queueToggle.textContent = 'Collapse ▲';
-    }
+    refreshQueue();
   }catch(e){
-    console.error(e);
-    toast(e?.message || 'Submit failed');
-    submitMsg.textContent = 'Submit failed.';
+    console.error('submit error', e);
+    const msg = e?.message || 'Submit failed.';
+    toast(msg);
+    setSubmitMsg(`Submit failed: ${msg}`, true);
+  }finally{
+    isSubmitting = false;
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = 'Submit';
   }
 });
-
-/* ---------- Queue toggle ---------- */
-if (queueToggle){
-  queueToggle.addEventListener('click', ()=>{
-    const shown = queuePanel.style.display !== 'none';
-    queuePanel.style.display = shown ? 'none' : 'block';
-    queueToggle.textContent = shown ? 'Expand ▼' : 'Collapse ▲';
-  });
-}
-
-/* ---------- Queue render ---------- */
-async function renderQueue(){
-  try{
-    const { data, error } = await supabase
-      .from('art_queue')
-      .select('id,image_url,created_at')
-      .eq('status','pending')
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-
-    if (!data || !data.length){
-      queueGrid.innerHTML = '';
-      queueEmpty.style.display = 'block';
-      if (queueCount) queueCount.textContent = '(0)';
-      return;
-    }
-    queueEmpty.style.display = 'none';
-    if (queueCount) queueCount.textContent = `(${data.length})`;
-    queueGrid.innerHTML = data.map((r,i)=>`
-      <div class="thumb" data-id="${r.id}" title="${r.image_url}">
-        <span class="idx">#${i+1}</span>
-        <img src="${r.image_url}" alt="queued art ${i+1}"/>
-      </div>
-    `).join('');
-
-    queueGrid.querySelectorAll('img').forEach(img=>{
-      img.addEventListener('load', ()=> log('IMG: loaded  ', img.src));
-      img.addEventListener('error', ()=> {
-        console.warn('IMG: error   ', img.src);
-        const host = img.closest('[data-id], .thumb, .item');
-        if (host) {
-          host.remove();
-          const count = queueGrid.children.length;
-          if (queueCount) queueCount.textContent = `(${count})`;
-          if (count === 0) queueEmpty.style.display = 'block';
-          console.warn('[QUEUE] removed 404 image tile');
-        }
-      });
-    });
-  }catch(e){
-    console.error(e);
-    toast('Queue failed to load');
-  }
-}
-
-/* ---------- Realtime queue watch ---------- */
-const queueChannel = supabase.channel('queue-watch')
-  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'art_queue' }, (payload) => {
-    const id = payload.new?.id;
-    const newS = payload.new?.status;
-    if (!id) return;
-    if (newS === 'locked' || newS === 'used') {
-      const el = queueGrid.querySelector(`[data-id="${id}"]`);
-      if (el) {
-        el.remove();
-        const count = queueGrid.children.length;
-        if (queueCount) queueCount.textContent = `(${count})`;
-        if (count === 0) queueEmpty.style.display = 'block';
-        console.log('[QUEUE] removed', id, '→', newS);
-      } else {
-        renderQueue().catch(()=>{});
-      }
-    }
-  })
-  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'art_queue' }, (payload) => {
-    const row = payload.new;
-    if (row?.status !== 'pending') return;
-    const div = document.createElement('div');
-    div.className = 'thumb';
-    div.dataset.id = row.id;
-    div.title = row.image_url;
-    div.innerHTML = `<span class="idx">#?</span><img src="${row.image_url}" alt="queued art"/>`;
-    if (queueGrid.children.length === 0) {
-      queueEmpty.style.display = 'none';
-      queueGrid.appendChild(div);
-    } else {
-      queueGrid.appendChild(div);
-    }
-    const count = queueGrid.children.length;
-    if (queueCount) queueCount.textContent = `(${count})`;
-  })
-  .subscribe();
-
-// Clean up
-window.addEventListener('beforeunload', ()=> { try { supabase.removeChannel(queueChannel); } catch {} });
-
-/* ---------- Round start watch (for queue refresh) ---------- */
-let __lastClock = null;
-function __watchRoundStart() {
-  const n = parseInt(clockEl.textContent, 10);
-  if (!isNaN(n)) {
-    if (__lastClock !== null && __lastClock <= 1 && n > __lastClock) {
-      console.log('[QUEUE] round start detected — refreshing queue');
-      renderQueue().catch(()=>{});
-    }
-    __lastClock = n;
-  }
-  requestAnimationFrame(__watchRoundStart);
-}
-__watchRoundStart();
-
-/* ---------- Boot ---------- */
-(async()=>{
-  paintAuth(await uid());
-  supabase.auth.onAuthStateChange((_e, session)=> paintAuth(session?.user?.id || null));
-
-  // First paint
-  await Promise.all([renderQueue(), syncState()]);
-  loop();
-
-  // Safety poll
-  setInterval(()=> renderQueue().catch(()=>{}), 5000);
-
-  // Refresh on visibility regain
-  document.addEventListener('visibilitychange', ()=>{
-    if (document.visibilityState === 'visible') {
-      renderQueue().catch(()=>{});
-      syncState().catch(()=>{});
-    }
-  });
-})();
 </script>
-<script src="js/auth-guard.js" type="module"></script>
-
-
-<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
-<script>
-(function () {
-  const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
-
-  // --- create floating button OUTSIDE the hidden panel ---
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'dbgFloatingBtn';
-  floatBtn.textContent = '🐛 Debug';
-  floatBtn.style.cssText = `
-    position: fixed; right: 8px; bottom: 8px;
-    z-index: 2147483647; background:#000; color:#0f0;
-    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
-    font: 12px/1.1 monospace; cursor:pointer;
-  `;
-  document.body.appendChild(floatBtn);
-
-  // --- panel wrapper (starts hidden) ---
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
-  `;
-
-  const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-  bar.innerHTML = `
-    <span style="color:#6f6">Rage Debug</span>
-    <label>Filter:
-      <select id="dbgFilter">
-        <option value="">All</option>
-        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
-        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
-        <option>ERR</option><option>WARN</option><option>LOG</option>
-      </select>
-    </label>
-    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgDownload">Download</button>
-    <button id="dbgClear">Clear</button>
-    <span style="margin-left:auto"></span>
-    <button id="dbgClose">✕</button>
-  `;
-
-  const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-
-  // button wiring
-  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-  // controls
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
-  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
-  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-  bar.querySelector('#dbgDownload').onclick = () => {
-    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
-    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  };
-
-  // ring buffer + rendering
-  let buffer = [];
-  function push(kind, msg, extra) {
-    if (!recordChk.checked) return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
-    if (buffer.length > MAX_LINES) buffer.shift();
-    const f = filterSel.value;
-    if (!f || f === kind) addLine({kind, line});
-  }
-  function addLine(r){
-    const div = document.createElement('div');
-    div.textContent = r.line;
-    if (r.kind === 'ERR') div.style.color = '#f88';
-    else if (r.kind === 'WARN') div.style.color = '#ff8';
-    else if (r.kind === 'EDGE') div.style.color = '#8ff';
-    else if (r.kind === 'NET')  div.style.color = '#8cf';
-    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-    list.appendChild(div); list.scrollTop = list.scrollHeight;
-  }
-  function render(){
-    list.innerHTML = '';
-    const f = filterSel.value;
-    for (const r of buffer) if (!f || f === r.kind) addLine(r);
-  }
-  filterSel.onchange = render;
-
-  // console hooks
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-
-  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-
-  // visibility & UI observers
-  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-  const q = (id) => document.getElementById(id);
-
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
-
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
-    let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
-        const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
-        last = el.textContent; lastAt = now;
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  })();
-
-  // fetch tracer
-  const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
-    const start = performance.now();
-    const method = (opts && opts.method) || 'GET';
-    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
-    push(tag, `${method} ${url}`);
-    try {
-      const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-      return res;
-    } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
-      throw e;
-    }
-  };
-
-  // timers & rAF
-  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-
-  const timers = new Map();
-  window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-  window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-  window.requestAnimationFrame = function(fn){
-    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
-  };
-  window.cancelAnimationFrame = function(id){ _caf(id); };
-
-  // image load tracing
-  function hookImg(img){
-    if (!img || img.__dbgHooked) return;
-    img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
-  }
-  Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
-      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
-
-  // bracket observer
-  const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
-      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
-  }
-
-  // public helpers
-  window.RageDebug = {
-    log: (k, m) => push(k||'LOG', m||''),
-    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
-    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
-    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
-  };
-
-  // small banner
-  (console.log||(()=>{}))('Debugger ready');
-})();
-</script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
-
 </body>
 </html>
