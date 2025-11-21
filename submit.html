@@ -15,7 +15,8 @@
 *{box-sizing:border-box}
 html,body{height:100%}
 body{
-  margin:0; background:radial-gradient(1200px 900px at 50% -10%,rgba(57,255,20,.08),transparent 60%), #000;
+  margin:0;
+  background:radial-gradient(1200px 900px at 50% -10%,rgba(57,255,20,.08),transparent 60%), #000;
   color:var(--ink); font:14px/1.45 system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
 }
 .wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 80px}
@@ -85,12 +86,16 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       </div>
     </div>
 
-    <!-- MINIMAL UPLOADER (auth panel removed) -->
+    <!-- MINIMAL UPLOADER -->
     <div class="card" style="margin-top:16px">
       <div id="pickZone" class="drop">
         <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
-        <div id="fileName" class="small">jpg / png / webp — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
-        <input id="fileInput" type="file" accept="image/*" class="hidden">
+        <!-- UPDATED TEXT: 200MB + video note -->
+        <div id="fileName" class="small">
+          jpg / png / webp / mp4 — 200MB max. Tip: drag &amp; drop or paste (Ctrl/⌘+V)
+        </div>
+        <!-- UPDATED accept: allow images + video -->
+        <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
         <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
         <div class="preview">
           <img id="imgPreview" alt="" class="hidden">
@@ -180,7 +185,11 @@ const clockEl = document.getElementById('clock');
 const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
 
 /* ---------- Utils ---------- */
-function toast(msg, ms=1600){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
+function toast(msg, ms=2000){
+  toastEl.textContent=msg;
+  toastEl.classList.add('show');
+  setTimeout(()=>toastEl.classList.remove('show'),ms);
+}
 function bytesToMB(n){ return (n/(1024*1024)).toFixed(2); }
 function show(el){ el.classList.remove('hidden'); }
 function hide(el){ el.classList.add('hidden'); }
@@ -205,6 +214,8 @@ function paintAuth(id){
 
 /* ---------- Pick flow ---------- */
 let picked = { file:null, url:'' };
+const MAX_BYTES = 200*1024*1024; // 200MB
+
 btnPick.addEventListener('click', ()=>{
   if (!picked.file && !picked.url){
     fileInput.click();
@@ -213,17 +224,41 @@ btnPick.addEventListener('click', ()=>{
     if (!urlInput.classList.contains('hidden')) urlInput.focus();
   }
 });
+
 fileInput.addEventListener('change', ()=>{
   const f = fileInput.files?.[0];
   if (!f) return;
-  if (!f.type.startsWith('image/')){ toast('File must be an image'); fileInput.value=''; return; }
-  if (f.size > 10*1024*1024){ toast('Max 10MB'); fileInput.value=''; return; }
-  picked.file = f; picked.url = '';
-  urlInput.value = ''; urlInput.classList.add('hidden');
+
+  const isImage = f.type.startsWith('image/');
+  const isVideo = f.type.startsWith('video/');
+
+  if (!isImage && !isVideo){
+    toast('File must be an image or video');
+    fileInput.value='';
+    return;
+  }
+  if (f.size > MAX_BYTES){
+    toast('Max 200MB');
+    fileInput.value='';
+    return;
+  }
+
+  picked.file = f;
+  picked.url = '';
+  urlInput.value = '';
+  urlInput.classList.add('hidden');
+
   fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  setPreview(URL.createObjectURL(f));
-  previewHint.textContent = 'Ready to upload';
+
+  if (isImage){
+    setPreview(URL.createObjectURL(f));
+    previewHint.textContent = 'Ready to upload';
+  } else {
+    setPreview('');
+    previewHint.textContent = 'Video selected (no preview) — ready to upload';
+  }
 });
+
 urlInput.addEventListener('input', ()=>{
   picked.url = urlInput.value.trim();
   if (picked.url) {
@@ -240,14 +275,14 @@ urlInput.addEventListener('input', ()=>{
   }
 });
 
-/* Drag/drop */
+/* Drag/drop – keep as image-only for now */
 ['dragenter','dragover'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.add('drag');}));
 ['dragleave','drop'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.remove('drag');}));
 pickZone.addEventListener('drop', (e)=>{
   const f = e.dataTransfer?.files?.[0];
   if (!f) return;
-  if (!f.type.startsWith('image/')) return toast('File must be an image');
-  if (f.size > 10*1024*1024) return toast('Max 10MB');
+  if (!f.type.startsWith('image/')) return toast('Drop images only here');
+  if (f.size > MAX_BYTES) return toast('Max 200MB');
   picked.file = f; picked.url='';
   fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
   fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
@@ -255,7 +290,7 @@ pickZone.addEventListener('drop', (e)=>{
   previewHint.textContent = 'Ready to upload (dropped)';
 });
 
-/* Paste */
+/* Paste – still image-only */
 window.addEventListener('paste', (e)=>{
   try{
     const items = e.clipboardData?.items || [];
@@ -263,7 +298,7 @@ window.addEventListener('paste', (e)=>{
       if (it.kind === 'file'){
         const f = it.getAsFile();
         if (f && f.type.startsWith('image/')){
-          if (f.size > 10*1024*1024) return toast('Max 10MB');
+          if (f.size > MAX_BYTES) return toast('Max 200MB');
           picked.file = f; picked.url='';
           fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
           fileName.textContent = `${f.name||'pasted-image'} — ${bytesToMB(f.size)} MB`;
@@ -281,13 +316,18 @@ async function uploadToStorage(userId, file){
   const d=new Date();
   const path = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${crypto.randomUUID()}-${file.name}`;
   const { data, error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl:'3600', upsert:false });
-  if (error) throw error;
+  if (error) {
+    console.error('storage upload error', error);
+    throw error;
+  }
   const { data:pub } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
   let url = pub?.publicUrl || null;
   try{
     const { data:signed } = await supabase.storage.from(BUCKET).createSignedUrl(data.path, 60*60*24*7);
     if (signed?.signedUrl) url = url || signed.signedUrl;
-  }catch{}
+  }catch(e){
+    console.warn('signed-url error', e);
+  }
   return url;
 }
 
@@ -329,7 +369,10 @@ async function syncState(){
     serverPhaseEndISO = s.phase_end_at || null;
     remainingSec = s.remaining_sec;
     lastSyncAt = Date.now();
-  }catch(e){ toast('Timer sync failed'); }
+  }catch(e){
+    console.error('timer sync failed', e);
+    toast('Timer sync failed');
+  }
 }
 
 /* render loop */
@@ -377,11 +420,14 @@ btnSubmit.addEventListener('click', async ()=>{
       piece_description,
       artist_name
     });
-    if (error) throw error;
+    if (error) {
+      console.error('art_queue insert error', error);
+      throw error;
+    }
 
     picked = {file:null, url:''};
     fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-    fileName.textContent = 'jpg / png / webp — 10MB max';
+    fileName.textContent = 'jpg / png / webp / mp4 — 200MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
     previewHint.textContent = '';
     setPreview('');
     consent.checked = false;
@@ -394,6 +440,7 @@ btnSubmit.addEventListener('click', async ()=>{
     queuePanel.style.display = 'block';
     queueToggle.textContent = 'Collapse ▲';
   }catch(e){
+    console.error('submit failed', e);
     toast(e?.message || 'Submit failed');
     submitMsg.textContent = 'Submit failed.';
   }
@@ -407,7 +454,10 @@ async function renderQueue(){
       .select('id,image_url,created_at')
       .eq('status','pending')
       .order('created_at', { ascending: true });
-    if (error) throw error;
+    if (error) {
+      console.error('queue load error', error);
+      throw error;
+    }
 
     if (!data || !data.length){
       queueGrid.innerHTML = '';
@@ -424,7 +474,9 @@ async function renderQueue(){
         <img src="${r.image_url}" alt="queued art ${i+1}"/>
       </div>
     `).join('');
-  }catch(e){ toast('Queue failed to load'); }
+  }catch(e){
+    toast('Queue failed to load');
+  }
 }
 
 /* ---------- Boot ---------- */
