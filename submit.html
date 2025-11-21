@@ -217,6 +217,33 @@ function paintAuth(id){
   else   { authBadge.textContent='not logged in'; authBadge.style.color='#ff6b6b'; authBadge.style.borderColor='#3b1616'; }
 }
 
+/* NEW: resolve the current user's display username for artist_name */
+async function currentUsername() {
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
+  if (!user) return null;
+
+  // Try profiles.username first
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (!error && data?.username) return data.username;
+  } catch (e) {
+    console.warn('[submit] profiles lookup failed', e);
+  }
+
+  // Fallback: email prefix
+  const email = user.email || user.user_metadata?.email;
+  if (typeof email === 'string') {
+    const at = email.indexOf('@');
+    return at > 0 ? email.slice(0, at) : email;
+  }
+  return null;
+}
+
 /* ---------- Pick flow (file or URL) ---------- */
 let picked = { file:null, url:'' };
 
@@ -439,6 +466,9 @@ btnSubmit.addEventListener('click', async ()=>{
   const pieceName = (titleInput?.value || '').trim();
   const pieceDesc = (descInput?.value || '').trim();
 
+  // NEW: lookup username to store in artist_name
+  const artistName = await currentUsername();
+
   let finalUrl = (picked.url||'').trim();
   try{
     if (picked.file){
@@ -451,7 +481,8 @@ btnSubmit.addEventListener('click', async ()=>{
       image_url: finalUrl,
       status: 'pending',
       piece_name: pieceName || null,
-      piece_description: pieceDesc || null
+      piece_description: pieceDesc || null,
+      artist_name: artistName || null   // << new field
     };
 
     const { error } = await supabase.from('art_queue').insert(payload);
