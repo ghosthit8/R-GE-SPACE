@@ -1,743 +1,647 @@
+
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Rage Space — Submit</title>
-<link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<style>
-:root{
-  --green:#39ff14; --green2:#7dff62; --ink:#e5e5e5;
-  --bg:#000; --card:#090909; --border:#153b16; --muted:#8aff8a;
-  --maxw:860px;
-}
-*{box-sizing:border-box}
-html,body{height:100%}
-body{
-  margin:0; padding:0;
-  background:#000;
-  color:var(--ink);
-  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  -webkit-font-smoothing:antialiased;
-}
-.wrap{
-  max-width:var(--maxw);
-  margin:0 auto;
-  padding:14px 10px 40px;
-}
-.header{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  flex-wrap:wrap;
-}
-h1{
-  margin:0;
-  font-size:22px;
-  letter-spacing:.14em;
-}
-.badge{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  padding:4px 10px;
-  border-radius:999px;
-  border:1px solid var(--border);
-  font-size:11px;
-  letter-spacing:.12em;
-  text-transform:uppercase;
-  color:var(--muted);
-}
-.badge.small{
-  padding:2px 6px;
-  font-size:10px;
-}
-.card{
-  margin-top:16px;
-  padding:14px 12px 16px;
-  border-radius:16px;
-  border:1px solid var(--border);
-  background:
-    radial-gradient(circle at 0 0,rgba(57,255,20,.12),transparent 55%),
-    radial-gradient(circle at 100% 100%,rgba(57,255,20,.12),transparent 55%),
-    #050505;
-  box-shadow:0 0 24px rgba(0,0,0,.9);
-}
-.card h2{
-  margin:0 0 6px;
-  font-size:14px;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-  color:var(--green);
-}
-.card p{
-  margin:0 0 8px;
-  font-size:13px;
-  color:var(--muted);
-}
-.label{
-  display:block;
-  font-size:11px;
-  letter-spacing:.14em;
-  text-transform:uppercase;
-  color:var(--muted);
-  margin-bottom:4px;
-}
-.input{
-  width:100%;
-  padding:8px 9px;
-  border-radius:10px;
-  border:1px solid var(--border);
-  background:#050505;
-  color:var(--ink);
-  font-size:14px;
-}
-.input:focus{
-  outline:none;
-  border-color:var(--green);
-  box-shadow:0 0 0 1px rgba(57,255,20,.3);
-}
-textarea.input{
-  min-height:60px;
-  resize:vertical;
-}
-.row{
-  display:flex;
-  gap:10px;
-  align-items:center;
-  flex-wrap:wrap;
-}
-.btn{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:6px;
-  padding:8px 12px;
-  border-radius:999px;
-  border:1px solid var(--green);
-  background:#050505;
-  color:var(--green);
-  font-size:12px;
-  font-weight:600;
-  letter-spacing:.12em;
-  text-transform:uppercase;
-  cursor:pointer;
-  text-decoration:none;
-  transition:.15s ease;
-}
-.btn.big{
-  width:100%;
-  padding:12px;
-  font-size:13px;
-}
-.btn.ghost{
-  border-color:var(--border);
-  color:var(--muted);
-}
-.btn:hover{
-  box-shadow:0 0 12px rgba(57,255,20,.4);
-  transform:translateY(-1px);
-}
-.small{
-  font-size:12px;
-  color:var(--muted);
-}
-.hidden{display:none!important;}
-.checkbox-row{
-  display:flex;
-  gap:8px;
-  align-items:flex-start;
-  margin-top:10px;
-}
-.checkbox-row input[type="checkbox"]{
-  margin-top:2px;
-}
-.checkbox-row span{
-  font-size:12px;
-  color:var(--muted);
-}
-hr{
-  border:none;
-  border-top:1px dashed rgba(57,255,20,.3);
-  margin:10px 0;
-}
-.toast{
-  position:fixed;
-  left:50%;
-  bottom:16px;
-  transform:translateX(-50%);
-  background:#050505;
-  color:var(--green2);
-  padding:8px 12px;
-  border-radius:999px;
-  border:1px solid var(--green);
-  font-size:13px;
-  box-shadow:0 0 12px rgba(57,255,20,.5);
-  opacity:0;
-  pointer-events:none;
-  transition:opacity .18s ease, transform .18s ease;
-  z-index:40;
-}
-.toast.show{
-  opacity:1;
-  transform:translateX(-50%) translateY(-3px);
-}
-#submitMsg{
-  margin-top:8px;
-  font-size:12px;
-  color:var(--muted);
-}
-.drop{
-  margin-top:6px;
-  padding:10px 10px 12px;
-  border-radius:12px;
-  border:1px dashed rgba(57,255,20,.5);
-  background:#020602;
-}
-.drop.drag{
-  background:#041104;
-}
-.drop-title{
-  font-size:12px;
-  color:var(--muted);
-}
-.preview{
-  margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
-}
-.preview img{max-height:120px; border-radius:10px; border:1px solid var(--border)}
-.authRow{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
-.queueHeader{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:8px;
-  margin-bottom:6px;
-}
-.queueGrid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(90px,1fr));
-  gap:8px;
-}
-.thumb{
-  position:relative;
-  border-radius:10px;
-  overflow:hidden;
-  border:1px solid rgba(57,255,20,.4);
-  background:#000;
-}
-.thumb img{
-  width:100%;
-  height:80px;
-  object-fit:cover;
-  display:block;
-}
-.thumb span{
-  position:absolute;
-  left:4px;
-  bottom:2px;
-  font-size:10px;
-  padding:2px 6px;
-  border-radius:999px;
-  background:rgba(0,0,0,.75);
-  color:var(--green2);
-}
-.queueEmpty{
-  font-size:12px;
-  color:var(--muted);
-}
-.clock{
-  margin-top:4px;
-  font-size:11px;
-  letter-spacing:.12em;
-  text-transform:uppercase;
-  color:var(--muted);
-}
-.clock span{
-  color:var(--green2);
-}
-@media (max-width:600px){
-  .header{align-items:flex-start;}
-  h1{font-size:18px;}
-}
-.mono{font-family:ui-monospace,"SF Mono","Menlo",monospace; font-size:11px; color:var(--muted)}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rage Space — Winners</title>
+
+  <!-- Global neon / scanline styles -->
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    :root {
+      /* tie into your global neon variables */
+      --fg: var(--green);
+      --bg: #000;
+      --accent: var(--green);
+      --muted: #6aff6a;
+      --card: #050505;
+      --line: #133313;
+    }
+
+    html,body{
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
+    }
+
+    .wrap{
+      max-width:780px;
+      margin:0 auto;
+      padding:16px 12px 24px;
+      position:relative;
+      z-index:2; /* sit above scanlines */
+    }
+
+    /* glitch title is defined in style.css, this just tweaks spacing */
+    h1{
+      margin:0 0 10px;
+      font-size:22px;
+      font-weight:800;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+    }
+
+    .top{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:8px;
+      flex-wrap:wrap;
+    }
+
+    /* Cyberpunk buttons that match your global .btn style */
+    a.btn,
+    button.btn{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 14px;
+      border-radius:12px;
+      border:1px solid var(--accent);
+      background:#010101;
+      color:var(--accent);
+      font-weight:700;
+      text-decoration:none;
+      cursor:pointer;
+      font-size:14px;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      transition:.18s ease;
+    }
+    a.btn:hover,
+    button.btn:hover{
+      box-shadow:0 0 10px var(--accent);
+      background:#050805;
+    }
+
+    .meta{
+      color:var(--muted);
+      font-size:12px;
+      margin-bottom:8px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
+    .tz{
+      padding:2px 10px;
+      border-radius:999px;
+      background:#020602;
+      border:1px solid var(--accent);
+      color:var(--accent);
+      font-weight:700;
+      font-size:11px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+    }
+
+    .seg{
+      display:inline-block;
+      margin-left:6px;
+      padding:2px 10px;
+      border:1px dashed var(--accent);
+      border-radius:999px;
+      font-size:11px;
+      color:var(--accent);
+      background:#020202;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+    }
+
+    .card{
+      border:1px solid var(--accent);
+      background:var(--card);
+      border-radius:16px;
+      overflow:hidden;
+      box-shadow:
+        0 0 18px rgba(57,255,20,.25),
+        0 0 40px rgba(0,0,0,.9) inset;
+      position:relative;
+      z-index:2;
+    }
+
+    .table-wrap{overflow-x:auto;}
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:14px;
+      color:var(--fg);
+    }
+
+    th,td{
+      padding:10px 12px;
+      border-bottom:1px solid rgba(57,255,20,.25);
+      text-align:left;
+      vertical-align:middle;
+    }
+
+    th{
+      color:var(--accent);
+      font-weight:700;
+      font-size:11px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      white-space:nowrap;
+      background:rgba(0,0,0,.7);
+    }
+
+    /* winner pills – red vs blue glow, but text stays neon green */
+    .pillA,
+    .pillB{
+      display:inline-block;
+      padding:4px 12px;
+      border-radius:999px;
+      font-weight:800;
+      font-size:12px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:var(--accent);
+      border:1px solid var(--accent);
+      box-shadow:0 0 8px rgba(57,255,20,.6);
+    }
+
+    .pillA{
+      background:radial-gradient(circle at 0% 0%, rgba(255,0,51,.45), #140307);
+    }
+
+    .pillB{
+      background:radial-gradient(circle at 100% 0%, rgba(0,140,255,.4), #020812);
+    }
+
+    .score{
+      font-variant-numeric:tabular-nums;
+      white-space:nowrap;
+      font-weight:700;
+      color:var(--accent);
+    }
+
+    .cycle{
+      word-break:break-all;
+      color:var(--muted);
+      opacity:.9;
+      font-size:11px;
+    }
+
+    .thumb{
+      width:42px;
+      height:42px;
+      object-fit:cover;
+      border-radius:6px;
+      border:1px solid var(--accent);
+      box-shadow:0 0 10px rgba(57,255,20,.4);
+    }
+
+    /* description button */
+    .descBtn{
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--accent);
+      background:#020602;
+      color:var(--accent);
+      font-size:12px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .descBtn:hover{
+      background:#041104;
+      box-shadow:0 0 6px var(--accent);
+    }
+
+    /* artist profile link */
+    .artist-link{
+      color:var(--accent);
+      text-decoration:none;
+      font-weight:600;
+    }
+    .artist-link:hover{
+      text-decoration:underline;
+      text-shadow:0 0 6px var(--accent);
+    }
+
+    /* description modal */
+    .desc-modal{
+      position:fixed;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      background:rgba(0,0,0,0.88);
+      z-index:9999;
+    }
+    .desc-modal-inner{
+      max-width:380px;
+      width:90%;
+      background:var(--card);
+      border-radius:14px;
+      border:1px solid var(--accent);
+      padding:12px 14px;
+      color:var(--fg);
+      box-shadow:0 0 20px rgba(57,255,20,.4);
+    }
+    .desc-modal-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:8px;
+      font-weight:700;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+    .desc-modal-close{
+      border:none;
+      background:transparent;
+      color:var(--accent);
+      cursor:pointer;
+      font-size:16px;
+    }
+    .desc-modal-body{
+      font-size:14px;
+      color:var(--fg);
+      max-height:260px;
+      overflow-y:auto;
+      white-space:pre-wrap;
+    }
+
+    @media (max-width:560px){
+      th.cycle,td.cycle{display:none;}
+      table{font-size:13px;}
+      th,td{padding:8px 10px;}
+    }
+  </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="header">
-      <h1 style="color:var(--green)">SUBMIT ART</h1>
-      <div class="row">
-        <span id="authBadge" class="badge small">not logged in</span>
-        <a class="btn ghost" href="./menu.html">← Menu</a>
+    <div class="top">
+      <!-- glitch-title class + data-text uses your cyberpunk title effect -->
+      <h1 class="glitch-title" data-text="Winners Log">Winners Log</h1>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a class="btn" href="matchup.html">← Back</a>
+        <button class="btn" id="refresh">Refresh</button>
+        <button class="btn" id="toggleAuto">Auto-Refresh: On</button>
+        <button class="btn" id="toggleMode">Mode: All Phases</button>
+        <button class="btn" id="clear">Clear Data</button>
       </div>
     </div>
 
-    <!-- Minimal uploader -->
-    <div class="card" style="margin-top:16px">
-      <div id="pickZone" class="drop">
-        <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
-        <div id="fileName" class="small">jpg / png / webp — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
-        <input id="fileInput" type="file" accept="image/*" class="hidden">
-        <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
-        <div class="preview">
-          <img id="imgPreview" alt="" class="hidden">
-          <div class="small mono" id="previewHint"></div>
-        </div>
-      </div>
-
-      <hr>
-
-      <!-- Piece metadata -->
-      <div style="margin-top:8px">
-        <label class="label" for="pieceTitle">Piece title (optional)</label>
-        <input id="pieceTitle" class="input" placeholder="A short title for your art">
-      </div>
-      <div style="margin-top:8px">
-        <label class="label" for="pieceDesc">Piece description (optional)</label>
-        <textarea id="pieceDesc" class="input" placeholder="Tell us about this piece, techniques, story, etc."></textarea>
-      </div>
-
-      <div class="checkbox-row">
-        <input id="consent" type="checkbox">
-        <span>
-          I confirm I have the rights to this image and that it follows Rage Space rules
-          (no minors, no real-death gore, no doxxing, no organized hate propaganda).
-        </span>
-      </div>
-
-      <div style="margin-top:12px" class="row">
-        <button id="btnSubmit" class="btn">✅ Submit</button>
-        <span id="submitMsg" class="small"></span>
-      </div>
+    <div class="meta" id="meta">
+      Loading…
+      <span class="tz" id="tzBadge"></span>
+      <span class="seg">Cycle: R32@120s → R16@90s → QF@60s → SF@30s → Final@0s</span>
     </div>
 
-    <!-- Queue / timer panel -->
-    <div class="card" style="margin-top:18px">
-      <div class="queueHeader">
-        <h2>Queue &amp; Next Cycle</h2>
-        <button id="queueToggle" class="btn ghost" style="padding:6px 10px">Expand ▼</button>
-      </div>
-      <div id="clock" class="clock">Next tournament cycle in <span>…</span></div>
-      <div id="queuePanel" class="hidden">
-        <div class="row" style="margin-top:8px;margin-bottom:6px;justify-content:space-between;gap:6px">
-          <span class="small">Your submissions waiting in the queue <span id="queueCount"></span></span>
-        </div>
-        <div id="queueEmpty" class="queueEmpty">No pending art yet.</div>
-        <div id="queue" class="queueGrid"></div>
+    <div class="card">
+      <div class="table-wrap">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Decided At</th>
+              <th>Phase</th>
+              <th class="cycle">Cycle</th>
+              <th>Winner</th>
+              <th>Piece Name</th>
+              <th>Description</th>
+              <th>Artist</th>
+              <th>Thumbnail</th>
+              <th>Score</th>
+              <th>Decided By</th>
+            </tr>
+          </thead>
+          <tbody id="body">
+            <tr><td colspan="11" style="padding:18px;color:var(--muted);">Loading winners…</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
-
-    <p class="small" style="margin-top:10px">
-      Tip: Large images will be auto-resized by the server. Submitting multiple pieces is allowed but please don&apos;t spam.
-    </p>
   </div>
 
-  <div id="toast" class="toast"></div>
+  <!-- Piece description modal -->
+  <div id="descModal" class="desc-modal">
+    <div class="desc-modal-inner">
+      <div class="desc-modal-header">
+        <span id="descTitle">Piece description</span>
+        <button id="descClose" class="desc-modal-close">✕</button>
+      </div>
+      <div id="descBody" class="desc-modal-body"></div>
+    </div>
+  </div>
 
-<script type="module">
-const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+  <!-- Fullscreen image viewer -->
+  <div id="fsView" style="
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.88);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:9998;
+    backdrop-filter:blur(4px);
+  ">
+    <img id="fsImg" src="" alt="fullscreen winner" style="
+      max-width:90%;
+      max-height:90%;
+      border:2px solid var(--accent);
+      border-radius:14px;
+      box-shadow:0 0 20px var(--accent);
+    ">
+  </div>
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  <script>
+    // -------- config --------
+    const FUNCTION_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
+    const ADMIN_KEY = "Inklink88!";
 
-/* ---------- Elements ---------- */
-const authBadge = document.getElementById('authBadge');
-const toastEl = document.getElementById('toast');
+    const metaEl = document.getElementById('meta');
+    const tzBadge = document.getElementById('tzBadge');
+    const tbody  = document.getElementById('body');
+    const btnRefresh = document.getElementById('refresh');
+    const btnToggleAuto = document.getElementById('toggleAuto');
+    const btnToggleMode = document.getElementById('toggleMode');
+    const btnClear = document.getElementById('clear');
 
-const pickZone = document.getElementById('pickZone');
-const btnPick = document.getElementById('btnPick');
-const fileInput = document.getElementById('fileInput');
-const urlInput = document.getElementById('urlInput');
-const fileName = document.getElementById('fileName');
-const previewHint = document.getElementById('previewHint');
-const imgPreview = document.getElementById('imgPreview');
+    // fullscreen overlay elements
+    const fsView = document.getElementById("fsView");
+    const fsImg  = document.getElementById("fsImg");
 
-const titleInput = document.getElementById('pieceTitle');
-const descInput  = document.getElementById('pieceDesc');
+    // description modal elements
+    const descModal    = document.getElementById('descModal');
+    const descTitleEl  = document.getElementById('descTitle');
+    const descBodyEl   = document.getElementById('descBody');
+    const descCloseBtn = document.getElementById('descClose');
+    let descStore = [];
+    let descTitleStore = [];
 
-const consent = document.getElementById('consent');
-const btnSubmit = document.getElementById('btnSubmit');
-const submitMsg = document.getElementById('submitMsg');
+    if (fsView) {
+      fsView.addEventListener('click', () => {
+        fsView.style.display = 'none';
+        if (fsImg) fsImg.src = '';
+      });
+    }
 
-const queuePanel = document.getElementById('queuePanel');
-const queueToggle = document.getElementById('queueToggle');
-const queueCount = document.getElementById('queueCount');
-const queueGrid = document.getElementById('queue');
-const queueEmpty = document.getElementById('queueEmpty');
+    function enableThumbFullscreen() {
+      if (!fsView || !fsImg) return;
+      document.querySelectorAll('.thumb').forEach(thumb => {
+        thumb.style.cursor = 'pointer';
+        thumb.onclick = () => {
+          fsImg.src = thumb.src;
+          fsView.style.display = 'flex';
+        };
+      });
+    }
 
-const clockEl = document.getElementById('clock');
+    function openDesc(idx){
+      if (!descModal || !descTitleEl || !descBodyEl) return;
+      const title = descTitleStore[idx] || 'Piece description';
+      const txt = (descStore[idx] || '').trim();
+      descTitleEl.textContent = title;
+      descBodyEl.textContent = txt || 'No description provided yet.';
+      descModal.style.display = 'flex';
+    }
+    function closeDesc(){
+      if (!descModal) return;
+      descModal.style.display = 'none';
+    }
+    if (descCloseBtn) descCloseBtn.addEventListener('click', closeDesc);
+    if (descModal) {
+      descModal.addEventListener('click', (e) => {
+        if (e.target === descModal) closeDesc();
+      });
+    }
 
-/* ---------- Debugger (kept) ---------- */
-const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
+    // persistent view mode
+    const MODE_KEY = "winners_mode_v2"; // "all" | "finals"
+    let viewMode = localStorage.getItem(MODE_KEY) || "all";
+    function applyModeBtn(){
+      btnToggleMode.textContent = viewMode==="all" ? "Mode: All Phases" : "Mode: Finals Only";
+    }
+    applyModeBtn();
 
-/* ---------- Toast ---------- */
-let toastTimer=null;
-function toast(msg){
-  toastEl.textContent=msg;
-  toastEl.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=> toastEl.classList.remove('show'), 2600);
-}
+    btnToggleMode.onclick = () => {
+      viewMode = (viewMode==="all" ? "finals" : "all");
+      localStorage.setItem(MODE_KEY, viewMode);
+      applyModeBtn();
+      load();
+    };
+    btnRefresh.onclick = () => load();
+    let auto = true;
+    btnToggleAuto.onclick = () => {
+      auto = !auto;
+      btnToggleAuto.textContent = `Auto-Refresh: ${auto ? "On" : "Off"}`;
+    };
+    btnClear.onclick = clearData;
 
-/* ---------- Auth state ---------- */
-function varGreen(){ return getComputedStyle(document.documentElement).getPropertyValue('--green') || '#39ff14'; }
+    // timezone badge
+    try {
+      const fmt = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
+      const tz = fmt.formatToParts(new Date()).find(p=>p.type==="timeZoneName")?.value || "";
+      tzBadge.textContent = tz ? `Local time: ${tz}` : "Local time";
+    } catch {
+      tzBadge.textContent = "Local time";
+    }
 
-async function uid(){
-  const { data:{session} } = await supabase.auth.getSession();
-  return session?.user?.id || null;
-}
-function paintAuth(id){
-  if (id){ authBadge.textContent='logged in'; authBadge.style.color=varGreen(); }
-  else   { authBadge.textContent='not logged in'; authBadge.style.color='#ff6b6b'; authBadge.style.borderColor='#3b1616'; }
-}
+    // --- helpers ---
+    function parseAsUTCish(s){
+      if (!s) return NaN;
+      const str = String(s);
+      if (/Z|[+-]\d{2}:\d{2}$/.test(str)) return Date.parse(str);
+      return Date.parse(str.replace(" ", "T") + "Z");
+    }
+    function fmtLocal(ts){
+      if (isNaN(ts)) return "—";
+      return new Date(ts).toLocaleString(undefined, {
+        year:"numeric", month:"2-digit", day:"2-digit",
+        hour:"numeric", minute:"2-digit", second:"2-digit", hour12:true
+      });
+    }
+    function phaseFromBase(base){
+      const s = String(base||"");
+      if (!s.includes("::")) return "Final";
+      const suf = s.split("::")[1];
+      const map = {
+        q1:"Quarter 1", q2:"Quarter 2", q3:"Quarter 3", q4:"Quarter 4",
+        semi1:"Semi 1", semi2:"Semi 2"
+      };
+      if (suf.startsWith("r32_")) return "R32 " + suf.split("_")[1];
+      return map[suf] || suf.toUpperCase();
+    }
 
-async function currentUsername() {
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
-  if (!user) return null;
+    // NEW: turn email into username-only for display
+    function displayArtist(raw){
+      if (!raw) return "";
+      const s = String(raw);
+      const at = s.indexOf("@");
+      if (at > 0) return s.slice(0, at);
+      return s;
+    }
 
-  // Try profiles.username first
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (!error && data?.username) return data.username;
-  } catch (e) {
-    console.warn('[submit] profiles lookup failed', e);
-  }
+    function computeDecidedAt(row){
+      const d = parseAsUTCish(row.decided_at);
+      if (!isNaN(d)) return d;
+      const base = parseAsUTCish(row.base_iso);
+      if (!isNaN(base)) {
+        const secs = Number(row.period_sec) > 0 ? Number(row.period_sec) : 150; // fallback now 150s
+        return base + secs * 1000;
+      }
+      return NaN;
+    }
 
-  // Fallback: email before the @
-  const email = user.email || user.user_metadata?.email;
-  if (typeof email === 'string') {
-    const at = email.indexOf('@');
-    return at > 0 ? email.slice(0, at) : email;
-  }
-  return null;
-}
+    function isFinalRow(w){
+      return !String(w.base_iso || "").includes("::");
+    }
 
-/* ---------- Pick flow (file or URL) ---------- */
-let picked = { file:null, url:'' };
-
-btnPick.addEventListener('click', ()=>{
-  if (!picked.file && !picked.url){
-    fileInput.click();
-  } else {
-    urlInput.classList.toggle('hidden');
-    if (!urlInput.classList.contains('hidden')) urlInput.focus();
-  }
-});
-
-fileInput.addEventListener('change', ()=>{
-  const f = fileInput.files?.[0];
-  if (!f) return;
-  if (!f.type.startsWith('image/')) return toast('File must be an image');
-  if (f.size > 10*1024*1024) return toast('Max 10MB');
-  picked.file = f; picked.url='';
-  fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  setPreview(URL.createObjectURL(f));
-  previewHint.textContent = 'Ready to upload (picked from device)';
-});
-
-pickZone.addEventListener('dragover',(e)=>{
-  e.preventDefault(); pickZone.classList.add('drag');
-});
-pickZone.addEventListener('dragleave',(e)=>{
-  e.preventDefault(); pickZone.classList.remove('drag');
-});
-pickZone.addEventListener('drop',(e)=>{
-  e.preventDefault(); pickZone.classList.remove('drag');
-  const f = e.dataTransfer?.files?.[0];
-  if (!f) return;
-  if (!f.type.startsWith('image/')) return toast('File must be an image');
-  if (f.size > 10*1024*1024) return toast('Max 10MB');
-  picked.file = f; picked.url='';
-  fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  setPreview(URL.createObjectURL(f));
-  previewHint.textContent = 'Ready to upload (dropped)';
-});
-
-/* Paste support (clipboard image or URL text) */
-window.addEventListener('paste', (e)=>{
-  try{
-    const items = e.clipboardData?.items || [];
-    for (const it of items){
-      if (it.kind === 'file'){
-        const f = it.getAsFile();
-        if (f && f.type.startsWith('image/')){
-          if (f.size > 10*1024*1024) { toast('Max 10MB'); return; }
-          picked.file = f; picked.url='';
-          fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-          fileName.textContent = `${f.name||'pasted-image'} — ${bytesToMB(f.size)} MB`;
-          setPreview(URL.createObjectURL(f));
-          previewHint.textContent = 'Ready to upload (pasted image)';
-          return;
+    // Build a map per cycle: image_url → original seed (a..af)
+    // Include both R16 and R32 rows to backfill original seed letters cleanly.
+    function buildUrlToSeedMap(all){
+      const byCycle = new Map(); // cycleBase -> Map(url -> seedLetter)
+      for (const r of all){
+        const base = String(r.base_iso||"");
+        const root = base.split("::")[0];
+        if (!byCycle.has(root)) byCycle.set(root, new Map());
+        if (base.includes("::r16_") || base.includes("::r32_")){
+          const url = r.image_url || r.winner_url || "";
+          const seed = (r.winner_seed || "").toLowerCase();
+          if (url && seed) byCycle.get(root).set(url, seed);
         }
-      } else if (it.kind === 'string'){
-        it.getAsString((txt)=>{
-          const s = (txt||'').trim();
-          if (/^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i.test(s)){
-            picked.url = s; picked.file = null;
-            urlInput.classList.add('hidden');
-            fileInput.value='';
-            fileName.textContent = 'URL picked instead of file';
-            setPreview(s);
-            previewHint.textContent = 'Ready to upload (pasted URL)';
+      }
+      return byCycle;
+    }
+
+    // map a..af → 1..32
+    function seedLetterToNumber(letter) {
+      const list = [
+        "a","b","c","d","e","f","g","h",
+        "i","j","k","l","m","n","o","p",
+        "q","r","s","t","u","v","w","x",
+        "y","z","aa","ab","ac","ad","ae","af"
+      ];
+      const idx = list.indexOf(String(letter || "").toLowerCase());
+      return idx >= 0 ? idx + 1 : null;
+    }
+
+    function render(rows){
+      if(!rows || rows.length===0){
+        tbody.innerHTML = `<tr><td colspan="11" style="padding:18px;color:var(--muted);">No winners yet.</td></tr>`;
+        return;
+      }
+      descStore = [];
+      descTitleStore = [];
+      const N = rows.length;
+      tbody.innerHTML = rows.map((r, idx) => {
+        const n = N - idx;
+        const seed = (r._resolved_seed || r.winner_seed || "").toLowerCase();
+        const isLeft = ["a","c","e","g","i","k","m","o","q","s","u","w","y","aa","ac","ae"].includes(seed);
+        const pillClass = isLeft ? "pillA" : "pillB";
+
+        // letters → numbers
+        const num = seedLetterToNumber(seed);
+        const seedLabel = num ? `Seed #${num}` : "Seed ?";
+
+        const pieceName = r.piece_name || "";
+        // use username-only for artist display
+        const artistName = displayArtist(r.artist_name || "");
+        const artistHref = artistName ? `profile.html?u=${encodeURIComponent(artistName)}` : null;
+        const artistCell = artistName ? `<a class="artist-link" href="${artistHref}">${artistName}</a>` : "—";
+        const pieceDesc = r.piece_description || r.description || "";
+
+        descStore[idx] = pieceDesc || "";
+        descTitleStore[idx] = pieceName || seedLabel || "Piece description";
+
+        const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
+        const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
+        const img = r.image_url || r.winner_url || '';
+        const thumb = img ? `<img src="${img}" class="thumb" alt="winner">` : `<span style="color:#666;">—</span>`;
+        const decidedTs = computeDecidedAt(r);
+        const phase = phaseFromBase(r.base_iso);
+        return `
+          <tr>
+            <td>${n}</td>
+            <td>${fmtLocal(decidedTs)}</td>
+            <td>${phase}</td>
+            <td class="cycle">${r.base_iso || "—"}</td>
+            <td><span class="${pillClass}">${seedLabel}</span></td>
+            <td>${pieceName || "—"}</td>
+            <td><button class="descBtn" onclick="openDesc(${idx})">🔍</button></td>
+            <td>${artistCell}</td>
+            <td>${thumb}</td>
+            <td class="score">${score}</td>
+            <td>${by}</td>
+          </tr>`;
+      }).join('');
+
+      enableThumbFullscreen();
+    }
+
+    async function load(){
+      try {
+        const ts = Date.now(); // cache-buster
+        metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Loading… ' : (metaEl.textContent = 'Loading… ');
+        const res = await fetch(`${FUNCTION_URL}?winners=1&limit=500&_=${ts}`, { cache: "no-store" });
+        const data = await res.json().catch(()=> ({}));
+        const all = Array.isArray(data) ? data : (data.winners || []);
+
+        // Resolve original seeds by matching image_url back to R32/R16 rows
+        const mapByCycle = buildUrlToSeedMap(all);
+        for (const r of all){
+          const root = String(r.base_iso||"").split("::")[0];
+          const url = r.image_url || r.winner_url || "";
+          const m = mapByCycle.get(root);
+          if (m && url && m.has(url)){
+            r._resolved_seed = m.get(url); // a..af
           }
-        });
+        }
+
+        // filter according to mode
+        const rows = viewMode==="finals" ? (all||[]).filter(isFinalRow) : (all||[]);
+        // newest first by decided_at
+        rows.sort((a,b) => computeDecidedAt(b) - computeDecidedAt(a));
+        render(rows);
+
+        const total = rows.length;
+        const newest = rows[0];
+        const newestTs = newest ? computeDecidedAt(newest) : NaN;
+        const prefix = `Showing ${total} ${viewMode==="finals"?"finals":"winners"}`;
+        const newestTxt = isNaN(newestTs) ? '' : ` • newest at ${fmtLocal(newestTs)}`;
+        const tail = total ? newestTxt : '';
+        metaEl.firstChild ? metaEl.firstChild.nodeValue = prefix + tail : (metaEl.textContent = prefix + tail);
+      } catch (e){
+        metaEl.firstChild ? metaEl.firstChild.nodeValue = 'Error loading winners' : (metaEl.textContent = 'Error loading winners');
+        console.error(e);
       }
     }
-  }catch(err){
-    console.warn('paste parse failed', err);
-  }
-});
 
-/* URL manual input */
-urlInput.addEventListener('input', ()=>{
-  const s = (urlInput.value||'').trim();
-  if (!s){ picked.url=''; setPreview(''); previewHint.textContent=''; return; }
-  picked.url=s; picked.file=null;
-  setPreview(s);
-  previewHint.textContent = 'Ready to upload (URL mode)';
-});
-
-/* ---------- Preview ---------- */
-function setPreview(src){
-  if (!imgPreview) return;
-  if (!src){
-    imgPreview.classList.add('hidden');
-    imgPreview.removeAttribute('src');
-  } else {
-    imgPreview.src = src;
-    imgPreview.classList.remove('hidden');
-  }
-}
-function bytesToMB(x){
-  return (x/(1024*1024)).toFixed(2);
-}
-
-/* ---------- Edge timer (read-only) ---------- */
-const EDGE_URL = "https://tuqvpcevrhciursxrgav.supabase.co/functions/v1/global-timer-v2";
-
-async function callEdge(){
-  const res = await fetch(`${EDGE_URL}?timer=1`, { cache:'no-store' });
-  if (!res.ok) throw new Error(`edge ${res.status}`);
-  return res.json();
-}
-
-function normalize(raw){
-  const s = raw || {};
-  const baseISO = s.phase_end_at || s.next_phase_iso || s.next_phase_at;
-  const period = Number(s.period_sec || s.phase_length_sec || 20);
-  let phaseEnd = null;
-  if (baseISO){
-    const iso = String(baseISO).replace(' ','T');
-    phaseEnd = Date.parse(iso) || null;
-  }
-  let remaining = null;
-  if (typeof s.remaining_sec === 'number') remaining = s.remaining_sec;
-  try { log('[EDGE] normalized', JSON.stringify({phase_end_at:phaseEnd, period_sec:period, remaining_sec:remaining, paused:!!s.paused})); } catch {}
-  return { phase_end_at: phaseEnd, period_sec: period, paused: !!s.paused, remaining_sec: remaining };
-}
-
-/* ---------- Timer state ---------- */
-let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
-
-/* ---------- Sync ---------- */
-async function syncState(){
-  try{
-    const s = normalize(await callEdge());
-    const __prev = serverPhaseEndISO;
-
-    serverPhaseEndISO = s.phase_end_at;
-    periodSec = s.period_sec || 20;
-    paused = !!s.paused;
-    remainingSec = s.remaining_sec ?? null;
-    lastSyncAt = Date.now();
-
-    if (serverPhaseEndISO && serverPhaseEndISO !== __prev){
-      log('[timer] new phase end', new Date(serverPhaseEndISO).toISOString(), 'period', periodSec);
-    }
-  }catch(e){
-    console.warn('syncState failed', e);
-  }
-}
-
-/* ---------- Clock render ---------- */
-function renderClock(){
-  if (!clockEl) return;
-  const span = clockEl.querySelector('span') || clockEl;
-  if (!serverPhaseEndISO){
-    span.textContent = '…';
-    return;
-  }
-  let diffSec;
-  if (remainingSec != null){
-    const elapsed = (Date.now() - lastSyncAt)/1000;
-    diffSec = Math.max(0, remainingSec - elapsed);
-  } else {
-    diffSec = Math.max(0, (serverPhaseEndISO - Date.now())/1000);
-  }
-  const mm = String(Math.floor(diffSec/60)).padStart(2,'0');
-  const ss = String(Math.floor(diffSec%60)).padStart(2,'0');
-  span.textContent = `${mm}:${ss}`;
-}
-
-/* ---------- Queue render ---------- */
-async function renderQueue(){
-  try{
-    const id = await uid();
-    paintAuth(id);
-    if (!id){
-      queueGrid.innerHTML='';
-      queueEmpty.textContent = 'Log in to see your pending art.';
-      queueEmpty.style.display = 'block';
-      if (queueCount) queueCount.textContent = '';
-      return;
+    async function clearData(){
+      const ok = prompt("Admin key to clear winners:") === ADMIN_KEY;
+      if (!ok) return;
+      try{
+        const res = await fetch(`${FUNCTION_URL}?clear=1`, {
+          method: "DELETE",
+          headers: { "x-admin-key": ADMIN_KEY }
+        });
+        if (!res.ok) throw new Error("clear failed");
+        await load();
+      }catch(e){
+        alert("Clear failed: " + (e?.message||e));
+      }
     }
 
-    const { data, error } = await supabase
-      .from('art_queue')
-      .select('id,image_url,created_at')
-      .eq('status','pending')
-      .order('created_at', { ascending: true });
-    if (error) throw error;
+    // auto refresh loop
+    (function loop(){
+      if (auto) load();
+      setTimeout(loop, 15000);
+    })();
 
-    if (!data || !data.length){
-      queueGrid.innerHTML = '';
-      queueEmpty.style.display = 'block';
-      if (queueCount) queueCount.textContent = '(0)';
-      return;
-    }
-    queueEmpty.style.display = 'none';
-    if (queueCount) queueCount.textContent = `(${data.length})`;
-    queueGrid.innerHTML = data.map((r,i)=>`
-      <div class="thumb" data-id="${r.id}" title="${r.image_url}">
-        <img src="${r.image_url}" alt="">
-        <span>#${i+1}</span>
-      </div>
-    `).join('');
-  }catch(e){
-    console.warn('renderQueue failed', e);
-  }
-}
-
-/* ---------- Queue toggle ---------- */
-queueToggle.addEventListener('click', ()=>{
-  const open = queuePanel.style.display !== 'none';
-  queuePanel.style.display = open ? 'none' : 'block';
-  queueToggle.textContent = open ? 'Expand ▼' : 'Collapse ▲';
-});
-
-/* ---------- Submit handler ---------- */
-btnSubmit.addEventListener('click', async ()=>{
-  submitMsg.textContent='';
-  const id = await uid();
-  if (!id) return toast('Log in to submit');
-  if (!consent.checked) return toast('Please consent to the rules');
-
-  const pieceName = (titleInput?.value || '').trim();
-  const pieceDesc = (descInput?.value || '').trim();
-
-  // Determine display username for this submission
-  const artistName = await currentUsername();
-
-  let finalUrl = (picked.url||'').trim();
-  try{
-    if (picked.file){
-      toast('Uploading…');
-      finalUrl = await uploadToStorage(id, picked.file);
-    }
-    if (!finalUrl) return toast('Pick a file or paste a URL');
-
-    const payload = {
-      image_url: finalUrl,
-      status: 'pending',
-      piece_name: pieceName || null,
-      piece_description: pieceDesc || null,
-      artist_name: artistName || null
-    };
-
-    const { error } = await supabase.from('art_queue').insert(payload);
-    if (error) throw error;
-
-    picked = {file:null, url:''};
-    fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-    fileName.textContent = 'jpg / png / webp — 10MB max';
-    previewHint.textContent = '';
-    setPreview('');
-    consent.checked = false;
-    if (titleInput) titleInput.value = '';
-    if (descInput)  descInput.value  = '';
-
-    toast('✅ Art queued for next round');
-    submitMsg.textContent = 'Art queued for next round.';
-    await renderQueue();
-    if (queuePanel && queuePanel.style.display === 'none') {
-      queuePanel.style.display = 'block'; queueToggle.textContent = 'Collapse ▲';
-    }
-  }catch(e){
-    console.error(e);
-    toast(e?.message || 'Submit failed');
-    submitMsg.textContent = 'Submit failed.';
-  }
-});
-
-/* ---------- Upload helper ---------- */
-async function uploadToStorage(userId, file){
-  const ext = (file.name||'').split('.').pop() || 'png';
-  const path = `${userId}/${Date.now()}.${ext}`;
-  const { data, error } = await supabase
-    .storage
-    .from('art-uploads')
-    .upload(path, file, {
-      cacheControl:'3600',
-      upsert:false
-    });
-  if (error) throw error;
-  const { data:pub } = supabase
-    .storage
-    .from('art-uploads')
-    .getPublicUrl(data.path);
-  if (!pub?.publicUrl) throw new Error('No public URL');
-  return pub.publicUrl;
-}
-
-/* ---------- Init ---------- */
-(async function init(){
-  try{
-    const id = await uid();
-    paintAuth(id);
-    await Promise.all([
-      renderQueue(),
-      syncState()
-    ]);
-    renderClock();
-  }catch(e){
-    console.warn('init failed', e);
-  }
-  setInterval(()=>{ renderClock(); }, 1000);
-  setInterval(()=>{ syncState().catch(()=>{}); }, 15000);
-  setTimeout(()=>{ log('timer sanity: timeout 4 run 0.0ms'); }, 0);
-
-  // Refresh queue every few seconds while open
-  setInterval(()=> renderQueue().catch(()=>{}), 5000);
-
-  // Refresh on visibility regain
-  document.addEventListener('visibilitychange', ()=>{
-    if (document.visibilityState === 'visible') {
-      renderQueue().catch(()=>{});
-      syncState().catch(()=>{});
-    }
-  });
-})();
-</script>
-<script src="js/auth-guard.js" type="module"></script>
-
+    // initial load
+    load();
+  </script>
+  <script src="js/auth-guard.js" type="module"></script>
 </body>
 </html>
