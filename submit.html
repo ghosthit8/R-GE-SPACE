@@ -104,6 +104,19 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 
       <hr class="sep">
 
+      <!-- NEW: piece title + description -->
+      <div class="small" style="margin-bottom:6px">Optional details</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+        <div>
+          <label for="pieceTitle" class="small" style="display:block;margin-bottom:4px">Piece title</label>
+          <input id="pieceTitle" class="input" maxlength="120" placeholder="e.g., Neon Cathedral">
+        </div>
+        <div>
+          <label for="pieceDesc" class="small" style="display:block;margin-bottom:4px">Description</label>
+          <textarea id="pieceDesc" class="input" rows="3" maxlength="500" placeholder="Tell people about this piece…"></textarea>
+        </div>
+      </div>
+
       <label class="row small" style="align-items:flex-start">
         <input id="consent" type="checkbox">
         <span>I am 18+, no sexual minors, no Nazi BS.</span>
@@ -163,6 +176,9 @@ const urlInput = document.getElementById('urlInput');
 const fileName = document.getElementById('fileName');
 const previewHint = document.getElementById('previewHint');
 const imgPreview = document.getElementById('imgPreview');
+
+const titleInput = document.getElementById('pieceTitle');
+const descInput  = document.getElementById('pieceDesc');
 
 const consent = document.getElementById('consent');
 const btnSubmit = document.getElementById('btnSubmit');
@@ -420,6 +436,9 @@ btnSubmit.addEventListener('click', async ()=>{
   if (!id) return toast('Log in to submit');
   if (!consent.checked) return toast('Please consent to the rules');
 
+  const pieceName = (titleInput?.value || '').trim();
+  const pieceDesc = (descInput?.value || '').trim();
+
   let finalUrl = (picked.url||'').trim();
   try{
     if (picked.file){
@@ -428,9 +447,14 @@ btnSubmit.addEventListener('click', async ()=>{
     }
     if (!finalUrl) return toast('Pick a file or paste a URL');
 
-    const { error } = await supabase.from('art_queue').insert({
-      image_url: finalUrl, status: 'pending'
-    });
+    const payload = {
+      image_url: finalUrl,
+      status: 'pending',
+      piece_name: pieceName || null,
+      piece_description: pieceDesc || null
+    };
+
+    const { error } = await supabase.from('art_queue').insert(payload);
     if (error) throw error;
 
     picked = {file:null, url:''};
@@ -439,6 +463,8 @@ btnSubmit.addEventListener('click', async ()=>{
     previewHint.textContent = '';
     setPreview('');
     consent.checked = false;
+    if (titleInput) titleInput.value = '';
+    if (descInput)  descInput.value  = '';
 
     toast('✅ Art queued for next round');
     submitMsg.textContent = 'Art queued for next round.';
