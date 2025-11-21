@@ -52,10 +52,6 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
   background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35)
 }
 
-/* Timer card */
-.timer .row{justify-content:space-between}
-.clock,.stage{display:inline-flex; min-width:36px; height:26px; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:10px; padding:0 10px}
-
 .toast{
   position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
   background:rgba(0,0,0,.85); color:var(--ink); border:1px solid var(--border); padding:10px 12px; border-radius:12px;
@@ -86,16 +82,6 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       </div>
     </div>
 
-    <!-- Auth quick panel -->
-    <div class="card" style="margin-top:12px">
-      <div class="authRow">
-        <input id="emailInput" class="input" placeholder="email@you.com (for magic link)" style="max-width:260px">
-        <button id="btnMagic" class="btn">Send magic link</button>
-        <button id="btnSignOut" class="btn ghost">Sign out</button>
-        <span id="authMsg" class="small mono"></span>
-      </div>
-    </div>
-
     <!-- Minimal uploader -->
     <div class="card" style="margin-top:16px">
       <div id="pickZone" class="drop">
@@ -122,20 +108,6 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       </div>
     </div>
 
-    <!-- Live tournament status -->
-    <div class="card" style="margin-top:16px">
-      <div class="timer">
-        <div class="row">
-          <span>🕒 Tournament Clock</span>
-          <span id="clock" class="clock">—</span>
-        </div>
-        <div class="row">
-          <span>🏷️ Current Round</span>
-          <span id="stage" class="stage">—</span>
-        </div>
-      </div>
-    </div>
-
     <!-- Queue (collapsible) -->
     <div class="card" style="margin-top:16px">
       <div class="row" style="justify-content:space-between; align-items:center">
@@ -159,18 +131,12 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 /* ---------- Supabase + constants ---------- */
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 const BUCKET = 'art-uploads';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ---------- Elements ---------- */
 const authBadge = document.getElementById('authBadge');
 const toastEl = document.getElementById('toast');
-
-const emailInput = document.getElementById('emailInput');
-const btnMagic = document.getElementById('btnMagic');
-const btnSignOut = document.getElementById('btnSignOut');
-const authMsg = document.getElementById('authMsg');
 
 const pickZone = document.getElementById('pickZone');
 const btnPick = document.getElementById('btnPick');
@@ -190,15 +156,11 @@ const queueCount = document.getElementById('queueCount');
 const queueGrid = document.getElementById('queue');
 const queueEmpty = document.getElementById('queueEmpty');
 
-const clockEl = document.getElementById('clock');
-const stageEl = document.getElementById('stage');
-
 /* ---------- Debugger (kept) ---------- */
 const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
 log('LOG: Debugger ready');
 
 /* ---------- Utils ---------- */
-const iso = (d)=> new Date(d).toISOString().replace(/\.\d{3}Z$/,'Z');
 function toast(msg, ms=1600){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
 function bytesToMB(n){ return (n/(1024*1024)).toFixed(2); }
 const varGreen = ()=> getComputedStyle(document.documentElement).getPropertyValue('--green') || '#39ff14';
@@ -209,7 +171,7 @@ function setPreview(src){
   else { imgPreview.removeAttribute('src'); hide(imgPreview); }
 }
 
-/* ---------- Auth helpers ---------- */
+/* ---------- Auth helpers (no magic-link UI) ---------- */
 async function uid(){
   const { data:{session} } = await supabase.auth.getSession();
   return session?.user?.id || null;
@@ -218,19 +180,6 @@ function paintAuth(id){
   if (id){ authBadge.textContent='logged in'; authBadge.style.color=varGreen(); }
   else   { authBadge.textContent='not logged in'; authBadge.style.color='#ff6b6b'; authBadge.style.borderColor='#3b1616'; }
 }
-btnMagic.addEventListener('click', async ()=>{
-  const email = (emailInput.value||'').trim();
-  if (!email) return toast('Enter email first');
-  authMsg.textContent = 'Sending link…';
-  const { error } = await supabase.auth.signInWithOtp({ email, options:{ emailRedirectTo: window.location.href } });
-  if (error){ authMsg.textContent = 'Error sending link'; console.error(error); toast('Magic link failed'); }
-  else { authMsg.textContent = 'Check your email for the link.'; toast('Magic link sent'); }
-});
-btnSignOut.addEventListener('click', async ()=>{
-  await supabase.auth.signOut();
-  paintAuth(null);
-  toast('Signed out');
-});
 
 /* ---------- Pick flow (file or URL) ---------- */
 let picked = { file:null, url:'' };
@@ -262,7 +211,6 @@ urlInput.addEventListener('input', ()=>{
     picked.file = null; fileInput.value='';
     fileName.textContent = 'Using pasted URL';
     previewHint.textContent = picked.url;
-    // quick sanity check for image URL
     const im = new Image();
     im.onload = ()=> setPreview(picked.url);
     im.onerror = ()=> { setPreview(''); toast('URL is not an image'); };
@@ -330,129 +278,17 @@ async function uploadToStorage(userId, file){
   const dt=(performance.now()-t0).toFixed(0);
   if (error) throw error;
 
-  // Public URL first; if that fails to load later, fall back to signed URL
   const { data:pub } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
   let url = pub?.publicUrl || null;
 
-  // Optional quick HEAD check — browsers limit CORS, so we’ll also offer a signed URL fallback unconditionally
   try{
-    const { data:signed } = await supabase.storage.from(BUCKET).createSignedUrl(data.path, 60*60*24*7); // 7 days
+    const { data:signed } = await supabase.storage.from(BUCKET).createSignedUrl(data.path, 60*60*24*7);
     if (signed?.signedUrl) url = url || signed.signedUrl;
-  }catch(e){ /* ignore if bucket is public and signed not needed */ }
+  }catch(e){}
 
   log('IMG: uploaded ', url, `(${dt}ms)`);
   return url;
 }
-
-/* ---------- Edge call + timer normalize ---------- */
-async function callEdge(){
-  const t0 = performance.now();
-  log('EDGE: GET', EDGE_URL);
-  const res = await fetch(EDGE_URL, {
-    method:'GET',
-    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`, 'apikey':SUPABASE_ANON_KEY }
-  });
-  const raw = await res.text();
-  const dt = (performance.now()-t0).toFixed(0);
-  log(`EDGE: GET ${EDGE_URL} → ${res.status} (${dt}ms)`);
-  const preview = raw.length>200 ? raw.slice(0,200)+'…' : raw;
-  log('EDGE: body ~200b =', preview);
-
-  let j=null; try{ j=JSON.parse(raw); }catch(e){ log('EDGE: JSON parse error', String(e)); }
-  if (!res.ok) throw new Error((j&&j.error)||raw||'edge error');
-  return j?.state || j || {};
-}
-
-function normalize(s){
-  try { log('[EDGE] raw state', JSON.stringify(s)); } catch {}
-
-  // ✅ Prefer ends_at (what your edge returns), then fall back
-  const phaseEnd =
-    s.ends_at || s.endsAt || s.phase_end_at || s.phaseEndAt || s.next_at || s.next_iso || s.base_iso || null;
-
-  const period =
-    (typeof s.period_sec==='number') ? s.period_sec
-  : (typeof s.period==='number')     ? s.period
-  : (typeof s.period_s==='number')   ? s.period_s
-  : 20;
-
-  let remaining =
-    (typeof s.remaining_sec==='number') ? s.remaining_sec
-  : (typeof s.remaining==='number')     ? s.remaining
-  : (typeof s.remaining_ms==='number')  ? Math.ceil(s.remaining_ms/1000)
-  : (typeof s.next_ms==='number')       ? Math.ceil(s.next_ms/1000)
-  : null;
-
-  // ✅ If server gives null/0, derive from ends_at
-  if ((remaining==null || remaining<=0) && phaseEnd){
-    const ms = Date.parse(phaseEnd) - Date.now();
-    if (!isNaN(ms)) remaining = Math.max(0, Math.ceil(ms/1000));
-  }
-
-  try { log('[EDGE] normalized', JSON.stringify({phase_end_at:phaseEnd, period_sec:period, remaining_sec:remaining, paused:!!s.paused})); } catch {}
-  return { phase_end_at: phaseEnd, period_sec: period, paused: !!s.paused, remaining_sec: remaining };
-}
-
-/* ---------- Timer state ---------- */
-let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
-
-/* ---------- Stage display (placeholder) ---------- */
-function computeStage(){ return 'R32'; } // leave as-is for now
-
-/* ---------- Sync ---------- */
-async function syncState(){
-  try{
-    const s = normalize(await callEdge());
-    const __prev = serverPhaseEndISO;
-
-    // ✅ Store a real server end instant your loop can use
-    serverPhaseEndISO = s.phase_end_at || s.ends_at || s.endsAt || null;
-    if (!serverPhaseEndISO && s.base_iso) serverPhaseEndISO = s.base_iso;
-
-    remainingSec = s.remaining_sec;
-    periodSec = s.period_sec ?? 20;
-    paused = !!s.paused;
-    lastSyncAt = Date.now();
-
-    if (__prev && serverPhaseEndISO && __prev !== serverPhaseEndISO) {
-      try { await renderQueue(); } catch {}
-    }
-
-    stageEl.textContent = computeStage();
-    log('CLOCK: clock — →', (typeof remainingSec==='number')?remainingSec:'—', `(Δdom ${(performance.now()/1000).toFixed(2)}s)`);
-  }catch(e){
-    console.error(e);
-    toast('Timer sync failed');
-  }
-}
-
-/* ---------- Render loop ---------- */
-let raf;
-function loop(){
-  if (typeof remainingSec === 'number') {
-    const elapsed = (Date.now() - lastSyncAt) / 1000;
-    const sec = Math.max(0, Math.ceil(remainingSec - elapsed));
-    clockEl.textContent = String(sec);
-    if (sec<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
-  } else if (serverPhaseEndISO) {
-    const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
-    const sec = Math.ceil(rem/1000);
-    clockEl.textContent = String(sec);
-    if (rem<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
-  } else {
-    const elapsed = Math.floor(((Date.now()% (periodSec*1000)))/1000);
-    const sec = Math.max(0, periodSec - elapsed);
-    clockEl.textContent = String(sec);
-    if (Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
-  }
-  raf = requestAnimationFrame(loop);
-}
-
-/* Keep your style of periodic logging */
-log('TIMER: interval 3 set @ 30000ms');
-const int3 = setInterval(()=> syncState().catch(()=>{}), 30000);
-log('TIMER: timeout 4 set @ 0ms');
-setTimeout(()=>{ log('TIMER: timeout 4 run 0.0ms'); }, 0);
 
 /* ---------- Submit handler ---------- */
 btnSubmit.addEventListener('click', async ()=>{
@@ -484,7 +320,10 @@ btnSubmit.addEventListener('click', async ()=>{
     toast('✅ Art queued for next round');
     submitMsg.textContent = 'Art queued for next round.';
     await renderQueue();
-    if (queuePanel && queuePanel.style.display === 'none') { queuePanel.style.display = 'block'; queueToggle.textContent = 'Collapse ▲'; }
+    if (queuePanel && queuePanel.style.display === 'none') {
+      queuePanel.style.display = 'block';
+      queueToggle.textContent = 'Collapse ▲';
+    }
   }catch(e){
     console.error(e);
     toast(e?.message || 'Submit failed');
@@ -526,7 +365,6 @@ async function renderQueue(){
       </div>
     `).join('');
 
-    // Image load logs + 404 cleanup
     queueGrid.querySelectorAll('img').forEach(img=>{
       img.addEventListener('load', ()=> log('IMG: loaded  ', img.src));
       img.addEventListener('error', ()=> {
@@ -588,38 +426,20 @@ const queueChannel = supabase.channel('queue-watch')
 // Clean up
 window.addEventListener('beforeunload', ()=> { try { supabase.removeChannel(queueChannel); } catch {} });
 
-/* ---------- Round start watch ---------- */
-let __lastClock = null;
-function __watchRoundStart() {
-  const n = parseInt(clockEl.textContent, 10);
-  if (!isNaN(n)) {
-    if (__lastClock !== null && __lastClock <= 1 && n > __lastClock) {
-      console.log('[QUEUE] round start detected — refreshing queue');
-      renderQueue().catch(()=>{});
-    }
-    __lastClock = n;
-  }
-  requestAnimationFrame(__watchRoundStart);
-}
-__watchRoundStart();
-
 /* ---------- Boot ---------- */
 (async()=>{
   paintAuth(await uid());
   supabase.auth.onAuthStateChange((_e, session)=> paintAuth(session?.user?.id || null));
 
-  // First paint
-  await Promise.all([renderQueue(), syncState()]);
-  loop();
+  await renderQueue();
 
-  // Safety poll (kept)
+  // Safety poll
   setInterval(()=> renderQueue().catch(()=>{}), 5000);
 
-  // Refresh on visibility regain (kept)
+  // Refresh on visibility regain
   document.addEventListener('visibilitychange', ()=>{
     if (document.visibilityState === 'visible') {
       renderQueue().catch(()=>{});
-      syncState().catch(()=>{});
     }
   });
 })();
