@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -546,10 +545,24 @@
         const seedLabel = num ? `Seed #${num}` : "Seed ?";
 
         const pieceName = r.piece_name || "";
-        // use username-only for artist display
-        const artistName = displayArtist(r.artist_name || "");
+
+        // PREFER username-based columns, then fall back to older fields
+        const rawArtist =
+          r.artist_username ||
+          r.artist_name ||
+          r.artist ||
+          r.user_name ||
+          r.username ||
+          r.user_username ||
+          r.submitter ||
+          r.user_email ||
+          "";
+
+        // use username-only for artist display (strips email if that's all we have)
+        const artistName = displayArtist(rawArtist);
         const artistHref = artistName ? `profile.html?u=${encodeURIComponent(artistName)}` : null;
         const artistCell = artistName ? `<a class="artist-link" href="${artistHref}">${artistName}</a>` : "—";
+
         const pieceDesc = r.piece_description || r.description || "";
 
         descStore[idx] = pieceDesc || "";
