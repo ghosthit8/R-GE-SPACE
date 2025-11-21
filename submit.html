@@ -93,8 +93,8 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
     <div class="card" style="margin-top:16px">
       <div id="pickZone" class="drop">
         <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
-        <div id="fileName" class="small">jpg / png / webp — 10MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
-        <input id="fileInput" type="file" accept="image/*" class="hidden">
+        <div id="fileName" class="small">jpg / png / webp / mp4 / webm — 100MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
+        <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
         <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
         <div class="preview">
           <img id="imgPreview" alt="" class="hidden">
@@ -207,6 +207,22 @@ function setPreview(src){
   else { imgPreview.removeAttribute('src'); hide(imgPreview); }
 }
 
+/* helper: update preview based on image vs video */
+function updatePreviewForFile(f){
+  const isImage = f.type.startsWith('image/');
+  const isVideo = f.type.startsWith('video/');
+  if (isImage){
+    setPreview(URL.createObjectURL(f));
+    previewHint.textContent = 'Ready to upload';
+  } else if (isVideo){
+    setPreview('');
+    previewHint.textContent = `Video selected: ${f.name} — ${bytesToMB(f.size)} MB`;
+  } else {
+    setPreview('');
+    previewHint.textContent = '';
+  }
+}
+
 /* ---------- Auth helpers (no magic-link UI) ---------- */
 async function uid(){
   const { data:{session} } = await supabase.auth.getSession();
@@ -259,13 +275,22 @@ btnPick.addEventListener('click', ()=>{
 fileInput.addEventListener('change', ()=>{
   const f = fileInput.files?.[0];
   if (!f) return;
-  if (!f.type.startsWith('image/')){ toast('File must be an image'); fileInput.value=''; return; }
-  if (f.size > 10*1024*1024){ toast('Max 10MB'); fileInput.value=''; return; }
+  const isImage = f.type.startsWith('image/');
+  const isVideo = f.type.startsWith('video/');
+  if (!isImage && !isVideo){
+    toast('File must be an image or video');
+    fileInput.value='';
+    return;
+  }
+  if (f.size > 100*1024*1024){
+    toast('Max 100MB');
+    fileInput.value='';
+    return;
+  }
   picked.file = f; picked.url = '';
   urlInput.value = ''; urlInput.classList.add('hidden');
   fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  setPreview(URL.createObjectURL(f));
-  previewHint.textContent = 'Ready to upload';
+  updatePreviewForFile(f);
 });
 
 urlInput.addEventListener('input', ()=>{
@@ -290,13 +315,14 @@ urlInput.addEventListener('input', ()=>{
 pickZone.addEventListener('drop', (e)=>{
   const f = e.dataTransfer?.files?.[0];
   if (!f) return;
-  if (!f.type.startsWith('image/')) return toast('File must be an image');
-  if (f.size > 10*1024*1024) return toast('Max 10MB');
+  const isImage = f.type.startsWith('image/');
+  const isVideo = f.type.startsWith('video/');
+  if (!isImage && !isVideo) return toast('File must be an image or video');
+  if (f.size > 100*1024*1024) return toast('Max 100MB');
   picked.file = f; picked.url='';
   fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
   fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
-  setPreview(URL.createObjectURL(f));
-  previewHint.textContent = 'Ready to upload (dropped)';
+  updatePreviewForFile(f);
 });
 
 /* Paste support (clipboard image or URL text) */
@@ -307,7 +333,7 @@ window.addEventListener('paste', (e)=>{
       if (it.kind === 'file'){
         const f = it.getAsFile();
         if (f && f.type.startsWith('image/')){
-          if (f.size > 10*1024*1024) { toast('Max 10MB'); return; }
+          if (f.size > 100*1024*1024) { toast('Max 100MB'); return; }
           picked.file = f; picked.url='';
           fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
           fileName.textContent = `${f.name||'pasted-image'} — ${bytesToMB(f.size)} MB`;
@@ -490,7 +516,7 @@ btnSubmit.addEventListener('click', async ()=>{
 
     picked = {file:null, url:''};
     fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
-    fileName.textContent = 'jpg / png / webp — 10MB max';
+    fileName.textContent = 'jpg / png / webp / mp4 / webm — 100MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
     previewHint.textContent = '';
     setPreview('');
     consent.checked = false;
