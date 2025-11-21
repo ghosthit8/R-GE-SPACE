@@ -1,1150 +1,676 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Submit — Rage Space</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Rage Space — Submit</title>
+<link rel="preconnect" href="https://tuqvpcevrhciursxrgav.supabase.co">
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --green:#39ff14; --green2:#7dff62; --ink:#e5e5e5;
+  --bg:#000; --card:#090909; --border:#153b16; --muted:#8aff8a;
+  --maxw:860px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:radial-gradient(1200px 900px at 50% -10%,rgba(57,255,20,.08),transparent 60%), #000;
+  color:var(--ink); font:14px/1.45 system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
+}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:18px 14px 80px}
+h1{margin:0 0 12px; font-size:24px; letter-spacing:.6px}
+.header{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.badge{border:1px solid var(--border); padding:6px 10px; border-radius:12px; color:var(--ink)}
+.btn{
+  display:inline-flex; align-items:center; gap:8px; justify-content:center; text-decoration:none;
+  border:1px solid var(--border); border-radius:14px; padding:10px 14px; font-weight:600;
+  background:linear-gradient(180deg, rgba(57,255,20,.08), rgba(57,255,20,.02));
+  color:var(--green); transition:box-shadow .2s ease, transform .08s ease; cursor:pointer;
+}
+.btn:hover{box-shadow:0 0 14px rgba(57,255,20,.22)}
+.btn.big{font-size:18px; padding:16px 18px}
+.btn.ghost{opacity:.9}
+.btn[disabled]{opacity:.45; cursor:not-allowed; box-shadow:none}
+.input{width:100%; border:1px solid var(--border); border-radius:12px; background:#0b0b0b; color:var(--ink); padding:10px 12px; font-size:14px}
+.hidden{display:none !important}
 
-    body {
-      background: #050505;
-      color: #f1f1f1;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        sans-serif;
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      padding: 16px;
-    }
+.card{border:1px solid var(--border); border-radius:18px; background:rgba(9,9,9,.6); padding:16px}
+.row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.small{font-size:12px; color:var(--muted)}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.center{display:flex; justify-content:center; align-items:center; gap:12px}
 
-    .page {
-      width: 100%;
-      max-width: 900px;
-      border: 1px solid #222;
-      border-radius: 12px;
-      padding: 16px;
-      background: radial-gradient(circle at top, #151515 0%, #050505 50%, #000 100%);
-      box-shadow: 0 0 20px rgba(0, 255, 128, 0.1);
-    }
+hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 
-    h1 {
-      font-size: 1.8rem;
-      margin-bottom: 8px;
-      color: #39ff14;
-      letter-spacing: 1px;
-      text-shadow: 0 0 6px rgba(57, 255, 20, 0.7);
-      text-align: center;
-    }
+/* Queue grid */
+.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px}
+.thumb{position:relative; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#ff3aa0; min-height:120px}
+.thumb img{display:block; width:100%; height:100%; object-fit:cover}
+.thumb .idx{
+  position:absolute; top:6px; left:6px; font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
+  background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35)
+}
 
-    .subtitle {
-      font-size: 0.9rem;
-      color: #bbbbbb;
-      text-align: center;
-      margin-bottom: 16px;
-    }
+/* Timer card */
+.timer .row{justify-content:space-between}
+.clock{
+  display:inline-flex; min-width:36px; height:26px; align-items:center; justify-content:center;
+  border:1px solid var(--border); border-radius:10px; padding:0 10px;
+}
 
-    .grid {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 16px;
-    }
+.toast{
+  position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
+  background:rgba(0,0,0,.85); color:var(--ink); border:1px solid var(--border); padding:10px 12px; border-radius:12px;
+  opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(-4px)}
 
-    @media (max-width: 720px) {
-      .grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .card {
-      border-radius: 10px;
-      background: rgba(0, 0, 0, 0.75);
-      padding: 14px;
-      border: 1px solid #222;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .card::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: repeating-linear-gradient(
-        to bottom,
-        rgba(0, 255, 120, 0.04),
-        rgba(0, 255, 120, 0.04) 1px,
-        transparent 1px,
-        transparent 3px
-      );
-      opacity: 0.4;
-      pointer-events: none;
-      mix-blend-mode: screen;
-    }
-
-    .card-inner {
-      position: relative;
-      z-index: 1;
-    }
-
-    .section-title {
-      font-size: 1rem;
-      color: #eeeeee;
-      margin-bottom: 8px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .section-title span {
-      font-size: 0.75rem;
-      color: #888;
-      font-weight: 400;
-    }
-
-    .field {
-      margin-bottom: 10px;
-    }
-
-    .field label {
-      display: block;
-      font-size: 0.85rem;
-      margin-bottom: 4px;
-      color: #dddddd;
-    }
-
-    .field small {
-      display: block;
-      font-size: 0.75rem;
-      color: #888;
-      margin-top: 2px;
-    }
-
-    input[type="text"],
-    textarea {
-      width: 100%;
-      padding: 8px 10px;
-      border-radius: 8px;
-      border: 1px solid #333;
-      background: #050505;
-      color: #f1f1f1;
-      font-size: 0.9rem;
-      outline: none;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    input[type="text"]:focus,
-    textarea:focus {
-      border-color: #39ff14;
-      box-shadow: 0 0 8px rgba(57, 255, 20, 0.5);
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 60px;
-      max-height: 220px;
-    }
-
-    .file-drop {
-      border-radius: 10px;
-      border: 1px dashed #444;
-      background: rgba(5, 5, 5, 0.9);
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      justify-content: center;
-      align-items: stretch;
-      cursor: pointer;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease,
-        background 0.2s ease;
-      min-height: 90px;
-    }
-
-    .file-drop.drag-over {
-      border-color: #39ff14;
-      box-shadow: 0 0 12px rgba(57, 255, 20, 0.5);
-      background: rgba(10, 20, 10, 0.95);
-    }
-
-    .file-drop-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .file-drop-main {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 0;
-    }
-
-    .file-drop-title {
-      font-size: 0.9rem;
-      color: #ffffff;
-      font-weight: 500;
-    }
-
-    .file-drop-sub {
-      font-size: 0.8rem;
-      color: #aaaaaa;
-    }
-
-    .file-name {
-      font-size: 0.8rem;
-      color: #cccccc;
-      margin-top: 4px;
-      word-break: break-all;
-    }
-
-    .btn-line {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      border-radius: 999px;
-      border: 1px solid #333;
-      background: radial-gradient(circle at top left, #222 0%, #050505 60%);
-      color: #f1f1f1;
-      padding: 7px 12px;
-      min-width: 70px;
-      text-align: center;
-      font-size: 0.8rem;
-      cursor: pointer;
-      transition: border-color 0.15s ease, box-shadow 0.15s ease,
-        transform 0.1s ease, background 0.15s ease;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-    }
-
-    .btn span.icon {
-      font-size: 0.9rem;
-    }
-
-    .btn-primary {
-      border-color: #39ff14;
-      box-shadow: 0 0 7px rgba(57, 255, 20, 0.4);
-    }
-
-    .btn-primary:hover {
-      box-shadow: 0 0 11px rgba(57, 255, 20, 0.7);
-      transform: translateY(-1px);
-    }
-
-    .btn-secondary {
-      border-color: #666;
-      color: #ddd;
-    }
-
-    .btn-secondary:hover {
-      border-color: #888;
-      box-shadow: 0 0 6px rgba(255, 255, 255, 0.18);
-      transform: translateY(-1px);
-    }
-
-    .btn:active {
-      transform: translateY(0px) scale(0.98);
-      box-shadow: none;
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: default;
-      box-shadow: none;
-      transform: none;
-    }
-
-    .status-line {
-      font-size: 0.8rem;
-      color: #999;
-      margin-top: 6px;
-      min-height: 18px;
-    }
-
-    .status-line span.good {
-      color: #39ff14;
-    }
-
-    .status-line span.bad {
-      color: #ff3333;
-    }
-
-    .status-line span.warn {
-      color: #ffcc33;
-    }
-
-    .timer-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      font-size: 0.9rem;
-    }
-
-    .timer-value {
-      font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas,
-        "Liberation Mono", "Courier New", monospace;
-      font-size: 2.2rem;
-      line-height: 1.2;
-      color: #39ff14;
-      text-shadow: 0 0 10px rgba(57, 255, 20, 0.7);
-      letter-spacing: 2px;
-    }
-
-    .timer-label {
-      font-size: 0.8rem;
-      color: #aaaaaa;
-    }
-
-    .phase-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.8rem;
-      color: #eeeeee;
-    }
-
-    .phase-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: #39ff14;
-      box-shadow: 0 0 6px rgba(57, 255, 20, 0.7);
-    }
-
-    .phase-sub {
-      font-size: 0.75rem;
-      color: #888;
-      margin-top: 2px;
-    }
-
-    .helper {
-      font-size: 0.75rem;
-      color: #888;
-      margin-top: 6px;
-      line-height: 1.4;
-    }
-
-    .helper strong {
-      color: #dddddd;
-      font-weight: 500;
-    }
-
-    .divider {
-      height: 1px;
-      background: linear-gradient(
-        to right,
-        transparent,
-        rgba(255, 255, 255, 0.18),
-        transparent
-      );
-      margin: 10px 0;
-    }
-
-    .preview-area {
-      margin-top: 8px;
-      border-radius: 8px;
-      border: 1px solid #222;
-      background: #020202;
-      padding: 8px;
-      min-height: 150px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .preview-area::before {
-      content: "";
-      pointer-events: none;
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(
-        circle at center,
-        rgba(57, 255, 20, 0.15),
-        transparent 60%
-      );
-      opacity: 0.5;
-      mix-blend-mode: screen;
-    }
-
-    .preview-inner {
-      position: relative;
-      z-index: 1;
-      max-height: 320px;
-      max-width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .preview-inner img,
-    .preview-inner video {
-      max-width: 100%;
-      max-height: 320px;
-      border-radius: 8px;
-      border: 1px solid #333;
-      display: block;
-    }
-
-    .preview-placeholder {
-      font-size: 0.85rem;
-      color: #666;
-      text-align: center;
-      padding: 20px 10px;
-    }
-
-    .preview-meta {
-      margin-top: 6px;
-      font-size: 0.75rem;
-      color: #999;
-      display: flex;
-      justify-content: space-between;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .preview-meta span {
-      white-space: nowrap;
-    }
-
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: 16px;
-      transform: translateX(-50%);
-      background: #111;
-      color: #f1f1f1;
-      padding: 10px 14px;
-      font-size: 0.85rem;
-      border-radius: 999px;
-      border: 1px solid #39ff14;
-      box-shadow: 0 0 10px rgba(57, 255, 20, 0.6);
-      z-index: 2000;
-      max-width: 95%;
-      text-align: center;
-      pointer-events: none;
-    }
-
-    a {
-      color: #39ff14;
-      text-decoration: none;
-    }
-
-    a:hover {
-      text-decoration: underline;
-    }
-
-    .nav-top {
-      font-size: 0.8rem;
-      margin-bottom: 6px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .nav-top a.left-link {
-      color: #999;
-    }
-
-    .nav-top span.right {
-      color: #666;
-      font-size: 0.75rem;
-    }
-  </style>
+/* Drop zone */
+.drop{
+  border:1px dashed var(--border); border-radius:14px; padding:14px; text-align:center;
+  background:rgba(57,255,20,.03);
+}
+.drop.drag{background:rgba(57,255,20,.08)}
+.preview{
+  margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+}
+.preview img{max-height:120px; border-radius:10px; border:1px solid var(--border)}
+.authRow{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+</style>
 </head>
 <body>
-  <div class="page">
-    <div class="nav-top">
-      <a href="index.html" class="left-link">&larr; Back to Matchup</a>
-      <span class="right">Rage Space &mdash; Art Queue Submission</span>
+  <div class="wrap">
+    <div class="header">
+      <h1 style="color:var(--green)">SUBMIT ART</h1>
+      <div class="row">
+        <span id="authBadge" class="badge small">not logged in</span>
+        <a class="btn ghost" href="./menu.html">← Menu</a>
+      </div>
     </div>
 
-    <h1>Submit to the Queue</h1>
-    <div class="subtitle">
-      Drop your piece into the machine. When the next tournament spins up, it may be chosen to devour the bracket.
-    </div>
-
-    <div class="grid">
-      <div class="card">
-        <div class="card-inner">
-          <div class="section-title">
-            <span>1. Your Piece</span>
-            <span>Required</span>
-          </div>
-
-          <div class="field" style="margin-top:6px;">
-            <label for="pieceTitle">Piece title (optional)</label>
-            <input
-              id="pieceTitle"
-              type="text"
-              placeholder="Glitch Blossom // Neon Ruins..."
-              autocomplete="off"
-            />
-            <small>Shown on the winners page if your art reaches glory.</small>
-          </div>
-
-          <div class="field">
-            <label for="pieceDesc">Piece description (optional)</label>
-            <textarea
-              id="pieceDesc"
-              placeholder="Short lore, process notes, or whatever the machine should know..."
-            ></textarea>
-            <small>Kept fairly short is best. Shown alongside the winner.</small>
-          </div>
-
-          <div class="divider"></div>
-
-          <label style="font-size:0.85rem; color:#ddd; margin-bottom:4px; display:block;"
-            >Upload or paste image</label
-          >
-
-          <div id="dropZone" class="file-drop">
-            <div class="file-drop-row">
-              <div class="file-drop-main">
-                <div class="file-drop-title">
-                  <span>Choose or Paste</span>
-                </div>
-                <div class="file-drop-sub">
-                  jpg / png / webp &mdash; 50MB max &mdash; images only
-                </div>
-                <div id="fileName" class="file-name">
-                  No file selected yet.
-                </div>
-              </div>
-              <div class="btn-line">
-                <button id="btnPick" class="btn btn-secondary" type="button">
-                  <span class="icon">📁</span>
-                  <span>Pick file</span>
-                </button>
-              </div>
-            </div>
-
-            <div class="status-line" id="pasteStatus">
-              Paste an image from your clipboard or pick a file.
-            </div>
-          </div>
-
-          <input
-            id="fileInput"
-            type="file"
-            accept="image/*"
-            style="display:none;"
-          />
-
-          <div class="helper">
-            <strong>Tips:</strong> Use clear, high-res art. The machine will resize and optimize for the tournament wall.
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="section-title" style="margin-top:4px;">
-            <span>2. Submit</span>
-            <span>Status</span>
-          </div>
-
-          <div class="btn-line" style="margin-top:4px;">
-            <button id="btnSubmit" class="btn btn-primary" type="button">
-              <span class="icon">🚀</span>
-              <span>Submit to Queue</span>
-            </button>
-          </div>
-
-          <div class="status-line" id="submitStatus">
-            Waiting for your art.
-          </div>
-
-          <div class="helper">
-            You can close this page after a successful submit. Your piece will stay in the queue until the machine pulls it into a bracket.
-          </div>
+    <!-- Minimal uploader -->
+    <div class="card" style="margin-top:16px">
+      <div id="pickZone" class="drop">
+        <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
+        <div id="fileName" class="small">jpg / png / webp / mp4 / webm — 50MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
+        <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
+        <input id="urlInput" type="url" class="input hidden" placeholder="https://image.example/your-art.jpg">
+        <div class="preview">
+          <img id="imgPreview" alt="" class="hidden">
+          <div class="small mono" id="previewHint"></div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-inner">
-          <div class="section-title">
-            <span>Bracket Timer</span>
-            <span>Global</span>
-          </div>
+      <hr class="sep">
 
-          <div class="timer-panel">
-            <div class="timer-value" id="timerDisplay">--:--</div>
-            <div class="timer-label" id="timerLabel">
-              Loading global tournament timer...
-            </div>
-            <div class="phase-badge">
-              <span class="phase-dot"></span>
-              <span id="phaseName">Phase: --</span>
-            </div>
-            <div class="phase-sub" id="phaseSub">
-              Next global update from the edge function will appear here.
-            </div>
-
-            <div class="divider"></div>
-
-            <div class="section-title">
-              <span>Preview</span>
-              <span>What you&apos;re sending</span>
-            </div>
-
-            <div class="preview-area">
-              <div class="preview-inner" id="previewInner">
-                <div class="preview-placeholder">
-                  Your image preview will appear here once selected or pasted.
-                </div>
-              </div>
-            </div>
-
-            <div class="preview-meta" id="previewMeta">
-              <span>Type: --</span>
-              <span>Size: --</span>
-            </div>
-
-            <div class="helper">
-              The timer above is the same one powering <a href="index.html">Matchup</a>.
-              Submissions use the current user you are logged in as.
-            </div>
-          </div>
+      <!-- Optional piece title + description -->
+      <div class="small" style="margin-bottom:6px">Optional details</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+        <div>
+          <label for="pieceTitle" class="small" style="display:block;margin-bottom:4px">Piece title</label>
+          <input id="pieceTitle" class="input" maxlength="120" placeholder="e.g., Neon Cathedral">
+        </div>
+        <div>
+          <label for="pieceDesc" class="small" style="display:block;margin-bottom:4px">Description</label>
+          <textarea id="pieceDesc" class="input" rows="3" maxlength="500" placeholder="Tell people about this piece…"></textarea>
         </div>
       </div>
+
+      <label class="row small" style="align-items:flex-start">
+        <input id="consent" type="checkbox">
+        <span>I am 18+, no sexual minors, no Nazi BS.</span>
+      </label>
+
+      <div class="center" style="margin-top:10px">
+        <button id="btnSubmit" class="btn">✅ Submit</button>
+        <span id="submitMsg" class="small"></span>
+      </div>
+    </div>
+
+    <!-- Live tournament clock -->
+    <div class="card" style="margin-top:16px">
+      <div class="timer">
+        <div class="row">
+          <span>🕒 Tournament Clock</span>
+          <span id="clock" class="clock">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queue (collapsible) -->
+    <div class="card" style="margin-top:16px">
+      <div class="row" style="justify-content:space-between; align-items:center">
+        <strong>📜 In the Queue</strong>
+        <div class="row small" style="gap:8px">
+          <span id="queueCount" class="small"></span>
+          <button id="queueToggle" class="btn ghost" style="padding:6px 10px">Expand ▼</button>
+        </div>
+      </div>
+      <div id="queuePanel" style="display:none; margin-top:12px">
+        <div id="queue" class="grid"></div>
+        <div id="queueEmpty" class="small" style="margin-top:6px; display:none">No items in queue.</div>
+      </div>
+      <div class="small" style="margin-top:6px">Oldest first → next in</div>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON_KEY =
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+  <div id="toast" class="toast"></div>
 
-    const supabase = window.supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY
-    );
+<script>
+/* ---------- Supabase + constants ---------- */
+const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+const EDGE_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
+const BUCKET = 'art-uploads';
+const MAX_MB = 50; // client-side cap
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const dropZone = document.getElementById("dropZone");
-    const fileInput = document.getElementById("fileInput");
-    const btnPick = document.getElementById("btnPick");
-    const btnSubmit = document.getElementById("btnSubmit");
-    const fileNameEl = document.getElementById("fileName");
-    const pasteStatus = document.getElementById("pasteStatus");
-    const submitStatus = document.getElementById("submitStatus");
-    const previewInner = document.getElementById("previewInner");
-    const previewMeta = document.getElementById("previewMeta");
+/* ---------- Elements ---------- */
+const authBadge = document.getElementById('authBadge');
+const toastEl = document.getElementById('toast');
 
-    const timerDisplay = document.getElementById("timerDisplay");
-    const timerLabel = document.getElementById("timerLabel");
-    const phaseName = document.getElementById("phaseName");
-    const phaseSub = document.getElementById("phaseSub");
+const pickZone = document.getElementById('pickZone');
+const btnPick = document.getElementById('btnPick');
+const fileInput = document.getElementById('fileInput');
+const urlInput = document.getElementById('urlInput');
+const fileName = document.getElementById('fileName');
+const previewHint = document.getElementById('previewHint');
+const imgPreview = document.getElementById('imgPreview');
 
-    const titleInput = document.getElementById("pieceTitle");
-    const descInput = document.getElementById("pieceDesc");
+const titleInput = document.getElementById('pieceTitle');
+const descInput  = document.getElementById('pieceDesc');
 
-    let pickedFile = null;
-    let isSubmitting = false;
+const consent = document.getElementById('consent');
+const btnSubmit = document.getElementById('btnSubmit');
+const submitMsg = document.getElementById('submitMsg');
 
-    const MAX_MB = 50;
+const queuePanel = document.getElementById('queuePanel');
+const queueToggle = document.getElementById('queueToggle');
+const queueCount = document.getElementById('queueCount');
+const queueGrid = document.getElementById('queue');
+const queueEmpty = document.getElementById('queueEmpty');
 
-    const log = (...args) => {
-      const now = new Date();
-      const stamp = now.toLocaleTimeString();
-      console.log(`[${stamp}] SUBMIT:`, ...args);
+const clockEl = document.getElementById('clock');
+
+/* ---------- Debugger ---------- */
+const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
+log('LOG: Debugger ready');
+
+/* ---------- Utils ---------- */
+function toast(msg, ms=1600){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),ms); }
+function bytesToMB(n){ return (n/(1024*1024)).toFixed(2); }
+const varGreen = ()=> getComputedStyle(document.documentElement).getPropertyValue('--green') || '#39ff14';
+function show(el){ el.classList.remove('hidden'); }
+function hide(el){ el.classList.add('hidden'); }
+function setPreview(src){
+  if (src){ imgPreview.src = src; show(imgPreview); }
+  else { imgPreview.removeAttribute('src'); hide(imgPreview); }
+}
+
+/* helper: update preview based on image vs video */
+function updatePreviewForFile(f){
+  const isImage = f.type.startsWith('image/');
+  const isVideo = f.type.startsWith('video/');
+  if (isImage){
+    setPreview(URL.createObjectURL(f));
+    previewHint.textContent = 'Ready to upload';
+  } else if (isVideo){
+    setPreview('');
+    previewHint.textContent = `Video selected: ${f.name} — ${bytesToMB(f.size)} MB`;
+  } else {
+    setPreview('');
+    previewHint.textContent = '';
+  }
+}
+
+/* ---------- Auth helpers ---------- */
+async function uid(){
+  const { data:{session} } = await supabase.auth.getSession();
+  return session?.user?.id || null;
+}
+function paintAuth(id){
+  if (id){ authBadge.textContent='logged in'; authBadge.style.color=varGreen(); }
+  else   { authBadge.textContent='not logged in'; authBadge.style.color='#ff6b6b'; authBadge.style.borderColor='#3b1616'; }
+}
+
+/* Optional username lookup (kept, even if not used in insert yet) */
+async function currentUsername() {
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
+  if (!user) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (!error && data?.username) return data.username;
+  } catch (e) {
+    console.warn('[submit] profiles lookup failed', e);
+  }
+
+  const email = user.email || user.user_metadata?.email;
+  if (typeof email === 'string') {
+    const at = email.indexOf('@');
+    return at > 0 ? email.slice(0, at) : email;
+  }
+  return null;
+}
+
+/* ---------- Pick flow (file or URL) ---------- */
+let picked = { file:null, url:'' };
+
+btnPick.addEventListener('click', ()=>{
+  if (!picked.file && !picked.url){
+    fileInput.click();
+  } else {
+    urlInput.classList.toggle('hidden');
+    if (!urlInput.classList.contains('hidden')) urlInput.focus();
+  }
+});
+
+fileInput.addEventListener('change', ()=>{
+  const f = fileInput.files?.[0];
+  if (!f) return;
+  const isImage = f.type.startsWith('image/');
+  const isVideo = f.type.startsWith('video/');
+  if (!isImage && !isVideo){
+    toast('File must be an image or video');
+    fileInput.value='';
+    return;
+  }
+  if (f.size > MAX_MB*1024*1024){
+    toast(`Max ${MAX_MB}MB`);
+    fileInput.value='';
+    return;
+  }
+  picked.file = f; picked.url = '';
+  urlInput.value = ''; urlInput.classList.add('hidden');
+  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
+  updatePreviewForFile(f);
+});
+
+urlInput.addEventListener('input', ()=>{
+  picked.url = urlInput.value.trim();
+  if (picked.url) {
+    picked.file = null; fileInput.value='';
+    fileName.textContent = 'Using pasted URL';
+    previewHint.textContent = picked.url;
+    const im = new Image();
+    im.onload = ()=> setPreview(picked.url);
+    im.onerror = ()=> { setPreview(''); toast('URL is not an image'); };
+    im.src = picked.url;
+  } else {
+    previewHint.textContent='';
+    setPreview('');
+  }
+});
+
+/* Drag & Drop */
+['dragenter','dragover'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=> pickZone.addEventListener(ev, e=>{e.preventDefault(); pickZone.classList.remove('drag');}));
+pickZone.addEventListener('drop', (e)=>{
+  const f = e.dataTransfer?.files?.[0];
+  if (!f) return;
+  const isImage = f.type.startsWith('image/');
+  const isVideo = f.type.startsWith('video/');
+  if (!isImage && !isVideo) return toast('File must be an image or video');
+  if (f.size > MAX_MB*1024*1024) return toast(`Max ${MAX_MB}MB`);
+  picked.file = f; picked.url='';
+  fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+  fileName.textContent = `${f.name} — ${bytesToMB(f.size)} MB`;
+  updatePreviewForFile(f);
+});
+
+/* Paste support */
+window.addEventListener('paste', (e)=>{
+  try{
+    const items = e.clipboardData?.items || [];
+    for (const it of items){
+      if (it.kind === 'file'){
+        const f = it.getAsFile();
+        if (f && f.type.startsWith('image/')){
+          if (f.size > MAX_MB*1024*1024) { toast(`Max ${MAX_MB}MB`); return; }
+          picked.file = f; picked.url='';
+          fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+          fileName.textContent = `${f.name||'pasted-image'} — ${bytesToMB(f.size)} MB`;
+          setPreview(URL.createObjectURL(f));
+          previewHint.textContent = 'Ready to upload (pasted image)';
+          return;
+        }
+      } else if (it.kind === 'string'){
+        it.getAsString((txt)=>{
+          const s = (txt||'').trim();
+          if (/^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i.test(s)){
+            picked.url = s; picked.file = null;
+            urlInput.value = s; urlInput.classList.remove('hidden');
+            fileInput.value = '';
+            fileName.textContent = 'Using pasted URL';
+            setPreview(s);
+            previewHint.textContent = s;
+          }
+        });
+      }
+    }
+  }catch{}
+});
+
+/* ---------- Upload helper ---------- */
+async function uploadToStorage(userId, file){
+  const d=new Date();
+  const path = `${userId}/${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${crypto.randomUUID()}-${file.name}`;
+  const t0=performance.now();
+  const { data, error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl:'3600', upsert:false });
+  const dt=(performance.now()-t0).toFixed(0);
+  if (error) throw error;
+
+  const { data:pub } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
+  let url = pub?.publicUrl || null;
+
+  try{
+    const { data:signed } = await supabase.storage.from(BUCKET).createSignedUrl(data.path, 60*60*24*7);
+    if (signed?.signedUrl) url = url || signed.signedUrl;
+  }catch(e){}
+
+  log('IMG: uploaded ', url, `(${dt}ms)`);
+  return url;
+}
+
+/* ---------- Edge call + timer normalize ---------- */
+async function callEdge(){
+  const t0 = performance.now();
+  log('EDGE: GET', EDGE_URL);
+  const res = await fetch(EDGE_URL, {
+    method:'GET',
+    headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`, 'apikey':SUPABASE_ANON_KEY }
+  });
+  const raw = await res.text();
+  const dt = (performance.now()-t0).toFixed(0);
+  log(`EDGE: GET ${EDGE_URL} → ${res.status} (${dt}ms)`);
+  const preview = raw.length>200 ? raw.slice(0,200)+'…' : raw;
+  log('EDGE: body ~200b =', preview);
+
+  let j=null; try{ j=JSON.parse(raw); }catch(e){ log('EDGE: JSON parse error', String(e)); }
+  if (!res.ok) throw new Error((j&&j.error)||raw||'edge error');
+  return j?.state || j || {};
+}
+
+function normalize(s){
+  try { log('[EDGE] raw state', JSON.stringify(s)); } catch {}
+
+  const phaseEnd =
+    s.ends_at || s.endsAt || s.phase_end_at || s.phaseEndAt || s.next_at || s.next_iso || s.base_iso || null;
+
+  const period =
+    (typeof s.period_sec==='number') ? s.period_sec
+  : (typeof s.period==='number')     ? s.period
+  : (typeof s.period_s==='number')   ? s.period_s
+  : 20;
+
+  let remaining =
+    (typeof s.remaining_sec==='number') ? s.remaining_sec
+  : (typeof s.remaining==='number')     ? s.remaining
+  : (typeof s.remaining_ms==='number')  ? Math.ceil(s.remaining_ms/1000)
+  : (typeof s.next_ms==='number')       ? Math.ceil(s.next_ms/1000)
+  : null;
+
+  if ((remaining==null || remaining<=0) && phaseEnd){
+    const ms = Date.parse(phaseEnd) - Date.now();
+    if (!isNaN(ms)) remaining = Math.max(0, Math.ceil(ms/1000));
+  }
+
+  try { log('[EDGE] normalized', JSON.stringify({phase_end_at:phaseEnd, period_sec:period, remaining_sec:remaining, paused:!!s.paused})); } catch {}
+  return { phase_end_at: phaseEnd, period_sec: period, paused: !!s.paused, remaining_sec: remaining };
+}
+
+/* ---------- Timer state ---------- */
+let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
+
+/* ---------- Sync ---------- */
+async function syncState(){
+  try{
+    const s = normalize(await callEdge());
+    const __prev = serverPhaseEndISO;
+
+    serverPhaseEndISO = s.phase_end_at || s.ends_at || s.endsAt || null;
+    if (!serverPhaseEndISO && s.base_iso) serverPhaseEndISO = s.base_iso;
+
+    remainingSec = s.remaining_sec;
+    periodSec = s.period_sec ?? 20;
+    paused = !!s.paused;
+    lastSyncAt = Date.now();
+
+    if (__prev && serverPhaseEndISO && __prev !== serverPhaseEndISO) {
+      try { await renderQueue(); } catch {}
+    }
+
+    log('CLOCK: clock — →', (typeof remainingSec==='number')?remainingSec:'—', `(Δdom ${(performance.now()/1000).toFixed(2)}s)`);
+  }catch(e){
+    console.error(e);
+    toast('Timer sync failed');
+  }
+}
+
+/* ---------- Render loop ---------- */
+let raf;
+function loop(){
+  if (typeof remainingSec === 'number') {
+    const elapsed = (Date.now() - lastSyncAt) / 1000;
+    const sec = Math.max(0, Math.ceil(remainingSec - elapsed));
+    clockEl.textContent = String(sec);
+    if (sec<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
+  } else if (serverPhaseEndISO) {
+    const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
+    const sec = Math.ceil(rem/1000);
+    clockEl.textContent = String(sec);
+    if (rem<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
+  } else {
+    const elapsed = Math.floor(((Date.now()% (periodSec*1000)))/1000);
+    const sec = Math.max(0, periodSec - elapsed);
+    clockEl.textContent = String(sec);
+    if (Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
+  }
+  raf = requestAnimationFrame(loop);
+}
+
+/* Periodic sync */
+log('TIMER: interval 3 set @ 30000ms');
+const int3 = setInterval(()=> syncState().catch(()=>{}), 30000);
+log('TIMER: timeout 4 set @ 0ms');
+setTimeout(()=>{ log('TIMER: timeout 4 run 0.0ms'); }, 0);
+
+/* ---------- Submit handler ---------- */
+btnSubmit.addEventListener('click', async ()=>{
+  submitMsg.textContent='';
+  const id = await uid();
+  if (!id) return toast('Log in to submit');
+  if (!consent.checked) return toast('Please consent to the rules');
+
+  // Still read these fields in case we wire them later
+  const pieceName = (titleInput?.value || '').trim();
+  const pieceDesc = (descInput?.value || '').trim();
+
+  // Optional: username lookup (for future use)
+  const artistName = await currentUsername();
+
+  let finalUrl = (picked.url||'').trim();
+  try{
+    if (picked.file){
+      if (picked.file.size > MAX_MB*1024*1024) {
+        return toast(`Max ${MAX_MB}MB`);
+      }
+      toast('Uploading…');
+      finalUrl = await uploadToStorage(id, picked.file);
+    }
+    if (!finalUrl) return toast('Pick a file or paste a URL');
+
+    // **SIMPLE, SAFE PAYLOAD** — only use columns we know exist
+    const payload = {
+      image_url: finalUrl,
+      status: 'pending'
     };
 
-    function showToast(message) {
-      const existing = document.querySelector(".toast");
-      if (existing) existing.remove();
-      const t = document.createElement("div");
-      t.className = "toast";
-      t.textContent = message;
-      document.body.appendChild(t);
-      setTimeout(() => {
-        t.style.opacity = "0";
-        t.style.transition = "opacity 0.3s ease";
-        setTimeout(() => t.remove(), 300);
-      }, 2200);
+    const { error } = await supabase.from('art_queue').insert(payload);
+    if (error) {
+      console.error('[SUBMIT] insert error', error);
+      throw error;
     }
 
-    function renderPreview(file) {
-      previewInner.innerHTML = "";
-      const wrap = document.createElement("div");
-      wrap.style.maxWidth = "100%";
-      wrap.style.maxHeight = "320px";
-      wrap.style.display = "flex";
-      wrap.style.alignItems = "center";
-      wrap.style.justifyContent = "center";
+    picked = {file:null, url:''};
+    fileInput.value=''; urlInput.value=''; urlInput.classList.add('hidden');
+    fileName.textContent = 'jpg / png / webp / mp4 / webm — 50MB max. Tip: drag & drop or paste (Ctrl/⌘+V)';
+    previewHint.textContent = '';
+    setPreview('');
+    consent.checked = false;
+    if (titleInput) titleInput.value = '';
+    if (descInput)  descInput.value  = '';
 
-      const isImage = file && file.type && file.type.startsWith("image/");
-      if (!file) {
-        const placeholder = document.createElement("div");
-        placeholder.className = "preview-placeholder";
-        placeholder.textContent =
-          "Your image preview will appear here once selected or pasted.";
-        previewInner.appendChild(placeholder);
-        previewMeta.innerHTML = "<span>Type: --</span><span>Size: --</span>";
-        return;
-      }
-
-      const el = document.createElement(isImage ? "img" : "video");
-      el.style.display = "block";
-      el.style.borderRadius = "8px";
-      el.style.border = "1px solid #333";
-      el.style.maxHeight = "320px";
-      el.style.maxWidth = "100%";
-
-      const url = URL.createObjectURL(file);
-      el.src = url;
-      if (!isImage) {
-        el.controls = true;
-      }
-
-      wrap.appendChild(el);
-      previewInner.appendChild(wrap);
-
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-      const type = file.type || "unknown";
-      previewMeta.innerHTML = `<span>Type: ${type}</span><span>Size: ${sizeMB} MB</span>`;
+    toast('✅ Art queued for next round');
+    submitMsg.textContent = 'Art queued for next round.';
+    await renderQueue();
+    if (queuePanel && queuePanel.style.display === 'none') {
+      queuePanel.style.display = 'block'; queueToggle.textContent = 'Collapse ▲';
     }
+  }catch(e){
+    console.error(e);
+    toast(e?.message || 'Submit failed');
+    submitMsg.textContent = 'Submit failed.';
+  }
+});
 
-    function setPickedFile(file) {
-      pickedFile = file;
-      if (!file) {
-        fileNameEl.textContent = "No file selected yet.";
-        pasteStatus.innerHTML =
-          'Paste an image from your clipboard or pick a file.';
-        pasteStatus.className = "status-line";
-        renderPreview(null);
-        return;
-      }
+/* ---------- Queue toggle ---------- */
+if (queueToggle){
+  queueToggle.addEventListener('click', ()=>{
+    const shown = queuePanel.style.display !== 'none';
+    queuePanel.style.display = shown ? 'none' : 'block';
+    queueToggle.textContent = shown ? 'Expand ▼' : 'Collapse ▲';
+  });
+}
 
-      const sizeMB = file.size / (1024 * 1024);
-      const name = file.name || "clipboard-image";
-      fileNameEl.textContent = `${name} (${sizeMB.toFixed(2)} MB)`;
+/* ---------- Queue render ---------- */
+async function renderQueue(){
+  try{
+    const { data, error } = await supabase
+      .from('art_queue')
+      .select('id,image_url,created_at')
+      .eq('status','pending')
+      .order('created_at', { ascending: true });
+    if (error) throw error;
 
-      if (sizeMB > MAX_MB) {
-        pasteStatus.innerHTML =
-          `<span class="bad">File is too large. Max ${MAX_MB}MB.</span>`;
+    if (!data || !data.length){
+      queueGrid.innerHTML = '';
+      queueEmpty.style.display = 'block';
+      if (queueCount) queueCount.textContent = '(0)';
+      return;
+    }
+    queueEmpty.style.display = 'none';
+    if (queueCount) queueCount.textContent = `(${data.length})`;
+    queueGrid.innerHTML = data.map((r,i)=>`
+      <div class="thumb" data-id="${r.id}" title="${r.image_url}">
+        <span class="idx">#${i+1}</span>
+        <img src="${r.image_url}" alt="queued art ${i+1}"/>
+      </div>
+    `).join('');
+
+    queueGrid.querySelectorAll('img').forEach(img=>{
+      img.addEventListener('load', ()=> log('IMG: loaded  ', img.src));
+      img.addEventListener('error', ()=> {
+        console.warn('IMG: error   ', img.src);
+        const host = img.closest('[data-id], .thumb, .item');
+        if (host) {
+          host.remove();
+          const count = queueGrid.children.length;
+          if (queueCount) queueCount.textContent = `(${count})`;
+          if (count === 0) queueEmpty.style.display = 'block';
+          console.warn('[QUEUE] removed 404 image tile');
+        }
+      });
+    });
+  }catch(e){
+    console.error(e);
+    toast('Queue failed to load');
+  }
+}
+
+/* ---------- Realtime queue watch ---------- */
+const queueChannel = supabase.channel('queue-watch')
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'art_queue' }, (payload) => {
+    const id = payload.new?.id;
+    const newS = payload.new?.status;
+    if (!id) return;
+    if (newS === 'locked' || newS === 'used') {
+      const el = queueGrid.querySelector(`[data-id="${id}"]`);
+      if (el) {
+        el.remove();
+        const count = queueGrid.children.length;
+        if (queueCount) queueCount.textContent = `(${count})`;
+        if (count === 0) queueEmpty.style.display = 'block';
+        console.log('[QUEUE] removed', id, '→', newS);
       } else {
-        pasteStatus.innerHTML = `<span class="good">Ready to submit.</span>`;
-      }
-
-      renderPreview(file);
-    }
-
-    btnPick.addEventListener("click", () => {
-      fileInput.click();
-    });
-
-    fileInput.addEventListener("change", (e) => {
-      const f = e.target.files && e.target.files[0];
-      if (!f) return;
-      if (!f.type || !f.type.startsWith("image/")) {
-        showToast("Images only: jpg / png / webp.");
-        pasteStatus.innerHTML =
-          '<span class="bad">Invalid file type. Images only.</span>';
-        fileInput.value = "";
-        return;
-      }
-      if (f.size > MAX_MB * 1024 * 1024) {
-        showToast(`File is too large. Max ${MAX_MB}MB.`);
-        pasteStatus.innerHTML =
-          `<span class="bad">File exceeds ${MAX_MB}MB limit.</span>`;
-        fileInput.value = "";
-        return;
-      }
-      setPickedFile(f);
-    });
-
-    dropZone.addEventListener("dragenter", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.add("drag-over");
-    });
-    dropZone.addEventListener("dragleave", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.remove("drag-over");
-    });
-    dropZone.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-    dropZone.addEventListener("drop", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.remove("drag-over");
-      const dt = e.dataTransfer;
-      if (!dt || !dt.files || !dt.files.length) return;
-      const f = dt.files[0];
-      if (!f.type || !f.type.startsWith("image/")) {
-        showToast("Images only: jpg / png / webp.");
-        pasteStatus.innerHTML =
-          '<span class="bad">Invalid file type. Images only.</span>';
-        return;
-      }
-      if (f.size > MAX_MB * 1024 * 1024) {
-        showToast(`File is too large. Max ${MAX_MB}MB.`);
-        pasteStatus.innerHTML =
-          `<span class="bad">File exceeds ${MAX_MB}MB limit.</span>`;
-        return;
-      }
-      setPickedFile(f);
-    });
-
-    document.addEventListener("paste", async (e) => {
-      try {
-        const items = e.clipboardData && e.clipboardData.items;
-        if (!items || !items.length) return;
-
-        let imageItem = null;
-        for (const it of items) {
-          if (it.type && it.type.startsWith("image/")) {
-            imageItem = it;
-            break;
-          }
-        }
-        if (!imageItem) {
-          pasteStatus.innerHTML =
-            '<span class="warn">Clipboard has no image. (Max 50MB.)</span>';
-          return;
-        }
-        const blob = imageItem.getAsFile();
-        if (!blob) {
-          pasteStatus.innerHTML =
-            '<span class="bad">Could not read clipboard image.</span>';
-          return;
-        }
-        if (!blob.type || !blob.type.startsWith("image/")) {
-          pasteStatus.innerHTML =
-            '<span class="bad">Clipboard item is not an image.</span>';
-          return;
-        }
-        if (blob.size > MAX_MB * 1024 * 1024) {
-          pasteStatus.innerHTML =
-            `<span class="bad">Clipboard image exceeds ${MAX_MB}MB limit.</span>`;
-          showToast(`Clipboard image is too large. Max ${MAX_MB}MB.`);
-          return;
-        }
-        const ext =
-          blob.type === "image/png"
-            ? ".png"
-            : blob.type === "image/webp"
-            ? ".webp"
-            : ".jpg";
-        const f = new File([blob], "clipboard-image" + ext, {
-          type: blob.type || "image/png",
-        });
-        setPickedFile(f);
-      } catch (err) {
-        console.error("Paste handler error", err);
-        pasteStatus.innerHTML =
-          '<span class="bad">Error reading clipboard image.</span>';
-      }
-    });
-
-    let timeState = {
-      remainingSec: null,
-      paused: false,
-      label: "Loading...",
-      debugPhase: null,
-    };
-
-    async function fetchTimerState() {
-      try {
-        const now = new Date();
-        log("Fetching timer state from edge...");
-        const res = await fetch(
-          `${SUPABASE_URL}/functions/v1/global-timer-v2`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            },
-          }
-        );
-
-        log(
-          "EDGE: GET global-timer-v2 →",
-          res.status,
-          `(~${now.toLocaleTimeString()})`
-        );
-
-        const data = await res.json();
-        const endIso = data.phase_end_at;
-        const periodSec = data.period_sec || 150;
-        const paused = !!data.paused;
-        const phaseDebug = data.phase_debug || data.phase || "unknown";
-
-        let remainingSec = null;
-        if (endIso) {
-          const end = new Date(endIso);
-          const diffMs = end.getTime() - Date.now();
-          remainingSec = Math.max(0, Math.round(diffMs / 1000));
-        }
-
-        timeState.remainingSec = remainingSec;
-        timeState.paused = paused;
-        timeState.debugPhase = phaseDebug;
-
-        if (paused) {
-          timeState.label = "Timer paused — bracket is frozen.";
-        } else if (remainingSec != null) {
-          timeState.label = "Time left in current global phase.";
-        } else {
-          timeState.label = "Timer active — waiting for next update.";
-        }
-
-        updateTimerDisplay();
-      } catch (err) {
-        console.error("Error fetching timer state", err);
-        timerLabel.textContent =
-          "Failed to contact timer. Submissions still use your logged-in account.";
+        renderQueue().catch(()=>{});
       }
     }
-
-    function updateTimerDisplay() {
-      const { remainingSec, paused, label, debugPhase } = timeState;
-      if (remainingSec == null) {
-        timerDisplay.textContent = "--:--";
-      } else {
-        const m = Math.floor(remainingSec / 60)
-          .toString()
-          .padStart(2, "0");
-        const s = Math.floor(remainingSec % 60)
-          .toString()
-          .padStart(2, "0");
-        timerDisplay.textContent = `${m}:${s}`;
-      }
-
-      timerLabel.textContent = paused
-        ? "Timer paused — bracket is frozen."
-        : label;
-
-      phaseName.textContent = `Phase: ${debugPhase || "--"}`;
-
-      if (debugPhase === "r32") {
-        phaseSub.textContent =
-          "Round of 32 chaos. Your piece might be pulled from the queue soon.";
-      } else if (debugPhase === "r16") {
-        phaseSub.textContent =
-          "Round of 16. Machine is narrowing the field.";
-      } else if (debugPhase === "qf") {
-        phaseSub.textContent = "Quarterfinals. Only killers left.";
-      } else if (debugPhase === "sf") {
-        phaseSub.textContent = "Semifinals. Almost to the throne.";
-      } else if (debugPhase === "final") {
-        phaseSub.textContent =
-          "Final clash. Glory to whoever survives.";
-      } else {
-        phaseSub.textContent =
-          "Edge function cycles phases automatically — all clients share this same clock.";
-      }
+  })
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'art_queue' }, (payload) => {
+    const row = payload.new;
+    if (row?.status !== 'pending') return;
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    div.dataset.id = row.id;
+    div.title = row.image_url;
+    div.innerHTML = `<span class="idx">#?</span><img src="${row.image_url}" alt="queued art"/>`;
+    if (queueGrid.children.length === 0) {
+      queueEmpty.style.display = 'none';
+      queueGrid.appendChild(div);
+    } else {
+      queueGrid.appendChild(div);
     }
+    const count = queueGrid.children.length;
+    if (queueCount) queueCount.textContent = `(${count})`;
+  })
+  .subscribe();
 
-    function tickTimer() {
-      if (timeState.remainingSec != null && !timeState.paused) {
-        timeState.remainingSec = Math.max(
-          0,
-          timeState.remainingSec - 1
-        );
-      }
-      updateTimerDisplay();
+// Clean up
+window.addEventListener('beforeunload', ()=> { try { supabase.removeChannel(queueChannel); } catch {} });
+
+/* ---------- Round start watch (for queue refresh) ---------- */
+let __lastClock = null;
+function __watchRoundStart() {
+  const n = parseInt(clockEl.textContent, 10);
+  if (!isNaN(n)) {
+    if (__lastClock !== null && __lastClock <= 1 && n > __lastClock) {
+      console.log('[QUEUE] round start detected — refreshing queue');
+      renderQueue().catch(()=>{});
     }
+    __lastClock = n;
+  }
+  requestAnimationFrame(__watchRoundStart);
+}
+__watchRoundStart();
 
-    fetchTimerState();
-    setInterval(fetchTimerState, 15000);
-    setInterval(tickTimer, 1000);
+/* ---------- Boot ---------- */
+(async()=>{
+  paintAuth(await uid());
+  supabase.auth.onAuthStateChange((_e, session)=> paintAuth(session?.user?.id || null));
 
-    async function uploadFileToBucket(file, userId) {
-      const bucket = "art-uploads";
-      const ext =
-        file.name && file.name.includes(".")
-          ? file.name.split(".").pop()
-          : "jpg";
-      const safeId = userId || "anon";
-      const uniqueName = `${safeId}_${Date.now()}_${Math.random()
-        .toString(36)
-        .slice(2)}.${ext}`;
-      const path = uniqueName;
+  await Promise.all([renderQueue(), syncState()]);
+  loop();
 
-      log("Uploading file to bucket path:", path);
+  // Safety poll
+  setInterval(()=> renderQueue().catch(()=>{}), 5000);
 
-      const { error: uploadErr } = await supabase.storage
-        .from(bucket)
-        .upload(path, file, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: file.type || "image/jpeg",
-        });
-
-      if (uploadErr) {
-        console.error("UPLOAD ERROR", uploadErr);
-        throw new Error(uploadErr.message || "Upload failed");
-      }
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(bucket).getPublicUrl(path);
-
-      if (!publicUrl) {
-        throw new Error("Could not generate public URL for upload.");
-      }
-
-      log("Upload success, public URL:", publicUrl);
-      return publicUrl;
+  // Refresh on visibility regain
+  document.addEventListener('visibilitychange', ()=>{
+    if (document.visibilityState === 'visible') {
+      renderQueue().catch(()=>{});
+      syncState().catch(()=>{});
     }
+  });
+})();
+</script>
+<script src="js/auth-guard.js" type="module"></script>
 
-    async function getCurrentUserProfile() {
-      try {
-        const { data: authData, error: authErr } =
-          await supabase.auth.getUser();
-        if (authErr) {
-          console.error("AUTH getUser error", authErr);
-          return { userId: null, username: null };
-        }
-        const user = authData && authData.user;
-        if (!user) {
-          return { userId: null, username: null };
-        }
-
-        const userId = user.id;
-        let username = null;
-
-        const { data: profile, error: profileErr } = await supabase
-          .from("profiles")
-          .select("username")
-          .eq("id", userId)
-          .maybeSingle();
-
-        if (profileErr) {
-          console.error("profiles lookup error", profileErr);
-        } else if (profile && profile.username) {
-          username = profile.username;
-        }
-
-        return { userId, username };
-      } catch (err) {
-        console.error("getCurrentUserProfile error", err);
-        return { userId: null, username: null };
-      }
-    }
-
-    async function handleSubmit() {
-      if (isSubmitting) return;
-      if (!pickedFile) {
-        showToast("Pick or paste an image first.");
-        submitStatus.innerHTML =
-          '<span class="bad">No file selected.</span>';
-        return;
-      }
-
-      const sizeMB = pickedFile.size / (1024 * 1024);
-      if (sizeMB > MAX_MB) {
-        showToast(`File is too large. Max ${MAX_MB}MB.`);
-        submitStatus.innerHTML =
-          `<span class="bad">File exceeds ${MAX_MB}MB limit.</span>`;
-        return;
-      }
-
-      isSubmitting = true;
-      btnSubmit.disabled = true;
-      btnSubmit.textContent = "Submitting...";
-      submitStatus.innerHTML =
-        '<span class="warn">Uploading and enqueueing your art...</span>';
-
-      try {
-        const { userId, username } = await getCurrentUserProfile();
-        if (!userId) {
-          throw new Error(
-            "No logged-in user. Please log in, then try again."
-          );
-        }
-
-        const artistName = username || "Unknown";
-
-        const finalUrl = await uploadFileToBucket(pickedFile, userId);
-
-        const pieceName =
-          (titleInput && titleInput.value
-            ? titleInput.value
-            : ""
-          ).trim();
-        const pieceDesc =
-          (descInput && descInput.value ? descInput.value : "")
-            .trim();
-
-        const payload = {
-          image_url: finalUrl,
-          status: "pending",
-          created_at: new Date().toISOString(),
-          artist_name: artistName || null,
-          title: pieceName || null,
-          description: pieceDesc || null,
-        };
-
-        log("Inserting into art_queue:", payload);
-
-        const { error: insertErr } = await supabase
-          .from("art_queue")
-          .insert(payload);
-
-        if (insertErr) {
-          console.error("art_queue insert error", insertErr);
-          throw new Error(
-            insertErr.message || "Could not add to art queue."
-          );
-        }
-
-        submitStatus.innerHTML =
-          '<span class="good">Submitted! Your art is now in the queue.</span>';
-        showToast("Submitted. Glory to the machine.");
-
-        pickedFile = null;
-        renderPreview(null);
-        fileNameEl.textContent = "No file selected yet.";
-        pasteStatus.innerHTML =
-          'Paste an image from your clipboard or pick a file.';
-        if (fileInput) fileInput.value = "";
-        if (titleInput) titleInput.value = "";
-        if (descInput) descInput.value = "";
-      } catch (e) {
-        console.error("Submit error", e);
-        showToast("Submit failed. Check console for details.");
-        submitStatus.innerHTML = `<span class="bad">Error: ${
-          e.message || "Submit failed."
-        }</span>`;
-      } finally {
-        isSubmitting = false;
-        btnSubmit.disabled = false;
-        btnSubmit.textContent = "Submit to Queue";
-      }
-    }
-
-    btnSubmit.addEventListener("click", () => {
-      handleSubmit();
-    });
-
-    window.addEventListener("keydown", (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "enter") {
-        handleSubmit();
-      }
-    });
-
-    log("Submit page initialized.");
-  </script>
 </body>
 </html>
