@@ -214,10 +214,9 @@
     const overlay  = document.getElementById("overlay");
     const fullImg  = document.getElementById("fullImg");
     const fullVideo = document.getElementById("fullVideo");
-    const btnClose = document.getElementById("closeFull"); 
-    btnClose.onclick = ()=>{
+    const btnClose = document.getElementById("closeFull"); btnClose.onclick = ()=>{
       overlay.style.display='none';
-      try { fullVideo.pause(); fullVideo.removeAttribute('src'); fullVideo.load(); } catch(e){}
+      try{ fullVideo.pause(); fullVideo.removeAttribute('src'); fullVideo.load(); }catch(e){}
     };
 
     const grid = document.getElementById("thumbGrid");
@@ -236,16 +235,15 @@
         else url = imgActive2.src;
       }
       if (!url) return;
-
-      const video = isVideoUrl(url);
-      if (video){
+      const isVid = isVideoUrl(url);
+      if (isVid){
         fullImg.classList.add("hidden");
         fullVideo.classList.remove("hidden");
         fullVideo.src = url;
-        try { fullVideo.play().catch(()=>{}); } catch(e){}
+        try{ fullVideo.play().catch(()=>{});}catch(e){}
       } else {
         fullVideo.classList.add("hidden");
-        try { fullVideo.pause(); fullVideo.removeAttribute("src"); fullVideo.load(); } catch(e){}
+        try{ fullVideo.pause(); fullVideo.removeAttribute('src'); fullVideo.load(); }catch(e){}
         fullImg.classList.remove("hidden");
         fullImg.src = url;
       }
@@ -258,6 +256,7 @@
     function pick(a,b){ return (a!=null && a!=="") ? a : b; }
 
     // ---------- MATCH INDEX ----------
+    // New R32 (rr1..rr16) — we map rrN → POST phase rN to match server
     const order = [
       {key:"rr1",  label:"R32 1",  left:"seed_a_url",  right:"seed_b_url",  lct:"seed_a_count",  rct:"seed_b_count"},
       {key:"rr2",  label:"R32 2",  left:"seed_c_url",  right:"seed_d_url",  lct:"seed_c_count",  rct:"seed_d_count"},
@@ -452,10 +451,9 @@
     }
 
     function setActiveMedia(which, url){
-      const isVid = isVideoUrl(url);
-      const img = which==="active1" ? imgActive1 : imgActive2;
       const vid = which==="active1" ? vidActive1 : vidActive2;
-
+      const img = which==="active1" ? imgActive1 : imgActive2;
+      const isVid = isVideoUrl(url);
       if (isVid){
         img.classList.add("hidden");
         vid.classList.remove("hidden");
@@ -463,10 +461,10 @@
         vid.muted = true;
         vid.loop = true;
         vid.playsInline = true;
-        try { vid.play().catch(()=>{}); } catch(e){}
+        try{ vid.play().catch(()=>{});}catch(e){}
       } else {
         vid.classList.add("hidden");
-        try { vid.pause(); vid.removeAttribute("src"); vid.load(); } catch(e){}
+        try{ vid.pause(); vid.removeAttribute('src'); vid.load(); }catch(e){}
         img.classList.remove("hidden");
         img.src = url || placeholder("?");
       }
@@ -476,7 +474,6 @@
       const img = idx===1 ? finalImg1 : finalImg2;
       const vid = idx===1 ? finalVid1 : finalVid2;
       const isVid = isVideoUrl(url);
-
       if (isVid){
         img.classList.add("hidden");
         vid.classList.remove("hidden");
@@ -484,10 +481,10 @@
         vid.muted = true;
         vid.loop = true;
         vid.playsInline = true;
-        try { vid.play().catch(()=>{}); } catch(e){}
+        try{ vid.play().catch(()=>{});}catch(e){}
       } else {
         vid.classList.add("hidden");
-        try { vid.pause(); vid.removeAttribute("src"); vid.load(); } catch(e){}
+        try{ vid.pause(); vid.removeAttribute('src'); vid.load(); }catch(e){}
         img.classList.remove("hidden");
         img.src = url || placeholder("?");
       }
@@ -625,6 +622,7 @@
         const R = pick(state[find.right], state[find.fbRight]);
         const LC = pick(state[find.lct], state[find.fbLct]);
         const RC = pick(state[find.rct], state[find.fbRct]);
+
         leftImg=L||placeholder("?"); rightImg=R||placeholder("?");
         leftCt=LC||0; rightCt=RC||0;
         leftLabel = find.label.split(" ")[0] + " — Top";
