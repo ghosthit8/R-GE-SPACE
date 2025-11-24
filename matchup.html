@@ -1,15 +1,11 @@
 <!doctype html>
 <html lang="en">
 <head>
-   <meta charset="utf-8"/>
+  <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Rage Space — Matchup (32-up → 2-up)</title>
-  <style>
-    /* all your existing matchup CSS stays exactly the same */
-  </style>
   <link rel="stylesheet" href="style.css"/>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-</head>
   <style>
     :root { --fg:#e5e7eb; --bg:#0b0f13; --accent:#39ff14; --muted:#8b8b8b; --card:#0f1318; --border:#20242a; }
     html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
@@ -63,7 +59,6 @@
     .thumb-img.diag img.right {
       clip-path:polygon(100% 0, 100% 100%, 0 100%);
     }
-    /* subtle dividing line */
     .thumb-img.diag::before {
       content:"";
       position:absolute;
@@ -86,17 +81,18 @@
     .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed var(--border); border-radius:10px; padding:8px; text-align:center; }
     .final-slot .label { display:block; margin-bottom:4px; }
     .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#000; border-radius:8px; overflow:hidden; display:grid; place-items:center; }
-    .final-slot .thumb-final img, .final-slot .thumb-final video { width:100%; height:100%; object-fit:cover; }
+    .final-slot .thumb-final img,
+    .final-slot .thumb-final video { width:100%; height:100%; object-fit:cover; }
     .final-footer { padding:0 12px 12px; font-size:12px; color:#9aa0a6; }
 
     .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
-    .fullscreen-overlay img, .fullscreen-overlay video { max-width:90%; max-height:90%; border-radius:8px; }
+    .fullscreen-overlay img,
+    .fullscreen-overlay video { max-width:90%; max-height:90%; border-radius:8px; }
     .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
-    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
 
-    .hidden { display: none !important; }
+    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
+    .hidden { display:none !important; }
   </style>
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="wrap">
@@ -116,7 +112,8 @@
     <div class="card" id="activeTop">
       <div class="imgBox">
         <img id="imgActive1" alt="Active top">
-        <video id="vidActive1" class="hidden" muted playsinline loop></video>
+        <!-- muted for autoplay, now with controls -->
+        <video id="vidActive1" class="hidden" muted playsinline loop controls></video>
         <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
       </div>
       <div class="bar">
@@ -129,7 +126,8 @@
     <div class="card" id="activeBottom">
       <div class="imgBox">
         <img id="imgActive2" alt="Active bottom">
-        <video id="vidActive2" class="hidden" muted playsinline loop></video>
+        <!-- muted for autoplay, now with controls -->
+        <video id="vidActive2" class="hidden" muted playsinline loop controls></video>
         <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
       </div>
       <div class="bar">
@@ -156,30 +154,37 @@
       <div class="final-inner">
         <div class="final-slot">
           <span class="label" id="finalLeftLabel">Winner of Semi 1</span>
-          <div class="thumb-final"><img id="finalImg1" alt="Final slot 1"><video id="finalVid1" class="hidden" muted playsinline loop></video></div>
+          <div class="thumb-final">
+            <img id="finalImg1" alt="Final slot 1">
+            <!-- muted for autoplay preview, with controls -->
+            <video id="finalVid1" class="hidden" muted playsinline loop controls></video>
+          </div>
         </div>
         <div class="final-slot">
           <span class="label" id="finalRightLabel">Winner of Semi 2</span>
-          <div class="thumb-final"><img id="finalImg2" alt="Final slot 2"><video id="finalVid2" class="hidden" muted playsinline loop></video></div>
+          <div class="thumb-final">
+            <img id="finalImg2" alt="Final slot 2">
+            <!-- muted for autoplay preview, with controls -->
+            <video id="finalVid2" class="hidden" muted playsinline loop controls></video>
+          </div>
         </div>
       </div>
-      <div class="final-footer" id="finalFooter">Waiting…</div>
+      <div class="final-footer" id="finalFooter">Waiting… (tap a card’s ⤢ for audio)</div>
     </div>
 
     <div class="hint">32 images → 16 R32 matches (120s) → 8 R16 (90s) → 4 QF (60s) → 2 SF (30s) → Final (0s).</div>
   </div>
 
+  <!-- FULLSCREEN OVERLAY (not muted, has controls) -->
   <div class="fullscreen-overlay" id="overlay">
     <button id="closeFull">✕ Close</button>
     <img id="fullImg" src="">
-    <video id="fullVideo" class="hidden" muted playsinline controls></video>
+    <video id="fullVideo" class="hidden" playsinline controls></video>
   </div>
 
-  <!-- NEW: champion overlay JS (injects cyberpunk overlay + confetti) -->
   <script src="js/champion-overlay.js"></script>
 
   <script>
-    // === config ===
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -187,7 +192,10 @@
 
     const RSID_KEY = "rsid_v2";
     let RSID = localStorage.getItem(RSID_KEY);
-    if (!RSID){ RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now()); localStorage.setItem(RSID_KEY, RSID); }
+    if (!RSID){
+      RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now());
+      localStorage.setItem(RSID_KEY, RSID);
+    }
 
     const elRemain = document.getElementById("tRemain");
     const winnerText = document.getElementById("winnerText");
@@ -214,9 +222,14 @@
     const overlay  = document.getElementById("overlay");
     const fullImg  = document.getElementById("fullImg");
     const fullVideo = document.getElementById("fullVideo");
-    const btnClose = document.getElementById("closeFull"); btnClose.onclick = ()=>{
+    const btnClose = document.getElementById("closeFull");
+    btnClose.onclick = ()=>{
       overlay.style.display='none';
-      try{ fullVideo.pause(); fullVideo.removeAttribute('src'); fullVideo.load(); }catch(e){}
+      try {
+        fullVideo.pause();
+        fullVideo.removeAttribute('src');
+        fullVideo.load();
+      } catch(e){}
     };
 
     const grid = document.getElementById("thumbGrid");
@@ -235,28 +248,39 @@
         else url = imgActive2.src;
       }
       if (!url) return;
-      const isVid = isVideoUrl(url);
-      if (isVid){
+
+      const video = isVideoUrl(url);
+      if (video){
         fullImg.classList.add("hidden");
         fullVideo.classList.remove("hidden");
         fullVideo.src = url;
-        try{ fullVideo.play().catch(()=>{});}catch(e){}
+        // let user hit play (with sound) if autoplay is blocked
+        try { fullVideo.play().catch(()=>{}); } catch(e){}
       } else {
         fullVideo.classList.add("hidden");
-        try{ fullVideo.pause(); fullVideo.removeAttribute('src'); fullVideo.load(); }catch(e){}
+        try {
+          fullVideo.pause();
+          fullVideo.removeAttribute("src");
+          fullVideo.load();
+        } catch(e){}
         fullImg.classList.remove("hidden");
         fullImg.src = url;
       }
       overlay.style.display = 'flex';
     }
+
     function placeholder(letter){
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960"><rect width="100%" height="100%" fill="#000"/><text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace" text-anchor="middle" dominant-baseline="middle">${letter}</text></svg>`;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960">
+        <rect width="100%" height="100%" fill="#000"/>
+        <text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace"
+          text-anchor="middle" dominant-baseline="middle">${letter}</text>
+      </svg>`;
       return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
     }
+
     function pick(a,b){ return (a!=null && a!=="") ? a : b; }
 
-    // ---------- MATCH INDEX ----------
-    // New R32 (rr1..rr16) — we map rrN → POST phase rN to match server
+    /* -------- MATCH INDEX (same as before) -------- */
     const order = [
       {key:"rr1",  label:"R32 1",  left:"seed_a_url",  right:"seed_b_url",  lct:"seed_a_count",  rct:"seed_b_count"},
       {key:"rr2",  label:"R32 2",  left:"seed_c_url",  right:"seed_d_url",  lct:"seed_c_count",  rct:"seed_d_count"},
@@ -275,7 +299,6 @@
       {key:"rr15", label:"R32 15", left:"seed_ac_url", right:"seed_ad_url", lct:"seed_ac_count", rct:"seed_ad_count"},
       {key:"rr16", label:"R32 16", left:"seed_ae_url", right:"seed_af_url", lct:"seed_ae_count", rct:"seed_af_count"},
 
-      // Existing R16 (unchanged keys r1..r8)
       {key:"r1", label:"R16 A–B", left:"seed_a_url", right:"seed_b_url", lct:"seed_a_count", rct:"seed_b_count"},
       {key:"r2", label:"R16 C–D", left:"seed_c_url", right:"seed_d_url", lct:"seed_c_count", rct:"seed_d_count"},
       {key:"r3", label:"R16 E–F", left:"seed_e_url", right:"seed_f_url", lct:"seed_e_count", rct:"seed_f_count"},
@@ -285,7 +308,6 @@
       {key:"r7", label:"R16 M–N", left:"seed_m_url", right:"seed_n_url", lct:"seed_m_count", rct:"seed_n_count"},
       {key:"r8", label:"R16 O–P", left:"seed_o_url", right:"seed_p_url", lct:"seed_o_count", rct:"seed_p_count"},
 
-      // Quarters, Semis, Final
       {key:"q1", label:"QF A–B", left:"q1_a_url", right:"q1_b_url", lct:"q1_a_count", rct:"q1_b_count", fbLeft:"seed_a_url", fbRight:"seed_b_url", fbLct:"seed_a_count", fbRct:"seed_b_count"},
       {key:"q2", label:"QF C–D", left:"q2_c_url", right:"q2_d_url", lct:"q2_c_count", rct:"q2_d_count", fbLeft:"seed_c_url", fbRight:"seed_d_url", fbLct:"seed_c_count", fbRct:"seed_d_count"},
       {key:"q3", label:"QF E–F", left:"q3_e_url", right:"q3_f_url", lct:"q3_e_count", rct:"q3_f_count", fbLeft:"seed_e_url", fbRight:"seed_f_url", fbLct:"seed_e_count", fbRct:"seed_f_count"},
@@ -295,45 +317,40 @@
       {key:"final", label:"Final"}
     ];
 
-    // Build grid
     const thumbs = {};
     function makeThumb(item){
       const div = document.createElement("div");
-      div.className = "thumb"; div.id = "thumb_"+item.key;
+      div.className = "thumb";
+      div.id = "thumb_"+item.key;
       div.innerHTML = `
         <div class="thumb-img diag">
           <img class="half left" id="imgL_${item.key}" alt="${item.label} top">
           <img class="half right" id="imgR_${item.key}" alt="${item.label} bottom">
         </div>
-        <div class="thumb-label"><span>${item.label}</span><span class="thumb-count" id="cnt_${item.key}">0-0</span></div>
+        <div class="thumb-label">
+          <span>${item.label}</span>
+          <span class="thumb-count" id="cnt_${item.key}">0-0</span>
+        </div>
       `;
       div.addEventListener("click", ()=>{
-        // R32 rows (rr*) are clickable only before r32_done
         if (item.key.startsWith("rr") && state.r32_done) return;
-
-        // R16: only between r32_done and r16_done
         if (item.key.startsWith("r") && !item.key.startsWith("rr")) {
           if (!state.r32_done || state.r16_done) return;
         }
-
-        // Quarters: only between r16_done and mid1_done (semis)
         if (item.key.startsWith("q")) {
           if (!state.r16_done || state.mid1_done) return;
         }
-
-        // Semis: only between mid1_done and mid2_done (final pairing)
         if (item.key.startsWith("s")) {
           if (!state.mid1_done || state.mid2_done) return;
         }
-
-        // Final: only once mid2_done flips
         if (item.key==="final" && !state.mid2_done) return;
 
-        activeMatch = item.key; renderActive();
+        activeMatch = item.key;
+        renderActive();
       });
       grid.appendChild(div);
       thumbs[item.key] = {
-        box:div,
+        box: div,
         imgL: div.querySelector("#imgL_"+item.key),
         imgR: div.querySelector("#imgR_"+item.key),
         count: div.querySelector("#cnt_"+item.key)
@@ -341,11 +358,8 @@
     }
     order.forEach(makeThumb);
 
-    // ---------- STATE ----------
     let state = {
       base_iso:null, ends_at:null, period_sec:150,
-
-      // 32 seeds (urls + counts)
       seed_a_url:null, seed_b_url:null, seed_c_url:null, seed_d_url:null,
       seed_e_url:null, seed_f_url:null, seed_g_url:null, seed_h_url:null,
       seed_i_url:null, seed_j_url:null, seed_k_url:null, seed_l_url:null,
@@ -377,13 +391,14 @@
       mid_winner_1_url:null, mid_winner_2_url:null,
     };
 
-    // vote memory
     const VOTE_MEMORY_KEY="rs_vote_memory_v3";
     function memRead(base){ try{ return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")[base]||{} }catch{return{}} }
-    function memWrite(base,key,val){ const all=(()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")}catch{return{}}})(); all[base]=Object.assign({},all[base]||{}, {[key]:val}); localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
-    function pruneMem(keep){ const all=(()=>{try{return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")}catch{return{}}})(); for(const k of Object.keys(all)) if(k!==keep) delete all[k]; localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all)); }
+    function memWrite(base,key,val){
+      const all = (()=>{ try { return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}"); } catch { return {}; }})();
+      all[base] = Object.assign({}, all[base]||{}, { [key]: val });
+      localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all));
+    }
 
-    // start on R32 #1
     let activeMatch = "rr1";
 
     async function vote(color){
@@ -395,17 +410,13 @@
       const red = color==="red";
       const inc = (k)=> state[k] = (state[k]||0)+1;
 
-      // Map UI key → server phase:
-      // rr1..rr16 → r1..r16 (R32); others pass through
       const serverPhase = activeMatch.startsWith("rr")
         ? ("r"+activeMatch.slice(2))
         : activeMatch;
 
       const post = { phase: serverPhase, side: red ? "left":"right" };
 
-      // Local optimistic counters
       const map = {
-        // R32
         rr1:["seed_a_count","seed_b_count"],   rr2:["seed_c_count","seed_d_count"],
         rr3:["seed_e_count","seed_f_count"],   rr4:["seed_g_count","seed_h_count"],
         rr5:["seed_i_count","seed_j_count"],   rr6:["seed_k_count","seed_l_count"],
@@ -415,7 +426,6 @@
         rr13:["seed_y_count","seed_z_count"],  rr14:["seed_aa_count","seed_ab_count"],
         rr15:["seed_ac_count","seed_ad_count"],rr16:["seed_ae_count","seed_af_count"],
 
-        // R16 → unchanged
         r1:["seed_a_count","seed_b_count"], r2:["seed_c_count","seed_d_count"],
         r3:["seed_e_count","seed_f_count"], r4:["seed_g_count","seed_h_count"],
         r5:["seed_i_count","seed_j_count"], r6:["seed_k_count","seed_l_count"],
@@ -430,13 +440,19 @@
       if (arr){ inc(red?arr[0]:arr[1]); renderActive(); }
 
       try{
-        const res = await fetch(FUNCTION_URL, { method:"POST", headers:{"Content-Type":"application/json","x-rsid":RSID}, body: JSON.stringify(post) });
+        const res = await fetch(FUNCTION_URL, {
+          method:"POST",
+          headers:{"Content-Type":"application/json","x-rsid":RSID},
+          body: JSON.stringify(post)
+        });
         if (!res.ok){ await fetchState(true); return; }
         const s = await res.json().catch(()=> ({}));
         Object.assign(state, s||{});
         memWrite(base,key,color);
         renderActive();
-      }catch{ await fetchState(true); }
+      }catch{
+        await fetchState(true);
+      }
     }
     btnActive1.onclick = ()=> vote("red");
     btnActive2.onclick = ()=> vote("blue");
@@ -451,20 +467,25 @@
     }
 
     function setActiveMedia(which, url){
-      const vid = which==="active1" ? vidActive1 : vidActive2;
       const img = which==="active1" ? imgActive1 : imgActive2;
+      const vid = which==="active1" ? vidActive1 : vidActive2;
       const isVid = isVideoUrl(url);
+
       if (isVid){
         img.classList.add("hidden");
         vid.classList.remove("hidden");
         vid.src = url + "#t=0.1";
-        vid.muted = true;
         vid.loop = true;
         vid.playsInline = true;
-        try{ vid.play().catch(()=>{});}catch(e){}
+        // let browser handle autoplay; controls let user unmute
+        try { vid.play().catch(()=>{}); } catch(e){}
       } else {
         vid.classList.add("hidden");
-        try{ vid.pause(); vid.removeAttribute('src'); vid.load(); }catch(e){}
+        try {
+          vid.pause();
+          vid.removeAttribute("src");
+          vid.load();
+        } catch(e){}
         img.classList.remove("hidden");
         img.src = url || placeholder("?");
       }
@@ -474,28 +495,33 @@
       const img = idx===1 ? finalImg1 : finalImg2;
       const vid = idx===1 ? finalVid1 : finalVid2;
       const isVid = isVideoUrl(url);
+
       if (isVid){
         img.classList.add("hidden");
         vid.classList.remove("hidden");
         vid.src = url + "#t=0.1";
-        vid.muted = true;
         vid.loop = true;
         vid.playsInline = true;
-        try{ vid.play().catch(()=>{});}catch(e){}
+        try { vid.play().catch(()=>{}); } catch(e){}
       } else {
         vid.classList.add("hidden");
-        try{ vid.pause(); vid.removeAttribute('src'); vid.load(); }catch(e){}
+        try {
+          vid.pause();
+          vid.removeAttribute("src");
+          vid.load();
+        } catch(e){}
         img.classList.remove("hidden");
         img.src = url || placeholder("?");
       }
     }
 
     function markActive(){
-      for (const k in thumbs) thumbs[k].box.classList.toggle("active", k===activeMatch);
+      for (const k in thumbs) {
+        thumbs[k].box.classList.toggle("active", k===activeMatch);
+      }
     }
 
     function renderThumbs(){
-      // R32
       setThumb("rr1",  state.seed_a_url,  state.seed_b_url,  state.seed_a_count,  state.seed_b_count, "A");
       setThumb("rr2",  state.seed_c_url,  state.seed_d_url,  state.seed_c_count,  state.seed_d_count, "C");
       setThumb("rr3",  state.seed_e_url,  state.seed_f_url,  state.seed_e_count,  state.seed_f_count, "E");
@@ -513,13 +539,11 @@
       setThumb("rr15", state.seed_ac_url, state.seed_ad_url, state.seed_ac_count, state.seed_ad_count, "AC");
       setThumb("rr16", state.seed_ae_url, state.seed_af_url, state.seed_ae_count, state.seed_af_count, "AE");
 
-      // Freeze R32 thumbnails after r32_done
       for (let i=1;i<=16;i++){
         const k = "rr"+i;
         thumbs[k].box.classList.toggle("disabled", !!state.r32_done);
       }
 
-      // R16 (hidden until r32_done)
       setThumb("r1", state.seed_a_url, state.seed_b_url, state.seed_a_count, state.seed_b_count,"A");
       setThumb("r2", state.seed_c_url, state.seed_d_url, state.seed_c_count, state.seed_d_count,"C");
       setThumb("r3", state.seed_e_url, state.seed_f_url, state.seed_e_count, state.seed_f_count,"E");
@@ -532,11 +556,9 @@
       for (let i=1;i<=8;i++){
         const k = "r"+i;
         thumbs[k].box.classList.toggle("hidden", !state.r32_done);
-        // R16 disabled until R32 done, and again after R16 done
         thumbs[k].box.classList.toggle("disabled", !state.r32_done || !!state.r16_done);
       }
 
-      // Quarters (prefer snapshots), hidden until r16_done
       const q = [
         ["q1","q1_a_url","q1_b_url","q1_a_count","q1_b_count","seed_a_url","seed_b_url","seed_a_count","seed_b_count","A"],
         ["q2","q2_c_url","q2_d_url","q2_c_count","q2_d_count","seed_c_url","seed_d_url","seed_c_count","seed_d_count","C"],
@@ -549,12 +571,10 @@
         const LC = pick(state[lc], state[flc]);
         const RC = pick(state[rc], state[frc]);
         setThumb(k, L, R, LC, RC, fb);
-        // QF disabled before R16 done, and after semis (mid1) done
         thumbs[k].box.classList.toggle("disabled", !state.r16_done || !!state.mid1_done);
         thumbs[k].box.classList.toggle("hidden",   !state.r16_done);
       }
 
-      // Semis
       if (!state.mid1_done){
         thumbs.s1.imgL.src = placeholder("S1");
         thumbs.s1.imgR.src = placeholder("S1");
@@ -569,7 +589,6 @@
         thumbs.s1.imgL.src = isVideoUrl(state.semi_1_left_url)  ? placeholder("V") : (state.semi_1_left_url  || placeholder("S1"));
         thumbs.s1.imgR.src = isVideoUrl(state.semi_1_right_url) ? placeholder("V") : (state.semi_1_right_url || placeholder("S1"));
         thumbs.s1.count.textContent = (state.seed_a_count||0) + "-" + (state.seed_b_count||0);
-        // Semis disabled once final pairing (mid2) is done
         thumbs.s1.box.classList.toggle("disabled", !!state.mid2_done);
         thumbs.s1.box.classList.remove("hidden");
 
@@ -580,7 +599,6 @@
         thumbs.s2.box.classList.remove("hidden");
       }
 
-      // Final
       if (!state.mid2_done){
         thumbs.final.imgL.src = placeholder("F");
         thumbs.final.imgR.src = placeholder("F");
@@ -599,7 +617,7 @@
     function renderFinalBox(){
       setFinalMedia(1, state.mid_winner_1_url || null);
       setFinalMedia(2, state.mid_winner_2_url || null);
-      if (state.mid2_done) finalFooter.textContent = "Final is live — decides at 0s.";
+      if (state.mid2_done) finalFooter.textContent = "Final is live — decides at 0s. Tap ⤢ for audio.";
       else if (state.mid1_done) finalFooter.textContent = "Semis live — final soon.";
       else if (state.r16_done) finalFooter.textContent = "Quarters live — semis soon.";
       else if (state.r32_done) finalFooter.textContent = "R16 live — quarters at 60s.";
@@ -622,7 +640,6 @@
         const R = pick(state[find.right], state[find.fbRight]);
         const LC = pick(state[find.lct], state[find.fbLct]);
         const RC = pick(state[find.rct], state[find.fbRct]);
-
         leftImg=L||placeholder("?"); rightImg=R||placeholder("?");
         leftCt=LC||0; rightCt=RC||0;
         leftLabel = find.label.split(" ")[0] + " — Top";
@@ -652,17 +669,12 @@
 
       setActiveMedia("active1", leftImg);
       setActiveMedia("active2", rightImg);
-      labelActive1.textContent = leftLabel; labelActive2.textContent = rightLabel;
-      countActive1.textContent = leftCt; countActive2.textContent = rightCt;
+      labelActive1.textContent = leftLabel;
+      labelActive2.textContent = rightLabel;
+      countActive1.textContent = leftCt;
+      countActive2.textContent = rightCt;
 
-      // PHASE LIVE RULES:
-      // R32: only while !r32_done
-      // R16: only while r32_done && !r16_done
-      // QF:  only while r16_done && !mid1_done
-      // S:   only while mid1_done && !mid2_done
-      // F:   only while mid2_done
       let phaseLive = true;
-
       if (activeMatch.startsWith("rr")) {
         if (state.r32_done) phaseLive = false;
       } else if (activeMatch.startsWith("r") && !activeMatch.startsWith("rr")) {
@@ -681,19 +693,19 @@
       if (picked==="blue") labelActive2.textContent += " • you voted";
     }
 
-    // ---------- NET ----------
     async function fetchState(force=false){
       try{
-        const res = await fetch(FUNCTION_URL + (force ? "" : ""));
+        const res = await fetch(FUNCTION_URL);
         const data = await res.json();
         const s = (data && typeof data==="object" && "state" in data) ? data.state : data;
         state = Object.assign(state, s || {});
 
-        // smooth active match progression
         if (!state.r32_done && !activeMatch.startsWith("rr")) activeMatch = "rr1";
-        if (state.r32_done && !state.r16_done && (activeMatch.startsWith("rr") || activeMatch.startsWith("q") || activeMatch.startsWith("s") || activeMatch==="final")) activeMatch = "r1";
+        if (state.r32_done && !state.r16_done &&
+            (activeMatch.startsWith("rr") || activeMatch.startsWith("q") || activeMatch.startsWith("s") || activeMatch==="final")) activeMatch = "r1";
         if (state.r16_done && !state.mid1_done && activeMatch.startsWith("r")) activeMatch = "q1";
-        if (state.mid1_done && !state.mid2_done && (activeMatch.startsWith("r")||activeMatch.startsWith("q"))) activeMatch="s1";
+        if (state.mid1_done && !state.mid2_done &&
+            (activeMatch.startsWith("r")||activeMatch.startsWith("q"))) activeMatch="s1";
         if (state.mid2_done && activeMatch!=="final") activeMatch="final";
 
         renderActive();
@@ -702,11 +714,8 @@
       }
     }
 
-    // ---------- TICK + CHAMPION OVERLAY ----------
     let phaseSync = { r32:false, r16:false, q:false, s:false, f:false };
     let lastFlags={r32:false, r16:false, mid1:false, mid2:false};
-
-    // guard so overlay shows once per cycle
     let championOverlayShown = false;
 
     function showChampionOverlayIfReady(){
@@ -730,7 +739,6 @@
       }
 
       const cleanLabel = winnerLabel.split(" •")[0];
-
       window.openChampionOverlay(cleanLabel, winnerUrl);
       championOverlayShown = true;
     }
@@ -760,7 +768,6 @@
       if (ms <= S_MS  && state.mid1_done && !state.mid2_done && !phaseSync.s){ phaseSync.s=true; fetchState(true); }
       if (ms <= 0     && state.mid2_done && !phaseSync.f){ phaseSync.f=true; fetchState(true); }
 
-      // when final hits 0 and pairing is ready, fire champion overlay once
       if (ms <= 0 && state.mid2_done && !championOverlayShown) {
         showChampionOverlayIfReady();
       }
@@ -768,7 +775,6 @@
       requestAnimationFrame(tick);
     }
 
-    // realtime
     supabase.channel('cycles-v2-live')
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'cycles_v2' }, async ()=>{ await fetchState(true); })
       .subscribe();
@@ -777,7 +783,6 @@
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'art_queue', filter:'status=in.(locked,used)' }, async ()=>{ await fetchState(true); })
       .subscribe();
 
-    // boot
     fetchState(true).then(()=>{
       setTimeout(()=>fetchState(true), 600);
       setTimeout(()=>fetchState(true), 1500);
