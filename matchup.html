@@ -31,7 +31,7 @@
     .thumbs-wrap { margin-top:16px; }
     .thumbs-title { font-size:12px; opacity:.6; margin-bottom:6px; }
     .thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
-    .thumb { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); cursor:pointer; }
+    .thumb { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); cursor:pointer; position:relative; }
     .thumb.disabled { opacity:.55; cursor:default; }
     .thumb.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(57,255,20,.3); }
 
@@ -69,6 +69,34 @@
       opacity:0.5;
     }
 
+    /* VIDEO badge on thumbnails */
+    .video-badge {
+      position:absolute;
+      top:6px;
+      left:6px;
+      padding:2px 6px;
+      font-size:9px;
+      font-weight:700;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:#0b0f13;
+      background:var(--accent);
+      border-radius:999px;
+      box-shadow:0 0 8px rgba(57,255,20,.8);
+      pointer-events:none;
+    }
+
+    /* Hover preview video in thumbs (desktop only) */
+    .thumb-preview {
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+      z-index:1;
+    }
+
     .thumb-label { padding:6px 8px 8px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
     .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
     .ghostBox { width:100%; height:100%; display:grid; place-items:center; color:#3b3b3b; font-weight:700; font-size:13px; letter-spacing:.08em; }
@@ -80,9 +108,10 @@
     .final-inner { display:flex; gap:12px; flex-wrap:wrap; padding:12px; }
     .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed var(--border); border-radius:10px; padding:8px; text-align:center; }
     .final-slot .label { display:block; margin-bottom:4px; }
-    .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#000; border-radius:8px; overflow:hidden; display:grid; place-items:center; }
+    .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#000; border-radius:8px; overflow:hidden; display:grid; place-items:center; position:relative; }
     .final-slot .thumb-final img,
     .final-slot .thumb-final video { width:100%; height:100%; object-fit:cover; }
+
     .final-footer { padding:0 12px 12px; font-size:12px; color:#9aa0a6; }
 
     .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
@@ -112,7 +141,7 @@
     <div class="card" id="activeTop">
       <div class="imgBox">
         <img id="imgActive1" alt="Active top">
-        <!-- muted for autoplay, now with controls -->
+        <!-- muted for autoplay, with controls so user can unmute -->
         <video id="vidActive1" class="hidden" muted playsinline loop controls></video>
         <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
       </div>
@@ -126,7 +155,7 @@
     <div class="card" id="activeBottom">
       <div class="imgBox">
         <img id="imgActive2" alt="Active bottom">
-        <!-- muted for autoplay, now with controls -->
+        <!-- muted for autoplay, with controls so user can unmute -->
         <video id="vidActive2" class="hidden" muted playsinline loop controls></video>
         <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
       </div>
@@ -172,7 +201,7 @@
       <div class="final-footer" id="finalFooter">Waiting… (tap a card’s ⤢ for audio)</div>
     </div>
 
-    <div class="hint">32 images → 16 R32 matches (120s) → 8 R16 (90s) → 4 QF (60s) → 2 SF (30s) → Final (0s).</div>
+    <div class="hint">Hover on desktop to preview videos. 32 images → 16 R32 matches (120s) → 8 R16 (90s) → 4 QF (60s) → 2 SF (30s) → Final (0s).</div>
   </div>
 
   <!-- FULLSCREEN OVERLAY (not muted, has controls) -->
@@ -254,7 +283,6 @@
         fullImg.classList.add("hidden");
         fullVideo.classList.remove("hidden");
         fullVideo.src = url;
-        // let user hit play (with sound) if autoplay is blocked
         try { fullVideo.play().catch(()=>{}); } catch(e){}
       } else {
         fullVideo.classList.add("hidden");
@@ -280,7 +308,7 @@
 
     function pick(a,b){ return (a!=null && a!=="") ? a : b; }
 
-    /* -------- MATCH INDEX (same as before) -------- */
+    /* -------- MATCH INDEX -------- */
     const order = [
       {key:"rr1",  label:"R32 1",  left:"seed_a_url",  right:"seed_b_url",  lct:"seed_a_count",  rct:"seed_b_count"},
       {key:"rr2",  label:"R32 2",  left:"seed_c_url",  right:"seed_d_url",  lct:"seed_c_count",  rct:"seed_d_count"},
@@ -326,6 +354,7 @@
         <div class="thumb-img diag">
           <img class="half left" id="imgL_${item.key}" alt="${item.label} top">
           <img class="half right" id="imgR_${item.key}" alt="${item.label} bottom">
+          <div class="video-badge hidden" id="badge_${item.key}">VIDEO</div>
         </div>
         <div class="thumb-label">
           <span>${item.label}</span>
@@ -353,10 +382,49 @@
         box: div,
         imgL: div.querySelector("#imgL_"+item.key),
         imgR: div.querySelector("#imgR_"+item.key),
-        count: div.querySelector("#cnt_"+item.key)
+        count: div.querySelector("#cnt_"+item.key),
+        badge: div.querySelector("#badge_"+item.key)
       };
     }
     order.forEach(makeThumb);
+
+    // Desktop-only hover preview setup (pointer:fine)
+    const hoverEnabled = window.matchMedia && window.matchMedia("(pointer:fine)").matches;
+    if (hoverEnabled) {
+      for (const k in thumbs) {
+        const t = thumbs[k];
+        t.box.addEventListener("mouseenter", handleThumbEnter);
+        t.box.addEventListener("mouseleave", handleThumbLeave);
+      }
+    }
+
+    function handleThumbEnter(e){
+      const box = e.currentTarget;
+      const url = box.dataset.videoUrl;
+      if (!url) return;
+      const imgWrap = box.querySelector(".thumb-img");
+      if (!imgWrap) return;
+      if (imgWrap.querySelector("video.thumb-preview")) return;
+
+      const v = document.createElement("video");
+      v.className = "thumb-preview";
+      v.src = url + "#t=0.1";
+      v.muted = true;
+      v.loop = true;
+      v.playsInline = true;
+      imgWrap.appendChild(v);
+      try { v.play().catch(()=>{}); } catch(e){}
+    }
+
+    function handleThumbLeave(e){
+      const box = e.currentTarget;
+      const imgWrap = box.querySelector(".thumb-img");
+      if (!imgWrap) return;
+      const v = imgWrap.querySelector("video.thumb-preview");
+      if (!v) return;
+      try { v.pause(); } catch(e){}
+      v.remove();
+    }
 
     let state = {
       base_iso:null, ends_at:null, period_sec:150,
@@ -461,9 +529,24 @@
       const th = thumbs[key]; if (!th) return;
       const leftIsVid = isVideoUrl(leftUrl);
       const rightIsVid = isVideoUrl(rightUrl);
+      const hasVideo = leftIsVid || rightIsVid;
+
       th.imgL.src = leftIsVid ? placeholder("V") : (leftUrl || placeholder(fallback||"?"));
       th.imgR.src = rightIsVid ? placeholder("V") : (rightUrl || placeholder(fallback||"?"));
       th.count.textContent = (leftCt??0) + "-" + (rightCt??0);
+
+      if (th.badge) {
+        th.badge.classList.toggle("hidden", !hasVideo);
+      }
+
+      // For hover preview: store one video URL if available (prefer left, then right)
+      const box = th.box;
+      if (hasVideo) {
+        const vidUrl = leftIsVid ? leftUrl : rightUrl;
+        box.dataset.videoUrl = vidUrl || "";
+      } else {
+        delete box.dataset.videoUrl;
+      }
     }
 
     function setActiveMedia(which, url){
@@ -477,7 +560,7 @@
         vid.src = url + "#t=0.1";
         vid.loop = true;
         vid.playsInline = true;
-        // let browser handle autoplay; controls let user unmute
+        // muted by default; user can unmute with controls
         try { vid.play().catch(()=>{}); } catch(e){}
       } else {
         vid.classList.add("hidden");
@@ -514,6 +597,21 @@
         img.src = url || placeholder("?");
       }
     }
+
+    // Auto-pause logic: keep only one video playing with sound potential
+    function pauseOtherVideos(except){
+      const vids = [vidActive1, vidActive2, finalVid1, finalVid2, fullVideo];
+      vids.forEach(v=>{
+        if (!v || v === except) return;
+        try { v.pause(); } catch(e){}
+      });
+    }
+
+    vidActive1.addEventListener("play", ()=> pauseOtherVideos(vidActive1));
+    vidActive2.addEventListener("play", ()=> pauseOtherVideos(vidActive2));
+    finalVid1.addEventListener("play", ()=> pauseOtherVideos(finalVid1));
+    finalVid2.addEventListener("play", ()=> pauseOtherVideos(finalVid2));
+    fullVideo.addEventListener("play", ()=> pauseOtherVideos(fullVideo));
 
     function markActive(){
       for (const k in thumbs) {
