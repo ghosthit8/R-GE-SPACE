@@ -152,6 +152,16 @@
 
     .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
     .hidden { display:none !important; }
+
+    /* NEW: clickable username in label */
+    .artist-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .artist-link:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -348,37 +358,27 @@
         .replace(/'/g,"&#39;");
     }
 
+    /* UPDATED: description-only meta block with see-more */
     function renderPieceMeta(container, meta){
       if (!container) return;
-      const title = meta && meta.title ? String(meta.title) : "";
-      const artist = meta && meta.artist ? String(meta.artist) : "";
       const desc = meta && meta.desc ? String(meta.desc) : "";
 
-      if (!title && !artist && !desc){
+      // If totally empty → hide
+      if (!desc){
         container.classList.add("hidden");
         container.innerHTML = "";
         return;
       }
 
       container.classList.remove("hidden");
-      const parts = [];
-      if (title) parts.push(`"${escapeHtml(title)}"`);
-      if (artist) parts.push(`@${escapeHtml(artist)}`);
-      const titleLine = parts.join(" · ");
 
       const LIMIT = 260;
       const truncated = desc.length > LIMIT;
       const shortDesc = truncated ? desc.slice(0, LIMIT).trim() + "…" : desc;
 
-      let html = "";
-      if (titleLine){
-        html += `<div class="piece-line">${titleLine}</div>`;
-      }
-      if (desc){
-        html += `<div class="piece-desc" data-full="${encodeURIComponent(desc)}" data-limit="${LIMIT}" data-expanded="0">${escapeHtml(shortDesc)}</div>`;
-        if (truncated){
-          html += `<button class="seeMoreBtn" type="button">See more</button>`;
-        }
+      let html = `<div class="piece-desc" data-full="${encodeURIComponent(desc)}" data-limit="${LIMIT}" data-expanded="0">${escapeHtml(shortDesc)}</div>`;
+      if (truncated){
+        html += `<button class="seeMoreBtn" type="button">See more</button>`;
       }
 
       container.innerHTML = html;
@@ -889,14 +889,19 @@
       const leftMeta = metaByUrl[leftImg] || {};
       const rightMeta = metaByUrl[rightImg] || {};
 
-      // Build label text: "Title" · @artist OR fallback to old labels
+      /* UPDATED: label builder with clickable @username */
       function buildLabel(defaultLabel, meta){
         const t = meta && meta.title ? String(meta.title) : "";
         const a = meta && meta.artist ? String(meta.artist) : "";
         if (!t && !a) return defaultLabel;
+
         let line = "";
-        if (t) line += `"${t}"`;
-        if (a) line += (line ? " · " : "") + "@" + a;
+        if (t) line += `"${escapeHtml(t)}"`;
+        if (a){
+          const safeA = escapeHtml(a);
+          line += (line ? " · " : "") +
+                  `<a href="profile.html?u=${safeA}" class="artist-link">@${safeA}</a>`;
+        }
         return line;
       }
 
@@ -907,12 +912,13 @@
       if (picked==="red")  baseLabel1 += " • you voted";
       if (picked==="blue") baseLabel2 += " • you voted";
 
-      labelActive1.textContent = baseLabel1;
-      labelActive2.textContent = baseLabel2;
+      // Use innerHTML so the <a> renders
+      labelActive1.innerHTML = baseLabel1;
+      labelActive2.innerHTML = baseLabel2;
       countActive1.textContent = leftCt;
       countActive2.textContent = rightCt;
 
-      // Render meta blocks (title + @artist + desc + see more)
+      // Meta blocks now only show description + see-more
       renderPieceMeta(metaActive1, leftMeta);
       renderPieceMeta(metaActive2, rightMeta);
 
