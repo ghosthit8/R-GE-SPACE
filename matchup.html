@@ -43,20 +43,24 @@
       background:#0b0f13;
       overflow:hidden;
     }
-    .thumb-img img {
+    .thumb-img img,
+    .thumb-img video {
       width:100%;
       height:100%;
       object-fit:cover;
       display:block;
     }
-    .thumb-img.diag img.half {
+    .thumb-img.diag img.half,
+    .thumb-img.diag video.half {
       position:absolute;
       inset:0;
     }
-    .thumb-img.diag img.left {
+    .thumb-img.diag img.left,
+    .thumb-img.diag video.left {
       clip-path:polygon(0 0, 100% 0, 0 100%);
     }
-    .thumb-img.diag img.right {
+    .thumb-img.diag img.right,
+    .thumb-img.diag video.right {
       clip-path:polygon(100% 0, 100% 100%, 0 100%);
     }
     .thumb-img.diag::before {
@@ -84,6 +88,7 @@
       border-radius:999px;
       box-shadow:0 0 8px rgba(57,255,20,.8);
       pointer-events:none;
+      z-index:2;
     }
 
     /* Hover preview video in thumbs (desktop only) */
@@ -94,7 +99,7 @@
       height:100%;
       object-fit:cover;
       display:block;
-      z-index:1;
+      z-index:3;
     }
 
     .thumb-label { padding:6px 8px 8px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
@@ -141,7 +146,6 @@
     <div class="card" id="activeTop">
       <div class="imgBox">
         <img id="imgActive1" alt="Active top">
-        <!-- muted for autoplay, with controls so user can unmute -->
         <video id="vidActive1" class="hidden" muted playsinline loop controls></video>
         <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
       </div>
@@ -155,7 +159,6 @@
     <div class="card" id="activeBottom">
       <div class="imgBox">
         <img id="imgActive2" alt="Active bottom">
-        <!-- muted for autoplay, with controls so user can unmute -->
         <video id="vidActive2" class="hidden" muted playsinline loop controls></video>
         <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
       </div>
@@ -185,7 +188,6 @@
           <span class="label" id="finalLeftLabel">Winner of Semi 1</span>
           <div class="thumb-final">
             <img id="finalImg1" alt="Final slot 1">
-            <!-- muted for autoplay preview, with controls -->
             <video id="finalVid1" class="hidden" muted playsinline loop controls></video>
           </div>
         </div>
@@ -193,7 +195,6 @@
           <span class="label" id="finalRightLabel">Winner of Semi 2</span>
           <div class="thumb-final">
             <img id="finalImg2" alt="Final slot 2">
-            <!-- muted for autoplay preview, with controls -->
             <video id="finalVid2" class="hidden" muted playsinline loop controls></video>
           </div>
         </div>
@@ -204,7 +205,7 @@
     <div class="hint">Hover on desktop to preview videos. 32 images → 16 R32 matches (120s) → 8 R16 (90s) → 4 QF (60s) → 2 SF (30s) → Final (0s).</div>
   </div>
 
-  <!-- FULLSCREEN OVERLAY (not muted, has controls) -->
+  <!-- FULLSCREEN OVERLAY -->
   <div class="fullscreen-overlay" id="overlay">
     <button id="closeFull">✕ Close</button>
     <img id="fullImg" src="">
@@ -308,7 +309,7 @@
 
     function pick(a,b){ return (a!=null && a!=="") ? a : b; }
 
-    /* -------- MATCH INDEX -------- */
+    /* MATCH INDEX */
     const order = [
       {key:"rr1",  label:"R32 1",  left:"seed_a_url",  right:"seed_b_url",  lct:"seed_a_count",  rct:"seed_b_count"},
       {key:"rr2",  label:"R32 2",  left:"seed_c_url",  right:"seed_d_url",  lct:"seed_c_count",  rct:"seed_d_count"},
@@ -352,8 +353,10 @@
       div.id = "thumb_"+item.key;
       div.innerHTML = `
         <div class="thumb-img diag">
-          <img class="half left" id="imgL_${item.key}" alt="${item.label} top">
+          <img class="half left"  id="imgL_${item.key}" alt="${item.label} top">
           <img class="half right" id="imgR_${item.key}" alt="${item.label} bottom">
+          <video class="half left hidden"  id="vidL_${item.key}" muted playsinline preload="metadata"></video>
+          <video class="half right hidden" id="vidR_${item.key}" muted playsinline preload="metadata"></video>
           <div class="video-badge hidden" id="badge_${item.key}">VIDEO</div>
         </div>
         <div class="thumb-label">
@@ -379,16 +382,18 @@
       });
       grid.appendChild(div);
       thumbs[item.key] = {
-        box: div,
-        imgL: div.querySelector("#imgL_"+item.key),
-        imgR: div.querySelector("#imgR_"+item.key),
+        box:   div,
+        imgL:  div.querySelector("#imgL_"+item.key),
+        imgR:  div.querySelector("#imgR_"+item.key),
+        vidL:  div.querySelector("#vidL_"+item.key),
+        vidR:  div.querySelector("#vidR_"+item.key),
         count: div.querySelector("#cnt_"+item.key),
         badge: div.querySelector("#badge_"+item.key)
       };
     }
     order.forEach(makeThumb);
 
-    // Desktop-only hover preview setup (pointer:fine)
+    // Desktop-only hover preview
     const hoverEnabled = window.matchMedia && window.matchMedia("(pointer:fine)").matches;
     if (hoverEnabled) {
       for (const k in thumbs) {
@@ -531,15 +536,35 @@
       const rightIsVid = isVideoUrl(rightUrl);
       const hasVideo = leftIsVid || rightIsVid;
 
-      th.imgL.src = leftIsVid ? placeholder("V") : (leftUrl || placeholder(fallback||"?"));
-      th.imgR.src = rightIsVid ? placeholder("V") : (rightUrl || placeholder(fallback||"?"));
-      th.count.textContent = (leftCt??0) + "-" + (rightCt??0);
-
-      if (th.badge) {
-        th.badge.classList.toggle("hidden", !hasVideo);
+      // LEFT SIDE
+      if (leftIsVid) {
+        th.imgL.classList.add("hidden");
+        th.vidL.classList.remove("hidden");
+        th.vidL.src = leftUrl + "#t=0.1";
+        th.vidL.preload = "metadata";
+        try { th.vidL.pause(); } catch(e){}
+      } else {
+        th.vidL.classList.add("hidden");
+        th.imgL.classList.remove("hidden");
+        th.imgL.src = leftUrl || placeholder(fallback||"?");
       }
 
-      // For hover preview: store one video URL if available (prefer left, then right)
+      // RIGHT SIDE
+      if (rightIsVid) {
+        th.imgR.classList.add("hidden");
+        th.vidR.classList.remove("hidden");
+        th.vidR.src = rightUrl + "#t=0.1";
+        th.vidR.preload = "metadata";
+        try { th.vidR.pause(); } catch(e){}
+      } else {
+        th.vidR.classList.add("hidden");
+        th.imgR.classList.remove("hidden");
+        th.imgR.src = rightUrl || placeholder(fallback||"?");
+      }
+
+      th.count.textContent = (leftCt??0) + "-" + (rightCt??0);
+      if (th.badge) th.badge.classList.toggle("hidden", !hasVideo);
+
       const box = th.box;
       if (hasVideo) {
         const vidUrl = leftIsVid ? leftUrl : rightUrl;
@@ -560,7 +585,6 @@
         vid.src = url + "#t=0.1";
         vid.loop = true;
         vid.playsInline = true;
-        // muted by default; user can unmute with controls
         try { vid.play().catch(()=>{}); } catch(e){}
       } else {
         vid.classList.add("hidden");
@@ -598,7 +622,6 @@
       }
     }
 
-    // Auto-pause logic: keep only one video playing with sound potential
     function pauseOtherVideos(except){
       const vids = [vidActive1, vidActive2, finalVid1, finalVid2, fullVideo];
       vids.forEach(v=>{
@@ -684,15 +707,10 @@
         thumbs.s2.count.textContent = "0-0";
         thumbs.s2.box.classList.add("disabled"); thumbs.s2.box.classList.add("hidden");
       }else{
-        thumbs.s1.imgL.src = isVideoUrl(state.semi_1_left_url)  ? placeholder("V") : (state.semi_1_left_url  || placeholder("S1"));
-        thumbs.s1.imgR.src = isVideoUrl(state.semi_1_right_url) ? placeholder("V") : (state.semi_1_right_url || placeholder("S1"));
-        thumbs.s1.count.textContent = (state.seed_a_count||0) + "-" + (state.seed_b_count||0);
+        setThumb("s1", state.semi_1_left_url, state.semi_1_right_url, state.seed_a_count, state.seed_b_count, "S1");
+        setThumb("s2", state.semi_2_left_url, state.semi_2_right_url, state.seed_c_count, state.seed_d_count, "S2");
         thumbs.s1.box.classList.toggle("disabled", !!state.mid2_done);
         thumbs.s1.box.classList.remove("hidden");
-
-        thumbs.s2.imgL.src = isVideoUrl(state.semi_2_left_url)  ? placeholder("V") : (state.semi_2_left_url  || placeholder("S2"));
-        thumbs.s2.imgR.src = isVideoUrl(state.semi_2_right_url) ? placeholder("V") : (state.semi_2_right_url || placeholder("S2"));
-        thumbs.s2.count.textContent = (state.seed_c_count||0) + "-" + (state.seed_d_count||0);
         thumbs.s2.box.classList.toggle("disabled", !!state.mid2_done);
         thumbs.s2.box.classList.remove("hidden");
       }
@@ -703,9 +721,7 @@
         thumbs.final.count.textContent = "0-0";
         thumbs.final.box.classList.add("disabled"); thumbs.final.box.classList.add("hidden");
       }else{
-        thumbs.final.imgL.src = isVideoUrl(state.mid_winner_1_url) ? placeholder("V") : (state.mid_winner_1_url || placeholder("F"));
-        thumbs.final.imgR.src = isVideoUrl(state.mid_winner_2_url) ? placeholder("V") : (state.mid_winner_2_url || placeholder("F"));
-        thumbs.final.count.textContent = (state.seed_a_count||0) + "-" + (state.seed_b_count||0);
+        setThumb("final", state.mid_winner_1_url, state.mid_winner_2_url, state.seed_a_count, state.seed_b_count, "F");
         thumbs.final.box.classList.remove("disabled"); thumbs.final.box.classList.remove("hidden");
       }
 
