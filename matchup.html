@@ -28,6 +28,32 @@
     button.vote { padding:10px 14px; }
     button.vote:disabled { opacity:.6; cursor:default; }
 
+    /* piece meta under active cards */
+    .piece-meta {
+      padding:6px 12px 10px;
+      border-top:1px solid var(--border);
+      font-size:12px;
+      color:var(--muted);
+    }
+    .piece-meta .piece-line {
+      font-weight:600;
+      color:var(--fg);
+      margin-bottom:4px;
+    }
+    .piece-meta .piece-desc {
+      white-space:pre-wrap;
+    }
+    .piece-meta .seeMoreBtn {
+      margin-top:4px;
+      font-size:11px;
+      border-radius:999px;
+      padding:3px 8px;
+      border:1px solid var(--accent);
+      background:transparent;
+      color:var(--accent);
+      cursor:pointer;
+    }
+
     .thumbs-wrap { margin-top:16px; }
     .thumbs-title { font-size:12px; opacity:.6; margin-bottom:6px; }
     .thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
@@ -154,6 +180,7 @@
         <div class="counts" id="countActive1">0</div>
         <button class="vote" id="btnActive1">Vote</button>
       </div>
+      <div class="piece-meta hidden" id="metaActive1"></div>
     </div>
 
     <div class="card" id="activeBottom">
@@ -167,6 +194,7 @@
         <div class="counts" id="countActive2">0</div>
         <button class="vote" id="btnActive2">Vote</button>
       </div>
+      <div class="piece-meta hidden" id="metaActive2"></div>
     </div>
 
     <!-- THUMBS -->
@@ -240,6 +268,8 @@
     const countActive2 = document.getElementById("countActive2");
     const btnActive1 = document.getElementById("btnActive1");
     const btnActive2 = document.getElementById("btnActive2");
+    const metaActive1 = document.getElementById("metaActive1");
+    const metaActive2 = document.getElementById("metaActive2");
 
     const finalImg1 = document.getElementById("finalImg1");
     const finalImg2 = document.getElementById("finalImg2");
@@ -308,6 +338,73 @@
     }
 
     function pick(a,b){ return (a!=null && a!=="") ? a : b; }
+
+    function escapeHtml(str){
+      return String(str)
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;")
+        .replace(/'/g,"&#39;");
+    }
+
+    function renderPieceMeta(container, meta){
+      if (!container) return;
+      const title = meta && meta.title ? String(meta.title) : "";
+      const artist = meta && meta.artist ? String(meta.artist) : "";
+      const desc = meta && meta.desc ? String(meta.desc) : "";
+
+      if (!title && !artist && !desc){
+        container.classList.add("hidden");
+        container.innerHTML = "";
+        return;
+      }
+
+      container.classList.remove("hidden");
+      const parts = [];
+      if (title) parts.push(`"${escapeHtml(title)}"`);
+      if (artist) parts.push(`@${escapeHtml(artist)}`);
+      const titleLine = parts.join(" · ");
+
+      const LIMIT = 260;
+      const truncated = desc.length > LIMIT;
+      const shortDesc = truncated ? desc.slice(0, LIMIT).trim() + "…" : desc;
+
+      let html = "";
+      if (titleLine){
+        html += `<div class="piece-line">${titleLine}</div>`;
+      }
+      if (desc){
+        html += `<div class="piece-desc" data-full="${encodeURIComponent(desc)}" data-limit="${LIMIT}" data-expanded="0">${escapeHtml(shortDesc)}</div>`;
+        if (truncated){
+          html += `<button class="seeMoreBtn" type="button">See more</button>`;
+        }
+      }
+
+      container.innerHTML = html;
+
+      const btn = container.querySelector(".seeMoreBtn");
+      if (btn){
+        btn.addEventListener("click", ()=>{
+          const descEl = container.querySelector(".piece-desc");
+          if (!descEl) return;
+          const expanded = descEl.dataset.expanded === "1";
+          const limit = parseInt(descEl.dataset.limit || "260",10);
+          const full = decodeURIComponent(descEl.dataset.full || "");
+          if (!expanded){
+            descEl.textContent = full;
+            descEl.dataset.expanded = "1";
+            btn.textContent = "See less";
+          } else {
+            const truncatedAgain = full.length > limit;
+            const shortAgain = truncatedAgain ? full.slice(0,limit).trim()+"…" : full;
+            descEl.textContent = shortAgain;
+            descEl.dataset.expanded = "0";
+            btn.textContent = "See more";
+          }
+        });
+      }
+    }
 
     /* MATCH INDEX */
     const order = [
@@ -462,6 +559,8 @@
       semi_2_left_url:null, semi_2_right_url:null, semi_2_left_count:0, semi_2_right_count:0,
 
       mid_winner_1_url:null, mid_winner_2_url:null,
+
+      meta_by_url:{}
     };
 
     const VOTE_MEMORY_KEY="rs_vote_memory_v3";
@@ -746,7 +845,10 @@
       const mem = memRead(base);
       const picked = mem[activeMatch];
 
-      let leftImg=placeholder("?"), rightImg=placeholder("?"), leftCt=0, rightCt=0, leftLabel="Top", rightLabel="Bottom";
+      let leftImg=placeholder("?"), rightImg=placeholder("?"), leftCt=0, rightCt=0;
+      let defaultLeftLabel="Top", defaultRightLabel="Bottom";
+
+      const metaByUrl = state.meta_by_url || {};
 
       const find = order.find(o=>o.key===activeMatch);
       if (find && !find.semi && find.key!=="final"){
@@ -756,37 +858,63 @@
         const RC = pick(state[find.rct], state[find.fbRct]);
         leftImg=L||placeholder("?"); rightImg=R||placeholder("?");
         leftCt=LC||0; rightCt=RC||0;
-        leftLabel = find.label.split(" ")[0] + " — Top";
-        rightLabel= find.label.split(" ")[0] + " — Bottom";
+        defaultLeftLabel = find.label.split(" ")[0] + " — Top";
+        defaultRightLabel= find.label.split(" ")[0] + " — Bottom";
       } else if (activeMatch==="s1"){
         if (state.mid1_done){
           leftImg  = state.semi_1_left_url  || placeholder("?");
           rightImg = state.semi_1_right_url || placeholder("?");
           leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0;
         }
-        leftLabel="Semi 1 — Top"; rightLabel="Semi 1 — Bottom";
+        defaultLeftLabel="Semi 1 — Top"; defaultRightLabel="Semi 1 — Bottom";
       } else if (activeMatch==="s2"){
         if (state.mid1_done){
           leftImg  = state.semi_2_left_url  || placeholder("?");
           rightImg = state.semi_2_right_url || placeholder("?");
           leftCt = state.seed_c_count||0; rightCt=state.seed_d_count||0;
         }
-        leftLabel="Semi 2 — Top"; rightLabel="Semi 2 — Bottom";
+        defaultLeftLabel="Semi 2 — Top"; defaultRightLabel="Semi 2 — Bottom";
       } else {
         if (state.mid2_done){
           leftImg  = state.mid_winner_1_url || placeholder("?");
           rightImg = state.mid_winner_2_url || placeholder("?");
           leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0;
         }
-        leftLabel="Final — Top"; rightLabel="Final — Bottom";
+        defaultLeftLabel="Final — Top"; defaultRightLabel="Final — Bottom";
       }
 
       setActiveMedia("active1", leftImg);
       setActiveMedia("active2", rightImg);
-      labelActive1.textContent = leftLabel;
-      labelActive2.textContent = rightLabel;
+
+      const leftMeta = metaByUrl[leftImg] || {};
+      const rightMeta = metaByUrl[rightImg] || {};
+
+      // Build label text: "Title" · @artist OR fallback to old labels
+      function buildLabel(defaultLabel, meta){
+        const t = meta && meta.title ? String(meta.title) : "";
+        const a = meta && meta.artist ? String(meta.artist) : "";
+        if (!t && !a) return defaultLabel;
+        let line = "";
+        if (t) line += `"${t}"`;
+        if (a) line += (line ? " · " : "") + "@" + a;
+        return line;
+      }
+
+      let baseLabel1 = buildLabel(defaultLeftLabel, leftMeta);
+      let baseLabel2 = buildLabel(defaultRightLabel, rightMeta);
+
+      // Apply vote tag
+      if (picked==="red")  baseLabel1 += " • you voted";
+      if (picked==="blue") baseLabel2 += " • you voted";
+
+      labelActive1.textContent = baseLabel1;
+      labelActive2.textContent = baseLabel2;
       countActive1.textContent = leftCt;
       countActive2.textContent = rightCt;
+
+      // Render meta blocks (title + @artist + desc + see more)
+      renderPieceMeta(metaActive1, leftMeta);
+      renderPieceMeta(metaActive2, rightMeta);
 
       let phaseLive = true;
       if (activeMatch.startsWith("rr")) {
@@ -803,8 +931,6 @@
 
       btnActive1.disabled = !!picked || !phaseLive;
       btnActive2.disabled = !!picked || !phaseLive;
-      if (picked==="red")  labelActive1.textContent += " • you voted";
-      if (picked==="blue") labelActive2.textContent += " • you voted";
     }
 
     async function fetchState(force=false){
