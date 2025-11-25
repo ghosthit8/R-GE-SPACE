@@ -99,8 +99,9 @@
     align-items: stretch;
   }
   .champion-image-wrap {
-    flex: 0 0 44%;
-    border-radius: 14px;
+    flex: 0 0 52%;
+    height: 260px;
+    border-radius: 16px;
     overflow: hidden;
     border: 1px solid rgba(15,23,42,0.8);
     background:
@@ -108,12 +109,17 @@
       #020617;
     position: relative;
   }
-  .champion-image {
+  .champion-image,
+  .champion-video {
     display: block;
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain; /* less cropped */
     mix-blend-mode: screen;
+    background: transparent;
+  }
+  .champion-video {
+    background: #020617;
   }
   .champion-text {
     flex: 1;
@@ -180,7 +186,7 @@
     }
     .champion-image-wrap {
       flex: 0 0 auto;
-      height: 220px;
+      height: 280px; /* taller on phones */
     }
   }
   `;
@@ -200,6 +206,7 @@
       <div class="champion-main">
         <div class="champion-image-wrap">
           <img src="" alt="Champion artwork" class="champion-image" id="championImage">
+          <video class="champion-video hidden" id="championVideo" playsinline controls></video>
         </div>
         <div class="champion-text">
           <div class="champion-title">CHAMPION</div>
@@ -216,6 +223,7 @@
   document.body.appendChild(overlay);
 
   const imgEl    = overlay.querySelector("#championImage");
+  const vidEl    = overlay.querySelector("#championVideo");
   const labelEl  = overlay.querySelector("#championLabel");
   const line1El  = overlay.querySelector("#champLine1");
   const line2El  = overlay.querySelector("#champLine2");
@@ -223,6 +231,13 @@
   const closeBtn = overlay.querySelector(".champion-close");
   const canvas   = overlay.querySelector("#championConfetti");
   const ctx      = canvas.getContext("2d");
+
+  // --- helper to detect video URLs ---
+  function isVideoUrl(url) {
+    if (typeof url !== "string") return false;
+    const base = url.split("#")[0]; // strip any time fragment
+    return /\.(mp4|webm|mov)(\?|$)/i.test(base);
+  }
 
   // --- 3. Typewriter config (Speed A: cinematic) ---
   const LINE1_TEXT = "Glory to the machine. Your art devours";
@@ -367,11 +382,43 @@
       clearTimeout(typeTimer);
       typeTimer = null;
     }
+    if (vidEl) {
+      try { vidEl.pause(); } catch (_) {}
+      vidEl.removeAttribute("src");
+      vidEl.classList.add("hidden");
+    }
   }
 
   // EXPORTED FUNCTION – called from matchup when final decides
-  window.openChampionOverlay = function(label, imageUrl) {
-    if (imgEl && imageUrl) imgEl.src = imageUrl;
+  window.openChampionOverlay = function(label, mediaUrl) {
+    if (!overlay) return;
+
+    const isVid = isVideoUrl(mediaUrl);
+
+    if (isVid && vidEl) {
+      // show video
+      vidEl.classList.remove("hidden");
+      vidEl.muted = false;      // user can control audio
+      vidEl.autoplay = false;   // user hits play
+      vidEl.controls = true;
+      vidEl.src = mediaUrl || "";
+
+      if (imgEl) {
+        imgEl.classList.add("hidden");
+        imgEl.removeAttribute("src");
+      }
+    } else if (imgEl) {
+      // show image
+      imgEl.classList.remove("hidden");
+      imgEl.src = mediaUrl || "";
+
+      if (vidEl) {
+        try { vidEl.pause(); } catch (_) {}
+        vidEl.removeAttribute("src");
+        vidEl.classList.add("hidden");
+      }
+    }
+
     if (labelEl) labelEl.textContent = label || "Champion";
 
     overlay.classList.add("active");
