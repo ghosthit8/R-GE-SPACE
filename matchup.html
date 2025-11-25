@@ -304,8 +304,11 @@
 
     const grid = document.getElementById("thumbGrid");
 
+    // *** FIXED: handle URLs that have #t=0.1 fragments so fullscreen works for videos
     function isVideoUrl(url){
-      return typeof url === "string" && /\.(mp4|webm|mov)(\?|$)/i.test(url);
+      if (typeof url !== "string") return false;
+      const base = url.split("#")[0]; // strip time fragment
+      return /\.(mp4|webm|mov)(\?|$)/i.test(base);
     }
 
     function openFull(which){
