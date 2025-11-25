@@ -144,6 +144,15 @@
     letter-spacing: 0.04em;
   }
 
+  /* clickable @username in label */
+  .champion-artist-link {
+    color: #39ff14;
+    text-decoration: none;
+  }
+  .champion-artist-link:hover {
+    text-decoration: underline;
+  }
+
   /* Neon typewriter tagline with moving block cursor */
   .champion-tagline {
     font-size: 12px;
@@ -232,11 +241,35 @@
   const canvas   = overlay.querySelector("#championConfetti");
   const ctx      = canvas.getContext("2d");
 
-  // --- helper to detect video URLs ---
+  // --- helpers ---
   function isVideoUrl(url) {
     if (typeof url !== "string") return false;
     const base = url.split("#")[0]; // strip any time fragment
     return /\.(mp4|webm|mov)(\?|$)/i.test(base);
+  }
+
+  function escapeHtml(str) {
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // Turn "@username" inside label into a clickable link to profile.html?u=username
+  function buildChampionLabelHTML(label) {
+    const raw = label || "Champion";
+    const safe = escapeHtml(raw);
+    const match = safe.match(/@([A-Za-z0-9_]+)/);
+    if (!match) return safe;
+
+    const username = match[1];
+    const linkHtml =
+      `<a href="profile.html?u=${encodeURIComponent(username)}" ` +
+      `class="champion-artist-link">@${username}</a>`;
+
+    return safe.replace(`@${username}`, linkHtml);
   }
 
   // --- 3. Typewriter config (Speed A: cinematic) ---
@@ -419,7 +452,9 @@
       }
     }
 
-    if (labelEl) labelEl.textContent = label || "Champion";
+    if (labelEl) {
+      labelEl.innerHTML = buildChampionLabelHTML(label);
+    }
 
     overlay.classList.add("active");
     startConfetti();
