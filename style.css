@@ -4,6 +4,9 @@
   --red:#ff0033;
   --bg:#000;
   --panel:#0a0a0a;
+
+  /* FIX: make forced-accent text neon green instead of white */
+  --accent:#39ff14;
 }
 
 html {
@@ -123,14 +126,14 @@ input, textarea {
 }
 .meta { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
 
-/* Default toast (used on some pages) */
+/* Default toast */
 .toast {
   position:fixed; left:50%; transform:translateX(-50%);
   bottom:18px; background:var(--panel); border:1px solid var(--green);
   padding:10px 14px; border-radius:10px; display:none;
 }
 
-/* === Darker high-contrast neon green scan-line effect === */
+/* === Neon green scan-line effect across whole page === */
 body {
   position: relative;
   overflow-x: hidden;
@@ -156,14 +159,14 @@ body::before {
   to   { background-position: 0 100vh; }
 }
 
-/* Ensure content sits above overlay */
+/* Ensure content sits above scanlines */
 .wrap, header, main, .card, .grid, .menu-buttons,
 .scorebar, .auth-btn, .menu-title {
   position: relative;
   z-index: 2;
 }
 
-/* === Force-compact toast override for the profile page's #toast === */
+/* === Compact toast override for profile page === */
 #toast.toast{
   position: fixed !important;
   top: 12px !important;
@@ -178,7 +181,6 @@ body::before {
 
   height: auto !important;
   max-height: 40px !important;
-  min-height: 0 !important;
   width: auto !important;
   max-width: 240px !important;
 
@@ -192,42 +194,32 @@ body::before {
   border: 2px solid var(--green) !important;
   border-radius: 10px !important;
   background: #050905 !important;
-  color: #e5ffe5 !important; /* matches inline CSS var(--ink) from page */
+  color: #e5ffe5 !important;
   box-shadow: 0 0 16px rgba(57,255,20,.35) !important;
   font-weight: 800 !important;
-  box-sizing: border-box !important;
 }
 
-/* kill any pseudo-elements that might stretch it */
 #toast.toast::before,
 #toast.toast::after{
   content: none !important;
   display: none !important;
 }
 
-/* Optional: center the toast horizontally on very small screens */
 @media (max-width:560px){
   #toast.toast{ right:50% !important; transform:translateX(50%) !important; }
 }
+
 /* ===== MAKE ALL TEXT NEON GREEN ===== */
 
-/* Labels under the big images */
-.label {
-  color: var(--accent) !important;
-}
+.label { color: var(--accent) !important; }
 
-/* Vote counts */
-.counts {
-  color: var(--accent) !important;
-}
+.counts { color: var(--accent) !important; }
 
-/* Thumbnails: label + 0-0 score */
 .thumb-label span,
 .thumb-count {
   color: var(--accent) !important;
 }
 
-/* Section titles */
 .thumbs-title,
 .winner,
 .final-footer,
@@ -235,17 +227,14 @@ body::before {
   color: var(--accent) !important;
 }
 
-/* "Final" label inside the final box */
 .final-card .label {
   color: var(--accent) !important;
 }
 
-/* Timer numbers */
 .timer {
   color: var(--accent) !important;
 }
 
-/* Buttons (text only, not background) */
 .btn,
 .linkbtn,
 .backbtn,
@@ -254,12 +243,12 @@ body::before {
   border-color: var(--accent) !important;
 }
 
-/* Fullscreen close button */
 .fullscreen-overlay button {
   color: var(--accent) !important;
   border-color: var(--accent) !important;
 }
-/* === Neon glitch + CRT scanlines, single line === */
+
+/* === Glitch neon title === */
 .glitch-title {
   position: relative;
   font-size: 26px;
@@ -276,10 +265,9 @@ body::before {
     0 0 14px #39ff14;
 
   animation: title-flicker 2.4s infinite alternate;
-  overflow: hidden; /* keeps scanlines inside */
+  overflow: hidden;
 }
 
-/* slight duplicate for a tiny glitch wobble */
 .glitch-title::before {
   content: attr(data-text);
   position: absolute;
@@ -295,7 +283,6 @@ body::before {
   animation: title-glitch 1.6s infinite steps(2, end);
 }
 
-/* CRT scanline overlay */
 .glitch-title::after {
   content: "";
   position: absolute;
@@ -306,7 +293,7 @@ body::before {
     repeating-linear-gradient(
       to bottom,
       rgba(0,0,0,0) 0px,
-      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,0) 2px, 
       rgba(0,0,0,0.25) 3px
     );
   background-size: 100% 4px;
@@ -316,14 +303,12 @@ body::before {
   animation: title-scanlines 5s linear infinite;
 }
 
-/* subtle brightness flicker */
 @keyframes title-flicker {
   0%   { opacity: 0.8; filter: brightness(1); }
   50%  { opacity: 1;   filter: brightness(1.25); }
   100% { opacity: 0.85; filter: brightness(1.1); }
 }
 
-/* tiny horizontal jitter */
 @keyframes title-glitch {
   0%   { transform: translate(0,0); }
   25%  { transform: translate(-1px,0); }
@@ -332,7 +317,6 @@ body::before {
   100% { transform: translate(0,0); }
 }
 
-/* move scanlines up/down slowly */
 @keyframes title-scanlines {
   0%   { background-position: 0 -100%; }
   100% { background-position: 0 100%; }
