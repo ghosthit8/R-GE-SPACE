@@ -170,7 +170,7 @@
 
     <div class="header">
       <div class="row">
-        <div class="timer" id="tRemain">00:00:30</div>
+        <div class="timer" id="tRemain">150.0</div>
       </div>
       <div class="row">
         <a class="backbtn" href="menu.html">← Menu</a>
@@ -632,182 +632,268 @@
         rr13:["seed_y_count","seed_z_count"],  rr14:["seed_aa_count","seed_ab_count"],
         rr15:["seed_ac_count","seed_ad_count"],rr16:["seed_ae_count","seed_af_count"],
 
-        r1:["seed_a_count","seed_b_count"],  r2:["seed_c_count","seed_d_count"],
-        r3:["seed_e_count","seed_f_count"],  r4:["seed_g_count","seed_h_count"],
-        r5:["seed_i_count","seed_j_count"],  r6:["seed_k_count","seed_l_count"],
-        r7:["seed_m_count","seed_n_count"],  r8:["seed_o_count","seed_p_count"],
+        r1:["seed_a_count","seed_b_count"], r2:["seed_c_count","seed_d_count"],
+        r3:["seed_e_count","seed_f_count"], r4:["seed_g_count","seed_h_count"],
+        r5:["seed_i_count","seed_j_count"], r6:["seed_k_count","seed_l_count"],
+        r7:["seed_m_count","seed_n_count"], r8:["seed_o_count","seed_p_count"],
 
-        q1:["q1_a_count","q1_b_count"],      q2:["q2_c_count","q2_d_count"],
-        q3:["q3_e_count","q3_f_count"],      q4:["q4_g_count","q4_h_count"],
-
-        s1:["semi_1_left_count","semi_1_right_count"],
-        s2:["semi_2_left_count","semi_2_right_count"],
+        q1:["seed_a_count","seed_b_count"], q2:["seed_c_count","seed_d_count"],
+        q3:["seed_e_count","seed_f_count"], q4:["seed_g_count","seed_h_count"],
+        s1:["seed_a_count","seed_b_count"], s2:["seed_c_count","seed_d_count"],
         final:["seed_a_count","seed_b_count"]
       };
+      const arr = map[activeMatch];
+      if (arr){ inc(red?arr[0]:arr[1]); renderActive(); }
 
-      const pair = map[activeMatch];
-      if (!pair) return;
-
-      if (red) inc(pair[0]); else inc(pair[1]);
-
-      try {
-        await fetch(FUNCTION_URL, {
+      try{
+        const res = await fetch(FUNCTION_URL, {
           method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body:JSON.stringify(post)
+          headers:{"Content-Type":"application/json","x-rsid":RSID},
+          body: JSON.stringify(post)
         });
-      } catch(e){}
+        if (!res.ok){ await fetchState(true); return; }
+        const s = await res.json().catch(()=> ({}));
+        Object.assign(state, s||{});
+        memWrite(base,key,color);
+        renderActive();
+      }catch{
+        await fetchState(true);
+      }
+    }
+    btnActive1.onclick = ()=> vote("red");
+    btnActive2.onclick = ()=> vote("blue");
 
-      memWrite(base, key, red ? "red" : "blue");
-      renderActive();
+    function setThumb(key,leftUrl,rightUrl,leftCt,rightCt,fallback){
+      const th = thumbs[key]; if (!th) return;
+      const leftIsVid = isVideoUrl(leftUrl);
+      const rightIsVid = isVideoUrl(rightUrl);
+      const hasVideo = leftIsVid || rightIsVid;
+
+      // LEFT SIDE
+      if (leftIsVid) {
+        th.imgL.classList.add("hidden");
+        th.vidL.classList.remove("hidden");
+        th.vidL.src = leftUrl + "#t=0.1";
+        th.vidL.preload = "metadata";
+        try { th.vidL.pause(); } catch(e){}
+      } else {
+        th.vidL.classList.add("hidden");
+        th.imgL.classList.remove("hidden");
+        th.imgL.src = leftUrl || placeholder(fallback||"?");
+      }
+
+      // RIGHT SIDE
+      if (rightIsVid) {
+        th.imgR.classList.add("hidden");
+        th.vidR.classList.remove("hidden");
+        th.vidR.src = rightUrl + "#t=0.1";
+        th.vidR.preload = "metadata";
+        try { th.vidR.pause(); } catch(e){}
+      } else {
+        th.vidR.classList.add("hidden");
+        th.imgR.classList.remove("hidden");
+        th.imgR.src = rightUrl || placeholder(fallback||"?");
+      }
+
+      th.count.textContent = (leftCt??0) + "-" + (rightCt??0);
+      if (th.badge) th.badge.classList.toggle("hidden", !hasVideo);
+
+      const box = th.box;
+      if (hasVideo) {
+        const vidUrl = leftIsVid ? leftUrl : rightUrl;
+        box.dataset.videoUrl = vidUrl || "";
+      } else {
+        delete box.dataset.videoUrl;
+      }
     }
 
     function setActiveMedia(which, url){
+      const img = which==="active1" ? imgActive1 : imgActive2;
+      const vid = which==="active1" ? vidActive1 : vidActive2;
       const isVid = isVideoUrl(url);
-      if (which==="active1"){
-        if (isVid){
-          vidActive1.classList.remove("hidden");
-          vidActive1.src = url + "#t=0.1";
-          imgActive1.classList.add("hidden");
-          try { vidActive1.play().catch(()=>{}); } catch(e){}
-        } else {
-          vidActive1.classList.add("hidden");
-          try {
-            vidActive1.pause();
-            vidActive1.removeAttribute("src");
-            vidActive1.load();
-          } catch(e){}
-          imgActive1.classList.remove("hidden");
-          imgActive1.src = url;
-        }
+
+      if (isVid){
+        img.classList.add("hidden");
+        vid.classList.remove("hidden");
+        vid.src = url + "#t=0.1";
+        vid.loop = true;
+        vid.playsInline = true;
+        try { vid.play().catch(()=>{}); } catch(e){}
       } else {
-        if (isVid){
-          vidActive2.classList.remove("hidden");
-          vidActive2.src = url + "#t=0.1";
-          imgActive2.classList.add("hidden");
-          try { vidActive2.play().catch(()=>{}); } catch(e){}
-        } else {
-          vidActive2.classList.add("hidden");
-          try {
-            vidActive2.pause();
-            vidActive2.removeAttribute("src");
-            vidActive2.load();
-          } catch(e){}
-          imgActive2.classList.remove("hidden");
-          imgActive2.src = url;
-        }
+        vid.classList.add("hidden");
+        try {
+          vid.pause();
+          vid.removeAttribute("src");
+          vid.load();
+        } catch(e){}
+        img.classList.remove("hidden");
+        img.src = url || placeholder("?");
       }
     }
 
-    function setThumbMedia(itemKey, leftUrl, rightUrl){
-      const t = thumbs[itemKey];
-      if (!t) return;
-      const leftIsVid = isVideoUrl(leftUrl);
-      const rightIsVid = isVideoUrl(rightUrl);
+    function setFinalMedia(idx, url){
+      const img = idx===1 ? finalImg1 : finalImg2;
+      const vid = idx===1 ? finalVid1 : finalVid2;
+      const isVid = isVideoUrl(url);
 
-      if (leftIsVid){
-        t.vidL.classList.remove("hidden");
-        t.imgL.classList.add("hidden");
-        t.vidL.src = leftUrl + "#t=0.1";
+      if (isVid){
+        img.classList.add("hidden");
+        vid.classList.remove("hidden");
+        vid.src = url + "#t=0.1";
+        vid.loop = true;
+        vid.playsInline = true;
+        try { vid.play().catch(()=>{}); } catch(e){}
       } else {
-        t.vidL.classList.add("hidden");
-        t.imgL.classList.remove("hidden");
-        t.imgL.src = leftUrl || placeholder("?");
+        vid.classList.add("hidden");
+        try {
+          vid.pause();
+          vid.removeAttribute("src");
+          vid.load();
+        } catch(e){}
+        img.classList.remove("hidden");
+        img.src = url || placeholder("?");
+      }
+    }
+
+    function pauseOtherVideos(except){
+      const vids = [vidActive1, vidActive2, finalVid1, finalVid2, fullVideo];
+      vids.forEach(v=>{
+        if (!v || v === except) return;
+        try { v.pause(); } catch(e){}
+      });
+    }
+
+    vidActive1.addEventListener("play", ()=> pauseOtherVideos(vidActive1));
+    vidActive2.addEventListener("play", ()=> pauseOtherVideos(vidActive2));
+    finalVid1.addEventListener("play", ()=> pauseOtherVideos(finalVid1));
+    finalVid2.addEventListener("play", ()=> pauseOtherVideos(finalVid2));
+    fullVideo.addEventListener("play", ()=> pauseOtherVideos(fullVideo));
+
+    function markActive(){
+      for (const k in thumbs) {
+        thumbs[k].box.classList.toggle("active", k===activeMatch);
+      }
+    }
+
+    function renderThumbs(){
+      setThumb("rr1",  state.seed_a_url,  state.seed_b_url,  state.seed_a_count,  state.seed_b_count, "A");
+      setThumb("rr2",  state.seed_c_url,  state.seed_d_url,  state.seed_c_count,  state.seed_d_count, "C");
+      setThumb("rr3",  state.seed_e_url,  state.seed_f_url,  state.seed_e_count,  state.seed_f_count, "E");
+      setThumb("rr4",  state.seed_g_url,  state.seed_h_url,  state.seed_g_count,  state.seed_h_count, "G");
+      setThumb("rr5",  state.seed_i_url,  state.seed_j_url,  state.seed_i_count,  state.seed_j_count, "I");
+      setThumb("rr6",  state.seed_k_url,  state.seed_l_url,  state.seed_k_count,  state.seed_l_count, "K");
+      setThumb("rr7",  state.seed_m_url,  state.seed_n_url,  state.seed_m_count,  state.seed_n_count, "M");
+      setThumb("rr8",  state.seed_o_url,  state.seed_p_url,  state.seed_o_count,  state.seed_p_count, "O");
+      setThumb("rr9",  state.seed_q_url,  state.seed_r_url,  state.seed_q_count,  state.seed_r_count, "Q");
+      setThumb("rr10", state.seed_s_url,  state.seed_t_url,  state.seed_s_count,  state.seed_t_count, "S");
+      setThumb("rr11", state.seed_u_url,  state.seed_v_url,  state.seed_u_count,  state.seed_v_count, "U");
+      setThumb("rr12", state.seed_w_url,  state.seed_x_url,  state.seed_w_count,  state.seed_x_count, "W");
+      setThumb("rr13", state.seed_y_url,  state.seed_z_url,  state.seed_y_count,  state.seed_z_count, "Y");
+      setThumb("rr14", state.seed_aa_url, state.seed_ab_url, state.seed_aa_count, state.seed_ab_count, "AA");
+      setThumb("rr15", state.seed_ac_url, state.seed_ad_url, state.seed_ac_count, state.seed_ad_count, "AC");
+      setThumb("rr16", state.seed_ae_url, state.seed_af_url, state.seed_ae_count, state.seed_af_count, "AE");
+
+      for (let i=1;i<=16;i++){
+        const k = "rr"+i;
+        thumbs[k].box.classList.toggle("disabled", !!state.r32_done);
       }
 
-      if (rightIsVid){
-        t.vidR.classList.remove("hidden");
-        t.imgR.classList.add("hidden");
-        t.vidR.src = rightUrl + "#t=0.1";
-      } else {
-        t.vidR.classList.add("hidden");
-        t.imgR.classList.remove("hidden");
-        t.imgR.src = rightUrl || placeholder("?");
+      setThumb("r1", state.seed_a_url, state.seed_b_url, state.seed_a_count, state.seed_b_count,"A");
+      setThumb("r2", state.seed_c_url, state.seed_d_url, state.seed_c_count, state.seed_d_count,"C");
+      setThumb("r3", state.seed_e_url, state.seed_f_url, state.seed_e_count, state.seed_f_count,"E");
+      setThumb("r4", state.seed_g_url, state.seed_h_url, state.seed_g_count, state.seed_h_count,"G");
+      setThumb("r5", state.seed_i_url, state.seed_j_url, state.seed_i_count, state.seed_j_count,"I");
+      setThumb("r6", state.seed_k_url, state.seed_l_url, state.seed_k_count, state.seed_l_count,"K");
+      setThumb("r7", state.seed_m_url, state.seed_n_url, state.seed_m_count, state.seed_n_count,"M");
+      setThumb("r8", state.seed_o_url, state.seed_p_url, state.seed_o_count, state.seed_p_count,"O");
+
+      for (let i=1;i<=8;i++){
+        const k = "r"+i;
+        thumbs[k].box.classList.toggle("hidden", !state.r32_done);
+        thumbs[k].box.classList.toggle("disabled", !state.r32_done || !!state.r16_done);
       }
 
-      if (leftIsVid || rightIsVid){
-        t.badge.classList.remove("hidden");
-        // store a preview URL for hover
-        const vidUrl = leftIsVid ? leftUrl : rightUrl;
-        t.box.dataset.videoUrl = vidUrl || "";
-      } else {
-        t.badge.classList.add("hidden");
-        t.box.dataset.videoUrl = "";
+      const q = [
+        ["q1","q1_a_url","q1_b_url","q1_a_count","q1_b_count","seed_a_url","seed_b_url","seed_a_count","seed_b_count","A"],
+        ["q2","q2_c_url","q2_d_url","q2_c_count","q2_d_count","seed_c_url","seed_d_url","seed_c_count","seed_d_count","C"],
+        ["q3","q3_e_url","q3_f_url","q3_e_count","q3_f_count","seed_e_url","seed_f_url","seed_e_count","seed_f_count","E"],
+        ["q4","q4_g_url","q4_h_url","q4_g_count","q4_h_count","seed_g_url","seed_h_url","seed_g_count","seed_h_count","G"],
+      ];
+      for (const [k,lu,ru,lc,rc,flu,fru,flc,frc,fb] of q){
+        const L = pick(state[lu], state[flu]);
+        const R = pick(state[ru], state[fru]);
+        const LC = pick(state[lc], state[flc]);
+        const RC = pick(state[rc], state[frc]);
+        setThumb(k, L, R, LC, RC, fb);
+        thumbs[k].box.classList.toggle("disabled", !state.r16_done || !!state.mid1_done);
+        thumbs[k].box.classList.toggle("hidden",   !state.r16_done);
       }
+
+      if (!state.mid1_done){
+        thumbs.s1.imgL.src = placeholder("S1");
+        thumbs.s1.imgR.src = placeholder("S1");
+        thumbs.s1.count.textContent = "0-0";
+        thumbs.s1.box.classList.add("disabled"); thumbs.s1.box.classList.add("hidden");
+
+        thumbs.s2.imgL.src = placeholder("S2");
+        thumbs.s2.imgR.src = placeholder("S2");
+        thumbs.s2.count.textContent = "0-0";
+        thumbs.s2.box.classList.add("disabled"); thumbs.s2.box.classList.add("hidden");
+      }else{
+        setThumb("s1", state.semi_1_left_url, state.semi_1_right_url, state.seed_a_count, state.seed_b_count, "S1");
+        setThumb("s2", state.semi_2_left_url, state.semi_2_right_url, state.seed_c_count, state.seed_d_count, "S2");
+        thumbs.s1.box.classList.toggle("disabled", !!state.mid2_done);
+        thumbs.s1.box.classList.remove("hidden");
+        thumbs.s2.box.classList.toggle("disabled", !!state.mid2_done);
+        thumbs.s2.box.classList.remove("hidden");
+      }
+
+      if (!state.mid2_done){
+        thumbs.final.imgL.src = placeholder("F");
+        thumbs.final.imgR.src = placeholder("F");
+        thumbs.final.count.textContent = "0-0";
+        thumbs.final.box.classList.add("disabled"); thumbs.final.box.classList.add("hidden");
+      }else{
+        setThumb("final", state.mid_winner_1_url, state.mid_winner_2_url, state.seed_a_count, state.seed_b_count, "F");
+        thumbs.final.box.classList.remove("disabled"); thumbs.final.box.classList.remove("hidden");
+      }
+
+      markActive();
+    }
+
+    function renderFinalBox(){
+      setFinalMedia(1, state.mid_winner_1_url || null);
+      setFinalMedia(2, state.mid_winner_2_url || null);
+      if (state.mid2_done) finalFooter.textContent = "Final is live — decides at 0s. Tap ⤢ for audio.";
+      else if (state.mid1_done) finalFooter.textContent = "Semis live — final soon.";
+      else if (state.r16_done) finalFooter.textContent = "Quarters live — semis soon.";
+      else if (state.r32_done) finalFooter.textContent = "R16 live — quarters at 60s.";
+      else finalFooter.textContent = "R32 live — R16 at 90s.";
     }
 
     function renderActive(){
-      const base = state.base_iso || "";
+      renderThumbs();
+      renderFinalBox();
+
+      const base = state.base_iso||"";
       const mem = memRead(base);
-      const picked = mem[activeMatch] || null;
+      const picked = mem[activeMatch];
+
+      let leftImg=placeholder("?"), rightImg=placeholder("?"), leftCt=0, rightCt=0;
+      let defaultLeftLabel="Top", defaultRightLabel="Bottom";
+
       const metaByUrl = state.meta_by_url || {};
 
-      let leftImg = placeholder("?");
-      let rightImg = placeholder("?");
-      let leftCt = 0;
-      let rightCt = 0;
-      let defaultLeftLabel = "Top";
-      let defaultRightLabel = "Bottom";
-
-      const find = order.find(o => o.key===activeMatch);
-
-      if (activeMatch.startsWith("rr")){
-        const idx = order.indexOf(find);
-        const mapSeed = [
-          ["seed_a_url","seed_b_url","seed_a_count","seed_b_count"],
-          ["seed_c_url","seed_d_url","seed_c_count","seed_d_count"],
-          ["seed_e_url","seed_f_url","seed_e_count","seed_f_count"],
-          ["seed_g_url","seed_h_url","seed_g_count","seed_h_count"],
-          ["seed_i_url","seed_j_url","seed_i_count","seed_j_count"],
-          ["seed_k_url","seed_l_url","seed_k_count","seed_l_count"],
-          ["seed_m_url","seed_n_url","seed_m_count","seed_n_count"],
-          ["seed_o_url","seed_p_url","seed_o_count","seed_p_count"],
-          ["seed_q_url","seed_r_url","seed_q_count","seed_r_count"],
-          ["seed_s_url","seed_t_url","seed_s_count","seed_t_count"],
-          ["seed_u_url","seed_v_url","seed_u_count","seed_v_count"],
-          ["seed_w_url","seed_x_url","seed_w_count","seed_x_count"],
-          ["seed_y_url","seed_z_url","seed_y_count","seed_z_count"],
-          ["seed_aa_url","seed_ab_url","seed_aa_count","seed_ab_count"],
-          ["seed_ac_url","seed_ad_url","seed_ac_count","seed_ad_count"],
-          ["seed_ae_url","seed_af_url","seed_ae_count","seed_af_count"],
-        ][idx] || ["seed_a_url","seed_b_url","seed_a_count","seed_b_count"];
-
-        const [L,R,LC,RC] = mapSeed;
-        leftImg = pick(state[L], placeholder("A"));
-        rightImg= pick(state[R], placeholder("B"));
-        leftCt  = state[LC]||0;
-        rightCt = state[RC]||0;
+      const find = order.find(o=>o.key===activeMatch);
+      if (find && !find.semi && find.key!=="final"){
+        const L = pick(state[find.left], state[find.fbLeft]);
+        const R = pick(state[find.right], state[find.fbRight]);
+        const LC = pick(state[find.lct], state[find.fbLct]);
+        const RC = pick(state[find.rct], state[find.fbRct]);
+        leftImg=L||placeholder("?"); rightImg=R||placeholder("?");
+        leftCt=LC||0; rightCt=RC||0;
         defaultLeftLabel = find.label.split(" ")[0] + " — Top";
         defaultRightLabel= find.label.split(" ")[0] + " — Bottom";
-      } else if (activeMatch.startsWith("r") && !activeMatch.startsWith("rr")){
-        const [L,R,LC,RC] = [find.left, find.right, find.lct, find.rct];
-        leftImg = pick(state[L], placeholder("A"));
-        rightImg= pick(state[R], placeholder("B"));
-        leftCt  = state[LC]||0;
-        rightCt = state[RC]||0;
-        defaultLeftLabel = find.label + " — Top";
-        defaultRightLabel= find.label + " — Bottom";
-      } else if (activeMatch.startsWith("q")){
-        const [L,R,LC,RC] = [find.left, find.right, find.lct, find.rct];
-        let leftCandidate  = state[L];
-        let rightCandidate = state[R];
-
-        if (!leftCandidate && find.fbLeft)  leftCandidate  = state[find.fbLeft];
-        if (!rightCandidate && find.fbRight) rightCandidate = state[find.fbRight];
-
-        leftImg = pick(leftCandidate,  placeholder("A"));
-        rightImg= pick(rightCandidate, placeholder("B"));
-
-        let baseLC = state[LC];
-        let baseRC = state[RC];
-        if ((baseLC==null || isNaN(baseLC)) && find.fbLct) baseLC = state[find.fbLct];
-        if ((baseRC==null || isNaN(baseRC)) && find.fbRct) baseRC = state[find.fbRct];
-
-        leftCt  = baseLC||0;
-        rightCt = baseRC||0;
-
-        defaultLeftLabel = find.label + " — Top";
-        defaultRightLabel= find.label + " — Bottom";
       } else if (activeMatch==="s1"){
         if (state.mid1_done){
           leftImg  = state.semi_1_left_url  || placeholder("?");
@@ -870,108 +956,21 @@
       renderPieceMeta(metaActive1, leftMeta);
       renderPieceMeta(metaActive2, rightMeta);
 
-      // Update thumbs counts & media
-      for (const item of order){
-        const t = thumbs[item.key];
-        if (!t) continue;
-
-        let L = placeholder("?");
-        let R = placeholder("?");
-        let LC = 0;
-        let RC = 0;
-
-        if (item.key.startsWith("rr")){
-          const idx = order.indexOf(item);
-          const mapSeed = [
-            ["seed_a_url","seed_b_url","seed_a_count","seed_b_count"],
-            ["seed_c_url","seed_d_url","seed_c_count","seed_d_count"],
-            ["seed_e_url","seed_f_url","seed_e_count","seed_f_count"],
-            ["seed_g_url","seed_h_url","seed_g_count","seed_h_count"],
-            ["seed_i_url","seed_j_url","seed_i_count","seed_j_count"],
-            ["seed_k_url","seed_l_url","seed_k_count","seed_l_count"],
-            ["seed_m_url","seed_n_url","seed_m_count","seed_n_count"],
-            ["seed_o_url","seed_p_url","seed_o_count","seed_p_count"],
-            ["seed_q_url","seed_r_url","seed_q_count","seed_r_count"],
-            ["seed_s_url","seed_t_url","seed_s_count","seed_t_count"],
-            ["seed_u_url","seed_v_url","seed_u_count","seed_v_count"],
-            ["seed_w_url","seed_x_url","seed_w_count","seed_x_count"],
-            ["seed_y_url","seed_z_url","seed_y_count","seed_z_count"],
-            ["seed_aa_url","seed_ab_url","seed_aa_count","seed_ab_count"],
-            ["seed_ac_url","seed_ad_url","seed_ac_count","seed_ad_count"],
-            ["seed_ae_url","seed_af_url","seed_ae_count","seed_af_count"],
-          ][idx] || ["seed_a_url","seed_b_url","seed_a_count","seed_b_count"];
-
-          const [LL,RR,LLC,RRC] = mapSeed;
-          L = pick(state[LL], placeholder("A"));
-          R = pick(state[RR], placeholder("B"));
-          LC = state[LLC]||0;
-          RC = state[RRC]||0;
-        } else if (item.key.startsWith("r") && !item.key.startsWith("rr")){
-          L = pick(state[item.left], placeholder("A"));
-          R = pick(state[item.right], placeholder("B"));
-          LC = state[item.lct]||0;
-          RC = state[item.rct]||0;
-        } else if (item.key.startsWith("q")){
-          let leftCandidate  = state[item.left];
-          let rightCandidate = state[item.right];
-
-          if (!leftCandidate && item.fbLeft)  leftCandidate  = state[item.fbLeft];
-          if (!rightCandidate && item.fbRight) rightCandidate = state[item.fbRight];
-
-          L = pick(leftCandidate,  placeholder("A"));
-          R = pick(rightCandidate, placeholder("B"));
-
-          let baseLC = state[item.lct];
-          let baseRC = state[item.rct];
-          if ((baseLC==null || isNaN(baseLC)) && item.fbLct) baseLC = state[item.fbLct];
-          if ((baseRC==null || isNaN(baseRC)) && item.fbRct) baseRC = state[item.fbRct];
-
-          LC = baseLC||0;
-          RC = baseRC||0;
-        } else if (item.key==="s1"){
-          if (state.mid1_done){
-            L = state.semi_1_left_url  || placeholder("?");
-            R = state.semi_1_right_url || placeholder("?");
-            LC = state.seed_a_count||0; RC = state.seed_b_count||0;
-          } else {
-            L = placeholder("?");
-            R = placeholder("?");
-            LC = 0; RC = 0;
-          }
-        } else if (item.key==="s2"){
-          if (state.mid1_done){
-            L = state.semi_2_left_url  || placeholder("?");
-            R = state.semi_2_right_url || placeholder("?");
-            LC = state.seed_c_count||0; RC = state.seed_d_count||0;
-          } else {
-            L = placeholder("?");
-            R = placeholder("?");
-            LC = 0; RC = 0;
-          }
-        } else if (item.key==="final"){
-          if (state.mid2_done){
-            L = state.mid_winner_1_url || placeholder("?");
-            R = state.mid_winner_2_url || placeholder("?");
-            LC = state.seed_a_count||0; RC = state.seed_b_count||0;
-          } else {
-            L = placeholder("?");
-            R = placeholder("?");
-            LC = 0; RC = 0;
-          }
-        }
-
-        setThumbMedia(item.key, L, R);
-        t.count.textContent = `${LC}-${RC}`;
-        t.box.classList.toggle("active", item.key===activeMatch);
+      let phaseLive = true;
+      if (activeMatch.startsWith("rr")) {
+        if (state.r32_done) phaseLive = false;
+      } else if (activeMatch.startsWith("r") && !activeMatch.startsWith("rr")) {
+        if (!state.r32_done || state.r16_done) phaseLive = false;
+      } else if (activeMatch.startsWith("q")) {
+        if (!state.r16_done || state.mid1_done) phaseLive = false;
+      } else if (["s1","s2"].includes(activeMatch)) {
+        if (!state.mid1_done || state.mid2_done) phaseLive = false;
+      } else if (activeMatch==="final") {
+        if (!state.mid2_done) phaseLive = false;
       }
 
-      const base2 = state.base_iso || "";
-      const phaseMem = memRead(base2);
-      const pickedPhase = phaseMem[activeMatch] || null;
-      const phaseLive = true; // UI gating handled elsewhere (by state flags)
-
-      btnActive1.disabled = !!pickedPhase || !phaseLive;
-      btnActive2.disabled = !!pickedPhase || !phaseLive;
+      btnActive1.disabled = !!picked || !phaseLive;
+      btnActive2.disabled = !!picked || !phaseLive;
     }
 
     async function fetchState(force=false){
@@ -1028,17 +1027,17 @@
       if (!state?.ends_at) return requestAnimationFrame(tick);
       const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
 
-      // Show a 30-second segment timer in HH:MM:SS
+      // NEW: show a 30-second segment timer in HH:MM:SS, no logic changes
       const SEG_MS = 30_000;
-      let segMsLeft = ms % SEG_MS;
-      if (segMsLeft === 0 && ms > 0) segMsLeft = SEG_MS;
-      const totalSeconds = Math.ceil(segMsLeft / 1000);
+      let segMs = ms % SEG_MS;
+      if (segMs === 0 && ms > 0) segMs = SEG_MS;
+      const totalSeconds = Math.ceil(segMs / 1000);
       const hours = Math.floor(totalSeconds / 3600);
       const minutes = Math.floor((totalSeconds % 3600) / 60);
       const seconds = totalSeconds % 60;
-      const hh = String(hours).padStart(2, "0");
-      const mm = String(minutes).padStart(2, "0");
-      const ss = String(seconds).padStart(2, "0");
+      const hh = String(hours).padStart(2,"0");
+      const mm = String(minutes).padStart(2,"0");
+      const ss = String(seconds).padStart(2,"0");
       elRemain.textContent = `${hh}:${mm}:${ss}`;
 
       const R32_MS = 120_000, R16_MS = 90_000, Q_MS = 60_000, S_MS = 30_000;
@@ -1072,12 +1071,18 @@
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'cycles_v2' }, async ()=>{ await fetchState(true); })
       .subscribe();
 
-    fetchState();
-    initVoteUserKey();
-    requestAnimationFrame(tick);
+    supabase.channel('matchup-sync')
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'art_queue', filter:'status=in.(locked,used)' }, async ()=>{ await fetchState(true); })
+      .subscribe();
 
-    btnActive1.addEventListener("click", ()=>vote("red"));
-    btnActive2.addEventListener("click", ()=>vote("blue"));
+    // initialize vote user key (per-account memory) and then state / timer
+    initVoteUserKey();
+    fetchState(true).then(()=>{
+      setTimeout(()=>fetchState(true), 600);
+      setTimeout(()=>fetchState(true), 1500);
+      tick();
+    });
   </script>
+  <script src="js/auth-guard.js" type="module"></script>
 </body>
 </html>
