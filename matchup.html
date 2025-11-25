@@ -172,7 +172,8 @@
 
     <div class="header">
       <div class="row">
-        <div class="timer" id="tRemain">150.0</div>
+        <!-- start a round at 4h48m = 17,280s -->
+        <div class="timer" id="tRemain">04:48:00</div>
         <div class="round-label" id="currentRound">Current round: —</div>
       </div>
       <div class="row">
@@ -216,7 +217,9 @@
       <div class="thumbs" id="thumbGrid"></div>
     </div>
 
-    <div class="winner" id="winnerText">R32 locks at 120s → R16 at 90s → Quarters at 60s → Semis at 30s → Final at 0s.</div>
+    <div class="winner" id="winnerText">
+      R32 locks at 69,120s remaining → R16 at 51,840s → Quarters at 34,560s → Semis at 17,280s → Final at 0s.
+    </div>
 
     <!-- FINAL BOX -->
     <div class="card final-card" id="finalCard">
@@ -243,7 +246,9 @@
       <div class="final-footer" id="finalFooter">Waiting… (tap a card’s ⤢ for audio)</div>
     </div>
 
-    <div class="hint">Hover on desktop to preview videos. 32 images → 16 R32 matches (120s) → 8 R16 (90s) → 4 QF (60s) → 2 SF (30s) → Final (0s).</div>
+    <div class="hint">
+      24-hour tournament: 32 images → R32 (first 4h48m) → R16 → QF → SF → Final (last 4h48m).
+    </div>
   </div>
 
   <!-- FULLSCREEN OVERLAY -->
@@ -537,7 +542,7 @@
     }
 
     let state = {
-      base_iso:null, ends_at:null, period_sec:150,
+      base_iso:null, ends_at:null, period_sec:86400,
       seed_a_url:null, seed_b_url:null, seed_c_url:null, seed_d_url:null,
       seed_e_url:null, seed_f_url:null, seed_g_url:null, seed_h_url:null,
       seed_i_url:null, seed_j_url:null, seed_k_url:null, seed_l_url:null,
@@ -872,8 +877,8 @@
       if (state.mid2_done) finalFooter.textContent = "Final is live — decides at 0s. Tap ⤢ for audio.";
       else if (state.mid1_done) finalFooter.textContent = "Semis live — final soon.";
       else if (state.r16_done) finalFooter.textContent = "Quarters live — semis soon.";
-      else if (state.r32_done) finalFooter.textContent = "R16 live — quarters at 60s.";
-      else finalFooter.textContent = "R32 live — R16 at 90s.";
+      else if (state.r32_done) finalFooter.textContent = "R16 live — quarters later.";
+      else finalFooter.textContent = "R32 live — R16 later.";
     }
 
     function renderActive(){
@@ -1055,8 +1060,8 @@
       if (!state?.ends_at) return requestAnimationFrame(tick);
       const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
 
-      // 30-second segment timer in HH:MM:SS
-      const SEG_MS = 30_000;
+      // 4h48m (17,280s) segment timer in HH:MM:SS
+      const SEG_MS = 17_280_000;
       let segMs = ms % SEG_MS;
       if (segMs === 0 && ms > 0) segMs = SEG_MS;
       const totalSeconds = Math.ceil(segMs / 1000);
@@ -1068,7 +1073,8 @@
       const ss = String(seconds).padStart(2,"0");
       elRemain.textContent = `${hh}:${mm}:${ss}`;
 
-      const R32_MS = 120_000, R16_MS = 90_000, Q_MS = 60_000, S_MS = 30_000;
+      // lock thresholds in ms: 69,120s, 51,840s, 34,560s, 17,280s
+      const R32_MS = 69_120_000, R16_MS = 51_840_000, Q_MS = 34_560_000, S_MS = 17_280_000;
 
       if (state.r32_done && !lastFlags.r32){ activeMatch="r1"; }
       if (state.r16_done && !lastFlags.r16){ activeMatch="q1"; }
