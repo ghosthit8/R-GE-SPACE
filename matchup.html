@@ -16,6 +16,8 @@
     .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid var(--border); border-radius:12px; background:var(--card); }
     .state { color:var(--muted); font-size:12px; }
 
+    .round-label { font-size:13px; color:var(--muted); }
+
     .card { margin-top:12px; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:var(--card); }
     .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
     .imgBox img, .imgBox video { width:100%; height:100%; object-fit:cover; display:block; }
@@ -171,6 +173,7 @@
     <div class="header">
       <div class="row">
         <div class="timer" id="tRemain">150.0</div>
+        <div class="round-label" id="currentRound">Current round: —</div>
       </div>
       <div class="row">
         <a class="backbtn" href="menu.html">← Menu</a>
@@ -267,6 +270,8 @@
 
     const elRemain = document.getElementById("tRemain");
     const winnerText = document.getElementById("winnerText");
+
+    const currentRoundEl = document.getElementById("currentRound");
 
     const imgActive1 = document.getElementById("imgActive1");
     const imgActive2 = document.getElementById("imgActive2");
@@ -989,8 +994,10 @@
         if (state.mid2_done && activeMatch!=="final") activeMatch="final";
 
         renderActive();
+        updateCurrentRoundLabel();
       }catch(e){
         renderActive();
+        updateCurrentRoundLabel();
       }
     }
 
@@ -1023,11 +1030,32 @@
       championOverlayShown = true;
     }
 
+    function updateCurrentRoundLabel(){
+      if (!currentRoundEl) return;
+      if (!state) {
+        currentRoundEl.textContent = "Current round: —";
+        return;
+      }
+      let name;
+      if (!state.r32_done) {
+        name = "Round of 32";
+      } else if (!state.r16_done) {
+        name = "Round of 16";
+      } else if (!state.mid1_done) {
+        name = "Quarterfinals";
+      } else if (!state.mid2_done) {
+        name = "Semifinals";
+      } else {
+        name = "Final";
+      }
+      currentRoundEl.textContent = "Current round: " + name;
+    }
+
     function tick(){
       if (!state?.ends_at) return requestAnimationFrame(tick);
       const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
 
-      // NEW: show a 30-second segment timer in HH:MM:SS, no logic changes
+      // 30-second segment timer in HH:MM:SS
       const SEG_MS = 30_000;
       let segMs = ms % SEG_MS;
       if (segMs === 0 && ms > 0) segMs = SEG_MS;
@@ -1063,6 +1091,8 @@
       if (ms <= 0 && state.mid2_done && !championOverlayShown) {
         showChampionOverlayIfReady();
       }
+
+      updateCurrentRoundLabel();
 
       requestAnimationFrame(tick);
     }
