@@ -118,11 +118,14 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
           <textarea id="pieceDesc" class="input" rows="3" maxlength="500" placeholder="Tell people about this piece…"></textarea>
         </div>
       </div>
-<div style="display:flex; align-items:center; gap:10px; margin-top:-4px;">
-  <input id="consent" type="checkbox" style="margin:0;">
-  <span class="small">I am 18+, no cp, no nazi BS.</span>
-</div>
 
+      <!-- Consent checkbox -->
+      <div style="display:flex; align-items:center; gap:8px; margin:6px 0 0 0;">
+        <input id="consent" type="checkbox" style="margin:0;">
+        <span class="small">I am 18+, no cp, no nazi BS.</span>
+      </div>
+
+      <!-- Submit button -->
       <div class="center" style="margin-top:10px">
         <button id="btnSubmit" class="btn">✅ Submit</button>
         <span id="submitMsg" class="small"></span>
