@@ -566,11 +566,42 @@
       meta_by_url:{}
     };
 
-    const VOTE_MEMORY_KEY="rs_vote_memory_v3";
-    function memRead(base){ try{ return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}")[base]||{} }catch{return{}} }
+    /* NEW: make vote memory per-user instead of per-browser */
+    const VOTE_MEMORY_KEY = "rs_vote_memory_v4";
+    let voteUserKey = "guest";
+
+    async function initVoteUserKey(){
+      try {
+        const { data } = await supabase.auth.getUser();
+        const user = data?.user;
+        if (user) {
+          voteUserKey = user.id || user.email || "user";
+        } else {
+          voteUserKey = "guest";
+        }
+      } catch(e) {
+        voteUserKey = "guest";
+      } finally {
+        // once we know which user we are, re-render so vote buttons
+        // reflect THIS account's votes (not whoever used the browser earlier)
+        renderActive();
+      }
+    }
+
+    function memRead(base){
+      try{
+        const all = JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}");
+        const perUser = all[voteUserKey] || {};
+        return perUser[base] || {};
+      }catch{
+        return {};
+      }
+    }
     function memWrite(base,key,val){
       const all = (()=>{ try { return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}"); } catch { return {}; }})();
-      all[base] = Object.assign({}, all[base]||{}, { [key]: val });
+      const perUser = all[voteUserKey] || {};
+      perUser[base] = Object.assign({}, perUser[base]||{}, { [key]: val });
+      all[voteUserKey] = perUser;
       localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all));
     }
 
@@ -1032,6 +1063,8 @@
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'art_queue', filter:'status=in.(locked,used)' }, async ()=>{ await fetchState(true); })
       .subscribe();
 
+    // initialize vote user key (per-account memory) and then state / timer
+    initVoteUserKey();
     fetchState(true).then(()=>{
       setTimeout(()=>fetchState(true), 600);
       setTimeout(()=>fetchState(true), 1500);
