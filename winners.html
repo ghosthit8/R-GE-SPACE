@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -335,7 +334,7 @@
     </div>
   </div>
 
-  <!-- Fullscreen image viewer -->
+  <!-- Fullscreen image / video viewer -->
   <div id="fsView" style="
     position:fixed;
     inset:0;
@@ -346,13 +345,35 @@
     z-index:9998;
     backdrop-filter:blur(4px);
   ">
-    <img id="fsImg" src="" alt="fullscreen winner" style="
-      max-width:90%;
-      max-height:90%;
-      border:2px solid var(--accent);
-      border-radius:14px;
-      box-shadow:0 0 20px var(--accent);
-    ">
+    <div style="position:relative;max-width:95%;max-height:95%;display:flex;align-items:center;justify-content:center;">
+      <button id="fsClose" style="
+        position:absolute;
+        top:-32px;
+        right:0;
+        border:none;
+        background:transparent;
+        color:var(--accent);
+        font-size:22px;
+        cursor:pointer;
+        text-shadow:0 0 10px var(--accent);
+      ">✕</button>
+      <img id="fsImg" src="" alt="fullscreen winner" style="
+        max-width:100%;
+        max-height:100%;
+        border:2px solid var(--accent);
+        border-radius:14px;
+        box-shadow:0 0 20px var(--accent);
+        display:none;
+      ">
+      <video id="fsVideo" style="
+        max-width:100%;
+        max-height:100%;
+        border:2px solid var(--accent);
+        border-radius:14px;
+        box-shadow:0 0 20px var(--accent);
+        display:none;
+      " controls playsinline></video>
+    </div>
   </div>
 
   <script>
@@ -369,8 +390,10 @@
     const btnClear = document.getElementById('clear');
 
     // fullscreen overlay elements
-    const fsView = document.getElementById("fsView");
-    const fsImg  = document.getElementById("fsImg");
+    const fsView  = document.getElementById("fsView");
+    const fsImg   = document.getElementById("fsImg");
+    const fsVideo = document.getElementById("fsVideo");
+    const fsClose = document.getElementById("fsClose");
 
     // description modal elements
     const descModal    = document.getElementById('descModal');
@@ -380,20 +403,74 @@
     let descStore = [];
     let descTitleStore = [];
 
+    function closeFullscreen(){
+      if (!fsView) return;
+      fsView.style.display = 'none';
+      if (fsImg){
+        fsImg.src = '';
+        fsImg.style.display = 'none';
+      }
+      if (fsVideo){
+        fsVideo.pause();
+        fsVideo.removeAttribute('src');
+        try { fsVideo.load(); } catch(e){}
+        fsVideo.style.display = 'none';
+      }
+    }
+
+    function openFsImage(url){
+      if (!fsView || !fsImg) return;
+      fsImg.src = url;
+      fsImg.style.display = 'block';
+      if (fsVideo){
+        fsVideo.pause();
+        fsVideo.removeAttribute('src');
+        fsVideo.style.display = 'none';
+      }
+      fsView.style.display = 'flex';
+    }
+
+    function openFsVideo(url){
+      if (!fsView || !fsVideo) return;
+      if (fsImg){
+        fsImg.src = '';
+        fsImg.style.display = 'none';
+      }
+      fsVideo.src = url;
+      fsVideo.style.display = 'block';
+      fsView.style.display = 'flex';
+      fsVideo.play().catch(()=>{});
+    }
+
     if (fsView) {
-      fsView.addEventListener('click', () => {
-        fsView.style.display = 'none';
-        if (fsImg) fsImg.src = '';
+      // only close when clicking dark backdrop, not the video itself
+      fsView.addEventListener('click', (e) => {
+        if (e.target === fsView) {
+          closeFullscreen();
+        }
+      });
+    }
+    if (fsClose){
+      fsClose.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeFullscreen();
       });
     }
 
     function enableThumbFullscreen() {
-      if (!fsView || !fsImg) return;
+      if (!fsView) return;
       document.querySelectorAll('.thumb').forEach(thumb => {
         thumb.style.cursor = 'pointer';
-        thumb.onclick = () => {
-          fsImg.src = thumb.src;
-          fsView.style.display = 'flex';
+        thumb.onclick = (e) => {
+          e.stopPropagation();
+          const type = thumb.dataset.type || (thumb.tagName === 'VIDEO' ? 'video' : 'image');
+          const url  = thumb.dataset.full || thumb.getAttribute('src');
+          if (!url) return;
+          if (type === 'video'){
+            openFsVideo(url);
+          } else {
+            openFsImage(url);
+          }
         };
       });
     }
@@ -527,6 +604,10 @@
       return idx >= 0 ? idx + 1 : null;
     }
 
+    function isVideoUrl(url){
+      return /\.(mp4|webm|mov|m4v|ogg)$/i.test(String(url||""));
+    }
+
     function render(rows){
       if(!rows || rows.length===0){
         tbody.innerHTML = `<tr><td colspan="11" style="padding:18px;color:var(--muted);">No winners yet.</td></tr>`;
@@ -557,8 +638,26 @@
 
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
-        const img = r.image_url || r.winner_url || '';
-        const thumb = img ? `<img src="${img}" class="thumb" alt="winner">` : `<span style="color:#666;">—</span>`;
+        const mediaUrl = r.image_url || r.winner_url || '';
+        let thumb;
+        if (mediaUrl){
+          if (isVideoUrl(mediaUrl)){
+            // video thumb – shows first frame/poster
+            thumb = `<video
+                src="${mediaUrl}"
+                class="thumb"
+                muted
+                playsinline
+                preload="metadata"
+                data-type="video"
+              ></video>`;
+          } else {
+            thumb = `<img src="${mediaUrl}" class="thumb" alt="winner" data-type="image">`;
+          }
+        } else {
+          thumb = `<span style="color:#666;">—</span>`;
+        }
+
         const decidedTs = computeDecidedAt(r);
         const phase = phaseFromBase(r.base_iso);
         return `
