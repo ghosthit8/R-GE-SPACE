@@ -351,7 +351,7 @@ window.addEventListener('paste', (e)=>{
         }
       } else if (it.kind === 'string'){
         it.getAsString((txt)=>{
-          const s = (txt||'`).trim();
+          const s = (txt || '').trim();
           const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(s);
           const isImage = /^https?:\/\/\S+\.(png|jpe?g|webp|gif)(\?\S*)?$/i.test(s);
           if (!s || (!isVideo && !isImage)) return;
