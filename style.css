@@ -321,3 +321,13 @@ body::before {
   0%   { background-position: 0 -100%; }
   100% { background-position: 0 100%; }
 }
+
+/* === FIX: restore normal behavior for checkboxes/radios === */
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto !important;
+  padding: 0 !important;
+  margin: 0 6px 0 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
