@@ -314,6 +314,16 @@
 
     const grid = document.getElementById("thumbGrid");
 
+    // *** CACHES to prevent disappearing thumbnails / active media ***
+    const lastGoodThumb = {};
+    const lastGoodActive = {};
+
+    function isRealUrl(url){
+      return typeof url === "string" &&
+             url.length > 0 &&
+             !url.startsWith("data:image/svg+xml");
+    }
+
     // *** FIXED: handle URLs that have #t=0.1 fragments so fullscreen works for videos
     function isVideoUrl(url){
       if (typeof url !== "string") return false;
@@ -675,6 +685,23 @@
 
     function setThumb(key,leftUrl,rightUrl,leftCt,rightCt,fallback){
       const th = thumbs[key]; if (!th) return;
+
+      const leftKey = key + "_L";
+      const rightKey = key + "_R";
+
+      // cache / restore last good URLs so thumbs never "blink" away
+      if (isRealUrl(leftUrl)) {
+        lastGoodThumb[leftKey] = leftUrl;
+      } else if (lastGoodThumb[leftKey]) {
+        leftUrl = lastGoodThumb[leftKey];
+      }
+
+      if (isRealUrl(rightUrl)) {
+        lastGoodThumb[rightKey] = rightUrl;
+      } else if (lastGoodThumb[rightKey]) {
+        rightUrl = lastGoodThumb[rightKey];
+      }
+
       const leftIsVid = isVideoUrl(leftUrl);
       const rightIsVid = isVideoUrl(rightUrl);
       const hasVideo = leftIsVid || rightIsVid;
@@ -720,12 +747,23 @@
     function setActiveMedia(which, url){
       const img = which==="active1" ? imgActive1 : imgActive2;
       const vid = which==="active1" ? vidActive1 : vidActive2;
-      const isVid = isVideoUrl(url);
+
+      // per-spot cache so active images never disappear
+      const cacheKey = which;
+      let finalUrl = url;
+
+      if (isRealUrl(finalUrl)) {
+        lastGoodActive[cacheKey] = finalUrl;
+      } else if (lastGoodActive[cacheKey]) {
+        finalUrl = lastGoodActive[cacheKey];
+      }
+
+      const isVid = isVideoUrl(finalUrl);
 
       if (isVid){
         img.classList.add("hidden");
         vid.classList.remove("hidden");
-        vid.src = url + "#t=0.1";
+        vid.src = finalUrl + "#t=0.1";
         vid.loop = true;
         vid.playsInline = true;
         try { vid.play().catch(()=>{}); } catch(e){}
@@ -737,7 +775,7 @@
           vid.load();
         } catch(e){}
         img.classList.remove("hidden");
-        img.src = url || placeholder("?");
+        img.src = finalUrl || placeholder("?");
       }
     }
 
