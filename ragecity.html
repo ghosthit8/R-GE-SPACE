@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Rage Space — RⒶGE CITY</title>
+  <link rel="stylesheet" href="style.css?v=2" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      text-align: center;
+      background-color: #000;
+      color: var(--green, #39ff14);
+    }
+
+    .home-btn {
+      position: fixed;
+      top: calc(env(safe-area-inset-top, 0px) + 12px);
+      right: 16px;
+      padding: 8px 14px;
+      border: 1px solid var(--green, #39ff14);
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--green, #39ff14);
+      background: transparent;
+      font-weight: bold;
+      text-shadow: 0 0 6px var(--green, #39ff14);
+      z-index: 9999;
+      pointer-events: auto;
+    }
+    .home-btn:hover {
+      color: var(--red, #ff0033);
+      border-color: var(--red, #ff0033);
+      text-shadow: 0 0 6px var(--red, #ff0033);
+    }
+
+    .city-title {
+      margin-top: 80px;
+      margin-bottom: 16px;
+      font-size: 1.5rem;
+    }
+
+    #game-container {
+      margin: 0 auto;
+      margin-top: 8px;
+      max-width: 480px;
+      /* Phaser will inject a canvas inside this */
+    }
+
+    .hint {
+      margin-top: 12px;
+      font-size: 0.8rem;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <!-- Back to menu -->
+  <a class="home-btn" href="./menu.html">← Menu</a>
+
+  <h1 class="city-title">RⒶGE CITY (PROTO)</h1>
+  <p class="hint">Use arrow keys or WASD to move. This is the prototype city core.</p>
+
+  <div id="game-container"></div>
+
+  <!-- Phaser 3 from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+
+  <!-- Your game logic -->
+  <script src="js/ragecity.js"></script>
+</body>
+</html>
