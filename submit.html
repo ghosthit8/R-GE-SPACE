@@ -442,6 +442,16 @@ function normalize(s){
 
 /* ---------- Timer state ---------- */
 let paused=false, serverPhaseEndISO=null, periodSec=20, remainingSec=null, lastSyncAt=0;
+let clockNumericSec = null; // numeric seconds currently displayed
+
+/* ---------- HH:MM:SS formatter ---------- */
+function formatHMS(sec){
+  if (sec == null || isNaN(sec)) return '—';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
 
 /* ---------- Sync ---------- */
 async function syncState(){
@@ -474,17 +484,20 @@ function loop(){
   if (typeof remainingSec === 'number') {
     const elapsed = (Date.now() - lastSyncAt) / 1000;
     const sec = Math.max(0, Math.ceil(remainingSec - elapsed));
-    clockEl.textContent = String(sec);
+    clockNumericSec = sec;
+    clockEl.textContent = formatHMS(sec);
     if (sec<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
   } else if (serverPhaseEndISO) {
     const rem = Math.max(0, Date.parse(serverPhaseEndISO) - Date.now());
     const sec = Math.ceil(rem/1000);
-    clockEl.textContent = String(sec);
+    clockNumericSec = sec;
+    clockEl.textContent = formatHMS(sec);
     if (rem<=0 || Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
   } else {
     const elapsed = Math.floor(((Date.now()% (periodSec*1000)))/1000);
     const sec = Math.max(0, periodSec - elapsed);
-    clockEl.textContent = String(sec);
+    clockNumericSec = sec;
+    clockEl.textContent = formatHMS(sec);
     if (Date.now()-lastSyncAt>5000) syncState().catch(()=>{});
   }
   raf = requestAnimationFrame(loop);
@@ -669,7 +682,7 @@ window.addEventListener('beforeunload', ()=> { try { supabase.removeChannel(queu
 /* ---------- Round start watch (for queue refresh) ---------- */
 let __lastClock = null;
 function __watchRoundStart() {
-  const n = parseInt(clockEl.textContent, 10);
+  const n = typeof clockNumericSec === 'number' ? clockNumericSec : NaN;
   if (!isNaN(n)) {
     if (__lastClock !== null && __lastClock <= 1 && n > __lastClock) {
       console.log('[QUEUE] round start detected — refreshing queue');
