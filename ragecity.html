@@ -73,7 +73,7 @@
       width: calc(100% - 24px);     /* small side margins */
       max-width: 720px;
       position: relative;
-      height: 520px;                /* TALL viewer */
+      height: 520px;                /* tall viewer */
       border: 2px solid rgba(57, 255, 20, 0.9);
       box-shadow: 0 0 16px rgba(57, 255, 20, 0.8);
       background: #020202;
@@ -156,29 +156,33 @@
       opacity: 0.9;
     }
 
+    /* A / B round buttons with dot + letter inside */
     .ab-buttons button {
+      position: relative;
       width: 64px;
       height: 64px;
       border-radius: 50%;
       font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding-top: 12px; /* space for dot above letter */
     }
 
-    .ab-buttons .btn-a::after,
-    .ab-buttons .btn-b::after {
-      display: block;
-      font-size: 0.65rem;
-      margin-top: 2px;
-      letter-spacing: 2px;
-    }
-    .ab-buttons .btn-a::after {
-      content: "A";
-    }
-    .ab-buttons .btn-b::after {
-      content: "B";
+    .ab-buttons button::before {
+      content: "";
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px rgba(57, 255, 20, 0.9);
     }
 
     @media (max-width: 600px) {
-      /* On smaller phones, still big but slightly shorter */
       #game-container {
         height: 480px;
       }
@@ -221,8 +225,8 @@
       </div>
 
       <div class="ab-buttons">
-        <button id="btn-b" class="btn-b">●</button>
-        <button id="btn-a" class="btn-a">●</button>
+        <button id="btn-b" class="btn-b">B</button>
+        <button id="btn-a" class="btn-a">A</button>
       </div>
     </div>
   </div>
