@@ -46,6 +46,8 @@
     .tiny-pfp{ width:26px; height:26px; border-radius:8px; overflow:hidden; border:1px solid var(--green); background:#111; }
     .tiny-pfp img{ width:100%; height:100%; object-fit:cover; display:block; }
     .otherName{ font-weight:800; letter-spacing:.2px; }
+    .otherName a{ color:var(--green); text-decoration:none; }
+    .otherName a:hover{ text-decoration:underline; }
 
     .chat-box{ height:calc(100vh - 152px); overflow-y:auto; padding:1rem; display:flex; flex-direction:column; }
     .msg{ margin:.25rem 0; padding:.6rem .75rem; border-radius:12px; max-width:78%; line-height:1.25; word-wrap:break-word; }
@@ -197,9 +199,19 @@
           .eq("id", otherId)
           .maybeSingle();
         if(pe){ console.warn(pe); }
-        const name = p?.display_name?.trim() || (p?.username ? '@'+p.username.trim() : '@user-' + (p?.id||'').slice(0,6));
-        otherNameEl.textContent = name;
+        const name =
+          p?.display_name?.trim() ||
+          (p?.username ? '@' + p.username.trim() : '@user-' + (p?.id || '').slice(0, 6));
+
+        // Make top name clickable -> profile.html?u=<username>
+        if (p?.username) {
+          const safeUser = encodeURIComponent(p.username);
+          otherNameEl.innerHTML = `<a href="profile.html?u=${safeUser}">${name}</a>`;
+        } else {
+          otherNameEl.textContent = name;
+        }
         otherNameEl.style.display = "inline";
+
         if(p?.avatar_url){
           otherPfpEl.innerHTML = `<img src="${p.avatar_url}" alt="">`;
           otherPfpEl.style.display = "block";
@@ -308,6 +320,6 @@
       markThreadRead(); // immediate on open
     })();
   </script>
-<script src="js/auth-guard.js" type="module"></script>
+  <script src="js/auth-guard.js" type="module"></script>
 </body>
 </html>
