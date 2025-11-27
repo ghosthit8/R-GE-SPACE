@@ -32,7 +32,7 @@
     }
     @keyframes scrollScan{ from{ background-position: 0 0; } to{ background-position: 0 100vh; } }
 
-    .topbar, .chat-box, .typing-row, .input-bar, .err { position: relative; z-index: 2; }
+    .topbar, .chat-box, .typing-row, .input-bar, .err, .upload-bar { position: relative; z-index: 2; }
 
     .topbar{
       display:flex; align-items:center; gap:.75rem; padding:.6rem 1rem;
@@ -84,11 +84,51 @@
     }
 
     .empty{ opacity:.6; font-size:.9rem; text-align:center; margin-top:20vh; }
+
     .err{
       position:fixed; left:50%; transform:translateX(-50%); bottom:76px; background:#170000; color:#ff9b9b; border:1px solid #330;
       padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%; white-space:pre-wrap;
+      z-index:4;
     }
+
     .disabled{ opacity:.5; pointer-events:none }
+
+    /* 🔄 Uploading bar */
+    .upload-bar{
+      position:fixed;
+      left:50%;
+      transform:translateX(-50%);
+      bottom:118px; /* just above input bar */
+      background:#020803;
+      border:1px solid #1c3f1c;
+      border-radius:999px;
+      padding:4px 10px;
+      display:none;
+      align-items:center;
+      gap:8px;
+      font-size:.78rem;
+      color:var(--green);
+      box-shadow:0 0 10px rgba(57,255,20,0.35);
+      z-index:3;
+    }
+    .upload-track{
+      width:80px;
+      height:4px;
+      background:#041404;
+      border-radius:999px;
+      overflow:hidden;
+    }
+    .upload-fill{
+      height:100%;
+      width:40%;
+      background:var(--green);
+      animation:uploadPulse 1.1s infinite;
+    }
+    @keyframes uploadPulse{
+      0%{ transform:translateX(-100%); }
+      50%{ transform:translateX(30%); }
+      100%{ transform:translateX(130%); }
+    }
   </style>
 </head>
 <body>
@@ -106,6 +146,12 @@
 
   <div class="typing-row">
     <div id="typing-indicator" class="note"></div>
+  </div>
+
+  <!-- 🔄 Uploading indicator -->
+  <div id="upload-bar" class="upload-bar">
+    <span id="upload-label">Uploading image…</span>
+    <div class="upload-track"><div class="upload-fill"></div></div>
   </div>
 
   <form class="input-bar" id="chat-form" autocomplete="off">
@@ -148,8 +194,10 @@
     const typingEl = document.getElementById("typing-indicator");
     const otherNameEl = document.getElementById("otherName");
     const otherPfpEl = document.getElementById("otherPfp");
-    const renderedIds = new Set();
+    const uploadBar = document.getElementById("upload-bar");
+    const uploadLabel = document.getElementById("upload-label");
 
+    const renderedIds = new Set();
     const state = { user:null, displayName:null };
 
     function showError(msg, extra){
@@ -158,6 +206,11 @@
       clearTimeout(showError._t);
       showError._t = setTimeout(()=> errBox.style.display="none", 4500);
       console.error("[DM ERR]", msg, extra || "");
+    }
+
+    function showUpload(show, label){
+      if (label) uploadLabel.textContent = label;
+      uploadBar.style.display = show ? "flex" : "none";
     }
 
     const fmtTS = iso => {
@@ -252,7 +305,6 @@
           p?.display_name?.trim() ||
           (p?.username ? '@' + p.username.trim() : '@user-' + (p?.id || '').slice(0, 6));
 
-        // Build profile link
         let profileHref = null;
         if (p?.username) {
           profileHref = `profile.html?u=${encodeURIComponent(p.username)}`;
@@ -306,14 +358,13 @@
       }
     }
 
-    // Upload just the image & send a message with attachment_url
+    // Upload image & send a message with attachment_url
     async function sendImageMessage(file){
       if (!file) return;
       if (!state.user) { showError("Please log in to send images"); return; }
 
       console.log("[DM] sendImageMessage start", file.name, file.size);
 
-      // basic size guard (10MB)
       if (file.size > 10 * 1024 * 1024) {
         showError("Image too large (max 10MB).");
         return;
@@ -325,12 +376,15 @@
 
       console.log("[DM] uploading to", DM_MEDIA_BUCKET, "path", path);
 
+      showUpload(true, "Uploading image…");
+
       const { error: upErr } = await sb
         .storage
         .from(DM_MEDIA_BUCKET)
         .upload(path, file, { upsert:false });
 
       if (upErr) {
+        showUpload(false);
         showError("Image upload failed.", JSON.stringify(upErr, null, 2));
         return;
       }
@@ -339,11 +393,11 @@
       const url = pub?.publicUrl;
       console.log("[DM] uploaded, publicUrl =", url);
       if (!url) {
+        showUpload(false);
         showError("Could not get public URL for image.");
         return;
       }
 
-      // Optional text that was in the box when they attached
       const text = input.value.trim() || null;
       input.value = "";
 
@@ -357,6 +411,8 @@
         })
         .select("id, thread_id, sender, body, attachment_url, created_at")
         .single();
+
+      showUpload(false);
 
       if (error) {
         showError("Send failed — likely RLS/policy or column mismatch.", JSON.stringify(error, null, 2));
