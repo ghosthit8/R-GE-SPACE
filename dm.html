@@ -442,5 +442,224 @@
     })();
   </script>
   <script src="js/auth-guard.js" type="module"></script>
+
+<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
+<script>
+(function () {
+  const MAX_LINES = 2000;
+  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
+
+  // --- create floating button OUTSIDE the hidden panel ---
+  const floatBtn = document.createElement('button');
+  floatBtn.id = 'dbgFloatingBtn';
+  floatBtn.textContent = '🐛 Debug';
+  floatBtn.style.cssText = `
+    position: fixed; right: 8px; bottom: 8px;
+    z-index: 2147483647; background:#000; color:#0f0;
+    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
+    font: 12px/1.1 monospace; cursor:pointer;
+  `;
+  document.body.appendChild(floatBtn);
+
+  // --- panel wrapper (starts hidden) ---
+  const wrap = document.createElement('div');
+  wrap.id = 'dbg';
+  wrap.style.cssText = `
+    position: fixed; right: 0; bottom: 0; left: 0;
+    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
+    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
+  `;
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
+  bar.innerHTML = `
+    <span style="color:#6f6">Rage Debug</span>
+    <label>Filter:
+      <select id="dbgFilter">
+        <option value="">All</option>
+        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
+        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
+        <option>ERR</option><option>WARN</option><option>LOG</option>
+      </select>
+    </label>
+    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
+    <button id="dbgCopy">Copy</button>
+    <button id="dbgDownload">Download</button>
+    <button id="dbgClear">Clear</button>
+    <span style="margin-left:auto"></span>
+    <button id="dbgClose">✕</button>
+  `;
+
+  const list = document.createElement('div');
+  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
+
+  wrap.appendChild(bar); wrap.appendChild(list);
+  document.body.appendChild(wrap);
+
+  // button wiring
+  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
+  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
+  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
+
+  // controls
+  const filterSel  = bar.querySelector('#dbgFilter');
+  const recordChk  = bar.querySelector('#dbgRecord');
+  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
+  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
+  bar.querySelector('#dbgDownload').onclick = () => {
+    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
+    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
+    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  };
+
+  // ring buffer + rendering
+  let buffer = [];
+  function push(kind, msg, extra) {
+    if (!recordChk.checked) return;
+    const ts = new Date().toLocaleTimeString();
+    const line = `[${ts}] ${kind}: ${msg}`;
+    buffer.push({kind, line, extra});
+    if (buffer.length > MAX_LINES) buffer.shift();
+    const f = filterSel.value;
+    if (!f || f === kind) addLine({kind, line});
+  }
+  function addLine(r){
+    const div = document.createElement('div');
+    div.textContent = r.line;
+    if (r.kind === 'ERR') div.style.color = '#f88';
+    else if (r.kind === 'WARN') div.style.color = '#ff8';
+    else if (r.kind === 'EDGE') div.style.color = '#8ff';
+    else if (r.kind === 'NET')  div.style.color = '#8cf';
+    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
+    list.appendChild(div); list.scrollTop = list.scrollHeight;
+  }
+  function render(){
+    list.innerHTML = '';
+    const f = filterSel.value;
+    for (const r of buffer) if (!f || f === r.kind) addLine(r);
+  }
+  filterSel.onchange = render;
+
+  // console hooks
+  const _log = console.log, _warn = console.warn, _err = console.error;
+  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
+  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
+  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
+
+  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
+  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
+
+  // visibility & UI observers
+  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
+  const q = (id) => document.getElementById(id);
+
+  function observeText(id, kind) {
+    const el = q(id); if (!el) return;
+    let last = el.textContent;
+    const mo = new MutationObserver(() => {
+      if (el.textContent !== last) {
+        last = el.textContent;
+        push(kind, `${id} → ${last}`);
+      }
+    });
+    mo.observe(el, {childList:true, characterData:true, subtree:true});
+  }
+  observeText('phaseKey', 'STAGE');
+  observeText('state', 'STAGE');
+
+  (function watchClock(){
+    const el = q('clock'); if (!el) return;
+    let last = el.textContent, lastAt = performance.now();
+    const mo = new MutationObserver(() => {
+      const now = performance.now();
+      if (el.textContent !== last) {
+        const dt = ((now - lastAt)/1000).toFixed(2);
+        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
+        last = el.textContent; lastAt = now;
+      }
+    });
+    mo.observe(el, {childList:true, characterData:true, subtree:true});
+  })();
+
+  // fetch tracer
+  const _fetch = window.fetch.bind(window);
+  window.fetch = async function(url, opts = {}) {
+    const start = performance.now();
+    const method = (opts && opts.method) || 'GET';
+    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
+    push(tag, `${method} ${url}`);
+    try {
+      const res = await _fetch(url, opts);
+      const ms = (performance.now() - start).toFixed(0);
+      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
+      return res;
+    } catch (e) {
+      const ms = (performance.now() - start).toFixed(0);
+      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
+      throw e;
+    }
+  };
+
+  // timers & rAF
+  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
+  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
+  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
+
+  const timers = new Map();
+  window.setInterval = function(fn, ms, ...rest){
+    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
+  };
+  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
+  window.setTimeout  = function(fn, ms, ...rest){
+    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
+  };
+  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
+  window.requestAnimationFrame = function(fn){
+    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
+  };
+  window.cancelAnimationFrame = function(id){ _caf(id); };
+
+  // image load tracing
+  function hookImg(img){
+    if (!img || img.__dbgHooked) return;
+    img.__dbgHooked = true;
+    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
+    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
+  }
+  Array.from(document.images).forEach(hookImg);
+  const imgObs = new MutationObserver((ms)=>{
+    for (const m of ms) for (const n of m.addedNodes) {
+      if (n.tagName === 'IMG') hookImg(n);
+      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
+    }
+  });
+  imgObs.observe(document.documentElement, {childList:true, subtree:true});
+
+  // bracket observer
+  const brows = document.getElementById('brows');
+  if (brows) {
+    const mo = new MutationObserver((ms)=>{
+      let adds = 0, rems = 0;
+      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
+      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
+    });
+    mo.observe(brows, {childList:true, subtree:false});
+  }
+
+  // public helpers
+  window.RageDebug = {
+    log: (k, m) => push(k||'LOG', m||''),
+    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
+    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
+    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
+  };
+
+  // small banner
+  (console.log||(()=>{}))('Debugger ready');
+})();
+</script>
+<!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
