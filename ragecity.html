@@ -149,14 +149,16 @@
       box-shadow: none;
     }
 
+    /* A/B buttons – repositioned to match your circled spots */
     .ab-buttons {
-      display: flex;
-      align-items: center;
-      gap: 16px;
+      position: relative;
+      width: 180px;    /* area to place A/B inside */
+      height: 140px;
       opacity: 0.9;
     }
 
     .ab-buttons button {
+      position: absolute;
       width: 64px;
       height: 64px;
       border-radius: 50%;
@@ -175,6 +177,16 @@
     }
     .ab-buttons .btn-b::after {
       content: "B";
+    }
+
+    /* Positions: B lower-left, A upper-right in the cluster */
+    .ab-buttons .btn-b {
+      bottom: 10px;
+      left: 30px;
+    }
+    .ab-buttons .btn-a {
+      bottom: 40px;
+      right: 25px;
     }
 
     @media (max-width: 600px) {
