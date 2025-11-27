@@ -149,12 +149,13 @@
       box-shadow: none;
     }
 
-    /* A/B cluster on the right, with custom positions */
+    /* A/B cluster – REPOSITIONED ONLY */
     .ab-buttons {
       position: relative;
-      width: 200px;
-      height: 150px;
+      width: 180px;      /* area for custom layout */
+      height: 140px;
       opacity: 0.9;
+      /* sits in the same spot in the flex row on the right */
     }
 
     .ab-buttons button {
@@ -162,46 +163,32 @@
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      font-size: 1.2rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding-top: 12px; /* room for dot above letter */
+      font-size: 1.1rem;
     }
 
-    /* Dot above letter */
-    .ab-buttons button::before {
-      content: "";
-      position: absolute;
-      top: 8px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 6px rgba(57, 255, 20, 0.9);
-    }
-
-    /* Letter inside button */
-    .ab-buttons button::after {
-      content: attr(data-label);
-      position: absolute;
-      bottom: 8px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 1rem;
+    /* Put letters under the dot text (●) */
+    .ab-buttons .btn-a::after,
+    .ab-buttons .btn-b::after {
+      display: block;
+      font-size: 0.65rem;
+      margin-top: 2px;
       letter-spacing: 2px;
     }
+    .ab-buttons .btn-a::after {
+      content: "A";
+    }
+    .ab-buttons .btn-b::after {
+      content: "B";
+    }
 
-    /* Positions to match your red circles */
+    /* Actual positions to match your red circles */
     .ab-buttons .btn-b {
       bottom: 10px;
-      left: 40px;
+      left: 32px;
     }
     .ab-buttons .btn-a {
       bottom: 40px;
-      right: 25px;
+      right: 28px;
     }
 
     @media (max-width: 600px) {
@@ -248,8 +235,8 @@
       </div>
 
       <div class="ab-buttons">
-        <button id="btn-b" class="btn-b" data-label="B"></button>
-        <button id="btn-a" class="btn-a" data-label="A"></button>
+        <button id="btn-b" class="btn-b">●</button>
+        <button id="btn-a" class="btn-a">●</button>
       </div>
     </div>
   </div>
