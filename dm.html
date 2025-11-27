@@ -250,22 +250,43 @@
           .eq("id", otherId)
           .maybeSingle();
         if(pe){ console.warn(pe); }
+
         const name =
           p?.display_name?.trim() ||
           (p?.username ? '@' + p.username.trim() : '@user-' + (p?.id || '').slice(0, 6));
 
-        // Make top name clickable -> profile.html?u=<username>
+        // Build profile link
+        let profileHref = null;
         if (p?.username) {
           const safeUser = encodeURIComponent(p.username);
-          otherNameEl.innerHTML = `<a href="profile.html?u=${safeUser}">${name}</a>`;
+          profileHref = `profile.html?u=${safeUser}`;
+          otherNameEl.innerHTML = `<a href="${profileHref}">${name}</a>`;
+        } else if (p?.id) {
+          profileHref = `profile.html?uid=${encodeURIComponent(p.id)}`;
+          otherNameEl.textContent = name;
         } else {
           otherNameEl.textContent = name;
         }
         otherNameEl.style.display = "inline";
 
+        // Make the whole name area clickable (not just the link)
+        if (profileHref) {
+          otherNameEl.style.cursor = "pointer";
+          otherNameEl.onclick = (ev) => {
+            // If the actual <a> was clicked, let it do its thing
+            if (ev.target.tagName.toLowerCase() === "a") return;
+            location.href = profileHref;
+          };
+        }
+
+        // Avatar + click → profile
         if(p?.avatar_url){
           otherPfpEl.innerHTML = `<img src="${p.avatar_url}" alt="">`;
           otherPfpEl.style.display = "block";
+          if (profileHref) {
+            otherPfpEl.style.cursor = "pointer";
+            otherPfpEl.onclick = () => { location.href = profileHref; };
+          }
         }
       }catch(e){
         console.warn(e);
