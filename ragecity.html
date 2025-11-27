@@ -68,12 +68,12 @@
 
     /* GAME BOX – big viewer with margin so border shows on all sides */
     #game-container {
-      margin-top: 80px;            /* leave room under the fixed buttons */
+      margin-top: 80px;             /* room for top buttons */
       margin-bottom: 8px;
-      width: calc(100% - 24px);   /* small margin left/right */
-      max-width: 720px;           /* wider on larger screens */
+      width: calc(100% - 24px);     /* small side margins */
+      max-width: 720px;
       position: relative;
-      height: 460px;              /* TALL viewer (fills most space) */
+      height: 520px;                /* TALL viewer */
       border: 2px solid rgba(57, 255, 20, 0.9);
       box-shadow: 0 0 16px rgba(57, 255, 20, 0.8);
       background: #020202;
@@ -178,9 +178,9 @@
     }
 
     @media (max-width: 600px) {
-      /* On smaller phones, still big but a bit shorter so it doesn't clash with controls */
+      /* On smaller phones, still big but slightly shorter */
       #game-container {
-        height: 420px;
+        height: 480px;
       }
 
       .dpad {
@@ -243,13 +243,13 @@
 
     const config = {
       type: Phaser.AUTO,
-      width: 480,   // bigger internal game resolution
+      width: 480,   // base resolution (will be overridden by RESIZE)
       height: 320,
       parent: "game-container",
       pixelArt: true,
       backgroundColor: "#111122",
       scale: {
-        mode: Phaser.Scale.FIT,
+        mode: Phaser.Scale.RESIZE,          // canvas always matches viewer size
         autoCenter: Phaser.Scale.CENTER_BOTH
       },
       scene: {
@@ -267,8 +267,14 @@
       const fb = document.getElementById("game-fallback");
       if (fb) fb.style.display = "none";
 
-      // Big bright green square in the center of the (bigger) world
-      player = this.add.rectangle(config.width / 2, config.height / 2, 32, 32, 0x39ff14);
+      // Place player in the center of the current viewer size
+      player = this.add.rectangle(
+        this.scale.width / 2,
+        this.scale.height / 2,
+        32,
+        32,
+        0x39ff14
+      );
 
       setupKeyboard(this);
       setupTouchButton("btn-left", "left");
@@ -412,10 +418,13 @@
       player.x += dx * speed * dt;
       player.y += dy * speed * dt;
 
-      // padding so you always see space on all sides
+      // Bounds use the CURRENT viewer size so the square can reach all edges
       const margin = 40;
-      player.x = Phaser.Math.Clamp(player.x, margin, config.width - margin);
-      player.y = Phaser.Math.Clamp(player.y, margin, config.height - margin);
+      const w = this.scale.width;
+      const h = this.scale.height;
+
+      player.x = Phaser.Math.Clamp(player.x, margin, w - margin);
+      player.y = Phaser.Math.Clamp(player.y, margin, h - margin);
     }
 
     new Phaser.Game(config);
