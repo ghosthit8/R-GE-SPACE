@@ -44,15 +44,15 @@
     }
 
     .city-title {
-      margin-top: 80px;
-      margin-bottom: 8px;
+      margin-top: 60px; /* moved up from 80px */
+      margin-bottom: 6px;
       font-size: 1.6rem;
       letter-spacing: 0.15em;
     }
 
     /* Fullscreen button */
     .fullscreen-btn {
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       padding: 6px 14px;
       border-radius: 999px;
       border: 1px solid rgba(57, 255, 20, 0.8);
@@ -68,13 +68,13 @@
       box-shadow: 0 0 4px rgba(57, 255, 20, 1);
     }
 
-    /* GAME BOX — made taller / bigger */
+    /* GAME BOX — tall play area, moved closer to title */
     #game-container {
       margin: 0 auto;
-      margin-top: 8px;
+      margin-top: 4px;        /* was 8px */
       width: 100%;
       max-width: 640px;
-      height: 420px; /* taller play area */
+      height: 420px;
       position: relative;
       border: 2px solid rgba(57, 255, 20, 0.9);
       box-shadow: 0 0 16px rgba(57, 255, 20, 0.8);
@@ -193,7 +193,6 @@
   <a class="home-btn" href="./menu.html">← Menu</a>
 
   <h1 class="city-title">RⒶGE CITY (PROTO)</h1>
-  <!-- hint line removed on purpose -->
   <button id="btn-fullscreen" class="fullscreen-btn">⛶ Fullscreen</button>
 
   <div id="game-container">
@@ -363,13 +362,15 @@
     }
 
     function setupFullscreenButton() {
-      const container = document.getElementById("game-container");
       const btn = document.getElementById("btn-fullscreen");
-      if (!container || !btn) return;
+      if (!btn) return;
 
       btn.addEventListener("click", () => {
+        // Fullscreen the whole page so controls stay visible
+        const elem = document.documentElement;
+
         if (!document.fullscreenElement) {
-          if (container.requestFullscreen) container.requestFullscreen();
+          if (elem.requestFullscreen) elem.requestFullscreen();
         } else {
           if (document.exitFullscreen) document.exitFullscreen();
         }
