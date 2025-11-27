@@ -45,7 +45,7 @@
     /* other participant hint */
     .tiny-pfp{ width:26px; height:26px; border-radius:8px; overflow:hidden; border:1px solid var(--green); background:#111; }
     .tiny-pfp img{ width:100%; height:100%; object-fit:cover; display:block; }
-    .otherName{ font-weight:800; letter-spacing:.2px; }
+    .otherName{ font-weight:800; letter-spacing:.2px; cursor:pointer; }
     .otherName a{ color:var(--green); text-decoration:none; }
     .otherName a:hover{ text-decoration:underline; }
 
@@ -55,7 +55,6 @@
     .them{ align-self:flex-start; background:#171717; color:#e5ffe5; border:1px solid #222; }
     .ts{ opacity:.55; font-size:.72rem; margin-top:.25rem }
 
-    /* image in messages */
     .msg-image{
       display:block;
       max-width:100%;
@@ -70,11 +69,11 @@
       display:flex; gap:.5rem; padding:.6rem; border-top:1px solid var(--border);
       position:sticky; bottom:0; background:#000;
     }
-    input{
-      flex:1; background:#000; color:var(--green);
-      border:1px solid #2a2a2a; border-radius:10px; padding:.7rem .8rem;
+    .input-bar input{
+      flex:1; background:#000; color:var(--green); border:1px solid #2a2a2a;
+      border-radius:10px; padding:.7rem .8rem;
     }
-    button{
+    .input-bar button{
       background:var(--green); color:#000; font-weight:800;
       border:none; border-radius:10px; padding:0 1rem;
     }
@@ -86,10 +85,8 @@
 
     .empty{ opacity:.6; font-size:.9rem; text-align:center; margin-top:20vh; }
     .err{
-      position:fixed; left:50%; transform:translateX(-50%); bottom:76px;
-      background:#170000; color:#ff9b9b; border:1px solid #330;
-      padding:.5rem .75rem; border-radius:8px; display:none;
-      max-width:92%; white-space:pre-wrap;
+      position:fixed; left:50%; transform:translateX(-50%); bottom:76px; background:#170000; color:#ff9b9b; border:1px solid #330;
+      padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%; white-space:pre-wrap;
     }
     .disabled{ opacity:.5; pointer-events:none }
   </style>
@@ -115,7 +112,6 @@
     <button type="button" id="attach-btn" title="Attach image">📎</button>
     <input id="message-input" placeholder="Say something…" />
     <button id="send-btn" type="submit">Send</button>
-    <!-- hidden file input for images -->
     <input id="image-input" type="file" accept="image/*" style="display:none" />
   </form>
 
@@ -128,7 +124,6 @@
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
 
-    // Bucket for DM images (create this in Supabase storage)
     const DM_MEDIA_BUCKET = "dm-media";
 
     // Accept both ?thread=<id> (inbox) or ?dm=<id> (legacy)
@@ -155,14 +150,14 @@
     const otherPfpEl = document.getElementById("otherPfp");
     const renderedIds = new Set();
 
-    attachBtn.addEventListener("click", () => imageInput.click());
+    const state = { user:null, displayName:null };
 
     function showError(msg, extra){
       errBox.textContent = extra ? `${msg}\n${extra}` : msg;
       errBox.style.display = "block";
       clearTimeout(showError._t);
       showError._t = setTimeout(()=> errBox.style.display="none", 4500);
-      console.error(msg, extra || "");
+      console.error("[DM ERR]", msg, extra || "");
     }
 
     const fmtTS = iso => {
@@ -172,13 +167,11 @@
       }catch(_){ return ""; }
     };
 
-    const state = { user:null, displayName:null };
-
     function renderMessage(row){
       if (!row || (row.id && renderedIds.has(row.id))) return;
       if (emptyState && emptyState.parentNode) emptyState.remove();
 
-      const mine = row.sender === state.user.id;
+      const mine = row.sender === state.user?.id;
 
       const div = document.createElement("div");
       div.className = "msg " + (mine ? "me" : "them");
@@ -189,13 +182,15 @@
         img.src = row.attachment_url;
         img.alt = "image";
         img.className = "msg-image";
+        img.loading = "lazy";
+        img.addEventListener("click", () => window.open(row.attachment_url, "_blank"));
         div.appendChild(img);
       }
 
       // text body (if any)
       if (row.body && row.body.trim() !== "") {
         const text = document.createElement("span");
-        text.textContent = row.body;
+        text.textContent = (row.body || "");
         div.appendChild(text);
       }
 
@@ -210,11 +205,11 @@
       chatBox.scrollTop = chatBox.scrollHeight;
       if (row.id) renderedIds.add(row.id);
 
-      // seeing the latest => mark as read
       markThreadRead();
     }
 
     async function loadMessages(){
+      console.log("[DM] loadMessages for thread", THREAD_ID);
       const { data, error } = await sb
         .from("dm_messages")
         .select("id, thread_id, sender, body, attachment_url, created_at")
@@ -236,20 +231,22 @@
 
     async function loadOtherHeader(meId){
       try{
+        console.log("[DM] loadOtherHeader for me", meId);
         const { data: t, error: te } = await sb
           .from("dm_threads")
           .select("id,a,b")
           .eq("id", THREAD_ID)
           .maybeSingle();
-        if(te){ console.warn(te); return; }
+        if(te){ console.warn("[DM] dm_threads error", te); return; }
         if(!t) return;
         const otherId = (t.a === meId) ? t.b : t.a;
+
         const { data: p, error: pe } = await sb
           .from("profiles")
           .select("id,username,display_name,avatar_url")
           .eq("id", otherId)
           .maybeSingle();
-        if(pe){ console.warn(pe); }
+        if(pe){ console.warn("[DM] profiles error", pe); }
 
         const name =
           p?.display_name?.trim() ||
@@ -258,8 +255,7 @@
         // Build profile link
         let profileHref = null;
         if (p?.username) {
-          const safeUser = encodeURIComponent(p.username);
-          profileHref = `profile.html?u=${safeUser}`;
+          profileHref = `profile.html?u=${encodeURIComponent(p.username)}`;
           otherNameEl.innerHTML = `<a href="${profileHref}">${name}</a>`;
         } else if (p?.id) {
           profileHref = `profile.html?uid=${encodeURIComponent(p.id)}`;
@@ -269,27 +265,24 @@
         }
         otherNameEl.style.display = "inline";
 
-        // Make the whole name area clickable (not just the link)
         if (profileHref) {
-          otherNameEl.style.cursor = "pointer";
           otherNameEl.onclick = (ev) => {
-            // If the actual <a> was clicked, let it do its thing
             if (ev.target.tagName.toLowerCase() === "a") return;
             location.href = profileHref;
           };
+          otherNameEl.style.cursor = "pointer";
         }
 
-        // Avatar + click → profile
         if(p?.avatar_url){
           otherPfpEl.innerHTML = `<img src="${p.avatar_url}" alt="">`;
           otherPfpEl.style.display = "block";
           if (profileHref) {
             otherPfpEl.style.cursor = "pointer";
-            otherPfpEl.onclick = () => { location.href = profileHref; };
+            otherPfpEl.onclick = () => location.href = profileHref;
           }
         }
       }catch(e){
-        console.warn(e);
+        console.warn("[DM] loadOtherHeader exception", e);
       }
     }
 
@@ -313,74 +306,109 @@
       }
     }
 
-    async function uploadImage(file){
-      if (!file) return null;
-      const ext = (file.name.split(".").pop() || "bin").toLowerCase();
-      const path = `${state.user.id}/${THREAD_ID}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    // Upload just the image & send a message with attachment_url
+    async function sendImageMessage(file){
+      if (!file) return;
+      if (!state.user) { showError("Please log in to send images"); return; }
+
+      console.log("[DM] sendImageMessage start", file.name, file.size);
+
+      // basic size guard (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        showError("Image too large (max 10MB).");
+        return;
+      }
+
+      const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g,"") || "bin";
+      const rand = Math.random().toString(36).slice(2);
+      const path = `${state.user.id}/${THREAD_ID}/${Date.now()}-${rand}.${ext}`;
+
+      console.log("[DM] uploading to", DM_MEDIA_BUCKET, "path", path);
 
       const { error: upErr } = await sb
         .storage
         .from(DM_MEDIA_BUCKET)
         .upload(path, file, { upsert:false });
 
-      if (upErr) throw upErr;
+      if (upErr) {
+        showError("Image upload failed.", JSON.stringify(upErr, null, 2));
+        return;
+      }
 
-      const { data } = sb
-        .storage
-        .from(DM_MEDIA_BUCKET)
-        .getPublicUrl(path);
+      const { data: pub } = sb.storage.from(DM_MEDIA_BUCKET).getPublicUrl(path);
+      const url = pub?.publicUrl;
+      console.log("[DM] uploaded, publicUrl =", url);
+      if (!url) {
+        showError("Could not get public URL for image.");
+        return;
+      }
 
-      return data.publicUrl;
-    }
+      // Optional text that was in the box when they attached
+      const text = input.value.trim() || null;
+      input.value = "";
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      if (!state.user) { showError("Please log in to send messages"); return; }
-
-      const text = input.value.trim();
-      const file = imageInput.files[0];
-
-      if (!text && !file) return;
-
-      sendBtn.disabled = true;
-      attachBtn.disabled = true;
-
-      let attachmentUrl = null;
-
-      try{
-        if (file) {
-          attachmentUrl = await uploadImage(file);
-        }
-
-        const payload = {
+      const { data, error } = await sb
+        .from("dm_messages")
+        .insert({
           thread_id: THREAD_ID,
           sender: state.user.id,
           body: text,
-          attachment_url: attachmentUrl
-        };
+          attachment_url: url
+        })
+        .select("id, thread_id, sender, body, attachment_url, created_at")
+        .single();
 
-        const { data, error } = await sb
-          .from("dm_messages")
-          .insert(payload)
-          .select("id, thread_id, sender, body, attachment_url, created_at")
-          .single();
+      if (error) {
+        showError("Send failed — likely RLS/policy or column mismatch.", JSON.stringify(error, null, 2));
+        return;
+      }
 
-        if(error){
-          showError("Send failed — likely RLS/policy or column mismatch.", JSON.stringify(error, null, 2));
-          return;
-        }
+      console.log("[DM] image message inserted", data);
+      renderMessage(data);
+    }
 
-        // Clear inputs
-        input.value = "";
+    // text-only send on submit
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!state.user) { showError("Please log in to send messages"); return; }
+      const text = input.value.trim();
+      if(!text) return;
+      input.value = "";
+
+      console.log("[DM] send text message", text);
+
+      const { data, error } = await sb
+        .from("dm_messages")
+        .insert({ thread_id: THREAD_ID, sender: state.user.id, body: text })
+        .select("id, thread_id, sender, body, attachment_url, created_at")
+        .single();
+
+      if(error){
+        showError("Send failed — likely RLS/policy or column mismatch.", JSON.stringify(error, null, 2));
+        return;
+      }
+
+      renderMessage(data);
+    });
+
+    // When they click 📎, open file picker
+    attachBtn.addEventListener("click", () => {
+      if (!state.user) { showError("Please log in to send images"); return; }
+      imageInput.click();
+    });
+
+    // When an image is picked, upload & send immediately
+    imageInput.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      attachBtn.disabled = true;
+      sendBtn.disabled = true;
+      try{
+        await sendImageMessage(file);
+      } finally {
         imageInput.value = "";
-
-        // Render immediately (don’t rely on realtime echo)
-        renderMessage(data);
-      }catch(err){
-        showError("Image upload failed.", JSON.stringify(err, null, 2));
-      }finally{
-        sendBtn.disabled = false;
         attachBtn.disabled = false;
+        sendBtn.disabled = false;
       }
     });
 
@@ -392,7 +420,6 @@
         { event: "INSERT", schema: "public", table: "dm_messages", filter: `thread_id=eq.${THREAD_ID}` },
         (payload) => {
           const msg = payload.new;
-          // if it's not ours, render it
           if (!state.user || msg.sender !== state.user.id) renderMessage(msg);
         }
       )
@@ -433,233 +460,14 @@
       await loadOtherHeader(state.user.id);
       await loadMessages();
 
-      // keep marking read on focus/visibility
       window.addEventListener('focus', markThreadRead);
       document.addEventListener('visibilitychange', () => {
         if(document.visibilityState === 'visible') markThreadRead();
       });
-      markThreadRead(); // immediate on open
+      markThreadRead();
+      console.log("[DM] init done");
     })();
   </script>
   <script src="js/auth-guard.js" type="module"></script>
-
-<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
-<script>
-(function () {
-  const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
-
-  // --- create floating button OUTSIDE the hidden panel ---
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'dbgFloatingBtn';
-  floatBtn.textContent = '🐛 Debug';
-  floatBtn.style.cssText = `
-    position: fixed; right: 8px; bottom: 8px;
-    z-index: 2147483647; background:#000; color:#0f0;
-    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
-    font: 12px/1.1 monospace; cursor:pointer;
-  `;
-  document.body.appendChild(floatBtn);
-
-  // --- panel wrapper (starts hidden) ---
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
-  `;
-
-  const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-  bar.innerHTML = `
-    <span style="color:#6f6">Rage Debug</span>
-    <label>Filter:
-      <select id="dbgFilter">
-        <option value="">All</option>
-        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
-        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
-        <option>ERR</option><option>WARN</option><option>LOG</option>
-      </select>
-    </label>
-    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgDownload">Download</button>
-    <button id="dbgClear">Clear</button>
-    <span style="margin-left:auto"></span>
-    <button id="dbgClose">✕</button>
-  `;
-
-  const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-
-  // button wiring
-  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-  // controls
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
-  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
-  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-  bar.querySelector('#dbgDownload').onclick = () => {
-    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
-    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  };
-
-  // ring buffer + rendering
-  let buffer = [];
-  function push(kind, msg, extra) {
-    if (!recordChk.checked) return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
-    if (buffer.length > MAX_LINES) buffer.shift();
-    const f = filterSel.value;
-    if (!f || f === kind) addLine({kind, line});
-  }
-  function addLine(r){
-    const div = document.createElement('div');
-    div.textContent = r.line;
-    if (r.kind === 'ERR') div.style.color = '#f88';
-    else if (r.kind === 'WARN') div.style.color = '#ff8';
-    else if (r.kind === 'EDGE') div.style.color = '#8ff';
-    else if (r.kind === 'NET')  div.style.color = '#8cf';
-    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-    list.appendChild(div); list.scrollTop = list.scrollHeight;
-  }
-  function render(){
-    list.innerHTML = '';
-    const f = filterSel.value;
-    for (const r of buffer) if (!f || f === r.kind) addLine(r);
-  }
-  filterSel.onchange = render;
-
-  // console hooks
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-
-  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-
-  // visibility & UI observers
-  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-  const q = (id) => document.getElementById(id);
-
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
-
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
-    let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
-        const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
-        last = el.textContent; lastAt = now;
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  })();
-
-  // fetch tracer
-  const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
-    const start = performance.now();
-    const method = (opts && opts.method) || 'GET';
-    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
-    push(tag, `${method} ${url}`);
-    try {
-      const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-      return res;
-    } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
-      throw e;
-    }
-  };
-
-  // timers & rAF
-  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-
-  const timers = new Map();
-  window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-  window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-  window.requestAnimationFrame = function(fn){
-    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
-  };
-  window.cancelAnimationFrame = function(id){ _caf(id); };
-
-  // image load tracing
-  function hookImg(img){
-    if (!img || img.__dbgHooked) return;
-    img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
-  }
-  Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
-      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
-
-  // bracket observer
-  const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
-      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
-  }
-
-  // public helpers
-  window.RageDebug = {
-    log: (k, m) => push(k||'LOG', m||''),
-    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
-    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
-    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
-  };
-
-  // small banner
-  (console.log||(()=>{}))('Debugger ready');
-})();
-</script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
