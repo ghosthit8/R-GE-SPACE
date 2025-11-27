@@ -68,18 +68,20 @@
       box-shadow: 0 0 4px rgba(57, 255, 20, 1);
     }
 
-    /* GAME BOX – sized to fit above controls on phones */
+    /* GAME BOX – with horizontal margin so border shows on all sides */
     #game-container {
-      margin: 0 auto;
       margin-top: 4px;
-      width: 100%;
+      margin-bottom: 8px;
+      width: calc(100% - 24px); /* small margin left/right */
       max-width: 640px;
-      height: 360px; /* play area height */
       position: relative;
+      height: 360px;
       border: 2px solid rgba(57, 255, 20, 0.9);
       box-shadow: 0 0 16px rgba(57, 255, 20, 0.8);
       background: #020202;
       overflow: hidden;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     #game-fallback {
@@ -178,7 +180,6 @@
     }
 
     @media (max-width: 600px) {
-      /* On smaller phones, shrink play area a bit more */
       #game-container {
         height: 320px;
       }
@@ -413,7 +414,7 @@
       player.x += dx * speed * dt;
       player.y += dy * speed * dt;
 
-      // more padding so you always see space on all sides
+      // padding so you always see space on all sides
       const margin = 40;
       player.x = Phaser.Math.Clamp(player.x, margin, config.width - margin);
       player.y = Phaser.Math.Clamp(player.y, margin, config.height - margin);
