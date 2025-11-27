@@ -55,16 +55,42 @@
     .them{ align-self:flex-start; background:#171717; color:#e5ffe5; border:1px solid #222; }
     .ts{ opacity:.55; font-size:.72rem; margin-top:.25rem }
 
+    /* image in messages */
+    .msg-image{
+      display:block;
+      max-width:100%;
+      border-radius:10px;
+      margin-bottom:.35rem;
+    }
+
     .typing-row{ padding:0 1rem .25rem; min-height:1.25rem; }
     #typing-indicator{ opacity:.8; font-size:.85rem; display:none; }
 
-    .input-bar{ display:flex; gap:.5rem; padding:.6rem; border-top:1px solid var(--border);
-      position:sticky; bottom:0; background:#000; }
-    input{ flex:1; background:#000; color:var(--green); border:1px solid #2a2a2a; border-radius:10px; padding:.7rem .8rem; }
-    button{ background:var(--green); color:#000; font-weight:800; border:none; border-radius:10px; padding:0 1rem; }
+    .input-bar{
+      display:flex; gap:.5rem; padding:.6rem; border-top:1px solid var(--border);
+      position:sticky; bottom:0; background:#000;
+    }
+    input{
+      flex:1; background:#000; color:var(--green);
+      border:1px solid #2a2a2a; border-radius:10px; padding:.7rem .8rem;
+    }
+    button{
+      background:var(--green); color:#000; font-weight:800;
+      border:none; border-radius:10px; padding:0 1rem;
+    }
+    #attach-btn{
+      padding:0 .75rem;
+      font-size:1.1rem;
+      display:flex; align-items:center; justify-content:center;
+    }
+
     .empty{ opacity:.6; font-size:.9rem; text-align:center; margin-top:20vh; }
-    .err{ position:fixed; left:50%; transform:translateX(-50%); bottom:76px; background:#170000; color:#ff9b9b; border:1px solid #330;
-      padding:.5rem .75rem; border-radius:8px; display:none; max-width:92%; white-space:pre-wrap; }
+    .err{
+      position:fixed; left:50%; transform:translateX(-50%); bottom:76px;
+      background:#170000; color:#ff9b9b; border:1px solid #330;
+      padding:.5rem .75rem; border-radius:8px; display:none;
+      max-width:92%; white-space:pre-wrap;
+    }
     .disabled{ opacity:.5; pointer-events:none }
   </style>
 </head>
@@ -86,8 +112,11 @@
   </div>
 
   <form class="input-bar" id="chat-form" autocomplete="off">
+    <button type="button" id="attach-btn" title="Attach image">📎</button>
     <input id="message-input" placeholder="Say something…" />
     <button id="send-btn" type="submit">Send</button>
+    <!-- hidden file input for images -->
+    <input id="image-input" type="file" accept="image/*" style="display:none" />
   </form>
 
   <div id="err" class="err"></div>
@@ -98,6 +127,9 @@
       "https://tuqvpcevrhciursxrgav.supabase.co",
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
     );
+
+    // Bucket for DM images (create this in Supabase storage)
+    const DM_MEDIA_BUCKET = "dm-media";
 
     // Accept both ?thread=<id> (inbox) or ?dm=<id> (legacy)
     const sp = new URLSearchParams(location.search);
@@ -113,6 +145,8 @@
     const form = document.getElementById("chat-form");
     const input = document.getElementById("message-input");
     const sendBtn = document.getElementById("send-btn");
+    const attachBtn = document.getElementById("attach-btn");
+    const imageInput = document.getElementById("image-input");
     const emptyState = document.getElementById("empty");
     const whoami = document.getElementById("whoami");
     const errBox = document.getElementById("err");
@@ -120,6 +154,8 @@
     const otherNameEl = document.getElementById("otherName");
     const otherPfpEl = document.getElementById("otherPfp");
     const renderedIds = new Set();
+
+    attachBtn.addEventListener("click", () => imageInput.click());
 
     function showError(msg, extra){
       errBox.textContent = extra ? `${msg}\n${extra}` : msg;
@@ -147,15 +183,27 @@
       const div = document.createElement("div");
       div.className = "msg " + (mine ? "me" : "them");
 
-      const text = document.createElement("span");
-      text.textContent = (row.body || "");
+      // image (if any)
+      if (row.attachment_url) {
+        const img = document.createElement("img");
+        img.src = row.attachment_url;
+        img.alt = "image";
+        img.className = "msg-image";
+        div.appendChild(img);
+      }
+
+      // text body (if any)
+      if (row.body && row.body.trim() !== "") {
+        const text = document.createElement("span");
+        text.textContent = row.body;
+        div.appendChild(text);
+      }
 
       const ts = document.createElement("div");
       ts.className = "ts";
       ts.textContent = fmtTS(row.created_at);
       ts.style.textAlign = mine ? "right" : "left";
 
-      div.appendChild(text);
       div.appendChild(ts);
 
       chatBox.appendChild(div);
@@ -169,11 +217,14 @@
     async function loadMessages(){
       const { data, error } = await sb
         .from("dm_messages")
-        .select("id, thread_id, sender, body, created_at")
+        .select("id, thread_id, sender, body, attachment_url, created_at")
         .eq("thread_id", THREAD_ID)
         .order("created_at", { ascending: true });
 
-      if(error){ showError("Load failed — check table/permissions.", JSON.stringify(error, null, 2)); return; }
+      if(error){
+        showError("Load failed — check table/permissions.", JSON.stringify(error, null, 2));
+        return;
+      }
       chatBox.innerHTML = "";
       if (!data || data.length === 0) {
         if (!emptyState.parentNode) chatBox.appendChild(emptyState);
@@ -229,38 +280,87 @@
       if (!user){
         whoami.textContent = "• not signed in — please log in";
         form.classList.add("disabled");
-        input.disabled = true; sendBtn.disabled = true;
+        input.disabled = true; sendBtn.disabled = true; attachBtn.disabled = true;
         return false;
       } else {
         const uname = user.user_metadata?.username || user.user_metadata?.full_name || user.email || ("user-" + user.id.slice(0,6));
         state.displayName = uname;
         whoami.textContent = `• you are ${uname}`;
         form.classList.remove("disabled");
-        input.disabled = false; sendBtn.disabled = false;
+        input.disabled = false; sendBtn.disabled = false; attachBtn.disabled = false;
         return true;
       }
+    }
+
+    async function uploadImage(file){
+      if (!file) return null;
+      const ext = (file.name.split(".").pop() || "bin").toLowerCase();
+      const path = `${state.user.id}/${THREAD_ID}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+      const { error: upErr } = await sb
+        .storage
+        .from(DM_MEDIA_BUCKET)
+        .upload(path, file, { upsert:false });
+
+      if (upErr) throw upErr;
+
+      const { data } = sb
+        .storage
+        .from(DM_MEDIA_BUCKET)
+        .getPublicUrl(path);
+
+      return data.publicUrl;
     }
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (!state.user) { showError("Please log in to send messages"); return; }
+
       const text = input.value.trim();
-      if(!text) return;
-      input.value = "";
+      const file = imageInput.files[0];
 
-      const { data, error } = await sb
-        .from("dm_messages")
-        .insert({ thread_id: THREAD_ID, sender: state.user.id, body: text })
-        .select("id, thread_id, sender, body, created_at")
-        .single();
+      if (!text && !file) return;
 
-      if(error){
-        showError("Send failed — likely RLS/policy or column mismatch.", JSON.stringify(error, null, 2));
-        return;
+      sendBtn.disabled = true;
+      attachBtn.disabled = true;
+
+      let attachmentUrl = null;
+
+      try{
+        if (file) {
+          attachmentUrl = await uploadImage(file);
+        }
+
+        const payload = {
+          thread_id: THREAD_ID,
+          sender: state.user.id,
+          body: text,
+          attachment_url: attachmentUrl
+        };
+
+        const { data, error } = await sb
+          .from("dm_messages")
+          .insert(payload)
+          .select("id, thread_id, sender, body, attachment_url, created_at")
+          .single();
+
+        if(error){
+          showError("Send failed — likely RLS/policy or column mismatch.", JSON.stringify(error, null, 2));
+          return;
+        }
+
+        // Clear inputs
+        input.value = "";
+        imageInput.value = "";
+
+        // Render immediately (don’t rely on realtime echo)
+        renderMessage(data);
+      }catch(err){
+        showError("Image upload failed.", JSON.stringify(err, null, 2));
+      }finally{
+        sendBtn.disabled = false;
+        attachBtn.disabled = false;
       }
-
-      // Render immediately (don’t rely on realtime echo)
-      renderMessage(data);
     });
 
     // Realtime: receive new messages from others
