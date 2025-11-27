@@ -1,6 +1,8 @@
 /* global Phaser */
 
-// Shared input state (keyboard + touch)
+// Debug: let us know Phaser is loading
+console.log('Rage City JS loaded');
+
 const inputState = {
   left: false,
   right: false,
@@ -12,11 +14,11 @@ const inputState = {
 
 const config = {
   type: Phaser.AUTO,
-  width: 320, // Game area size inside the container
+  width: 320,
   height: 240,
   parent: 'game-container',
   pixelArt: true,
-  backgroundColor: '#000000',
+  backgroundColor: '#111122', // slightly blue so you see the game box
   scene: {
     preload,
     create,
@@ -25,61 +27,44 @@ const config = {
 };
 
 let player;
-let cursors;
-let wasdKeys;
 
-function preload() {
-  // later we'll load tiles, sprites, etc
-}
+function preload() {}
 
 function create() {
-  const scene = this;
+  console.log('Phaser scene created');
 
-  // Simple player (bright green square so you can see it)
-  player = scene.add.rectangle(160, 120, 24, 24, 0x39ff14);
+  // Remove fallback text once game is running
+  const fb = document.getElementById('game-fallback');
+  if (fb) fb.style.display = 'none';
 
-  // Keyboard: arrow keys
-  cursors = scene.input.keyboard.createCursorKeys();
+  // Big bright square in the middle
+  player = this.add.rectangle(160, 120, 32, 32, 0x39ff14);
 
-  // Keyboard: WASD
-  wasdKeys = scene.input.keyboard.addKeys({
-    up: Phaser.Input.Keyboard.KeyCodes.W,
-    left: Phaser.Input.Keyboard.KeyCodes.A,
-    down: Phaser.Input.Keyboard.KeyCodes.S,
-    right: Phaser.Input.Keyboard.KeyCodes.D
-  });
+  setupKeyboard(this);
+  setupTouchButton('btn-left', 'left');
+  setupTouchButton('btn-right', 'right');
+  setupTouchButton('btn-up', 'up');
+  setupTouchButton('btn-down', 'down');
+  setupTouchButton('btn-a', 'A');
+  setupTouchButton('btn-b', 'B');
+}
 
-  // "A" action key: Z / ENTER
-  scene.input.keyboard.addKeys({
-    A: Phaser.Input.Keyboard.KeyCodes.Z,
-    ENTER: Phaser.Input.Keyboard.KeyCodes.ENTER,
-    B: Phaser.Input.Keyboard.KeyCodes.X
-  });
-
-  // Hook keyboard into inputState
+function setupKeyboard(scene) {
   scene.input.keyboard.on('keydown', event => {
     switch (event.code) {
       case 'ArrowLeft':
-        inputState.left = true;
-        break;
-      case 'ArrowRight':
-        inputState.right = true;
-        break;
-      case 'ArrowUp':
-        inputState.up = true;
-        break;
-      case 'ArrowDown':
-        inputState.down = true;
-        break;
       case 'KeyA':
         inputState.left = true;
         break;
+      case 'ArrowRight':
       case 'KeyD':
         inputState.right = true;
         break;
+      case 'ArrowUp':
       case 'KeyW':
         inputState.up = true;
         break;
+      case 'ArrowDown':
       case 'KeyS':
         inputState.down = true;
         break;
@@ -120,17 +105,8 @@ function create() {
         break;
     }
   });
-
-  // --- Touch controls: D-pad + A/B ---
-  setupTouchButton('btn-left', 'left');
-  setupTouchButton('btn-right', 'right');
-  setupTouchButton('btn-up', 'up');
-  setupTouchButton('btn-down', 'down');
-  setupTouchButton('btn-a', 'A');
-  setupTouchButton('btn-b', 'B');
 }
 
-// Attach touch / mouse to a button id and link to inputState[key]
 function setupTouchButton(id, key) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -148,31 +124,29 @@ function setupTouchButton(id, key) {
     setPressed(false);
   };
 
-  // Mouse
   el.addEventListener('mousedown', start);
   el.addEventListener('mouseup', end);
   el.addEventListener('mouseleave', end);
 
-  // Touch
   el.addEventListener('touchstart', start, { passive: false });
   el.addEventListener('touchend', end, { passive: false });
   el.addEventListener('touchcancel', end, { passive: false });
 }
 
 function update(time, delta) {
-  const speed = 80; // px per second
+  if (!player) return;
+
+  const speed = 90;
   const dt = delta / 1000;
 
   let dx = 0;
   let dy = 0;
 
-  // Combine all inputs into dx/dy
   if (inputState.left) dx -= 1;
   if (inputState.right) dx += 1;
   if (inputState.up) dy -= 1;
   if (inputState.down) dy += 1;
 
-  // Normalize diagonal
   if (dx !== 0 && dy !== 0) {
     const inv = 1 / Math.sqrt(2);
     dx *= inv;
@@ -182,17 +156,9 @@ function update(time, delta) {
   player.x += dx * speed * dt;
   player.y += dy * speed * dt;
 
-  // Simple bounds so you don't wander off-screen
-  const margin = 8;
+  const margin = 16;
   player.x = Phaser.Math.Clamp(player.x, margin, config.width - margin);
   player.y = Phaser.Math.Clamp(player.y, margin, config.height - margin);
-
-  // For now, just log A press (later this will open art / rooms)
-  if (inputState.A) {
-    // In the future: open room, inspect art, etc.
-    // console.log('A pressed');
-  }
 }
 
-// Boot the game
 new Phaser.Game(config);
