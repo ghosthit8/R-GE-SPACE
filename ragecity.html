@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Rage Space — RⒶGE CITY</title>
+  <title>Rage Space — City Proto</title>
 
   <!-- No global style.css here on purpose -->
 
@@ -43,15 +43,9 @@
       text-shadow: 0 0 6px var(--red);
     }
 
-    .city-title {
-      margin-top: 60px;
-      margin-bottom: 6px;
-      font-size: 1.6rem;
-      letter-spacing: 0.15em;
-    }
-
     /* Fullscreen button */
     .fullscreen-btn {
+      margin-top: 64px;
       margin-bottom: 4px;
       padding: 6px 14px;
       border-radius: 999px;
@@ -68,14 +62,14 @@
       box-shadow: 0 0 4px rgba(57, 255, 20, 1);
     }
 
-    /* GAME BOX – with horizontal margin so border shows on all sides */
+    /* GAME BOX – bigger viewer with margin so border shows on all sides */
     #game-container {
       margin-top: 4px;
       margin-bottom: 8px;
-      width: calc(100% - 24px); /* small margin left/right */
-      max-width: 640px;
+      width: calc(100% - 24px); /* margin left/right so border isn’t flush */
+      max-width: 720px;         /* wider on desktop/tablet */
       position: relative;
-      height: 360px;
+      height: 400px;            /* taller viewer */
       border: 2px solid rgba(57, 255, 20, 0.9);
       box-shadow: 0 0 16px rgba(57, 255, 20, 0.8);
       background: #020202;
@@ -180,8 +174,9 @@
     }
 
     @media (max-width: 600px) {
+      /* On smaller phones, shrink play area a bit so it stays above controls */
       #game-container {
-        height: 320px;
+        height: 340px;
       }
 
       .dpad {
@@ -198,7 +193,6 @@
 <body>
   <a class="home-btn" href="./menu.html">← Menu</a>
 
-  <h1 class="city-title">RⒶGE CITY (PROTO)</h1>
   <button id="btn-fullscreen" class="fullscreen-btn">⛶ Fullscreen</button>
 
   <div id="game-container">
@@ -245,8 +239,8 @@
 
     const config = {
       type: Phaser.AUTO,
-      width: 320,
-      height: 240,
+      width: 480,   // bigger internal game resolution
+      height: 320,
       parent: "game-container",
       pixelArt: true,
       backgroundColor: "#111122",
@@ -269,8 +263,8 @@
       const fb = document.getElementById("game-fallback");
       if (fb) fb.style.display = "none";
 
-      // Big bright green square in the middle
-      player = this.add.rectangle(160, 120, 32, 32, 0x39ff14);
+      // Big bright green square in the center of the (bigger) world
+      player = this.add.rectangle(config.width / 2, config.height / 2, 32, 32, 0x39ff14);
 
       setupKeyboard(this);
       setupTouchButton("btn-left", "left");
