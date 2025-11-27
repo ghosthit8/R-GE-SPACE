@@ -10,7 +10,6 @@
       margin: 0;
       padding: 0;
       text-align: center;
-      background-color: #000;
       color: var(--green, #39ff14);
     }
 
@@ -37,37 +36,169 @@
 
     .city-title {
       margin-top: 80px;
-      margin-bottom: 16px;
-      font-size: 1.5rem;
-    }
-
-    #game-container {
-      margin: 0 auto;
-      margin-top: 8px;
-      max-width: 480px;
-      /* Phaser will inject a canvas inside this */
+      margin-bottom: 8px;
+      font-size: 1.6rem;
     }
 
     .hint {
-      margin-top: 12px;
-      font-size: 0.8rem;
+      margin-top: 4px;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+
+    /* Ensure the canvas is actually visible */
+    #game-container {
+      margin: 0 auto;
+      margin-top: 8px;
+      width: 100%;
+      max-width: 480px;
+      height: 320px; /* fixed height so it shows on mobile */
+      position: relative;
+      border: 1px solid rgba(57, 255, 20, 0.3);
+      box-shadow: 0 0 12px rgba(57, 255, 20, 0.5);
+      overflow: hidden;
+    }
+
+    /* On-screen controls */
+    .controls-overlay {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+      z-index: 999;
+      pointer-events: none; /* let only buttons receive clicks */
+    }
+
+    .controls-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 0 12px;
+    }
+
+    .dpad,
+    .ab-buttons {
+      pointer-events: auto; /* turn back on for children */
+    }
+
+    .dpad {
+      display: grid;
+      grid-template-columns: 60px 60px 60px;
+      grid-template-rows: 60px 60px 60px;
+      gap: 4px;
       opacity: 0.8;
+    }
+
+    .dpad button,
+    .ab-buttons button {
+      background: rgba(0, 0, 0, 0.7);
+      border: 2px solid rgba(57, 255, 20, 0.6);
+      border-radius: 12px;
+      color: var(--green, #39ff14);
+      font-size: 1rem;
+      font-weight: bold;
+      box-shadow: 0 0 8px rgba(57, 255, 20, 0.6);
+      touch-action: none;
+    }
+
+    .dpad button:active,
+    .ab-buttons button:active {
+      transform: scale(0.96);
+      box-shadow: 0 0 4px rgba(57, 255, 20, 0.9);
+      background: rgba(0, 0, 0, 0.9);
+    }
+
+    .dpad .empty {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+    }
+
+    .ab-buttons {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      opacity: 0.85;
+    }
+
+    .ab-buttons button {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      font-size: 1.1rem;
+    }
+
+    .ab-buttons .btn-a::after,
+    .ab-buttons .btn-b::after {
+      display: block;
+      font-size: 0.65rem;
+      margin-top: 2px;
+      letter-spacing: 2px;
+    }
+    .ab-buttons .btn-a::after {
+      content: 'A';
+    }
+    .ab-buttons .btn-b::after {
+      content: 'B';
+    }
+
+    @media (max-width: 600px) {
+      .dpad {
+        grid-template-columns: 52px 52px 52px;
+        grid-template-rows: 52px 52px 52px;
+      }
+      .dpad button {
+        font-size: 0.9rem;
+      }
+      .ab-buttons button {
+        width: 56px;
+        height: 56px;
+      }
     }
   </style>
 </head>
 <body>
-  <!-- Back to menu -->
   <a class="home-btn" href="./menu.html">← Menu</a>
 
   <h1 class="city-title">RⒶGE CITY (PROTO)</h1>
-  <p class="hint">Use arrow keys or WASD to move. This is the prototype city core.</p>
+  <p class="hint">
+    Use arrow keys / WASD or on-screen controls. This is the prototype city core.
+  </p>
 
   <div id="game-container"></div>
 
-  <!-- Phaser 3 from CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+  <!-- On-screen controls (like an emulator) -->
+  <div class="controls-overlay">
+    <div class="controls-inner">
+      <!-- D-pad -->
+      <div class="dpad">
+        <button class="empty" disabled></button>
+        <button id="btn-up">▲</button>
+        <button class="empty" disabled></button>
 
-  <!-- Your game logic -->
+        <button id="btn-left">◀</button>
+        <button class="empty" disabled></button>
+        <button id="btn-right">▶</button>
+
+        <button class="empty" disabled></button>
+        <button id="btn-down">▼</button>
+        <button class="empty" disabled></button>
+      </div>
+
+      <!-- A/B buttons -->
+      <div class="ab-buttons">
+        <button id="btn-b" class="btn-b">●</button>
+        <button id="btn-a" class="btn-a">●</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Phaser 3 engine -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+  <!-- Game logic -->
   <script src="js/ragecity.js"></script>
 </body>
 </html>
