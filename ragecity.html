@@ -50,20 +50,31 @@
       letter-spacing: 0.15em;
     }
 
-    .hint {
-      margin-top: 4px;
-      margin-bottom: 8px;
-      font-size: 0.85rem;
-      opacity: 0.9;
+    /* Fullscreen button */
+    .fullscreen-btn {
+      margin-bottom: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(57, 255, 20, 0.8);
+      background: rgba(0, 0, 0, 0.8);
+      color: var(--green);
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      box-shadow: 0 0 8px rgba(57, 255, 20, 0.7);
+    }
+    .fullscreen-btn:active {
+      transform: scale(0.96);
+      box-shadow: 0 0 4px rgba(57, 255, 20, 1);
     }
 
-    /* GAME BOX */
+    /* GAME BOX — made taller / bigger */
     #game-container {
       margin: 0 auto;
       margin-top: 8px;
       width: 100%;
-      max-width: 480px;
-      height: 320px;
+      max-width: 640px;
+      height: 420px; /* taller play area */
       position: relative;
       border: 2px solid rgba(57, 255, 20, 0.9);
       box-shadow: 0 0 16px rgba(57, 255, 20, 0.8);
@@ -182,7 +193,8 @@
   <a class="home-btn" href="./menu.html">← Menu</a>
 
   <h1 class="city-title">RⒶGE CITY (PROTO)</h1>
-  <p class="hint">Use arrow keys / WASD or on-screen controls.</p>
+  <!-- hint line removed on purpose -->
+  <button id="btn-fullscreen" class="fullscreen-btn">⛶ Fullscreen</button>
 
   <div id="game-container">
     <div id="game-fallback">Loading Rage City…</div>
@@ -233,6 +245,10 @@
       parent: "game-container",
       pixelArt: true,
       backgroundColor: "#111122",
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+      },
       scene: {
         preload,
         create,
@@ -258,6 +274,8 @@
       setupTouchButton("btn-down", "down");
       setupTouchButton("btn-a", "A");
       setupTouchButton("btn-b", "B");
+
+      setupFullscreenButton();
     }
 
     function setupKeyboard(scene) {
@@ -342,6 +360,28 @@
       el.addEventListener("touchstart", start, { passive: false });
       el.addEventListener("touchend", end, { passive: false });
       el.addEventListener("touchcancel", end, { passive: false });
+    }
+
+    function setupFullscreenButton() {
+      const container = document.getElementById("game-container");
+      const btn = document.getElementById("btn-fullscreen");
+      if (!container || !btn) return;
+
+      btn.addEventListener("click", () => {
+        if (!document.fullscreenElement) {
+          if (container.requestFullscreen) container.requestFullscreen();
+        } else {
+          if (document.exitFullscreen) document.exitFullscreen();
+        }
+      });
+
+      document.addEventListener("fullscreenchange", () => {
+        if (document.fullscreenElement) {
+          btn.textContent = "⛶ Exit Fullscreen";
+        } else {
+          btn.textContent = "⛶ Fullscreen";
+        }
+      });
     }
 
     function update(time, delta) {
