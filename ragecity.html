@@ -44,7 +44,7 @@
     }
 
     .city-title {
-      margin-top: 60px; /* moved up from 80px */
+      margin-top: 60px;
       margin-bottom: 6px;
       font-size: 1.6rem;
       letter-spacing: 0.15em;
@@ -68,13 +68,13 @@
       box-shadow: 0 0 4px rgba(57, 255, 20, 1);
     }
 
-    /* GAME BOX — tall play area, moved closer to title */
+    /* GAME BOX – shortened so it doesn't hit the controls */
     #game-container {
       margin: 0 auto;
-      margin-top: 4px;        /* was 8px */
+      margin-top: 4px;
       width: 100%;
       max-width: 640px;
-      height: 420px;
+      height: 360px; /* was 420px */
       position: relative;
       border: 2px solid rgba(57, 255, 20, 0.9);
       box-shadow: 0 0 16px rgba(57, 255, 20, 0.8);
@@ -178,6 +178,11 @@
     }
 
     @media (max-width: 600px) {
+      /* On smaller phones, shrink play area a bit more */
+      #game-container {
+        height: 320px;
+      }
+
       .dpad {
         grid-template-columns: 52px 52px 52px;
         grid-template-rows: 52px 52px 52px;
