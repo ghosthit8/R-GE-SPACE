@@ -149,10 +149,10 @@
       box-shadow: none;
     }
 
-    /* A/B buttons – positioned like you showed in the screenshot */
+    /* A/B buttons – positioned how you wanted */
     .ab-buttons {
       position: relative;
-      width: 180px;    /* area to place A/B inside */
+      width: 180px;
       height: 140px;
       opacity: 0.9;
     }
@@ -179,7 +179,7 @@
       content: "B";
     }
 
-    /* Positions: B lower-left, A upper-right in the cluster */
+    /* Positions: B lower-left, A upper-right */
     .ab-buttons .btn-b {
       bottom: 10px;
       left: 30px;
@@ -190,11 +190,9 @@
     }
 
     @media (max-width: 600px) {
-      /* On smaller phones, still big but slightly shorter */
       #game-container {
         height: 480px;
       }
-
       .dpad {
         grid-template-columns: 52px 52px 52px;
         grid-template-rows: 52px 52px 52px;
@@ -255,13 +253,14 @@
 
     const config = {
       type: Phaser.AUTO,
-      width: 480,   // base resolution (overridden by RESIZE)
+      width: 480,
       height: 320,
       parent: "game-container",
-      pixelArt: true,
+      // pixelArt off so images are smooth, not blocky
+      pixelArt: false,
       backgroundColor: "#111122",
       scale: {
-        mode: Phaser.Scale.RESIZE,          // canvas always matches viewer size
+        mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH
       },
       scene: {
@@ -279,12 +278,13 @@
     let artOverlayImage;
     let artOpen = false;
     let prevA = false;
+    let prevB = false;
 
     function preload() {
-      // Random nice landscape from Unsplash
+      // Landscape from Unsplash (pretty high-res)
       this.load.image(
         "artImage",
-        "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1200&q=80"
+        "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2000&q=80"
       );
     }
 
@@ -292,7 +292,7 @@
       const fb = document.getElementById("game-fallback");
       if (fb) fb.style.display = "none";
 
-      // Place player in the center of the current viewer size
+      // Player in the center
       player = this.add.rectangle(
         this.scale.width / 2,
         this.scale.height / 2,
@@ -301,12 +301,10 @@
         0x39ff14
       );
 
-      // --- Picture frame on the "map" ---
-      // Position it somewhere on the right side of the viewer
+      // --- Picture frame ---
       const frameX = this.scale.width * 0.75;
       const frameY = this.scale.height * 0.4;
 
-      // Inner filled rect (like a screen)
       frameRect = this.add.rectangle(
         frameX,
         frameY,
@@ -314,7 +312,6 @@
         36,
         0x111111
       );
-      // Neon outline
       frameOutline = this.add.rectangle(
         frameX,
         frameY,
@@ -323,7 +320,7 @@
       );
       frameOutline.setStrokeStyle(2, 0x39ff14, 1);
 
-      // Prompt text for interaction
+      // Prompt
       promptText = this.add.text(
         this.scale.width / 2,
         this.scale.height - 40,
@@ -337,7 +334,7 @@
       promptText.setOrigin(0.5);
       promptText.setVisible(false);
 
-      // Overlay for expanded image
+      // Overlay
       artOverlayBg = this.add.rectangle(
         this.scale.width / 2,
         this.scale.height / 2,
@@ -352,13 +349,12 @@
         "artImage"
       );
 
-      // Scale the image to fit nicely inside
       resizeArtOverlay(this);
 
       artOverlayBg.setVisible(false);
       artOverlayImage.setVisible(false);
 
-      // Update overlay sizes if the game is resized
+      // Resize handler
       this.scale.on("resize", (gameSize) => {
         const width = gameSize.width;
         const height = gameSize.height;
@@ -486,9 +482,7 @@
       if (!btn) return;
 
       btn.addEventListener("click", () => {
-        // Fullscreen the whole page so controls stay visible
         const elem = document.documentElement;
-
         if (!document.fullscreenElement) {
           if (elem.requestFullscreen) elem.requestFullscreen();
         } else {
@@ -508,15 +502,16 @@
     function update(time, delta) {
       if (!player) return;
 
-      // Detect just-pressed A
       const justPressedA = inputState.A && !prevA;
+      const justPressedB = inputState.B && !prevB;
 
-      // If art overlay is open, ignore movement & only listen for A to close
+      // If art overlay is open, ignore movement & only listen for A/B to close
       if (artOpen) {
-        if (justPressedA) {
+        if (justPressedA || justPressedB) {
           closeArtOverlay();
         }
         prevA = inputState.A;
+        prevB = inputState.B;
         return;
       }
 
@@ -535,11 +530,11 @@
         const inv = 1 / Math.sqrt(2);
         dx *= inv;
         dy *= inv;
-        }
+      }
+
       player.x += dx * speed * dt;
       player.y += dy * speed * dt;
 
-      // Bounds use the CURRENT viewer size so the square can reach all edges
       const margin = 40;
       const w = this.scale.width;
       const h = this.scale.height;
@@ -547,7 +542,7 @@
       player.x = Phaser.Math.Clamp(player.x, margin, w - margin);
       player.y = Phaser.Math.Clamp(player.y, margin, h - margin);
 
-      // --- Interaction with frame ---
+      // Interaction with frame
       if (frameRect) {
         const dist = Phaser.Math.Distance.Between(
           player.x,
@@ -556,18 +551,17 @@
           frameRect.y
         );
 
-        // Show prompt if close enough
         if (promptText) {
           promptText.setVisible(dist < 70);
         }
 
-        // If close and A is pressed, open art overlay
         if (dist < 50 && justPressedA) {
           openArtOverlay();
         }
       }
 
       prevA = inputState.A;
+      prevB = inputState.B;
     }
 
     function openArtOverlay() {
