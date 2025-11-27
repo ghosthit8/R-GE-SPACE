@@ -42,24 +42,41 @@
     .chip{ border:1px solid var(--border); padding:.25rem .6rem; border-radius:999px; }
     .note{ opacity:.7; font-size:.85rem }
 
-    /* other participant hint */
     .tiny-pfp{ width:26px; height:26px; border-radius:8px; overflow:hidden; border:1px solid var(--green); background:#111; }
     .tiny-pfp img{ width:100%; height:100%; object-fit:cover; display:block; }
     .otherName{ font-weight:800; letter-spacing:.2px; cursor:pointer; }
     .otherName a{ color:var(--green); text-decoration:none; }
     .otherName a:hover{ text-decoration:underline; }
 
-    .chat-box{ height:calc(100vh - 152px); overflow-y:auto; padding:1rem; display:flex; flex-direction:column; }
-    .msg{ margin:.25rem 0; padding:.6rem .75rem; border-radius:12px; max-width:78%; line-height:1.25; word-wrap:break-word; }
+    .chat-box{
+      height:calc(100vh - 152px);
+      overflow-y:auto;
+      padding:1rem;
+      display:flex;
+      flex-direction:column;
+    }
+    .msg{
+      margin:.25rem 0;
+      padding:.6rem .75rem;
+      border-radius:12px;
+      max-width:78%;
+      line-height:1.25;
+      word-wrap:break-word;
+    }
     .me{ align-self:flex-end; background:#0f0f0f; color:var(--green); border:1px solid #1d401d; }
     .them{ align-self:flex-start; background:#171717; color:#e5ffe5; border:1px solid #222; }
     .ts{ opacity:.55; font-size:.72rem; margin-top:.25rem }
 
-    .msg-image{
+    .msg-image,
+    .msg-video{
       display:block;
       max-width:100%;
       border-radius:10px;
       margin-bottom:.35rem;
+      background:#000;
+    }
+    .msg-video{
+      max-height:60vh;
     }
 
     .typing-row{ padding:0 1rem .25rem; min-height:1.25rem; }
@@ -98,7 +115,7 @@
       position:fixed;
       left:50%;
       transform:translateX(-50%);
-      bottom:118px; /* just above input bar */
+      bottom:118px;
       background:#020803;
       border:1px solid #1c3f1c;
       border-radius:999px;
@@ -150,15 +167,15 @@
 
   <!-- 🔄 Uploading indicator -->
   <div id="upload-bar" class="upload-bar">
-    <span id="upload-label">Uploading image…</span>
+    <span id="upload-label">Uploading media…</span>
     <div class="upload-track"><div class="upload-fill"></div></div>
   </div>
 
   <form class="input-bar" id="chat-form" autocomplete="off">
-    <button type="button" id="attach-btn" title="Attach image">📎</button>
+    <button type="button" id="attach-btn" title="Attach media">📎</button>
     <input id="message-input" placeholder="Say something…" />
     <button id="send-btn" type="submit">Send</button>
-    <input id="image-input" type="file" accept="image/*" style="display:none" />
+    <input id="media-input" type="file" accept="image/*,video/*" style="display:none" />
   </form>
 
   <div id="err" class="err"></div>
@@ -177,25 +194,23 @@
     const THREAD_ID = sp.get("thread") || sp.get("dm");
     if(!THREAD_ID){ alert("Missing thread id"); location.href = "inbox.html"; }
 
-    // Unread marker (used by inbox)
     const lastReadKey = `dm_last_read_${THREAD_ID}`;
     const markThreadRead = () => localStorage.setItem(lastReadKey, Date.now());
 
-    // DOM refs
-    const chatBox = document.getElementById("chat");
-    const form = document.getElementById("chat-form");
-    const input = document.getElementById("message-input");
-    const sendBtn = document.getElementById("send-btn");
-    const attachBtn = document.getElementById("attach-btn");
-    const imageInput = document.getElementById("image-input");
-    const emptyState = document.getElementById("empty");
-    const whoami = document.getElementById("whoami");
-    const errBox = document.getElementById("err");
-    const typingEl = document.getElementById("typing-indicator");
-    const otherNameEl = document.getElementById("otherName");
-    const otherPfpEl = document.getElementById("otherPfp");
-    const uploadBar = document.getElementById("upload-bar");
-    const uploadLabel = document.getElementById("upload-label");
+    const chatBox      = document.getElementById("chat");
+    const form         = document.getElementById("chat-form");
+    const input        = document.getElementById("message-input");
+    const sendBtn      = document.getElementById("send-btn");
+    const attachBtn    = document.getElementById("attach-btn");
+    const mediaInput   = document.getElementById("media-input");
+    const emptyState   = document.getElementById("empty");
+    const whoami       = document.getElementById("whoami");
+    const errBox       = document.getElementById("err");
+    const typingEl     = document.getElementById("typing-indicator");
+    const otherNameEl  = document.getElementById("otherName");
+    const otherPfpEl   = document.getElementById("otherPfp");
+    const uploadBar    = document.getElementById("upload-bar");
+    const uploadLabel  = document.getElementById("upload-label");
 
     const renderedIds = new Set();
     const state = { user:null, displayName:null };
@@ -220,6 +235,11 @@
       }catch(_){ return ""; }
     };
 
+    function isVideoUrl(url){
+      const base = (url || "").split("?")[0].toLowerCase();
+      return /\.(mp4|webm|ogg|ogv|mov|m4v)$/i.test(base);
+    }
+
     function renderMessage(row){
       if (!row || (row.id && renderedIds.has(row.id))) return;
       if (emptyState && emptyState.parentNode) emptyState.remove();
@@ -229,21 +249,34 @@
       const div = document.createElement("div");
       div.className = "msg " + (mine ? "me" : "them");
 
-      // image (if any)
       if (row.attachment_url) {
-        const img = document.createElement("img");
-        img.src = row.attachment_url;
-        img.alt = "image";
-        img.className = "msg-image";
-        img.loading = "lazy";
-        img.addEventListener("click", () => window.open(row.attachment_url, "_blank"));
-        div.appendChild(img);
+        const url = row.attachment_url;
+        if (isVideoUrl(url)) {
+          const vid = document.createElement("video");
+          vid.src = url;
+          vid.className = "msg-video";
+          vid.controls = true;
+          vid.playsInline = true;
+          vid.preload = "metadata";
+          vid.addEventListener("click", () => {
+            // tap again for fullscreen
+            if (vid.requestFullscreen) vid.requestFullscreen().catch(()=>{});
+          });
+          div.appendChild(vid);
+        } else {
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = "image";
+          img.className = "msg-image";
+          img.loading = "lazy";
+          img.addEventListener("click", () => window.open(url, "_blank"));
+          div.appendChild(img);
+        }
       }
 
-      // text body (if any)
       if (row.body && row.body.trim() !== "") {
         const text = document.createElement("span");
-        text.textContent = (row.body || "");
+        text.textContent = row.body || "";
         div.appendChild(text);
       }
 
@@ -358,15 +391,15 @@
       }
     }
 
-    // Upload image & send a message with attachment_url
-    async function sendImageMessage(file){
+    // Upload image or video & send message with attachment_url
+    async function sendMediaMessage(file){
       if (!file) return;
-      if (!state.user) { showError("Please log in to send images"); return; }
+      if (!state.user) { showError("Please log in to send media"); return; }
 
-      console.log("[DM] sendImageMessage start", file.name, file.size);
+      console.log("[DM] sendMediaMessage start", file.name, file.size, file.type);
 
-      if (file.size > 10 * 1024 * 1024) {
-        showError("Image too large (max 10MB).");
+      if (file.size > 50 * 1024 * 1024) { // 50MB soft cap
+        showError("File too large (max ~50MB).");
         return;
       }
 
@@ -374,9 +407,8 @@
       const rand = Math.random().toString(36).slice(2);
       const path = `${state.user.id}/${THREAD_ID}/${Date.now()}-${rand}.${ext}`;
 
-      console.log("[DM] uploading to", DM_MEDIA_BUCKET, "path", path);
-
-      showUpload(true, "Uploading image…");
+      const isVid = file.type.startsWith("video/");
+      showUpload(true, isVid ? "Uploading video…" : "Uploading image…");
 
       const { error: upErr } = await sb
         .storage
@@ -385,7 +417,7 @@
 
       if (upErr) {
         showUpload(false);
-        showError("Image upload failed.", JSON.stringify(upErr, null, 2));
+        showError("Media upload failed.", JSON.stringify(upErr, null, 2));
         return;
       }
 
@@ -394,7 +426,7 @@
       console.log("[DM] uploaded, publicUrl =", url);
       if (!url) {
         showUpload(false);
-        showError("Could not get public URL for image.");
+        showError("Could not get public URL for media.");
         return;
       }
 
@@ -419,7 +451,7 @@
         return;
       }
 
-      console.log("[DM] image message inserted", data);
+      console.log("[DM] media message inserted", data);
       renderMessage(data);
     }
 
@@ -449,20 +481,20 @@
 
     // When they click 📎, open file picker
     attachBtn.addEventListener("click", () => {
-      if (!state.user) { showError("Please log in to send images"); return; }
-      imageInput.click();
+      if (!state.user) { showError("Please log in to send media"); return; }
+      mediaInput.click();
     });
 
-    // When an image is picked, upload & send immediately
-    imageInput.addEventListener("change", async (e) => {
+    // When media picked, upload & send
+    mediaInput.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
       attachBtn.disabled = true;
       sendBtn.disabled = true;
       try{
-        await sendImageMessage(file);
+        await sendMediaMessage(file);
       } finally {
-        imageInput.value = "";
+        mediaInput.value = "";
         attachBtn.disabled = false;
         sendBtn.disabled = false;
       }
