@@ -272,8 +272,21 @@
     };
 
     let player;
+    let frameRect;
+    let frameOutline;
+    let promptText;
+    let artOverlayBg;
+    let artOverlayImage;
+    let artOpen = false;
+    let prevA = false;
 
-    function preload() {}
+    function preload() {
+      // Placeholder art image – replace this URL with any image you want
+      this.load.image(
+        "artImage",
+        "https://images.pexels.com/photos/2837009/pexels-photo-2837009.jpeg?auto=compress&cs=tinysrgb&w=800"
+      );
+    }
 
     function create() {
       const fb = document.getElementById("game-fallback");
@@ -288,6 +301,77 @@
         0x39ff14
       );
 
+      // --- Picture frame on the "map" ---
+      // Position it somewhere on the right side of the viewer
+      const frameX = this.scale.width * 0.75;
+      const frameY = this.scale.height * 0.4;
+
+      // Inner filled rect (like a screen)
+      frameRect = this.add.rectangle(
+        frameX,
+        frameY,
+        48,
+        36,
+        0x111111
+      );
+      // Neon outline
+      frameOutline = this.add.rectangle(
+        frameX,
+        frameY,
+        52,
+        40
+      );
+      frameOutline.setStrokeStyle(2, 0x39ff14, 1);
+
+      // Prompt text for interaction
+      promptText = this.add.text(
+        this.scale.width / 2,
+        this.scale.height - 40,
+        "Press A to view art",
+        {
+          fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          fontSize: "14px",
+          color: "#39ff14"
+        }
+      );
+      promptText.setOrigin(0.5);
+      promptText.setVisible(false);
+
+      // Overlay for expanded image
+      artOverlayBg = this.add.rectangle(
+        this.scale.width / 2,
+        this.scale.height / 2,
+        this.scale.width,
+        this.scale.height,
+        0x000000,
+        0.9
+      );
+      artOverlayImage = this.add.image(
+        this.scale.width / 2,
+        this.scale.height / 2,
+        "artImage"
+      );
+
+      // Scale the image to fit nicely inside
+      resizeArtOverlay(this);
+
+      artOverlayBg.setVisible(false);
+      artOverlayImage.setVisible(false);
+
+      // Update overlay sizes if the game is resized
+      this.scale.on("resize", (gameSize) => {
+        const width = gameSize.width;
+        const height = gameSize.height;
+
+        artOverlayBg.setPosition(width / 2, height / 2);
+        artOverlayBg.setSize(width, height);
+
+        artOverlayImage.setPosition(width / 2, height / 2);
+        resizeArtOverlay(this);
+
+        promptText.setPosition(width / 2, height - 40);
+      });
+
       setupKeyboard(this);
       setupTouchButton("btn-left", "left");
       setupTouchButton("btn-right", "right");
@@ -297,6 +381,20 @@
       setupTouchButton("btn-b", "B");
 
       setupFullscreenButton();
+    }
+
+    function resizeArtOverlay(scene) {
+      if (!artOverlayImage) return;
+      const maxW = scene.scale.width * 0.8;
+      const maxH = scene.scale.height * 0.8;
+      const tex = artOverlayImage.texture;
+      if (!tex || !tex.source[0]) return;
+
+      const natW = tex.source[0].width;
+      const natH = tex.source[0].height;
+
+      const scale = Math.min(maxW / natW, maxH / natH, 1);
+      artOverlayImage.setDisplaySize(natW * scale, natH * scale);
     }
 
     function setupKeyboard(scene) {
@@ -410,6 +508,18 @@
     function update(time, delta) {
       if (!player) return;
 
+      // Detect just-pressed A
+      const justPressedA = inputState.A && !prevA;
+
+      // If art overlay is open, ignore movement & only listen for A to close
+      if (artOpen) {
+        if (justPressedA) {
+          closeArtOverlay();
+        }
+        prevA = inputState.A;
+        return;
+      }
+
       const speed = 90;
       const dt = delta / 1000;
 
@@ -437,6 +547,41 @@
 
       player.x = Phaser.Math.Clamp(player.x, margin, w - margin);
       player.y = Phaser.Math.Clamp(player.y, margin, h - margin);
+
+      // --- Interaction with frame ---
+      if (frameRect) {
+        const dist = Phaser.Math.Distance.Between(
+          player.x,
+          player.y,
+          frameRect.x,
+          frameRect.y
+        );
+
+        // Show prompt if close enough
+        if (promptText) {
+          promptText.setVisible(dist < 70);
+        }
+
+        // If close and A is pressed, open art overlay
+        if (dist < 50 && justPressedA) {
+          openArtOverlay();
+        }
+      }
+
+      prevA = inputState.A;
+    }
+
+    function openArtOverlay() {
+      artOpen = true;
+      if (artOverlayBg) artOverlayBg.setVisible(true);
+      if (artOverlayImage) artOverlayImage.setVisible(true);
+      if (promptText) promptText.setVisible(false);
+    }
+
+    function closeArtOverlay() {
+      artOpen = false;
+      if (artOverlayBg) artOverlayBg.setVisible(false);
+      if (artOverlayImage) artOverlayImage.setVisible(false);
     }
 
     new Phaser.Game(config);
