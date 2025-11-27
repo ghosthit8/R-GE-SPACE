@@ -68,12 +68,12 @@
 
     /* GAME BOX – big viewer with margin so border shows on all sides */
     #game-container {
-      margin-top: 80px;             /* room for top buttons */
+      margin-top: 80px;            /* leave room under the fixed buttons */
       margin-bottom: 8px;
-      width: calc(100% - 24px);     /* small side margins */
-      max-width: 720px;
+      width: calc(100% - 24px);   /* small margin left/right */
+      max-width: 720px;           /* wider on larger screens */
       position: relative;
-      height: 520px;                /* tall viewer */
+      height: 460px;              /* TALL viewer (fills most space) */
       border: 2px solid rgba(57, 255, 20, 0.9);
       box-shadow: 0 0 16px rgba(57, 255, 20, 0.8);
       background: #020202;
@@ -149,30 +149,31 @@
       box-shadow: none;
     }
 
+    /* A/B cluster on the right, with custom positions */
     .ab-buttons {
-      display: flex;
-      align-items: center;
-      gap: 16px;
+      position: relative;
+      width: 200px;
+      height: 150px;
       opacity: 0.9;
     }
 
-    /* A / B round buttons with dot + letter inside */
     .ab-buttons button {
-      position: relative;
+      position: absolute;
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      font-size: 1.1rem;
+      font-size: 1.2rem;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding-top: 12px; /* space for dot above letter */
+      padding-top: 12px; /* room for dot above letter */
     }
 
+    /* Dot above letter */
     .ab-buttons button::before {
       content: "";
       position: absolute;
-      top: 10px;
+      top: 8px;
       left: 50%;
       transform: translateX(-50%);
       width: 10px;
@@ -182,9 +183,31 @@
       box-shadow: 0 0 6px rgba(57, 255, 20, 0.9);
     }
 
+    /* Letter inside button */
+    .ab-buttons button::after {
+      content: attr(data-label);
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1rem;
+      letter-spacing: 2px;
+    }
+
+    /* Positions to match your red circles */
+    .ab-buttons .btn-b {
+      bottom: 10px;
+      left: 40px;
+    }
+    .ab-buttons .btn-a {
+      bottom: 40px;
+      right: 25px;
+    }
+
     @media (max-width: 600px) {
+      /* On smaller phones, still big but a bit shorter so it doesn't clash with controls */
       #game-container {
-        height: 480px;
+        height: 420px;
       }
 
       .dpad {
@@ -225,8 +248,8 @@
       </div>
 
       <div class="ab-buttons">
-        <button id="btn-b" class="btn-b">B</button>
-        <button id="btn-a" class="btn-a">A</button>
+        <button id="btn-b" class="btn-b" data-label="B"></button>
+        <button id="btn-a" class="btn-a" data-label="A"></button>
       </div>
     </div>
   </div>
@@ -247,13 +270,13 @@
 
     const config = {
       type: Phaser.AUTO,
-      width: 480,   // base resolution (will be overridden by RESIZE)
+      width: 480,   // bigger internal game resolution
       height: 320,
       parent: "game-container",
       pixelArt: true,
       backgroundColor: "#111122",
       scale: {
-        mode: Phaser.Scale.RESIZE,          // canvas always matches viewer size
+        mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
       },
       scene: {
@@ -271,14 +294,8 @@
       const fb = document.getElementById("game-fallback");
       if (fb) fb.style.display = "none";
 
-      // Place player in the center of the current viewer size
-      player = this.add.rectangle(
-        this.scale.width / 2,
-        this.scale.height / 2,
-        32,
-        32,
-        0x39ff14
-      );
+      // Big bright green square in the center of the (bigger) world
+      player = this.add.rectangle(config.width / 2, config.height / 2, 32, 32, 0x39ff14);
 
       setupKeyboard(this);
       setupTouchButton("btn-left", "left");
@@ -422,13 +439,10 @@
       player.x += dx * speed * dt;
       player.y += dy * speed * dt;
 
-      // Bounds use the CURRENT viewer size so the square can reach all edges
+      // padding so you always see space on all sides
       const margin = 40;
-      const w = this.scale.width;
-      const h = this.scale.height;
-
-      player.x = Phaser.Math.Clamp(player.x, margin, w - margin);
-      player.y = Phaser.Math.Clamp(player.y, margin, h - margin);
+      player.x = Phaser.Math.Clamp(player.x, margin, config.width - margin);
+      player.y = Phaser.Math.Clamp(player.y, margin, config.height - margin);
     }
 
     new Phaser.Game(config);
