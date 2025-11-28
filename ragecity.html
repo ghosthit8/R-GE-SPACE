@@ -302,6 +302,7 @@
     let prevB = false;
 
     const artOverlayEl = document.getElementById("art-overlay");
+    const artImg = document.getElementById("art-overlay-img");
 
     function preload() {
       // We don't need to load the big image into Phaser anymore
@@ -354,7 +355,7 @@
       setupTouchButton("btn-b", "B");
       setupFullscreenButton();
 
-      // Optional: tap the image itself to close
+      // tap anywhere on overlay to close
       artOverlayEl.addEventListener("click", () => {
         if (artOpen) closeArtOverlay();
       });
@@ -472,9 +473,14 @@
       const justPressedA = inputState.A && !prevA;
       const justPressedB = inputState.B && !prevB;
 
-      // Overlay open: only listen for A/B to close
+      // Overlay open:
+      //  - A toggles fullscreen on the image
+      //  - B closes the overlay (and exits fullscreen if needed)
       if (artOpen) {
-        if (justPressedA || justPressedB) {
+        if (justPressedA) {
+          toggleArtFullscreen();
+        }
+        if (justPressedB) {
           closeArtOverlay();
         }
         prevA = inputState.A;
@@ -540,6 +546,40 @@
     function closeArtOverlay() {
       artOpen = false;
       if (artOverlayEl) artOverlayEl.style.display = "none";
+
+      // if the image is currently fullscreen, exit it
+      if (
+        (document.fullscreenElement === artImg ||
+          document.webkitFullscreenElement === artImg) &&
+        (document.exitFullscreen || document.webkitExitFullscreen)
+      ) {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      }
+    }
+
+    function toggleArtFullscreen() {
+      // already fullscreen → exit
+      if (
+        document.fullscreenElement === artImg ||
+        document.webkitFullscreenElement === artImg
+      ) {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      } else {
+        // not fullscreen → request fullscreen on the image
+        if (artImg.requestFullscreen) {
+          artImg.requestFullscreen();
+        } else if (artImg.webkitRequestFullscreen) {
+          artImg.webkitRequestFullscreen();
+        }
+      }
     }
 
     new Phaser.Game(config);
