@@ -324,7 +324,7 @@
       const w = this.scale.width;
       const h = this.scale.height;
 
-      // ==== ROOM GEOMETRY (walls & door) ====
+      // ==== ROOM GEOMETRY (walls & LEFT-SIDE door) ====
       const marginX = 60;
       const marginY = 90;
 
@@ -340,23 +340,25 @@
       const bottomInner = bottomOuter - corridorWidth;
 
       const doorWidth = 90;
-      const doorCenterX = (leftOuter + rightOuter) / 2;
-      const gapOuterStartX = doorCenterX - doorWidth / 2;
-      const gapOuterEndX = doorCenterX + doorWidth / 2;
 
-      const gapInnerStartX = doorCenterX - doorWidth / 2;
-      const gapInnerEndX = doorCenterX + doorWidth / 2;
+      // door on the LEFT wall, a bit below center
+      const doorCenterY = topInner + (bottomInner - topInner) * 0.65;
+      const gapOuterTopY = doorCenterY - doorWidth / 2;
+      const gapOuterBotY = doorCenterY + doorWidth / 2;
 
-      // Outer wall with centered bottom opening
+      const gapInnerTopY = doorCenterY - doorWidth / 2;
+      const gapInnerBotY = doorCenterY + doorWidth / 2;
+
+      // Outer wall with opening on the left
       const wallOuter = this.add.graphics();
       wallOuter.lineStyle(4, 0xffffff, 1);
       wallOuter.beginPath();
       wallOuter.moveTo(leftOuter, topOuter);
       wallOuter.lineTo(rightOuter, topOuter);
       wallOuter.lineTo(rightOuter, bottomOuter);
-      wallOuter.lineTo(gapOuterEndX, bottomOuter);   // right to right edge of door
-      wallOuter.moveTo(gapOuterStartX, bottomOuter); // left edge of door to left corner
       wallOuter.lineTo(leftOuter, bottomOuter);
+      wallOuter.lineTo(leftOuter, gapOuterBotY);      // up to bottom of doorway
+      wallOuter.moveTo(leftOuter, gapOuterTopY);      // skip gap
       wallOuter.lineTo(leftOuter, topOuter);
       wallOuter.strokePath();
 
@@ -367,14 +369,14 @@
       wallInner.moveTo(leftInner, topInner);
       wallInner.lineTo(rightInner, topInner);
       wallInner.lineTo(rightInner, bottomInner);
-      wallInner.lineTo(gapInnerEndX, bottomInner);
-      wallInner.moveTo(gapInnerStartX, bottomInner);
       wallInner.lineTo(leftInner, bottomInner);
+      wallInner.lineTo(leftInner, gapInnerBotY);
+      wallInner.moveTo(leftInner, gapInnerTopY);
       wallInner.lineTo(leftInner, topInner);
       wallInner.strokePath();
 
-      // Player starts just *outside* the bottom opening
-      player = this.add.rectangle(doorCenterX, bottomOuter + 20, 20, 20, 0x39ff14);
+      // Player starts just outside that left opening
+      player = this.add.rectangle(leftOuter - 20, doorCenterY, 20, 20, 0x39ff14);
 
       // ===== TRAPEZOID PAINTING FRAMES (inside corridor) =====
       const tex = this.textures.get("artThumb").getSourceImage();
@@ -471,7 +473,7 @@
         });
       }
 
-      // all centers halfway between inner & outer for that side
+      // centers between inner and outer walls
       const midLeftX   = (leftOuter  + leftInner)  / 2;
       const midRightX  = (rightOuter + rightInner) / 2;
       const midTopY    = (topOuter   + topInner)   / 2;
@@ -494,24 +496,18 @@
       }
 
       // left paintings
-      const leftCount = 4;
+      const leftCount = 3; // slightly fewer so there's space near the doorway
       for (let i = 0; i < leftCount; i++) {
         const t = i / (leftCount - 1);
         const y = Phaser.Math.Linear(topInner + 40, bottomInner - 40, t);
         addTrapezoidFrame(this, midLeftX, y, "left");
       }
 
-      // bottom paintings, spread across bottom run (skip door gap slightly)
-      const bottomCount = 3;
-      const bottomStartX = leftInner + 50;
-      const bottomEndX   = rightInner - 50;
+      // bottom paintings
+      const bottomCount = 4;
       for (let i = 0; i < bottomCount; i++) {
         const t = i / (bottomCount - 1);
-        const x = Phaser.Math.Linear(bottomStartX, bottomEndX, t);
-        // tiny push so none land right in the doorway itself
-        if (Math.abs(x - doorCenterX) < doorWidth * 0.3) {
-          continue; // skip if it would sit right in the gap
-        }
+        const x = Phaser.Math.Linear(leftInner + 40, rightInner - 40, t);
         addTrapezoidFrame(this, x, midBottomY, "bottom");
       }
 
