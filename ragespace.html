@@ -100,7 +100,20 @@
   .msg .txt{ color:#eaffea; white-space:pre-wrap; word-wrap:break-word; }
   .msg .ops{ position:absolute; right:6px; top:6px; display:flex; gap:6px; opacity:0; transition:opacity .15s ease; }
   .msg:hover .ops{ opacity:.9; }
-  .msg .ops button{ border-color:rgba(57,255,20,0.35); padding:4px 6px; border-radius:8px; font-weight:700; font-size:11px; background:#041004; }
+  .msg .ops button{
+    border-color:rgba(57,255,20,0.35);
+    padding:4px 6px;
+    border-radius:8px;
+    font-weight:700;
+    font-size:11px;
+    background:#041004;
+  }
+  /* armed state for delete confirm */
+  .msg .ops button.armed{
+    border-color:var(--red);
+    color:var(--red);
+    background:#130000;
+  }
 
   .composer{ display:flex; gap:8px; align-items:center; }
   .composer input[type="text"]{ flex:1; height:44px; border-radius:14px; border-color:#0a260a; background:#020502; color:var(--ink); }
@@ -661,6 +674,27 @@
       return wrap;
     }
 
+    // two-step arm for delete
+    function armDelete(btn, id){
+      if(btn.dataset.armed === "1"){
+        btn.dataset.armed = "0";
+        btn.textContent = "delete";
+        btn.classList.remove("armed");
+        deleteMessage(id);
+      }else{
+        btn.dataset.armed = "1";
+        btn.textContent = "confirm";
+        btn.classList.add("armed");
+        setTimeout(()=>{
+          if(btn.dataset.armed === "1"){
+            btn.dataset.armed = "0";
+            btn.textContent = "delete";
+            btn.classList.remove("armed");
+          }
+        }, 3000);
+      }
+    }
+
     function renderMessage(m){
       const mine = m.user_id === me.id;
       const row = el("div", {
@@ -678,7 +712,7 @@
       const txt  = el("div", { class:"txt" }, textContent);
 
       const ops = el("div", { class:"ops" });
-      if (mine) ops.appendChild(el("button", { onclick:()=>deleteMessage(m.id) }, "delete"));
+      if (mine) ops.appendChild(el("button", { onclick:(ev)=>armDelete(ev.currentTarget, m.id) }, "delete"));
 
       row.append(meta);
       if (textContent) row.append(txt);
