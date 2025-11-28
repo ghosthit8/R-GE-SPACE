@@ -324,125 +324,200 @@
       const w = this.scale.width;
       const h = this.scale.height;
 
-      // Start just outside the bottom-left door
-      player = this.add.rectangle(w * 0.32, h * 0.72, 20, 20, 0x39ff14);
+      // ==== ROOM GEOMETRY (walls & door) ====
+      const marginX = 60;
+      const marginY = 90;
 
-      // ===== ROOM GEOMETRY (big C with door bottom-left) =====
-      const marginX = 70;
-      const marginY = 50;
+      const leftOuter = marginX;
+      const rightOuter = w - marginX;
+      const topOuter = marginY;
+      const bottomOuter = h - marginY;
 
-      const leftX = marginX;
-      const rightX = w - marginX;
-      const topY = marginY;
-      const bottomY = h - marginY;
+      const corridorWidth = 32;
+      const leftInner = leftOuter + corridorWidth;
+      const rightInner = rightOuter - corridorWidth;
+      const topInner = topOuter + corridorWidth;
+      const bottomInner = bottomOuter - corridorWidth;
 
       const doorWidth = 90;
-      const doorHeight = 90;
-      const wallThickness = 26;
+      const doorCenterX = (leftOuter + rightOuter) / 2;
+      const gapOuterStartX = doorCenterX - doorWidth / 2;
+      const gapOuterEndX = doorCenterX + doorWidth / 2;
 
-      const walls = this.add.graphics();
-      walls.lineStyle(wallThickness, 0xffffff, 1);
-      walls.beginPath();
+      const gapInnerStartX = doorCenterX - doorWidth / 2;
+      const gapInnerEndX = doorCenterX + doorWidth / 2;
 
-      // top
-      walls.moveTo(leftX, topY);
-      walls.lineTo(rightX, topY);
+      // Outer wall with centered bottom opening
+      const wallOuter = this.add.graphics();
+      wallOuter.lineStyle(4, 0xffffff, 1);
+      wallOuter.beginPath();
+      wallOuter.moveTo(leftOuter, topOuter);
+      wallOuter.lineTo(rightOuter, topOuter);
+      wallOuter.lineTo(rightOuter, bottomOuter);
+      wallOuter.lineTo(gapOuterEndX, bottomOuter);   // right to right edge of door
+      wallOuter.moveTo(gapOuterStartX, bottomOuter); // left edge of door to left corner
+      wallOuter.lineTo(leftOuter, bottomOuter);
+      wallOuter.lineTo(leftOuter, topOuter);
+      wallOuter.strokePath();
 
-      // right
-      walls.lineTo(rightX, bottomY);
+      // Inner wall with matching opening
+      const wallInner = this.add.graphics();
+      wallInner.lineStyle(4, 0xffffff, 1);
+      wallInner.beginPath();
+      wallInner.moveTo(leftInner, topInner);
+      wallInner.lineTo(rightInner, topInner);
+      wallInner.lineTo(rightInner, bottomInner);
+      wallInner.lineTo(gapInnerEndX, bottomInner);
+      wallInner.moveTo(gapInnerStartX, bottomInner);
+      wallInner.lineTo(leftInner, bottomInner);
+      wallInner.lineTo(leftInner, topInner);
+      wallInner.strokePath();
 
-      // bottom from right towards left, stop before door
-      walls.lineTo(leftX + doorWidth, bottomY);
+      // Player starts just *outside* the bottom opening
+      player = this.add.rectangle(doorCenterX, bottomOuter + 20, 20, 20, 0x39ff14);
 
-      // left wall from just above door up to top
-      walls.moveTo(leftX, bottomY - doorHeight);
-      walls.lineTo(leftX, topY);
-
-      walls.strokePath();
-
-      // inner darker "shadow" edge, subtle 3D
-      const inset = 10;
-      const inner = this.add.graphics();
-      inner.lineStyle(4, 0x444444, 1);
-      inner.beginPath();
-      inner.moveTo(leftX + inset, topY + inset);
-      inner.lineTo(rightX - inset, topY + inset);
-      inner.lineTo(rightX - inset, bottomY - inset);
-      inner.lineTo(leftX + doorWidth + inset, bottomY - inset);
-      inner.moveTo(leftX + inset, bottomY - doorHeight - inset);
-      inner.lineTo(leftX + inset, topY + inset);
-      inner.strokePath();
-
-      // ===== Paintings: tall portrait frames mounted on walls =====
+      // ===== TRAPEZOID PAINTING FRAMES (inside corridor) =====
       const tex = this.textures.get("artThumb").getSourceImage();
       const natW = tex.width;
       const natH = tex.height;
-      const maxThumbW = 40; // narrower
-      const maxThumbH = 60; // taller
-      const thumbScale = Math.min(maxThumbW / natW, maxThumbH / natH);
+      const imgMaxW = 26;
+      const imgMaxH = 26;
+      const imgScale = Math.min(imgMaxW / natW, imgMaxH / natH);
 
       galleryFrames = [];
 
-      const addPaintingFrame = (x, y) => {
-        const rect = this.add.rectangle(x, y, 46, 70);
-        rect.setStrokeStyle(4, 0x39ff14, 1);
+      function addTrapezoidFrame(scene, x, y, side) {
+        const g = scene.add.graphics();
+        g.lineStyle(3, 0x39ff14, 1);
 
-        const mat = this.add.rectangle(x, y, 36, 60, 0x000000);
-        mat.setStrokeStyle(2, 0x1a8f3a, 1);
+        const wTop = 18;
+        const wBottom = 28;
+        const h = 26;
+        const skew = 5;
 
-        const img = this.add.image(x, y, "artThumb");
-        img.setScale(thumbScale);
+        let points;
 
-        galleryFrames.push({ x, y, rect, mat, img, fullUrl: PAINTING_FULL_URL });
-      };
+        if (side === "left") {
+          points = [
+            { x: -wBottom / 2, y: -h / 2 },
+            { x:  wTop / 2,    y: -h / 2 + skew },
+            { x:  wTop / 2,    y:  h / 2 - skew },
+            { x: -wBottom / 2, y:  h / 2 }
+          ];
+        } else if (side === "right") {
+          points = [
+            { x: -wTop / 2,    y: -h / 2 + skew },
+            { x:  wBottom / 2, y: -h / 2 },
+            { x:  wBottom / 2, y:  h / 2 },
+            { x: -wTop / 2,    y:  h / 2 - skew }
+          ];
+        } else if (side === "top") {
+          // flipped vs bottom
+          points = [
+            { x: -wBottom / 2, y: -h / 2 },
+            { x:  wBottom / 2, y: -h / 2 },
+            { x:  wTop / 2,    y:  h / 2 },
+            { x: -wTop / 2,    y:  h / 2 }
+          ];
+        } else {
+          // bottom
+          points = [
+            { x: -wTop / 2,    y: -h / 2 },
+            { x:  wTop / 2,    y: -h / 2 },
+            { x:  wBottom / 2, y:  h / 2 },
+            { x: -wBottom / 2, y:  h / 2 }
+          ];
+        }
 
-      // offsets so they sit just inside each wall
-      const offsetFromWall = wallThickness / 2 + 18;
+        g.beginPath();
+        g.moveTo(x + points[0].x, y + points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          g.lineTo(x + points[i].x, y + points[i].y);
+        }
+        g.closePath();
+        g.strokePath();
 
-      const topInnerY = topY + offsetFromWall;
-      const bottomInnerY = bottomY - offsetFromWall;
-      const leftInnerX = leftX + offsetFromWall;
-      const rightInnerX = rightX - offsetFromWall;
+        const gMat = scene.add.graphics();
+        gMat.lineStyle(2, 0x1a8f3a, 1);
+        gMat.fillStyle(0x000000, 1);
 
-      // Top wall: evenly spaced paintings
+        const matScale = 0.78;
+        gMat.beginPath();
+        gMat.moveTo(
+          x + points[0].x * matScale,
+          y + points[0].y * matScale
+        );
+        for (let i = 1; i < points.length; i++) {
+          gMat.lineTo(
+            x + points[i].x * matScale,
+            y + points[i].y * matScale
+          );
+        }
+        gMat.closePath();
+        gMat.fillPath();
+        gMat.strokePath();
+
+        const img = scene.add.image(x, y, "artThumb");
+        img.setScale(imgScale * 0.9);
+
+        galleryFrames.push({
+          x,
+          y,
+          side,
+          frameGfx: g,
+          matGfx: gMat,
+          img,
+          fullUrl: PAINTING_FULL_URL
+        });
+      }
+
+      // all centers halfway between inner & outer for that side
+      const midLeftX   = (leftOuter  + leftInner)  / 2;
+      const midRightX  = (rightOuter + rightInner) / 2;
+      const midTopY    = (topOuter   + topInner)   / 2;
+      const midBottomY = (bottomOuter+ bottomInner)/ 2;
+
+      // top paintings
       const topCount = 4;
       for (let i = 0; i < topCount; i++) {
         const t = i / (topCount - 1);
-        const x = Phaser.Math.Linear(leftInnerX + 10, rightInnerX - 10, t);
-        addPaintingFrame(x, topInnerY);
+        const x = Phaser.Math.Linear(leftInner + 40, rightInner - 40, t);
+        addTrapezoidFrame(this, x, midTopY, "top");
       }
 
-      // Right wall: vertical row
+      // right paintings
       const rightCount = 4;
       for (let i = 0; i < rightCount; i++) {
         const t = i / (rightCount - 1);
-        const y = Phaser.Math.Linear(topInnerY + 20, bottomInnerY - 10, t);
-        addPaintingFrame(rightInnerX, y);
+        const y = Phaser.Math.Linear(topInner + 40, bottomInner - 40, t);
+        addTrapezoidFrame(this, midRightX, y, "right");
       }
 
-      // Left wall: only the upper section (above door)
-      const leftTopY = topInnerY;
-      const leftBottomY = bottomY - doorHeight - offsetFromWall * 0.2;
-      const leftCount = 3;
+      // left paintings
+      const leftCount = 4;
       for (let i = 0; i < leftCount; i++) {
         const t = i / (leftCount - 1);
-        const y = Phaser.Math.Linear(leftTopY, leftBottomY, t);
-        addPaintingFrame(leftInnerX, y);
+        const y = Phaser.Math.Linear(topInner + 40, bottomInner - 40, t);
+        addTrapezoidFrame(this, midLeftX, y, "left");
       }
 
-      // Bottom wall: to the right of the door
-      const bottomStartX = leftX + doorWidth + offsetFromWall + 25;
-      const bottomEndX = rightInnerX;
+      // bottom paintings, spread across bottom run (skip door gap slightly)
       const bottomCount = 3;
+      const bottomStartX = leftInner + 50;
+      const bottomEndX   = rightInner - 50;
       for (let i = 0; i < bottomCount; i++) {
         const t = i / (bottomCount - 1);
         const x = Phaser.Math.Linear(bottomStartX, bottomEndX, t);
-        addPaintingFrame(x, bottomInnerY);
+        // tiny push so none land right in the doorway itself
+        if (Math.abs(x - doorCenterX) < doorWidth * 0.3) {
+          continue; // skip if it would sit right in the gap
+        }
+        addTrapezoidFrame(this, x, midBottomY, "bottom");
       }
 
       // ===== Center pedestal =====
-      const centerX = (leftX + rightX) / 2;
-      const centerY = (topY + bottomY) / 2;
+      const centerX = (leftOuter + rightOuter) / 2;
+      const centerY = (topOuter + bottomOuter) / 2;
 
       const pedestalBase = this.add.rectangle(centerX, centerY, 80, 80, 0x000000);
       pedestalBase.setStrokeStyle(3, 0xffffff, 1);
@@ -457,7 +532,7 @@
         type: "sculpture"
       };
 
-      // Prompt text
+      // prompt text
       promptText = this.add.text(w / 2, h - 40, "", {
         fontFamily:
           "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -578,7 +653,9 @@
         if (!document.fullscreenElement) {
           if (elem.requestFullscreen) elem.requestFullscreen();
         } else {
-          if (document.exitFullscreen) document.exitFullscreen();
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          }
         }
       });
 
@@ -690,13 +767,9 @@
       if (
         (document.fullscreenElement === artImg ||
           document.webkitFullscreenElement === artImg) &&
-        (document.exitFullscreen || document.webkitExitFullscreen)
+        document.exitFullscreen
       ) {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        }
+        document.exitFullscreen();
       }
     }
 
@@ -706,16 +779,10 @@
         document.fullscreenElement === artImg ||
         document.webkitFullscreenElement === artImg
       ) {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        }
+        if (document.exitFullscreen) document.exitFullscreen();
       } else {
         if (artImg.requestFullscreen) {
           artImg.requestFullscreen();
-        } else if (artImg.webkitRequestFullscreen) {
-          artImg.webkitRequestFullscreen();
         }
       }
     }
