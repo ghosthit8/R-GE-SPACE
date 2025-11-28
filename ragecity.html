@@ -100,13 +100,24 @@
       align-items: center;
       justify-content: center;
       z-index: 5;              /* above game canvas, below UI buttons */
+      flex-direction: column;
     }
 
-    #art-overlay img {
+    #art-overlay-img {
       max-width: 90%;
-      max-height: 90%;
+      max-height: 80%;
       border-radius: 12px;
       box-shadow: 0 0 20px rgba(57, 255, 20, 0.8);
+    }
+
+    #art-overlay-msg {
+      width: 100%;
+      text-align: center;
+      font-size: 18px;
+      color: var(--green);
+      text-shadow: 0 0 8px var(--green);
+      margin-bottom: 12px;
+      display: block;
     }
 
     /* CONTROLS */
@@ -230,6 +241,7 @@
 
     <!-- HTML overlay for big, sharp image -->
     <div id="art-overlay">
+      <div id="art-overlay-msg">Press "A" for fullscreen</div>
       <img
         id="art-overlay-img"
         src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2000&q=80"
@@ -304,6 +316,7 @@
 
     const artOverlayEl = document.getElementById("art-overlay");
     const artImg = document.getElementById("art-overlay-img");
+    const artMsg = document.getElementById("art-overlay-msg");
 
     function preload() {
       // load a small thumbnail for the in-world frame
@@ -561,11 +574,13 @@
       artOpen = true;
       if (artOverlayEl) artOverlayEl.style.display = "flex";
       if (promptText) promptText.setVisible(false);
+      if (artMsg) artMsg.style.display = "block";
     }
 
     function closeArtOverlay() {
       artOpen = false;
       if (artOverlayEl) artOverlayEl.style.display = "none";
+      if (artMsg) artMsg.style.display = "none";
 
       // if the image is currently fullscreen, exit it
       if (
@@ -582,6 +597,9 @@
     }
 
     function toggleArtFullscreen() {
+      // hide the hint once user goes fullscreen / toggles
+      if (artMsg) artMsg.style.display = "none";
+
       // already fullscreen → exit
       if (
         document.fullscreenElement === artImg ||
