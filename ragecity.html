@@ -330,31 +330,32 @@
       const fb = document.getElementById("game-fallback");
       if (fb) fb.style.display = "none";
 
+      // Smaller player
       player = this.add.rectangle(
         this.scale.width / 2,
         this.scale.height / 2,
-        32,
-        32,
+        20,          // was 32
+        20,          // was 32
         0x39ff14
       );
 
       const frameX = this.scale.width * 0.75;
       const frameY = this.scale.height * 0.4;
 
-      // Outer glowing picture frame
-      frameRect = this.add.rectangle(frameX, frameY, 90, 68, 0x020202);
+      // Outer glowing picture frame - smaller
+      frameRect = this.add.rectangle(frameX, frameY, 70, 52); // was 90, 68
       frameRect.setStrokeStyle(4, 0x39ff14, 1);
 
-      // Inner "mat" inside the frame
-      frameMat = this.add.rectangle(frameX, frameY, 76, 54, 0x000000);
+      // Inner "mat" inside the frame - smaller
+      frameMat = this.add.rectangle(frameX, frameY, 60, 44, 0x000000); // was 76, 54
       frameMat.setStrokeStyle(2, 0x1a8f3a, 1);
 
-      // Tiny art thumbnail inside the frame
+      // Tiny art thumbnail inside the frame - resized
       const tex = this.textures.get("artThumb").getSourceImage();
       const natW = tex.width;
       const natH = tex.height;
-      const maxThumbW = 68;
-      const maxThumbH = 46;
+      const maxThumbW = 52;  // was 68
+      const maxThumbH = 38;  // was 46
       const scale = Math.min(maxThumbW / natW, maxThumbH / natH);
       frameThumb = this.add.image(frameX, frameY, "artThumb");
       frameThumb.setScale(scale);
