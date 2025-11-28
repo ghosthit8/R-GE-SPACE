@@ -663,7 +663,10 @@
 
     function renderMessage(m){
       const mine = m.user_id === me.id;
-      const row = el("div", { class:"msg" + (mine ? " me" : "") });
+      const row = el("div", {
+        class:"msg" + (mine ? " me" : ""),
+        "data-msg-id": m.id
+      });
 
       const label = (m.username && m.username.trim()) || (m.user_id === me.id ? (me.username || "anon") : "anon");
       const nameNode = el("a", { class:"who", href: (m.user_id ? profileHref(m.user_id) : "profile.html"), title:`View ${label}'s profile` }, label);
@@ -735,10 +738,24 @@
         .channel(`room:${room}`)
         .on("postgres_changes",
             { event:"INSERT", schema:"public", table:"messages", filter:`room=eq.${room}` },
-            payload=>{ renderMessage(payload.new); countEl.textContent=(parseInt(countEl.textContent||"0",10)+1).toString(); touchPresence(payload.new.user_id,payload.new.username); autoscroll(); })
+            payload=>{
+              renderMessage(payload.new);
+              countEl.textContent=(parseInt(countEl.textContent||"0",10)+1).toString();
+              touchPresence(payload.new.user_id,payload.new.username);
+              autoscroll();
+            })
         .on("postgres_changes",
             { event:"DELETE", schema:"public", table:"messages", filter:`room=eq.${room}` },
-            ()=>{ joinRoom(currentRoom); })
+            payload=>{
+              const deletedId = payload.old?.id;
+              if(!deletedId) return;
+              const row = msgEl.querySelector(`[data-msg-id="${deletedId}"]`);
+              if(row) row.remove();
+              const currentCount = parseInt(countEl.textContent || "0",10);
+              if(!Number.isNaN(currentCount) && currentCount>0){
+                countEl.textContent = String(currentCount-1);
+              }
+            })
         .subscribe(status=>{
           const sub = status==="SUBSCRIBED";
           rtDot.classList.toggle("ok", sub);
@@ -983,10 +1000,14 @@
         .from("messages")
         .select("user_id, media_url")
         .eq("id", id)
-        .single();
+        .maybeSingle();
 
       if(fetchErr){
         status("Delete failed: " + fetchErr.message, false);
+        return;
+      }
+      if(!msgData){
+        status("Delete failed: message not found", false);
         return;
       }
 
@@ -1025,8 +1046,15 @@
         return;
       }
 
+      // Immediate UI update
+      const row = msgEl.querySelector(`[data-msg-id="${id}"]`);
+      if(row) row.remove();
+      const currentCount = parseInt(countEl.textContent || "0",10);
+      if(!Number.isNaN(currentCount) && currentCount>0){
+        countEl.textContent = String(currentCount-1);
+      }
+
       status("Deleted ✓", true);
-      // UI will refresh via realtime DELETE handler (subscribeRealtime)
     }
   </script>
   <script src="js/auth-guard.js" type="module"></script>
