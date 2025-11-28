@@ -436,9 +436,13 @@
         fsImg.src = '';
         fsImg.style.display = 'none';
       }
-      fsVideo.src = url;
       fsVideo.style.display = 'block';
       fsView.style.display = 'flex';
+      try {
+        fsVideo.pause();
+        fsVideo.src = url;
+        fsVideo.currentTime = 0;
+      } catch(e){}
       fsVideo.play().catch(()=>{});
     }
 
@@ -472,6 +476,35 @@
             openFsImage(url);
           }
         };
+      });
+    }
+
+    // Make video thumbs show the first frame only
+    function prepareVideoThumbs(){
+      const vids = document.querySelectorAll('video.thumb');
+      vids.forEach(v => {
+        v.muted = true;
+        v.playsInline = true;
+        v.preload = 'metadata';
+        v.controls = false;
+        v.loop = false;
+
+        const snapFirstFrame = () => {
+          try {
+            // small offset so we definitely have image data
+            if (v.readyState >= 2) {
+              v.currentTime = 0.1;
+              v.pause();
+            }
+          } catch(e){}
+        };
+
+        // once we have enough data, seek and pause so it acts like a static thumbnail
+        if (v.readyState >= 2) {
+          snapFirstFrame();
+        } else {
+          v.addEventListener('loadeddata', snapFirstFrame, { once:true });
+        }
       });
     }
 
@@ -642,7 +675,7 @@
         let thumb;
         if (mediaUrl){
           if (isVideoUrl(mediaUrl)){
-            // video thumb – shows first frame/poster
+            // video thumb – shows first frame/poster once metadata loads
             thumb = `<video
                 src="${mediaUrl}"
                 class="thumb"
@@ -650,6 +683,7 @@
                 playsinline
                 preload="metadata"
                 data-type="video"
+                data-full="${mediaUrl}"
               ></video>`;
           } else {
             thumb = `<img src="${mediaUrl}" class="thumb" alt="winner" data-type="image">`;
@@ -677,6 +711,7 @@
       }).join('');
 
       enableThumbFullscreen();
+      prepareVideoThumbs();
     }
 
     async function load(){
