@@ -20,7 +20,6 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    /* Menu button (top-right) */
     .home-btn {
       position: fixed;
       top: calc(env(safe-area-inset-top, 0px) + 12px);
@@ -42,7 +41,6 @@
       text-shadow: 0 0 6px var(--red);
     }
 
-    /* Fullscreen button (top-left) */
     .fullscreen-btn {
       position: fixed;
       top: calc(env(safe-area-inset-top, 0px) + 12px);
@@ -64,7 +62,6 @@
       box-shadow: 0 0 4px rgba(57, 255, 20, 1);
     }
 
-    /* GAME BOX */
     #game-container {
       margin-top: 80px;
       margin-bottom: 8px;
@@ -91,15 +88,14 @@
       z-index: 1;
     }
 
-    /* HTML overlay for image (super crisp) */
     #art-overlay {
       position: absolute;
       inset: 0;
       background: rgba(0, 0, 0, 0.9);
-      display: none;           /* shown when A pressed */
+      display: none;
       align-items: center;
       justify-content: center;
-      z-index: 5;              /* above game canvas, below UI buttons */
+      z-index: 5;
       flex-direction: column;
     }
 
@@ -120,7 +116,6 @@
       display: block;
     }
 
-    /* CONTROLS */
     .controls-overlay {
       position: fixed;
       left: 0;
@@ -177,7 +172,6 @@
       box-shadow: none;
     }
 
-    /* A/B buttons – positioned how you wanted */
     .ab-buttons {
       position: relative;
       width: 180px;
@@ -239,7 +233,6 @@
   <div id="game-container">
     <div id="game-fallback">Loading Rage City…</div>
 
-    <!-- HTML overlay for big, sharp image -->
     <div id="art-overlay">
       <div id="art-overlay-msg">Press "A" for fullscreen</div>
       <img
@@ -250,7 +243,6 @@
     </div>
   </div>
 
-  <!-- On-screen controls -->
   <div class="controls-overlay">
     <div class="controls-inner">
       <div class="dpad">
@@ -274,7 +266,6 @@
     </div>
   </div>
 
-  <!-- Phaser 3 engine -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
 
   <script>
@@ -303,11 +294,7 @@
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH
       },
-      scene: {
-        preload,
-        create,
-        update
-      }
+      scene: { preload, create, update }
     };
 
     let player;
@@ -316,15 +303,14 @@
     let prevA = false;
     let prevB = false;
 
-    let galleryFrames = [];   // all wall paintings
-    let sculptureSpot = null; // center pedestal interaction
+    let galleryFrames = [];
+    let sculptureSpot = null;
 
     const artOverlayEl = document.getElementById("art-overlay");
     const artImg = document.getElementById("art-overlay-img");
     const artMsg = document.getElementById("art-overlay-msg");
 
     function preload() {
-      // load a small thumbnail for the in-world frames
       this.load.image(
         "artThumb",
         "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1000&q=80"
@@ -338,163 +324,151 @@
       const w = this.scale.width;
       const h = this.scale.height;
 
-      // Player starts just outside the bottom-left "door"
-      player = this.add.rectangle(
-        w * 0.35,
-        h * 0.72,
-        20,
-        20,
-        0x39ff14
-      );
+      // Start just outside the bottom-left door
+      player = this.add.rectangle(w * 0.32, h * 0.72, 20, 20, 0x39ff14);
 
-      // ==== GALLERY ROOM LAYOUT (C-shape with bottom-left gap) ====
-      const roomWidth = w * 0.55;
-      const roomHeight = h * 0.55;
-      const centerX = w / 2;
-      const centerY = h / 2;
+      // ===== ROOM GEOMETRY (big C with door bottom-left) =====
+      const marginX = 70;
+      const marginY = 50;
 
-      const leftX = centerX - roomWidth / 2;
-      const rightX = centerX + roomWidth / 2;
-      const topY = centerY - roomHeight / 2;
-      const bottomY = centerY + roomHeight / 2;
+      const leftX = marginX;
+      const rightX = w - marginX;
+      const topY = marginY;
+      const bottomY = h - marginY;
 
-      // how big the open corner is
-      const doorGap = roomWidth * 0.28; // affects both bottom and left
-
-      const wallThickness = 10;
+      const doorWidth = 90;
+      const doorHeight = 90;
+      const wallThickness = 26;
 
       const walls = this.add.graphics();
       walls.lineStyle(wallThickness, 0xffffff, 1);
-
       walls.beginPath();
-      // top wall
+
+      // top
       walls.moveTo(leftX, topY);
       walls.lineTo(rightX, topY);
 
-      // right wall
+      // right
       walls.lineTo(rightX, bottomY);
 
-      // bottom wall: from right corner back towards left, but stop before the open corner
-      walls.lineTo(leftX + doorGap, bottomY);
+      // bottom from right towards left, stop before door
+      walls.lineTo(leftX + doorWidth, bottomY);
 
-      // left wall: from just above the gap up to the top
-      walls.moveTo(leftX, bottomY - doorGap);
+      // left wall from just above door up to top
+      walls.moveTo(leftX, bottomY - doorHeight);
       walls.lineTo(leftX, topY);
 
       walls.strokePath();
 
-      // ---- Paintings around inside of walls ----
+      // inner darker "shadow" edge, subtle 3D
+      const inset = 10;
+      const inner = this.add.graphics();
+      inner.lineStyle(4, 0x444444, 1);
+      inner.beginPath();
+      inner.moveTo(leftX + inset, topY + inset);
+      inner.lineTo(rightX - inset, topY + inset);
+      inner.lineTo(rightX - inset, bottomY - inset);
+      inner.lineTo(leftX + doorWidth + inset, bottomY - inset);
+      inner.moveTo(leftX + inset, bottomY - doorHeight - inset);
+      inner.lineTo(leftX + inset, topY + inset);
+      inner.strokePath();
+
+      // ===== Paintings: tall portrait frames mounted on walls =====
       const tex = this.textures.get("artThumb").getSourceImage();
       const natW = tex.width;
       const natH = tex.height;
-      const maxThumbW = 52;
-      const maxThumbH = 38;
+      const maxThumbW = 40; // narrower
+      const maxThumbH = 60; // taller
       const thumbScale = Math.min(maxThumbW / natW, maxThumbH / natH);
 
       galleryFrames = [];
 
       const addPaintingFrame = (x, y) => {
-        const rect = this.add.rectangle(x, y, 70, 52);
+        const rect = this.add.rectangle(x, y, 46, 70);
         rect.setStrokeStyle(4, 0x39ff14, 1);
 
-        const mat = this.add.rectangle(x, y, 60, 44, 0x000000);
+        const mat = this.add.rectangle(x, y, 36, 60, 0x000000);
         mat.setStrokeStyle(2, 0x1a8f3a, 1);
 
         const img = this.add.image(x, y, "artThumb");
         img.setScale(thumbScale);
 
-        galleryFrames.push({
-          x,
-          y,
-          rect,
-          mat,
-          img,
-          fullUrl: PAINTING_FULL_URL
-        });
+        galleryFrames.push({ x, y, rect, mat, img, fullUrl: PAINTING_FULL_URL });
       };
 
-      const innerOffset = 40;
-      const leftInner = leftX + innerOffset;
-      const rightInner = rightX - innerOffset;
-      const topInner = topY + innerOffset;
-      const bottomInner = bottomY - innerOffset;
+      // offsets so they sit just inside each wall
+      const offsetFromWall = wallThickness / 2 + 18;
 
-      // TOP wall (3 paintings)
-      addPaintingFrame(leftInner + 20, topInner);
-      addPaintingFrame(centerX, topInner);
-      addPaintingFrame(rightInner - 20, topInner);
+      const topInnerY = topY + offsetFromWall;
+      const bottomInnerY = bottomY - offsetFromWall;
+      const leftInnerX = leftX + offsetFromWall;
+      const rightInnerX = rightX - offsetFromWall;
 
-      // RIGHT wall (4 paintings down the side)
-      const rightStep = (bottomInner - topInner) / 3;
-      addPaintingFrame(rightInner, topInner + rightStep * 0.3);
-      addPaintingFrame(rightInner, topInner + rightStep * 1.2);
-      addPaintingFrame(rightInner, topInner + rightStep * 2.1);
-      addPaintingFrame(rightInner, bottomInner);
+      // Top wall: evenly spaced paintings
+      const topCount = 4;
+      for (let i = 0; i < topCount; i++) {
+        const t = i / (topCount - 1);
+        const x = Phaser.Math.Linear(leftInnerX + 10, rightInnerX - 10, t);
+        addPaintingFrame(x, topInnerY);
+      }
 
-      // LEFT wall (3 paintings on the upper segment only, above the gap)
-      const leftSegmentBottom = bottomY - doorGap - innerOffset * 0.4;
-      const leftRange = leftSegmentBottom - topInner;
-      const leftStep = leftRange / 2;
-      addPaintingFrame(leftInner, topInner);
-      addPaintingFrame(leftInner, topInner + leftStep);
-      addPaintingFrame(leftInner, leftSegmentBottom);
+      // Right wall: vertical row
+      const rightCount = 4;
+      for (let i = 0; i < rightCount; i++) {
+        const t = i / (rightCount - 1);
+        const y = Phaser.Math.Linear(topInnerY + 20, bottomInnerY - 10, t);
+        addPaintingFrame(rightInnerX, y);
+      }
 
-      // BOTTOM wall (2 paintings on the right side of the gap)
-      const bottomStart = leftX + doorGap + innerOffset;
-      const bottomEnd = rightInner;
-      const bottomMid = (bottomStart + bottomEnd) / 2;
-      const yBottomFrames = bottomInner + 6;
-      addPaintingFrame(bottomMid - 40, yBottomFrames);
-      addPaintingFrame(bottomMid + 40, yBottomFrames);
+      // Left wall: only the upper section (above door)
+      const leftTopY = topInnerY;
+      const leftBottomY = bottomY - doorHeight - offsetFromWall * 0.2;
+      const leftCount = 3;
+      for (let i = 0; i < leftCount; i++) {
+        const t = i / (leftCount - 1);
+        const y = Phaser.Math.Linear(leftTopY, leftBottomY, t);
+        addPaintingFrame(leftInnerX, y);
+      }
 
-      // ==== Center pedestal for sculpture ====
-      const pedestalX = centerX;
-      const pedestalY = centerY;
+      // Bottom wall: to the right of the door
+      const bottomStartX = leftX + doorWidth + offsetFromWall + 25;
+      const bottomEndX = rightInnerX;
+      const bottomCount = 3;
+      for (let i = 0; i < bottomCount; i++) {
+        const t = i / (bottomCount - 1);
+        const x = Phaser.Math.Linear(bottomStartX, bottomEndX, t);
+        addPaintingFrame(x, bottomInnerY);
+      }
 
-      const pedestalBase = this.add.rectangle(
-        pedestalX,
-        pedestalY,
-        80,
-        80,
-        0x000000
-      );
+      // ===== Center pedestal =====
+      const centerX = (leftX + rightX) / 2;
+      const centerY = (topY + bottomY) / 2;
+
+      const pedestalBase = this.add.rectangle(centerX, centerY, 80, 80, 0x000000);
       pedestalBase.setStrokeStyle(3, 0xffffff, 1);
 
-      const pedestalTop = this.add.rectangle(
-        pedestalX,
-        pedestalY,
-        40,
-        40,
-        0x111111
-      );
+      const pedestalTop = this.add.rectangle(centerX, centerY, 40, 40, 0x111111);
       pedestalTop.setStrokeStyle(2, 0x39ff14, 1);
 
       sculptureSpot = {
-        x: pedestalX,
-        y: pedestalY,
+        x: centerX,
+        y: centerY,
         fullUrl: SCULPTURE_FULL_URL,
         type: "sculpture"
       };
 
       // Prompt text
-      promptText = this.add.text(
-        w / 2,
-        h - 40,
-        "",
-        {
-          fontFamily:
-            "system-ui, -apple-system, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-          fontSize: "14px",
-          color: "#39ff14"
-        }
-      );
+      promptText = this.add.text(w / 2, h - 40, "", {
+        fontFamily:
+          "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        fontSize: "14px",
+        color: "#39ff14"
+      });
       promptText.setOrigin(0.5);
       promptText.setVisible(false);
 
       this.scale.on("resize", (gameSize) => {
-        const width = gameSize.width;
-        const height = gameSize.height;
-        promptText.setPosition(width / 2, height - 40);
+        promptText.setPosition(gameSize.width / 2, gameSize.height - 40);
       });
 
       setupKeyboard(this);
@@ -506,14 +480,13 @@
       setupTouchButton("btn-b", "B");
       setupFullscreenButton();
 
-      // tap anywhere on overlay to close
       artOverlayEl.addEventListener("click", () => {
         if (artOpen) closeArtOverlay();
       });
     }
 
     function setupKeyboard(scene) {
-      scene.input.keyboard.on("keydown", function (event) {
+      scene.input.keyboard.on("keydown", (event) => {
         switch (event.code) {
           case "ArrowLeft":
           case "KeyA":
@@ -541,7 +514,7 @@
         }
       });
 
-      scene.input.keyboard.on("keyup", function (event) {
+      scene.input.keyboard.on("keyup", (event) => {
         switch (event.code) {
           case "ArrowLeft":
           case "KeyA":
@@ -605,20 +578,15 @@
         if (!document.fullscreenElement) {
           if (elem.requestFullscreen) elem.requestFullscreen();
         } else {
-          if (document.exitFullscreen) {
-            document.exitFullscreen();
-          }
+          if (document.exitFullscreen) document.exitFullscreen();
         }
       });
 
       document.addEventListener("fullscreenchange", () => {
-        const btn = document.getElementById("btn-fullscreen");
         if (!btn) return;
-        if (document.fullscreenElement) {
-          btn.textContent = "⛶ Exit Fullscreen";
-        } else {
-          btn.textContent = "⛶ Fullscreen";
-        }
+        btn.textContent = document.fullscreenElement
+          ? "⛶ Exit Fullscreen"
+          : "⛶ Fullscreen";
       });
     }
 
@@ -628,16 +596,9 @@
       const justPressedA = inputState.A && !prevA;
       const justPressedB = inputState.B && !prevB;
 
-      // Overlay open:
-      //  - A toggles fullscreen on the image
-      //  - B closes the overlay (and exits fullscreen if needed)
       if (artOpen) {
-        if (justPressedA) {
-          toggleArtFullscreen();
-        }
-        if (justPressedB) {
-          closeArtOverlay();
-        }
+        if (justPressedA) toggleArtFullscreen();
+        if (justPressedB) closeArtOverlay();
         prevA = inputState.A;
         prevB = inputState.B;
         return;
@@ -646,9 +607,8 @@
       const speed = 90;
       const dt = delta / 1000;
 
-      let dx = 0;
-      let dy = 0;
-
+      let dx = 0,
+        dy = 0;
       if (inputState.left) dx -= 1;
       if (inputState.right) dx += 1;
       if (inputState.up) dy -= 1;
@@ -666,11 +626,9 @@
       const margin = 40;
       const w = this.scale.width;
       const h = this.scale.height;
-
       player.x = Phaser.Math.Clamp(player.x, margin, w - margin);
       player.y = Phaser.Math.Clamp(player.y, margin, h - margin);
 
-      // Find nearest interactive item (painting or sculpture)
       let nearestItem = null;
       let nearestDist = Infinity;
 
@@ -678,10 +636,7 @@
         const d = Phaser.Math.Distance.Between(player.x, player.y, f.x, f.y);
         if (d < nearestDist) {
           nearestDist = d;
-          nearestItem = {
-            type: "painting",
-            fullUrl: f.fullUrl
-          };
+          nearestItem = { type: "painting", fullUrl: f.fullUrl };
         }
       });
 
@@ -694,21 +649,18 @@
         );
         if (d < nearestDist) {
           nearestDist = d;
-          nearestItem = {
-            type: "sculpture",
-            fullUrl: sculptureSpot.fullUrl
-          };
+          nearestItem = { type: "sculpture", fullUrl: sculptureSpot.fullUrl };
         }
       }
 
       if (promptText) {
         if (nearestItem && nearestDist < 80) {
           promptText.setVisible(true);
-          if (nearestItem.type === "sculpture") {
-            promptText.setText("Press A to inspect sculpture");
-          } else {
-            promptText.setText("Press A to view art");
-          }
+          promptText.setText(
+            nearestItem.type === "sculpture"
+              ? "Press A to inspect sculpture"
+              : "Press A to view art"
+          );
         } else {
           promptText.setVisible(false);
         }
@@ -724,9 +676,7 @@
 
     function openArtOverlay(imageUrl) {
       artOpen = true;
-      if (imageUrl && artImg) {
-        artImg.src = imageUrl;
-      }
+      if (imageUrl && artImg) artImg.src = imageUrl;
       if (artOverlayEl) artOverlayEl.style.display = "flex";
       if (promptText) promptText.setVisible(false);
       if (artMsg) artMsg.style.display = "block";
@@ -737,7 +687,6 @@
       if (artOverlayEl) artOverlayEl.style.display = "none";
       if (artMsg) artMsg.style.display = "none";
 
-      // if the image is currently fullscreen, exit it
       if (
         (document.fullscreenElement === artImg ||
           document.webkitFullscreenElement === artImg) &&
@@ -752,19 +701,17 @@
     }
 
     function toggleArtFullscreen() {
-      // hide the hint once user goes fullscreen / toggles
       if (artMsg) artMsg.style.display = "none";
-
-      // already fullscreen → exit
       if (
         document.fullscreenElement === artImg ||
         document.webkitFullscreenElement === artImg
       ) {
         if (document.exitFullscreen) {
           document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
         }
       } else {
-        // not fullscreen → request fullscreen on the image
         if (artImg.requestFullscreen) {
           artImg.requestFullscreen();
         } else if (artImg.webkitRequestFullscreen) {
