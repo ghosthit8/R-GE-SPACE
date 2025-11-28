@@ -180,7 +180,7 @@
     </div>
     <div class="controls">
 
-      <!-- NEW BACK BUTTON -->
+      <!-- BACK BUTTON -->
       <button id="backBtn" class="btn-ghost" title="Back to menu" onclick="window.location.href='menu.html'">
         ⟵ Back
       </button>
@@ -974,10 +974,59 @@
       if(typeof count==="number") countEl.textContent=count.toString();
     }, 20000);
 
+    // ===== DELETE MESSAGE (and media) =====
     async function deleteMessage(id){
       if(!id) return;
-      const { error } = await supabase.from("messages").delete().eq("id", id).eq("user_id", me.id);
-      if(error){ status("Delete failed: " + error.message, false); }
+
+      // Fetch message to verify ownership & get media URL
+      const { data: msgData, error: fetchErr } = await supabase
+        .from("messages")
+        .select("user_id, media_url")
+        .eq("id", id)
+        .single();
+
+      if(fetchErr){
+        status("Delete failed: " + fetchErr.message, false);
+        return;
+      }
+
+      // Only allow the user who posted it
+      if(msgData.user_id !== me.id){
+        status("You can only delete your own messages", false);
+        return;
+      }
+
+      // Delete media from storage if present
+      if(msgData.media_url){
+        try{
+          const bucketPrefix = "https://tuqvpcevrhciursxrgav.supabase.co/storage/v1/object/public/chat-media/";
+          const filePath = msgData.media_url.replace(bucketPrefix, "");
+          const { error: storageErr } = await supabase
+            .storage
+            .from("chat-media")
+            .remove([filePath]);
+          if(storageErr){
+            console.warn("Storage delete error:", storageErr);
+          }
+        }catch(err){
+          console.warn("Error removing from bucket:", err);
+        }
+      }
+
+      // Delete the message row
+      const { error } = await supabase
+        .from("messages")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", me.id);
+
+      if(error){
+        status("Delete failed: " + error.message, false);
+        return;
+      }
+
+      status("Deleted ✓", true);
+      // UI will refresh via realtime DELETE handler (subscribeRealtime)
     }
   </script>
   <script src="js/auth-guard.js" type="module"></script>
