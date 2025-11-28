@@ -167,6 +167,22 @@
   </style>
 </head>
 <body>
+  <div id="loadingScreen" style="
+  position:fixed;
+  inset:0;
+  background:#0b0f13;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  z-index:999999;
+  color:#39ff14;
+  font-size:22px;
+  letter-spacing:2px;
+  font-weight:700;
+  font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
+">
+  LOADING…
+</div>
   <div class="wrap">
     <h1 class="glitch-title" data-text="ART BATTLE. Faction I.">ART BATTLE. Faction I.</h1>
 
@@ -1158,5 +1174,30 @@
     });
   </script>
   <script src="js/auth-guard.js" type="module"></script>
+  <script>
+  const loadingEl = document.getElementById("loadingScreen");
+  let timerStarted = false;
+
+  function hideLoading() {
+    if (timerStarted) return;
+    timerStarted = true;
+    if (loadingEl) loadingEl.style.display = "none";
+  }
+
+  // When fetchState gets the timer data
+  const originalFetchState = fetchState;
+  fetchState = async function(force=false){
+    const result = await originalFetchState(force);
+    if (state?.ends_at) hideLoading();
+    return result;
+  };
+
+  // When tick finally runs with real data
+  const originalTick = tick;
+  tick = function(){
+    if (state?.ends_at) hideLoading();
+    originalTick();
+  };
+</script>
 </body>
 </html>
