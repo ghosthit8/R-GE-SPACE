@@ -335,24 +335,35 @@
       const fb = document.getElementById("game-fallback");
       if (fb) fb.style.display = "none";
 
-      // Smaller player
+      const w = this.scale.width;
+      const h = this.scale.height;
+
+      // Player starts near bottom gap, inside the room
       player = this.add.rectangle(
-        this.scale.width / 2,
-        this.scale.height / 2 + 80,
+        w / 2,
+        h * 0.7,
         20,
         20,
         0x39ff14
       );
 
-      // GALLERY ROOM LAYOUT
-      const roomMarginX = 120;
-      const roomMarginY = 80;
-      const leftX = roomMarginX;
-      const rightX = this.scale.width - roomMarginX;
-      const topY = roomMarginY;
-      const bottomY = this.scale.height - roomMarginY;
+      // ==== GALLERY ROOM LAYOUT (square-ish ring with bottom gap) ====
+      const roomWidth = w * 0.55;
+      const roomHeight = h * 0.55;
+      const centerX = w / 2;
+      const centerY = h / 2;
 
-      // Draw white walls with a "door" gap at bottom-left
+      const leftX = centerX - roomWidth / 2;
+      const rightX = centerX + roomWidth / 2;
+      const topY = centerY - roomHeight / 2;
+      const bottomY = centerY + roomHeight / 2;
+
+      // Bottom "door" gap in center
+      const doorWidth = roomWidth * 0.25;
+      const gapStartX = centerX - doorWidth / 2;
+      const gapEndX = centerX + doorWidth / 2;
+
+      // Draw walls (white, like your sketch)
       const walls = this.add.graphics();
       walls.lineStyle(4, 0xffffff, 1);
 
@@ -360,17 +371,22 @@
       // top wall
       walls.moveTo(leftX, topY);
       walls.lineTo(rightX, topY);
+
       // right wall
       walls.lineTo(rightX, bottomY);
-      // bottom wall (right part, leave gap near left)
-      const doorGap = 100;
-      walls.lineTo(leftX + doorGap, bottomY);
-      // left wall (upper part, leave gap at bottom)
-      walls.moveTo(leftX, bottomY - doorGap);
+
+      // bottom wall right segment (from right corner to gap end)
+      walls.lineTo(gapEndX, bottomY);
+
+      // bottom wall left segment (from gap start to left corner)
+      walls.moveTo(gapStartX, bottomY);
+      walls.lineTo(leftX, bottomY);
+
+      // left wall
       walls.lineTo(leftX, topY);
       walls.strokePath();
 
-      // Compute common thumbnail scale once
+      // ---- Paintings around inside of walls ----
       const tex = this.textures.get("artThumb").getSourceImage();
       const natW = tex.width;
       const natH = tex.height;
@@ -381,15 +397,12 @@
       galleryFrames = [];
 
       const addPaintingFrame = (x, y) => {
-        // outer frame (blue-ish via green glow + dark fill)
         const rect = this.add.rectangle(x, y, 70, 52);
         rect.setStrokeStyle(4, 0x39ff14, 1);
 
-        // inner mat
         const mat = this.add.rectangle(x, y, 60, 44, 0x000000);
         mat.setStrokeStyle(2, 0x1a8f3a, 1);
 
-        // thumbnail
         const img = this.add.image(x, y, "artThumb");
         img.setScale(thumbScale);
 
@@ -403,28 +416,38 @@
         });
       };
 
-      // TOP wall paintings
-      addPaintingFrame(leftX + 40, topY + 40);
-      addPaintingFrame((leftX + rightX) / 2, topY + 40);
-      addPaintingFrame(rightX - 40, topY + 40);
+      const innerOffset = 40;
+      const leftInner = leftX + innerOffset;
+      const rightInner = rightX - innerOffset;
+      const topInner = topY + innerOffset;
+      const bottomInner = bottomY - innerOffset;
 
-      // RIGHT wall paintings
-      addPaintingFrame(rightX - 40, (topY + bottomY) / 2 - 60);
-      addPaintingFrame(rightX - 40, (topY + bottomY) / 2);
-      addPaintingFrame(rightX - 40, (topY + bottomY) / 2 + 60);
-      addPaintingFrame(rightX - 40, bottomY - 40);
+      // Top row (3 paintings)
+      addPaintingFrame(leftInner, topInner);
+      addPaintingFrame(centerX, topInner);
+      addPaintingFrame(rightInner, topInner);
 
-      // LEFT wall paintings (skip lower-left gap for "door")
-      addPaintingFrame(leftX + 40, (topY + bottomY) / 2 - 60);
-      addPaintingFrame(leftX + 40, (topY + bottomY) / 2);
-      addPaintingFrame(leftX + 40, topY + 40);
+      // Right column (4 paintings)
+      const rightStep = (bottomInner - topInner) / 3;
+      addPaintingFrame(rightInner, topInner + rightStep * 0.7);
+      addPaintingFrame(rightInner, topInner + rightStep * 1.6);
+      addPaintingFrame(rightInner, topInner + rightStep * 2.3);
+      addPaintingFrame(rightInner, bottomInner);
 
-      // BOTTOM wall paintings (centered, leaving door gap to the left)
-      addPaintingFrame((leftX + rightX) / 2, bottomY - 40);
+      // Left column (4 paintings)
+      const leftStep = (bottomInner - topInner) / 3;
+      addPaintingFrame(leftInner, topInner);
+      addPaintingFrame(leftInner, topInner + leftStep * 1.0);
+      addPaintingFrame(leftInner, topInner + leftStep * 2.0);
+      addPaintingFrame(leftInner, bottomInner - leftStep * 0.4);
 
-      // CENTER PEDESTAL FOR SCULPTURE
-      const pedestalX = (leftX + rightX) / 2;
-      const pedestalY = (topY + bottomY) / 2;
+      // Bottom row (2 paintings at ends, leaving center gap as "door")
+      addPaintingFrame(leftInner + 30, bottomInner);
+      addPaintingFrame(rightInner - 30, bottomInner);
+
+      // ==== Center pedestal for sculpture ====
+      const pedestalX = centerX;
+      const pedestalY = centerY;
 
       const pedestalBase = this.add.rectangle(
         pedestalX,
@@ -453,8 +476,8 @@
 
       // Prompt text
       promptText = this.add.text(
-        this.scale.width / 2,
-        this.scale.height - 40,
+        w / 2,
+        h - 40,
         "",
         {
           fontFamily:
