@@ -338,16 +338,16 @@
       const w = this.scale.width;
       const h = this.scale.height;
 
-      // Player starts near bottom gap, inside the room
+      // Player starts just outside the bottom-left "door"
       player = this.add.rectangle(
-        w / 2,
-        h * 0.7,
+        w * 0.35,
+        h * 0.72,
         20,
         20,
         0x39ff14
       );
 
-      // ==== GALLERY ROOM LAYOUT (square-ish ring with bottom gap) ====
+      // ==== GALLERY ROOM LAYOUT (C-shape with bottom-left gap) ====
       const roomWidth = w * 0.55;
       const roomHeight = h * 0.55;
       const centerX = w / 2;
@@ -358,14 +358,13 @@
       const topY = centerY - roomHeight / 2;
       const bottomY = centerY + roomHeight / 2;
 
-      // Bottom "door" gap in center
-      const doorWidth = roomWidth * 0.25;
-      const gapStartX = centerX - doorWidth / 2;
-      const gapEndX = centerX + doorWidth / 2;
+      // how big the open corner is
+      const doorGap = roomWidth * 0.28; // affects both bottom and left
 
-      // Draw walls (white, like your sketch)
+      const wallThickness = 10;
+
       const walls = this.add.graphics();
-      walls.lineStyle(4, 0xffffff, 1);
+      walls.lineStyle(wallThickness, 0xffffff, 1);
 
       walls.beginPath();
       // top wall
@@ -375,15 +374,13 @@
       // right wall
       walls.lineTo(rightX, bottomY);
 
-      // bottom wall right segment (from right corner to gap end)
-      walls.lineTo(gapEndX, bottomY);
+      // bottom wall: from right corner back towards left, but stop before the open corner
+      walls.lineTo(leftX + doorGap, bottomY);
 
-      // bottom wall left segment (from gap start to left corner)
-      walls.moveTo(gapStartX, bottomY);
-      walls.lineTo(leftX, bottomY);
-
-      // left wall
+      // left wall: from just above the gap up to the top
+      walls.moveTo(leftX, bottomY - doorGap);
       walls.lineTo(leftX, topY);
+
       walls.strokePath();
 
       // ---- Paintings around inside of walls ----
@@ -422,28 +419,33 @@
       const topInner = topY + innerOffset;
       const bottomInner = bottomY - innerOffset;
 
-      // Top row (3 paintings)
-      addPaintingFrame(leftInner, topInner);
+      // TOP wall (3 paintings)
+      addPaintingFrame(leftInner + 20, topInner);
       addPaintingFrame(centerX, topInner);
-      addPaintingFrame(rightInner, topInner);
+      addPaintingFrame(rightInner - 20, topInner);
 
-      // Right column (4 paintings)
+      // RIGHT wall (4 paintings down the side)
       const rightStep = (bottomInner - topInner) / 3;
-      addPaintingFrame(rightInner, topInner + rightStep * 0.7);
-      addPaintingFrame(rightInner, topInner + rightStep * 1.6);
-      addPaintingFrame(rightInner, topInner + rightStep * 2.3);
+      addPaintingFrame(rightInner, topInner + rightStep * 0.3);
+      addPaintingFrame(rightInner, topInner + rightStep * 1.2);
+      addPaintingFrame(rightInner, topInner + rightStep * 2.1);
       addPaintingFrame(rightInner, bottomInner);
 
-      // Left column (4 paintings)
-      const leftStep = (bottomInner - topInner) / 3;
+      // LEFT wall (3 paintings on the upper segment only, above the gap)
+      const leftSegmentBottom = bottomY - doorGap - innerOffset * 0.4;
+      const leftRange = leftSegmentBottom - topInner;
+      const leftStep = leftRange / 2;
       addPaintingFrame(leftInner, topInner);
-      addPaintingFrame(leftInner, topInner + leftStep * 1.0);
-      addPaintingFrame(leftInner, topInner + leftStep * 2.0);
-      addPaintingFrame(leftInner, bottomInner - leftStep * 0.4);
+      addPaintingFrame(leftInner, topInner + leftStep);
+      addPaintingFrame(leftInner, leftSegmentBottom);
 
-      // Bottom row (2 paintings at ends, leaving center gap as "door")
-      addPaintingFrame(leftInner + 30, bottomInner);
-      addPaintingFrame(rightInner - 30, bottomInner);
+      // BOTTOM wall (2 paintings on the right side of the gap)
+      const bottomStart = leftX + doorGap + innerOffset;
+      const bottomEnd = rightInner;
+      const bottomMid = (bottomStart + bottomEnd) / 2;
+      const yBottomFrames = bottomInner + 6;
+      addPaintingFrame(bottomMid - 40, yBottomFrames);
+      addPaintingFrame(bottomMid + 40, yBottomFrames);
 
       // ==== Center pedestal for sculpture ====
       const pedestalX = centerX;
@@ -481,7 +483,7 @@
         "",
         {
           fontFamily:
-            "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            "system-ui, -apple-system, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           fontSize: "14px",
           color: "#39ff14"
         }
@@ -603,11 +605,15 @@
         if (!document.fullscreenElement) {
           if (elem.requestFullscreen) elem.requestFullscreen();
         } else {
-          if (document.exitFullscreen) document.exitFullscreen();
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          }
         }
       });
 
       document.addEventListener("fullscreenchange", () => {
+        const btn = document.getElementById("btn-fullscreen");
+        if (!btn) return;
         if (document.fullscreenElement) {
           btn.textContent = "⛶ Exit Fullscreen";
         } else {
@@ -756,8 +762,6 @@
       ) {
         if (document.exitFullscreen) {
           document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
         }
       } else {
         // not fullscreen → request fullscreen on the image
