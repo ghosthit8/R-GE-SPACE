@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Rage Space — City Proto</title>
 
-  <!-- No global style.css here on purpose -->
-
   <style>
     :root {
       --green: #39ff14;
@@ -66,14 +64,14 @@
       box-shadow: 0 0 4px rgba(57, 255, 20, 1);
     }
 
-    /* GAME BOX – big viewer with margin so border shows on all sides */
+    /* GAME BOX */
     #game-container {
-      margin-top: 80px;             /* room for top buttons */
+      margin-top: 80px;
       margin-bottom: 8px;
-      width: calc(100% - 24px);     /* small side margins */
+      width: calc(100% - 24px);
       max-width: 720px;
       position: relative;
-      height: 520px;                /* TALL viewer */
+      height: 520px;
       border: 2px solid rgba(57, 255, 20, 0.9);
       box-shadow: 0 0 16px rgba(57, 255, 20, 0.8);
       background: #020202;
@@ -90,6 +88,25 @@
       justify-content: center;
       font-size: 0.9rem;
       color: rgba(57, 255, 20, 0.7);
+      z-index: 1;
+    }
+
+    /* HTML overlay for image (super crisp) */
+    #art-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.9);
+      display: none;           /* shown when A pressed */
+      align-items: center;
+      justify-content: center;
+      z-index: 5;              /* above game canvas, below UI buttons */
+    }
+
+    #art-overlay img {
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(57, 255, 20, 0.8);
     }
 
     /* CONTROLS */
@@ -179,7 +196,6 @@
       content: "B";
     }
 
-    /* Positions: B lower-left, A upper-right */
     .ab-buttons .btn-b {
       bottom: 10px;
       left: 30px;
@@ -211,6 +227,15 @@
 
   <div id="game-container">
     <div id="game-fallback">Loading Rage City…</div>
+
+    <!-- HTML overlay for big, sharp image -->
+    <div id="art-overlay">
+      <img
+        id="art-overlay-img"
+        src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2000&q=80"
+        alt="Gallery landscape"
+      />
+    </div>
   </div>
 
   <!-- On-screen controls -->
@@ -240,7 +265,6 @@
   <!-- Phaser 3 engine -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
 
-  <!-- Game logic INLINE -->
   <script>
     const inputState = {
       left: false,
@@ -253,12 +277,10 @@
 
     const config = {
       type: Phaser.AUTO,
-      // higher internal base resolution
       width: 960,
       height: 540,
       parent: "game-container",
-      resolution: window.devicePixelRatio || 1, // render at device DPI
-      pixelArt: false,                            // smooth scaling
+      pixelArt: false,
       backgroundColor: "#111122",
       scale: {
         mode: Phaser.Scale.RESIZE,
@@ -275,25 +297,20 @@
     let frameRect;
     let frameOutline;
     let promptText;
-    let artOverlayBg;
-    let artOverlayImage;
     let artOpen = false;
     let prevA = false;
     let prevB = false;
 
+    const artOverlayEl = document.getElementById("art-overlay");
+
     function preload() {
-      // Landscape from Unsplash
-      this.load.image(
-        "artImage",
-        "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2000&q=80"
-      );
+      // We don't need to load the big image into Phaser anymore
     }
 
     function create() {
       const fb = document.getElementById("game-fallback");
       if (fb) fb.style.display = "none";
 
-      // Player in the center
       player = this.add.rectangle(
         this.scale.width / 2,
         this.scale.height / 2,
@@ -302,26 +319,13 @@
         0x39ff14
       );
 
-      // --- Picture frame ---
       const frameX = this.scale.width * 0.75;
       const frameY = this.scale.height * 0.4;
 
-      frameRect = this.add.rectangle(
-        frameX,
-        frameY,
-        48,
-        36,
-        0x111111
-      );
-      frameOutline = this.add.rectangle(
-        frameX,
-        frameY,
-        52,
-        40
-      );
+      frameRect = this.add.rectangle(frameX, frameY, 48, 36, 0x111111);
+      frameOutline = this.add.rectangle(frameX, frameY, 52, 40);
       frameOutline.setStrokeStyle(2, 0x39ff14, 1);
 
-      // Prompt
       promptText = this.add.text(
         this.scale.width / 2,
         this.scale.height - 40,
@@ -335,37 +339,9 @@
       promptText.setOrigin(0.5);
       promptText.setVisible(false);
 
-      // Overlay
-      artOverlayBg = this.add.rectangle(
-        this.scale.width / 2,
-        this.scale.height / 2,
-        this.scale.width,
-        this.scale.height,
-        0x000000,
-        0.9
-      );
-      artOverlayImage = this.add.image(
-        this.scale.width / 2,
-        this.scale.height / 2,
-        "artImage"
-      );
-
-      resizeArtOverlay(this);
-
-      artOverlayBg.setVisible(false);
-      artOverlayImage.setVisible(false);
-
-      // Resize handler
       this.scale.on("resize", (gameSize) => {
         const width = gameSize.width;
         const height = gameSize.height;
-
-        artOverlayBg.setPosition(width / 2, height / 2);
-        artOverlayBg.setSize(width, height);
-
-        artOverlayImage.setPosition(width / 2, height / 2);
-        resizeArtOverlay(this);
-
         promptText.setPosition(width / 2, height - 40);
       });
 
@@ -376,22 +352,12 @@
       setupTouchButton("btn-down", "down");
       setupTouchButton("btn-a", "A");
       setupTouchButton("btn-b", "B");
-
       setupFullscreenButton();
-    }
 
-    function resizeArtOverlay(scene) {
-      if (!artOverlayImage) return;
-      const maxW = scene.scale.width * 0.8;
-      const maxH = scene.scale.height * 0.8;
-      const tex = artOverlayImage.texture;
-      if (!tex || !tex.source[0]) return;
-
-      const natW = tex.source[0].width;
-      const natH = tex.source[0].height;
-
-      const scale = Math.min(maxW / natW, maxH / natH, 1);
-      artOverlayImage.setDisplaySize(natW * scale, natH * scale);
+      // Optional: tap the image itself to close
+      artOverlayEl.addEventListener("click", () => {
+        if (artOpen) closeArtOverlay();
+      });
     }
 
     function setupKeyboard(scene) {
@@ -506,7 +472,7 @@
       const justPressedA = inputState.A && !prevA;
       const justPressedB = inputState.B && !prevB;
 
-      // If art overlay is open, ignore movement & only listen for A/B to close
+      // Overlay open: only listen for A/B to close
       if (artOpen) {
         if (justPressedA || justPressedB) {
           closeArtOverlay();
@@ -567,15 +533,13 @@
 
     function openArtOverlay() {
       artOpen = true;
-      if (artOverlayBg) artOverlayBg.setVisible(true);
-      if (artOverlayImage) artOverlayImage.setVisible(true);
+      if (artOverlayEl) artOverlayEl.style.display = "flex";
       if (promptText) promptText.setVisible(false);
     }
 
     function closeArtOverlay() {
       artOpen = false;
-      if (artOverlayBg) artOverlayBg.setVisible(false);
-      if (artOverlayImage) artOverlayImage.setVisible(false);
+      if (artOverlayEl) artOverlayEl.style.display = "none";
     }
 
     new Phaser.Game(config);
