@@ -330,32 +330,32 @@
       const fb = document.getElementById("game-fallback");
       if (fb) fb.style.display = "none";
 
-      // Smaller player
+      // Smaller player (20x20)
       player = this.add.rectangle(
         this.scale.width / 2,
         this.scale.height / 2,
-        20,          // was 32
-        20,          // was 32
+        20,
+        20,
         0x39ff14
       );
 
       const frameX = this.scale.width * 0.75;
       const frameY = this.scale.height * 0.4;
 
-      // Outer glowing picture frame - smaller
-      frameRect = this.add.rectangle(frameX, frameY, 70, 52); // was 90, 68
+      // Outer glowing picture frame - a bit smaller now
+      frameRect = this.add.rectangle(frameX, frameY, 55, 40, 0x020202); // was 70x52
       frameRect.setStrokeStyle(4, 0x39ff14, 1);
 
-      // Inner "mat" inside the frame - smaller
-      frameMat = this.add.rectangle(frameX, frameY, 60, 44, 0x000000); // was 76, 54
+      // Inner "mat" inside the frame - shrunk to match
+      frameMat = this.add.rectangle(frameX, frameY, 45, 32, 0x000000); // was 60x44
       frameMat.setStrokeStyle(2, 0x1a8f3a, 1);
 
-      // Tiny art thumbnail inside the frame - resized
+      // Tiny art thumbnail inside the frame - rescaled for new frame size
       const tex = this.textures.get("artThumb").getSourceImage();
       const natW = tex.width;
       const natH = tex.height;
-      const maxThumbW = 52;  // was 68
-      const maxThumbH = 38;  // was 46
+      const maxThumbW = 40;  // was 52
+      const maxThumbH = 28;  // was 38
       const scale = Math.min(maxThumbW / natW, maxThumbH / natH);
       frameThumb = this.add.image(frameX, frameY, "artThumb");
       frameThumb.setScale(scale);
