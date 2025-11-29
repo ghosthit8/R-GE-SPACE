@@ -497,7 +497,7 @@
         addTrapezoidFrame(this, midRightX, y, "right");
       }
 
-      // ----- LEFT WALL: now 2 (we “moved” the middle one) -----
+      // ----- LEFT WALL: 2 above the doorway -----
       const leftYPositions = [
         topInner + 55,         // high
         gapInnerTopY - 22      // just above doorway
@@ -506,15 +506,17 @@
         addTrapezoidFrame(this, midLeftX, y, "left");
       });
 
-      // ----- BOTTOM ROW: now 5, more spaced -----
-      const bottomCount = 5;
-      const bottomStartX = leftInner + 40;
-      const bottomEndX   = rightInner - 40;
-      for (let i = 0; i < bottomCount; i++) {
-        const t = bottomCount === 1 ? 0.5 : i / (bottomCount - 1);
-        const x = Phaser.Math.Linear(bottomStartX, bottomEndX, t);
+      // ----- BOTTOM ROW: 5, first one tucked near inner-left corner -----
+      const bottomPositions = [
+        leftInner + 24,                       // close to inner-left corner
+        leftInner + 90,
+        (leftInner + rightInner) / 2,
+        rightInner - 90,
+        rightInner - 24                       // near inner-right corner
+      ];
+      bottomPositions.forEach((x) => {
         addTrapezoidFrame(this, x, midBottomY, "bottom");
-      }
+      });
 
       // ===== Center pedestal =====
       const centerX = (leftOuter + rightOuter) / 2;
