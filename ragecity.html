@@ -479,15 +479,17 @@
       const midTopY    = (topOuter   + topInner)   / 2;
       const midBottomY = (bottomOuter+ bottomInner)/ 2;
 
-      // top paintings
+      // ----- TOP ROW: spaced paintings -----
       const topCount = 4;
+      const topStartX = leftInner + 35;
+      const topEndX   = rightInner - 35;
       for (let i = 0; i < topCount; i++) {
-        const t = i / (topCount - 1);
-        const x = Phaser.Math.Linear(leftInner + 40, rightInner - 40, t);
+        const t = topCount === 1 ? 0.5 : i / (topCount - 1);
+        const x = Phaser.Math.Linear(topStartX, topEndX, t);
         addTrapezoidFrame(this, x, midTopY, "top");
       }
 
-      // right paintings
+      // ----- RIGHT WALL -----
       const rightCount = 4;
       for (let i = 0; i < rightCount; i++) {
         const t = i / (rightCount - 1);
@@ -495,19 +497,22 @@
         addTrapezoidFrame(this, midRightX, y, "right");
       }
 
-      // left paintings
-      const leftCount = 3; // slightly fewer so there's space near the doorway
-      for (let i = 0; i < leftCount; i++) {
-        const t = i / (leftCount - 1);
-        const y = Phaser.Math.Linear(topInner + 40, bottomInner - 40, t);
+      // ----- LEFT WALL: now 2 (we “moved” the middle one) -----
+      const leftYPositions = [
+        topInner + 55,         // high
+        gapInnerTopY - 22      // just above doorway
+      ];
+      leftYPositions.forEach((y) => {
         addTrapezoidFrame(this, midLeftX, y, "left");
-      }
+      });
 
-      // bottom paintings
-      const bottomCount = 4;
+      // ----- BOTTOM ROW: now 5, more spaced -----
+      const bottomCount = 5;
+      const bottomStartX = leftInner + 40;
+      const bottomEndX   = rightInner - 40;
       for (let i = 0; i < bottomCount; i++) {
-        const t = i / (bottomCount - 1);
-        const x = Phaser.Math.Linear(leftInner + 40, rightInner - 40, t);
+        const t = bottomCount === 1 ? 0.5 : i / (bottomCount - 1);
+        const x = Phaser.Math.Linear(bottomStartX, bottomEndX, t);
         addTrapezoidFrame(this, x, midBottomY, "bottom");
       }
 
