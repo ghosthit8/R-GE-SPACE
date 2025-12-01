@@ -149,8 +149,28 @@
     border-radius:10px;
     border:1px solid rgba(57,255,20,0.35);
     box-shadow:0 0 0 1px rgba(57,255,20,0.08) inset;
+    position:relative;           /* for FS button */
+    overflow:hidden;
   }
   .msg .media video, .msg .media img{ display:block; width:100%; height:auto; border-radius:10px; }
+
+  /* per-media fullscreen button */
+  .media-fs-btn{
+    position:absolute;
+    top:4px;
+    right:4px;
+    border-radius:999px;
+    border:1px solid rgba(57,255,20,0.6);
+    background:rgba(0,0,0,0.7);
+    padding:2px 6px;
+    font-size:11px;
+    font-weight:800;
+    cursor:pointer;
+    z-index:2;
+  }
+  .media-fs-btn:hover{
+    box-shadow:0 0 8px rgba(57,255,20,0.7);
+  }
 
   body.fs header{ display:none; }
   body.fs #header-spacer{ display:none; height:0 !important; }
@@ -664,13 +684,30 @@
 
     function mediaNode(url, type){
       const wrap = el("div", { class:"media" });
+      let mediaEl;
       if((type||"").startsWith("video")){
-        const v = el("video", { src:url, controls:true, playsinline:true });
-        wrap.appendChild(v);
+        mediaEl = el("video", { src:url, controls:true, playsinline:true });
       }else{
-        const img = el("img", { src:url, alt:"upload" });
-        wrap.appendChild(img);
+        mediaEl = el("img", { src:url, alt:"upload" });
       }
+
+      const btn = el("button", {
+        class:"media-fs-btn",
+        type:"button",
+        title:"Full screen",
+        onclick:(ev)=>{
+          ev.stopPropagation();
+          const target = mediaEl || wrap;
+          if(target && target.requestFullscreen){
+            target.requestFullscreen().catch(()=>{});
+          }else if(wrap.requestFullscreen){
+            wrap.requestFullscreen().catch(()=>{});
+          }
+        }
+      }, "⤢");
+
+      wrap.appendChild(btn);
+      wrap.appendChild(mediaEl);
       return wrap;
     }
 
