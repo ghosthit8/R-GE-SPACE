@@ -48,31 +48,22 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
 .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px}
 .thumb{
   position:relative; border:1px solid var(--border); border-radius:12px;
-  overflow:hidden; background:#ff3aa0; min-height:120px;
+  overflow:hidden; background:#ff3aa0; min-height:120px
 }
 .thumb img,
-.thumb video{display:block; width:100%; height:100%; object-fit:cover}
+.thumb video{
+  display:block; width:100%; height:100%; object-fit:cover;
+}
 .thumb .idx{
   position:absolute; top:6px; left:6px; font:700 12px/1 ui-monospace,monospace; color:#c9c9c9;
-  background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35)
+  background:rgba(0,0,0,.55); padding:4px 6px; border-radius:10px; border:1px solid rgba(57,255,20,.35);
+  z-index:2;
 }
-/* NEW: username tag in queue (top-right, green, clickable) */
-.thumb .user{
-  position:absolute; top:6px; right:6px;
-  max-width:70%;
-  font-size:11px; line-height:1.1;
-  color:var(--green);
-  text-decoration:none;
-  background:rgba(0,0,0,.7);
-  padding:3px 6px;
-  border-radius:10px;
-  border:1px solid rgba(57,255,20,.5);
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-.thumb .user:hover{
-  text-decoration:underline;
+.thumb .artist{
+  position:absolute; top:6px; right:6px; font:700 11px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color:var(--green); background:rgba(0,0,0,.75); padding:4px 8px; border-radius:999px;
+  border:1px solid rgba(57,255,20,.7); text-decoration:none;
+  z-index:3; max-width:70%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 
 /* Timer card */
@@ -128,8 +119,8 @@ hr.sep{border:0; border-top:1px dashed var(--border); margin:16px 0}
       <div id="pickZone" class="drop">
         <button id="btnPick" class="btn big">⬆️ Upload or Paste Art</button>
         <div id="fileName" class="small">jpg / png / webp / mp4 / webm — 50MB max. Tip: drag & drop or paste (Ctrl/⌘+V)</div>
-        <!-- NEW: note under upload text -->
-        <div class="small" style="margin-top:4px;">
+        <!-- New note under upload button text -->
+        <div class="small" style="margin-top:4px; color:var(--muted);">
           Images/videos submitted will appear in the next tournament.
         </div>
         <input id="fileInput" type="file" accept="image/*,video/*" class="hidden">
@@ -259,6 +250,24 @@ function hide(el){ el.classList.add('hidden'); }
 function setPreview(src){
   if (src){ imgPreview.src = src; show(imgPreview); }
   else { imgPreview.removeAttribute('src'); hide(imgPreview); }
+}
+
+/* escape helper for usernames in HTML */
+function escHtml(str){
+  return String(str).replace(/[&<>"']/g, c => (
+    c === '&' ? '&amp;' :
+    c === '<' ? '&lt;'  :
+    c === '>' ? '&gt;'  :
+    c === '"' ? '&quot;' : '&#39;'
+  ));
+}
+
+/* build profile link markup for a username */
+function profileLinkForUsername(username){
+  if (!username) return '';
+  const safeLabel = escHtml(username);
+  const safeQuery = encodeURIComponent(username);
+  return `<a class="artist" href="./profile.html?u=${safeQuery}" onclick="event.stopPropagation();">${safeLabel}</a>`;
 }
 
 /* helper: update preview based on image vs video */
@@ -695,16 +704,13 @@ async function renderQueue(){
       const media = isVideo
         ? `<video src="${url}#t=0.1" muted playsinline loop></video>`
         : `<img src="${url}" alt="queued art ${i+1}"/>`;
-      const username = (r.artist_name || '').trim();
-      const profileHref = username ? `profile.html?u=${encodeURIComponent(username)}` : '#';
-      const userLabel = username
-        ? `<a class="user" href="${profileHref}" onclick="event.stopPropagation()">@${username}</a>`
-        : '';
+      const artist = (r.artist_name || '').trim();
+      const artistHtml = artist ? profileLinkForUsername(artist) : '';
       return `
         <div class="thumb" data-id="${r.id}" title="${url}">
-          <span class="idx">#${i+1}</span>
-          ${userLabel}
           ${media}
+          <span class="idx">#${i+1}</span>
+          ${artistHtml}
         </div>
       `;
     }).join('');
@@ -743,12 +749,9 @@ const queueChannel = supabase.channel('queue-watch')
     const media = isVideo
       ? `<video src="${url}#t=0.1" muted playsinline loop></video>`
       : `<img src="${url}" alt="queued art"/>`;
-    const username = (row.artist_name || '').trim();
-    const profileHref = username ? `profile.html?u=${encodeURIComponent(username)}` : '#';
-    const userLabel = username
-      ? `<a class="user" href="${profileHref}" onclick="event.stopPropagation()">@${username}</a>`
-      : '';
-    div.innerHTML = `<span class="idx">#?</span>${userLabel}${media}`;
+    const artist = (row.artist_name || '').trim();
+    const artistHtml = artist ? profileLinkForUsername(artist) : '';
+    div.innerHTML = `${media}<span class="idx">#?</span>${artistHtml}`;
 
     const img = div.querySelector('img');
     if (img) {
