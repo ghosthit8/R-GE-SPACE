@@ -324,7 +324,7 @@
       const w = this.scale.width;
       const h = this.scale.height;
 
-      // ==== ROOM GEOMETRY (original outer + inner walls) ====
+      // ==== ROOM GEOMETRY ====
       const marginX = 60;
       const marginY = 90;
 
@@ -341,7 +341,7 @@
 
       const doorWidth = 90;
 
-      // Door on the left wall
+      // door on the LEFT wall
       const doorCenterY = topInner + (bottomInner - topInner) * 0.65;
       const gapOuterTopY = doorCenterY - doorWidth / 2;
       const gapOuterBotY = doorCenterY + doorWidth / 2;
@@ -349,7 +349,7 @@
       const gapInnerTopY = doorCenterY - doorWidth / 2;
       const gapInnerBotY = doorCenterY + doorWidth / 2;
 
-      // Outer wall (same as original)
+      // Outer wall with opening on the left
       const wallOuter = this.add.graphics();
       wallOuter.lineStyle(4, 0xffffff, 1);
       wallOuter.beginPath();
@@ -362,7 +362,7 @@
       wallOuter.lineTo(leftOuter, topOuter);
       wallOuter.strokePath();
 
-      // Inner wall (same as original)
+      // Inner wall with matching opening (base rectangle)
       const wallInner = this.add.graphics();
       wallInner.lineStyle(4, 0xffffff, 1);
       wallInner.beginPath();
@@ -375,18 +375,24 @@
       wallInner.lineTo(leftInner, topInner);
       wallInner.strokePath();
 
-      // EXTRA SHORT LINES on the left side (what you drew in red):
-      // one across the top corridor, one across the bottom corridor
-      const extraWalls = this.add.graphics();
-      extraWalls.lineStyle(4, 0xffffff, 1);
-      extraWalls.beginPath();
-      // Top corridor connector
-      extraWalls.moveTo(leftOuter, topInner);
-      extraWalls.lineTo(leftInner, topInner);
-      // Bottom corridor connector
-      extraWalls.moveTo(leftOuter, bottomInner);
-      extraWalls.lineTo(leftInner, bottomInner);
-      extraWalls.strokePath();
+      // === DIAGONAL CORNER PIECES on inner wall ===
+      const cornerLen = 30; // tweak this for longer/shorter diagonals
+      const diag = this.add.graphics();
+      diag.lineStyle(4, 0xffffff, 1);
+      diag.beginPath();
+      // top-left corner
+      diag.moveTo(leftInner, topInner);
+      diag.lineTo(leftInner + cornerLen, topInner + cornerLen);
+      // top-right corner
+      diag.moveTo(rightInner, topInner);
+      diag.lineTo(rightInner - cornerLen, topInner + cornerLen);
+      // bottom-left corner
+      diag.moveTo(leftInner, bottomInner);
+      diag.lineTo(leftInner + cornerLen, bottomInner - cornerLen);
+      // bottom-right corner
+      diag.moveTo(rightInner, bottomInner);
+      diag.lineTo(rightInner - cornerLen, bottomInner - cornerLen);
+      diag.strokePath();
 
       // Player starts just outside that left opening
       player = this.add.rectangle(leftOuter - 20, doorCenterY, 20, 20, 0x39ff14);
