@@ -30,6 +30,22 @@
     button.vote { padding:10px 14px; }
     button.vote:disabled { opacity:.6; cursor:default; }
 
+    /* NEW: previous/next match arrow buttons */
+    .navArrow {
+      border: 1px solid var(--accent);
+      background: rgba(0,0,0,0.45);
+      color: var(--accent);
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .navArrow:disabled {
+      opacity: .35;
+      cursor: default;
+    }
+
     /* piece meta under active cards */
     .piece-meta {
       padding:6px 12px 10px;
@@ -195,6 +211,9 @@
       <div class="row">
         <a class="backbtn" href="menu.html">← Menu</a>
         <a class="linkbtn" href="winners.html">Winners</a>
+        <!-- NEW: Previous / Next battle arrows -->
+        <button class="navArrow" id="prevMatch">⟨</button>
+        <button class="navArrow" id="nextMatch">⟩</button>
       </div>
     </div>
 
@@ -565,6 +584,30 @@
       if (!v) return;
       try { v.pause(); } catch(e){}
       v.remove();
+    }
+
+    /* NEW: keyboard/arrow navigation helpers */
+    function gotoMatch(offset) {
+      const keys = order
+        .map(o => o.key)
+        .filter(k => !thumbs[k].box.classList.contains("disabled")
+                  && !thumbs[k].box.classList.contains("hidden"));
+
+      const idx = keys.indexOf(activeMatch);
+      if (idx === -1) return;
+
+      const nextKey = keys[idx + offset];
+      if (nextKey) {
+        activeMatch = nextKey;
+        renderActive();
+      }
+    }
+
+    const prevBtnEl = document.getElementById("prevMatch");
+    const nextBtnEl = document.getElementById("nextMatch");
+    if (prevBtnEl && nextBtnEl) {
+      prevBtnEl.addEventListener("click", () => gotoMatch(-1));
+      nextBtnEl.addEventListener("click", () => gotoMatch(1));
     }
 
     let state = {
@@ -1035,6 +1078,23 @@
 
       btnActive1.disabled = !!picked || !phaseLive;
       btnActive2.disabled = !!picked || !phaseLive;
+
+      /* NEW: keep arrows in sync (disable at ends) */
+      (function updateArrows(){
+        const prevBtn = document.getElementById("prevMatch");
+        const nextBtn = document.getElementById("nextMatch");
+        if (!prevBtn || !nextBtn) return;
+
+        const keys = order
+          .map(o => o.key)
+          .filter(k => !thumbs[k].box.classList.contains("disabled")
+                    && !thumbs[k].box.classList.contains("hidden"));
+
+        const idx = keys.indexOf(activeMatch);
+
+        prevBtn.disabled = (idx <= 0);
+        nextBtn.disabled = (idx === -1 || idx >= keys.length - 1);
+      })();
     }
 
     async function fetchState(force=false){
