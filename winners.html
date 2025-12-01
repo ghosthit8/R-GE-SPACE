@@ -608,7 +608,7 @@
       return !String(w.base_iso || "").includes("::");
     }
 
-    // Build a map per cycle: image_url → original seed (a..af)
+    // Build a map per cycle: media_url/image_url/winner_url → original seed (a..af)
     // Include both R16 and R32 rows to backfill original seed letters cleanly.
     function buildUrlToSeedMap(all){
       const byCycle = new Map(); // cycleBase -> Map(url -> seedLetter)
@@ -617,7 +617,7 @@
         const root = base.split("::")[0];
         if (!byCycle.has(root)) byCycle.set(root, new Map());
         if (base.includes("::r16_") || base.includes("::r32_")){
-          const url = r.image_url || r.winner_url || "";
+          const url = r.media_url || r.image_url || r.winner_url || "";
           const seed = (r.winner_seed || "").toLowerCase();
           if (url && seed) byCycle.get(root).set(url, seed);
         }
@@ -671,7 +671,9 @@
 
         const by = r.decided_by === 'random_tie' ? 'random tie' : 'votes';
         const score = `${r.red_count ?? 0}–${r.blue_count ?? 0}`;
-        const mediaUrl = r.image_url || r.winner_url || '';
+
+        // 🔧 MAIN FIX: use media_url OR image_url OR winner_url
+        const mediaUrl = r.media_url || r.image_url || r.winner_url || '';
         let thumb;
         if (mediaUrl){
           if (isVideoUrl(mediaUrl)){
@@ -722,14 +724,18 @@
         const data = await res.json().catch(()=> ({}));
         const all = Array.isArray(data) ? data : (data.winners || []);
 
-        // Resolve original seeds by matching image_url back to R32/R16 rows
+        // Resolve original seeds by matching media_url/image_url/winner_url back to R32/R16 rows
         const mapByCycle = buildUrlToSeedMap(all);
         for (const r of all){
           const root = String(r.base_iso||"").split("::")[0];
-          const url = r.image_url || r.winner_url || "";
+          const url = r.media_url || r.image_url || r.winner_url || "";
           const m = mapByCycle.get(root);
           if (m && url && m.has(url)){
             r._resolved_seed = m.get(url); // a..af
+          }
+          // fallback: if mapping fails, still use winner_seed so row always has a seed
+          if (!r._resolved_seed && r.winner_seed){
+            r._resolved_seed = String(r.winner_seed).toLowerCase();
           }
         }
 
