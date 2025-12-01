@@ -324,7 +324,7 @@
       const w = this.scale.width;
       const h = this.scale.height;
 
-      // ==== ROOM GEOMETRY (walls & LEFT-SIDE door) ====
+      // ==== ROOM GEOMETRY (original outer + inner walls) ====
       const marginX = 60;
       const marginY = 90;
 
@@ -341,7 +341,7 @@
 
       const doorWidth = 90;
 
-      // door on the LEFT wall, a bit below center
+      // Door on the left wall
       const doorCenterY = topInner + (bottomInner - topInner) * 0.65;
       const gapOuterTopY = doorCenterY - doorWidth / 2;
       const gapOuterBotY = doorCenterY + doorWidth / 2;
@@ -349,7 +349,7 @@
       const gapInnerTopY = doorCenterY - doorWidth / 2;
       const gapInnerBotY = doorCenterY + doorWidth / 2;
 
-      // Outer wall with opening on the left
+      // Outer wall (same as original)
       const wallOuter = this.add.graphics();
       wallOuter.lineStyle(4, 0xffffff, 1);
       wallOuter.beginPath();
@@ -362,7 +362,7 @@
       wallOuter.lineTo(leftOuter, topOuter);
       wallOuter.strokePath();
 
-      // Inner wall with matching opening
+      // Inner wall (same as original)
       const wallInner = this.add.graphics();
       wallInner.lineStyle(4, 0xffffff, 1);
       wallInner.beginPath();
@@ -375,10 +375,23 @@
       wallInner.lineTo(leftInner, topInner);
       wallInner.strokePath();
 
+      // EXTRA SHORT LINES on the left side (what you drew in red):
+      // one across the top corridor, one across the bottom corridor
+      const extraWalls = this.add.graphics();
+      extraWalls.lineStyle(4, 0xffffff, 1);
+      extraWalls.beginPath();
+      // Top corridor connector
+      extraWalls.moveTo(leftOuter, topInner);
+      extraWalls.lineTo(leftInner, topInner);
+      // Bottom corridor connector
+      extraWalls.moveTo(leftOuter, bottomInner);
+      extraWalls.lineTo(leftInner, bottomInner);
+      extraWalls.strokePath();
+
       // Player starts just outside that left opening
       player = this.add.rectangle(leftOuter - 20, doorCenterY, 20, 20, 0x39ff14);
 
-      // ===== TRAPEZOID PAINTING FRAMES (inside corridor) =====
+      // ===== TRAPEZOID PAINTING FRAMES =====
       const tex = this.textures.get("artThumb").getSourceImage();
       const natW = tex.width;
       const natH = tex.height;
@@ -479,7 +492,7 @@
       const midTopY    = (topOuter   + topInner)   / 2;
       const midBottomY = (bottomOuter+ bottomInner)/ 2;
 
-      // ----- TOP ROW: spaced paintings -----
+      // ----- TOP ROW -----
       const topCount = 4;
       const topStartX = leftInner + 35;
       const topEndX   = rightInner - 35;
@@ -499,20 +512,20 @@
 
       // ----- LEFT WALL: 2 above the doorway -----
       const leftYPositions = [
-        topInner + 55,         // high
-        gapInnerTopY - 22      // just above doorway
+        topInner + 55,
+        gapInnerTopY - 22
       ];
       leftYPositions.forEach((y) => {
         addTrapezoidFrame(this, midLeftX, y, "left");
       });
 
-      // ----- BOTTOM ROW: 5, first one tucked near inner-left corner -----
+      // ----- BOTTOM ROW -----
       const bottomPositions = [
-        leftInner + 24,                       // close to inner-left corner
+        leftInner + 24,
         leftInner + 90,
         (leftInner + rightInner) / 2,
         rightInner - 90,
-        rightInner - 24                       // near inner-right corner
+        rightInner - 24
       ];
       bottomPositions.forEach((x) => {
         addTrapezoidFrame(this, x, midBottomY, "bottom");
