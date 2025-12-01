@@ -687,19 +687,35 @@
     let activeMatch = "rr1";
 
     async function vote(color){
-      const base = state.base_iso||"";
+      const base = state.base_iso || "";
+
+      // Ensure we have a logged-in Supabase user so server can enforce
+      // 1 vote per account (user_votes_v2 unique constraint).
+      let accessToken = null;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        accessToken = sessionData?.session?.access_token || null;
+      } catch (e) {
+        accessToken = null;
+      }
+
+      if (!accessToken) {
+        alert("You need to be signed in to vote.");
+        return;
+      }
+
       const mem = memRead(base);
       const key = activeMatch;
       if (mem[key]) return;
 
-      const red = color==="red";
-      const inc = (k)=> state[k] = (state[k]||0)+1;
+      const red = color === "red";
+      const inc = (k) => state[k] = (state[k] || 0) + 1;
 
       const serverPhase = activeMatch.startsWith("rr")
-        ? ("r"+activeMatch.slice(2))
+        ? ("r" + activeMatch.slice(2))
         : activeMatch;
 
-      const post = { phase: serverPhase, side: red ? "left":"right" };
+      const post = { phase: serverPhase, side: red ? "left" : "right" };
 
       const map = {
         rr1:["seed_a_count","seed_b_count"],   rr2:["seed_c_count","seed_d_count"],
@@ -722,18 +738,28 @@
         final:["seed_a_count","seed_b_count"]
       };
       const arr = map[activeMatch];
-      if (arr){ inc(red?arr[0]:arr[1]); renderActive(); }
+      if (arr){
+        inc(red ? arr[0] : arr[1]);
+        renderActive();
+      }
 
       try{
         const res = await fetch(FUNCTION_URL, {
-          method:"POST",
-          headers:{"Content-Type":"application/json","x-rsid":RSID},
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-rsid": RSID,
+            "Authorization": `Bearer ${accessToken}`
+          },
           body: JSON.stringify(post)
         });
-        if (!res.ok){ await fetchState(true); return; }
-        const s = await res.json().catch(()=> ({}));
-        Object.assign(state, s||{});
-        memWrite(base,key,color);
+        if (!res.ok){
+          await fetchState(true);
+          return;
+        }
+        const s = await res.json().catch(() => ({}));
+        Object.assign(state, s || {});
+        memWrite(base, key, color);
         renderActive();
       }catch{
         await fetchState(true);
