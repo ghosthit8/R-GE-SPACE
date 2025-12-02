@@ -30,11 +30,17 @@
     button.vote { padding:10px 14px; }
     button.vote:disabled { opacity:.6; cursor:default; }
 
-    /* NEW: tiny AFK auto-vote button under Vote */
+    /* NEW: row that holds the tiny AFK button under the vote row */
+    .autoRow {
+      display:flex;
+      justify-content:flex-end;
+      padding:0 12px 8px;
+    }
+
+    /* NEW: tiny AFK auto-vote button */
     .autoVoteBtn {
-      margin-left: 8px;
-      padding: 4px 8px;
-      font-size: 10px;
+      padding: 2px 6px;
+      font-size: 9px;
       border-radius: 999px;
       border: 1px solid var(--accent);
       background: transparent;
@@ -200,7 +206,7 @@
   </style>
 </head>
 <body>
-  <div id="loadingScreen" style="
+<div id="loadingScreen" style="
   position:fixed;
   inset:0;
   background:#0b0f13;
@@ -216,25 +222,24 @@
 ">
   LOADING…
 </div>
+
   <div class="wrap">
     <h1 class="glitch-title" data-text="ART BATTLE. Faction I.">ART BATTLE. Faction I.</h1>
 
     <div class="header">
       <div class="row">
-        <!-- start a round at 4h48m = 17,280s -->
         <div class="timer" id="tRemain">04:48:00</div>
         <div class="round-label" id="currentRound">Current round: —</div>
       </div>
       <div class="row">
         <a class="backbtn" href="menu.html">← Menu</a>
         <a class="linkbtn" href="winners.html">Winners</a>
-        <!-- NEW: Previous / Next battle arrows -->
         <button class="navArrow" id="prevMatch">⟨</button>
         <button class="navArrow" id="nextMatch">⟩</button>
       </div>
     </div>
 
-    <!-- ACTIVE MATCH -->
+    <!-- ACTIVE MATCH TOP -->
     <div class="card" id="activeTop">
       <div class="imgBox">
         <img id="imgActive1" alt="Active top">
@@ -245,12 +250,15 @@
         <div class="label" id="labelActive1">Top</div>
         <div class="counts" id="countActive1">0</div>
         <button class="vote" id="btnActive1">Vote</button>
-        <!-- NEW: AFK auto-vote button (top art) -->
+      </div>
+      <!-- AFK button under vote -->
+      <div class="autoRow">
         <button class="autoVoteBtn" id="autoActive1">vote this art for every round</button>
       </div>
       <div class="piece-meta hidden" id="metaActive1"></div>
     </div>
 
+    <!-- ACTIVE MATCH BOTTOM -->
     <div class="card" id="activeBottom">
       <div class="imgBox">
         <img id="imgActive2" alt="Active bottom">
@@ -261,7 +269,9 @@
         <div class="label" id="labelActive2">Bottom</div>
         <div class="counts" id="countActive2">0</div>
         <button class="vote" id="btnActive2">Vote</button>
-        <!-- NEW: AFK auto-vote button (bottom art) -->
+      </div>
+      <!-- AFK button under vote -->
+      <div class="autoRow">
         <button class="autoVoteBtn" id="autoActive2">vote this art for every round</button>
       </div>
       <div class="piece-meta hidden" id="metaActive2"></div>
@@ -331,7 +341,6 @@
 
     const elRemain = document.getElementById("tRemain");
     const winnerText = document.getElementById("winnerText");
-
     const currentRoundEl = document.getElementById("currentRound");
 
     const imgActive1 = document.getElementById("imgActive1");
@@ -372,7 +381,6 @@
 
     const grid = document.getElementById("thumbGrid");
 
-    // *** CACHES to prevent disappearing thumbnails / active media ***
     const lastGoodThumb = {};
     const lastGoodActive = {};
 
@@ -382,10 +390,9 @@
              !url.startsWith("data:image/svg+xml");
     }
 
-    // *** FIXED: handle URLs that have #t=0.1 fragments so fullscreen works for videos
     function isVideoUrl(url){
       if (typeof url !== "string") return false;
-      const base = url.split("#")[0]; // strip time fragment
+      const base = url.split("#")[0];
       return /\.(mp4|webm|mov)(\?|$)/i.test(base);
     }
 
@@ -439,12 +446,10 @@
         .replace(/'/g,"&#39;");
     }
 
-    /* UPDATED: description-only meta block with see-more */
     function renderPieceMeta(container, meta){
       if (!container) return;
       const desc = meta && meta.desc ? String(meta.desc) : "";
 
-      // If totally empty → hide
       if (!desc){
         container.classList.add("hidden");
         container.innerHTML = "";
@@ -487,7 +492,6 @@
       }
     }
 
-    /* MATCH INDEX */
     const order = [
       {key:"rr1",  label:"R32 1",  left:"seed_a_url",  right:"seed_b_url",  lct:"seed_a_count",  rct:"seed_b_count"},
       {key:"rr2",  label:"R32 2",  left:"seed_c_url",  right:"seed_d_url",  lct:"seed_c_count",  rct:"seed_d_count"},
@@ -571,7 +575,6 @@
     }
     order.forEach(makeThumb);
 
-    // Desktop-only hover preview
     const hoverEnabled = window.matchMedia && window.matchMedia("(pointer:fine)").matches;
     if (hoverEnabled) {
       for (const k in thumbs) {
@@ -609,7 +612,6 @@
       v.remove();
     }
 
-    /* NEW: keyboard/arrow navigation helpers */
     function gotoMatch(offset) {
       const keys = order
         .map(o => o.key)
@@ -668,11 +670,9 @@
       meta_by_url:{}
     };
 
-    /* NEW: track which URLs are active left/right for AFK auto-vote */
     let activeLeftUrl = null;
     let activeRightUrl = null;
 
-    /* NEW: make vote memory per-user instead of per-browser */
     const VOTE_MEMORY_KEY = "rs_vote_memory_v4";
     const AUTO_MEMORY_KEY = "rs_auto_vote_v1";
     let voteUserKey = "guest";
@@ -689,8 +689,6 @@
       } catch(e) {
         voteUserKey = "guest";
       } finally {
-        // once we know which user we are, re-render so vote buttons
-        // reflect THIS account's votes (not whoever used the browser earlier)
         renderActive();
       }
     }
@@ -712,20 +710,24 @@
       localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all));
     }
 
-    /* NEW: local memory for "AFK auto-vote used" per user per base_iso */
+    /* AFK memory: one per user per base_iso, but remembers WHICH URL */
     function autoMemRead(base){
       try{
         const all = JSON.parse(localStorage.getItem(AUTO_MEMORY_KEY)||"{}");
         const perUser = all[voteUserKey] || {};
-        return !!perUser[base];
+        const val = perUser[base];
+        if (!val) return { used:false, url:null };
+        if (typeof val === "string") return { used:true, url:val };
+        if (typeof val === "object") return { used: !!val.used, url: val.url || null };
+        return { used:true, url:null };
       }catch{
-        return false;
+        return { used:false, url:null };
       }
     }
-    function autoMemWrite(base){
+    function autoMemWrite(base, imageUrl){
       const all = (()=>{ try { return JSON.parse(localStorage.getItem(AUTO_MEMORY_KEY)||"{}"); } catch { return {}; }})();
       const perUser = all[voteUserKey] || {};
-      perUser[base] = true;
+      perUser[base] = { used:true, url: imageUrl || null };
       all[voteUserKey] = perUser;
       localStorage.setItem(AUTO_MEMORY_KEY, JSON.stringify(all));
     }
@@ -735,8 +737,6 @@
     async function vote(color){
       const base = state.base_iso || "";
 
-      // Ensure we have a logged-in Supabase user so server can enforce
-      // 1 vote per account per base_iso+phase
       let accessToken = null;
       try {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -814,17 +814,15 @@
     btnActive1.onclick = ()=> vote("red");
     btnActive2.onclick = ()=> vote("blue");
 
-    /* NEW: AFK auto-vote handler */
     async function autoVote(whichSide){
       const base = state.base_iso || "";
+      const autoState = autoMemRead(base);
 
-      // already used this tournament? (UI-side check)
-      if (autoMemRead(base)) {
+      if (autoState.used) {
         alert("You've already set an AFK auto-vote for this tournament.");
         return;
       }
 
-      // need logged-in user
       let accessToken = null;
       try {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -862,8 +860,7 @@
 
         if (!res.ok) {
           if (payload && payload.error === "auto_already_used") {
-            // server says they've already used it this base_iso
-            autoMemWrite(base);
+            autoMemWrite(base, null);
             updateAutoButtons(false);
             alert("You've already set an AFK auto-vote for this tournament.");
             return;
@@ -876,10 +873,9 @@
           return;
         }
 
-        // success → remember locally and lock the button
-        autoMemWrite(base);
+        autoMemWrite(base, url);
         updateAutoButtons(false);
-        alert("AFK auto-vote locked in for this art for the rest of today.");
+        alert("AFK vote locked in for this art for the rest of today.");
       } catch (e) {
         alert("Network error while setting AFK auto-vote.");
       }
@@ -894,7 +890,6 @@
       const leftKey = key + "_L";
       const rightKey = key + "_R";
 
-      // cache / restore last good URLs so thumbs never "blink" away
       if (isRealUrl(leftUrl)) {
         lastGoodThumb[leftKey] = leftUrl;
       } else if (lastGoodThumb[leftKey]) {
@@ -911,7 +906,6 @@
       const rightIsVid = isVideoUrl(rightUrl);
       const hasVideo = leftIsVid || rightIsVid;
 
-      // LEFT SIDE
       if (leftIsVid) {
         th.imgL.classList.add("hidden");
         th.vidL.classList.remove("hidden");
@@ -924,7 +918,6 @@
         th.imgL.src = leftUrl || placeholder(fallback||"?");
       }
 
-      // RIGHT SIDE
       if (rightIsVid) {
         th.imgR.classList.add("hidden");
         th.vidR.classList.remove("hidden");
@@ -953,7 +946,6 @@
       const img = which==="active1" ? imgActive1 : imgActive2;
       const vid = which==="active1" ? vidActive1 : vidActive2;
 
-      // per-spot cache so active images never disappear
       const cacheKey = which;
       let finalUrl = url;
 
@@ -1124,22 +1116,19 @@
       else finalFooter.textContent = "R32 live — R16 later.";
     }
 
-    /* NEW: keep AFK buttons in sync with phase + memory */
     function updateAutoButtons(phaseLive){
       if (!autoBtn1 || !autoBtn2) return;
       const base = state.base_iso || "";
-      const used = autoMemRead(base);
+      const { used, url } = autoMemRead(base);
+
+      const leftMatches = used && isRealUrl(activeLeftUrl) && activeLeftUrl === url;
+      const rightMatches = used && isRealUrl(activeRightUrl) && activeRightUrl === url;
 
       autoBtn1.disabled = used || !phaseLive;
       autoBtn2.disabled = used || !phaseLive;
 
-      if (used) {
-        autoBtn1.textContent = "AFK vote locked in";
-        autoBtn2.textContent = "AFK vote locked in";
-      } else {
-        autoBtn1.textContent = "vote this art for every round";
-        autoBtn2.textContent = "vote this art for every round";
-      }
+      autoBtn1.textContent = leftMatches ? "AFK vote locked in" : "vote this art for every round";
+      autoBtn2.textContent = rightMatches ? "AFK vote locked in" : "vote this art for every round";
     }
 
     function renderActive(){
@@ -1188,7 +1177,6 @@
         defaultLeftLabel="Final — Top"; defaultRightLabel="Final — Bottom";
       }
 
-      // store active URLs for AFK auto-vote
       activeLeftUrl = leftImg;
       activeRightUrl = rightImg;
 
@@ -1198,7 +1186,6 @@
       const leftMeta = metaByUrl[leftImg] || {};
       const rightMeta = metaByUrl[rightImg] || {};
 
-      /* UPDATED: label builder with clickable @username */
       function buildLabel(defaultLabel, meta){
         const t = meta && meta.title ? String(meta.title) : "";
         const a = meta && meta.artist ? String(meta.artist) : "";
@@ -1217,17 +1204,14 @@
       let baseLabel1 = buildLabel(defaultLeftLabel, leftMeta);
       let baseLabel2 = buildLabel(defaultRightLabel, rightMeta);
 
-      // Apply vote tag
       if (picked==="red")  baseLabel1 += " • you voted";
       if (picked==="blue") baseLabel2 += " • you voted";
 
-      // Use innerHTML so the <a> renders
       labelActive1.innerHTML = baseLabel1;
       labelActive2.innerHTML = baseLabel2;
       countActive1.textContent = leftCt;
       countActive2.textContent = rightCt;
 
-      // Meta blocks now only show description + see-more
       renderPieceMeta(metaActive1, leftMeta);
       renderPieceMeta(metaActive2, rightMeta);
 
@@ -1249,7 +1233,6 @@
 
       updateAutoButtons(phaseLive);
 
-      /* NEW: keep arrows in sync (disable at ends) */
       (function updateArrows(){
         const prevBtn = document.getElementById("prevMatch");
         const nextBtn = document.getElementById("nextMatch");
@@ -1344,7 +1327,6 @@
       if (!state?.ends_at) return requestAnimationFrame(tick);
       const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
 
-      // 4h48m (17,280s) segment timer in HH:MM:SS
       const SEG_MS = 17_280_000;
       let segMs = ms % SEG_MS;
       if (segMs === 0 && ms > 0) segMs = SEG_MS;
@@ -1357,7 +1339,6 @@
       const ss = String(seconds).padStart(2,"0");
       elRemain.textContent = `${hh}:${mm}:${ss}`;
 
-      // lock thresholds in ms: 69,120s, 51,840s, 34,560s, 17,280s
       const R32_MS = 69_120_000, R16_MS = 51_840_000, Q_MS = 34_560_000, S_MS = 17_280_000;
 
       if (state.r32_done && !lastFlags.r32){ activeMatch="r1"; }
@@ -1395,7 +1376,6 @@
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'art_queue', filter:'status=in.(locked,used)' }, async ()=>{ await fetchState(true); })
       .subscribe();
 
-    // initialize vote user key (per-account memory) and then state / timer
     initVoteUserKey();
     fetchState(true).then(()=>{
       setTimeout(()=>fetchState(true), 600);
@@ -1405,29 +1385,27 @@
   </script>
   <script src="js/auth-guard.js" type="module"></script>
   <script>
-  const loadingEl = document.getElementById("loadingScreen");
-  let timerStarted = false;
+    const loadingEl = document.getElementById("loadingScreen");
+    let timerStarted = false;
 
-  function hideLoading() {
-    if (timerStarted) return;
-    timerStarted = true;
-    if (loadingEl) loadingEl.style.display = "none";
-  }
+    function hideLoading() {
+      if (timerStarted) return;
+      timerStarted = true;
+      if (loadingEl) loadingEl.style.display = "none";
+    }
 
-  // When fetchState gets the timer data
-  const originalFetchState = fetchState;
-  fetchState = async function(force=false){
-    const result = await originalFetchState(force);
-    if (state?.ends_at) hideLoading();
-    return result;
-  };
+    const originalFetchState = fetchState;
+    fetchState = async function(force=false){
+      const result = await originalFetchState(force);
+      if (state?.ends_at) hideLoading();
+      return result;
+    };
 
-  // When tick finally runs with real data
-  const originalTick = tick;
-  tick = function(){
-    if (state?.ends_at) hideLoading();
-    originalTick();
-  };
-</script>
+    const originalTick = tick;
+    tick = function(){
+      if (state?.ends_at) hideLoading();
+      originalTick();
+    };
+  </script>
 </body>
 </html>
