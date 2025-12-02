@@ -30,6 +30,23 @@
     button.vote { padding:10px 14px; }
     button.vote:disabled { opacity:.6; cursor:default; }
 
+    /* NEW: tiny AFK auto-vote button under Vote */
+    .autoVoteBtn {
+      margin-left: 8px;
+      padding: 4px 8px;
+      font-size: 10px;
+      border-radius: 999px;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .autoVoteBtn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
     /* NEW: previous/next match arrow buttons */
     .navArrow {
       border: 1px solid var(--accent);
@@ -228,6 +245,8 @@
         <div class="label" id="labelActive1">Top</div>
         <div class="counts" id="countActive1">0</div>
         <button class="vote" id="btnActive1">Vote</button>
+        <!-- NEW: AFK auto-vote button (top art) -->
+        <button class="autoVoteBtn" id="autoActive1">vote this art for every round</button>
       </div>
       <div class="piece-meta hidden" id="metaActive1"></div>
     </div>
@@ -242,6 +261,8 @@
         <div class="label" id="labelActive2">Bottom</div>
         <div class="counts" id="countActive2">0</div>
         <button class="vote" id="btnActive2">Vote</button>
+        <!-- NEW: AFK auto-vote button (bottom art) -->
+        <button class="autoVoteBtn" id="autoActive2">vote this art for every round</button>
       </div>
       <div class="piece-meta hidden" id="metaActive2"></div>
     </div>
@@ -325,6 +346,8 @@
     const btnActive2 = document.getElementById("btnActive2");
     const metaActive1 = document.getElementById("metaActive1");
     const metaActive2 = document.getElementById("metaActive2");
+    const autoBtn1 = document.getElementById("autoActive1");
+    const autoBtn2 = document.getElementById("autoActive2");
 
     const finalImg1 = document.getElementById("finalImg1");
     const finalImg2 = document.getElementById("finalImg2");
@@ -645,8 +668,13 @@
       meta_by_url:{}
     };
 
+    /* NEW: track which URLs are active left/right for AFK auto-vote */
+    let activeLeftUrl = null;
+    let activeRightUrl = null;
+
     /* NEW: make vote memory per-user instead of per-browser */
     const VOTE_MEMORY_KEY = "rs_vote_memory_v4";
+    const AUTO_MEMORY_KEY = "rs_auto_vote_v1";
     let voteUserKey = "guest";
 
     async function initVoteUserKey(){
@@ -684,13 +712,31 @@
       localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all));
     }
 
+    /* NEW: local memory for "AFK auto-vote used" per user per base_iso */
+    function autoMemRead(base){
+      try{
+        const all = JSON.parse(localStorage.getItem(AUTO_MEMORY_KEY)||"{}");
+        const perUser = all[voteUserKey] || {};
+        return !!perUser[base];
+      }catch{
+        return false;
+      }
+    }
+    function autoMemWrite(base){
+      const all = (()=>{ try { return JSON.parse(localStorage.getItem(AUTO_MEMORY_KEY)||"{}"); } catch { return {}; }})();
+      const perUser = all[voteUserKey] || {};
+      perUser[base] = true;
+      all[voteUserKey] = perUser;
+      localStorage.setItem(AUTO_MEMORY_KEY, JSON.stringify(all));
+    }
+
     let activeMatch = "rr1";
 
     async function vote(color){
       const base = state.base_iso || "";
 
       // Ensure we have a logged-in Supabase user so server can enforce
-      // 1 vote per account (user_votes_v2 unique constraint).
+      // 1 vote per account per base_iso+phase
       let accessToken = null;
       try {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -767,6 +813,80 @@
     }
     btnActive1.onclick = ()=> vote("red");
     btnActive2.onclick = ()=> vote("blue");
+
+    /* NEW: AFK auto-vote handler */
+    async function autoVote(whichSide){
+      const base = state.base_iso || "";
+
+      // already used this tournament? (UI-side check)
+      if (autoMemRead(base)) {
+        alert("You've already set an AFK auto-vote for this tournament.");
+        return;
+      }
+
+      // need logged-in user
+      let accessToken = null;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        accessToken = sessionData?.session?.access_token || null;
+      } catch (e) {
+        accessToken = null;
+      }
+
+      if (!accessToken) {
+        alert("You need to be signed in to use AFK auto-vote.");
+        return;
+      }
+
+      const url = whichSide === "left" ? activeLeftUrl : activeRightUrl;
+      if (!isRealUrl(url)) {
+        alert("No art loaded to auto-vote for yet.");
+        return;
+      }
+
+      try {
+        const res = await fetch(FUNCTION_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-rsid": RSID,
+            "Authorization": `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            mode: "auto_vote",
+            image_url: url
+          })
+        });
+
+        const payload = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          if (payload && payload.error === "auto_already_used") {
+            // server says they've already used it this base_iso
+            autoMemWrite(base);
+            updateAutoButtons(false);
+            alert("You've already set an AFK auto-vote for this tournament.");
+            return;
+          }
+          if (payload && payload.error === "cycle_over") {
+            alert("This tournament cycle is already over.");
+            return;
+          }
+          alert("AFK auto-vote failed. Please try again in a moment.");
+          return;
+        }
+
+        // success → remember locally and lock the button
+        autoMemWrite(base);
+        updateAutoButtons(false);
+        alert("AFK auto-vote locked in for this art for the rest of today.");
+      } catch (e) {
+        alert("Network error while setting AFK auto-vote.");
+      }
+    }
+
+    autoBtn1.onclick = () => autoVote("left");
+    autoBtn2.onclick = () => autoVote("right");
 
     function setThumb(key,leftUrl,rightUrl,leftCt,rightCt,fallback){
       const th = thumbs[key]; if (!th) return;
@@ -1004,6 +1124,24 @@
       else finalFooter.textContent = "R32 live — R16 later.";
     }
 
+    /* NEW: keep AFK buttons in sync with phase + memory */
+    function updateAutoButtons(phaseLive){
+      if (!autoBtn1 || !autoBtn2) return;
+      const base = state.base_iso || "";
+      const used = autoMemRead(base);
+
+      autoBtn1.disabled = used || !phaseLive;
+      autoBtn2.disabled = used || !phaseLive;
+
+      if (used) {
+        autoBtn1.textContent = "AFK vote locked in";
+        autoBtn2.textContent = "AFK vote locked in";
+      } else {
+        autoBtn1.textContent = "vote this art for every round";
+        autoBtn2.textContent = "vote this art for every round";
+      }
+    }
+
     function renderActive(){
       renderThumbs();
       renderFinalBox();
@@ -1049,6 +1187,10 @@
         }
         defaultLeftLabel="Final — Top"; defaultRightLabel="Final — Bottom";
       }
+
+      // store active URLs for AFK auto-vote
+      activeLeftUrl = leftImg;
+      activeRightUrl = rightImg;
 
       setActiveMedia("active1", leftImg);
       setActiveMedia("active2", rightImg);
@@ -1104,6 +1246,8 @@
 
       btnActive1.disabled = !!picked || !phaseLive;
       btnActive2.disabled = !!picked || !phaseLive;
+
+      updateAutoButtons(phaseLive);
 
       /* NEW: keep arrows in sync (disable at ends) */
       (function updateArrows(){
