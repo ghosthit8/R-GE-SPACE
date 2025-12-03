@@ -375,28 +375,26 @@
       wallInner.lineTo(leftInner, topInner);
       wallInner.strokePath();
 
-      // === DIAGONAL CONNECTORS: outer corner ↔ inner wall (tight at corners) ===
-      const bridgeOffset = corridorWidth; // distance down the inner wall
-
+      // === DIAGONAL CONNECTORS: outer corner ↔ matching inner corner ===
       const diag = this.add.graphics();
       diag.lineStyle(4, 0xffffff, 1);
       diag.beginPath();
 
-      // top-left: outer corner -> inner left
+      // top-left
       diag.moveTo(leftOuter, topOuter);
-      diag.lineTo(leftInner, topInner + bridgeOffset);
+      diag.lineTo(leftInner, topInner);
 
-      // top-right: outer corner -> inner right
+      // top-right
       diag.moveTo(rightOuter, topOuter);
-      diag.lineTo(rightInner, topInner + bridgeOffset);
+      diag.lineTo(rightInner, topInner);
 
-      // bottom-right: outer corner -> inner right
+      // bottom-right
       diag.moveTo(rightOuter, bottomOuter);
-      diag.lineTo(rightInner, bottomInner - bridgeOffset);
+      diag.lineTo(rightInner, bottomInner);
 
-      // bottom-left: outer corner -> inner left
+      // bottom-left
       diag.moveTo(leftOuter, bottomOuter);
-      diag.lineTo(leftInner, bottomInner - bridgeOffset);
+      diag.lineTo(leftInner, bottomInner);
 
       diag.strokePath();
 
