@@ -5,7 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Rage Space — Login</title>
   <link rel="stylesheet" href="style.css?v=2" />
-  <style>.hidden{display:none!important}</style>
+  <style>
+    .hidden{display:none!important}
+
+    /* 🔥 Make the green Sign In button text black */
+    .btn.primary {
+      color: #000 !important;
+    }
+  </style>
 </head>
 <body>
   <main class="wrap">
@@ -116,11 +123,9 @@
       } catch (e) { showErr("Reset error. See console."); console.error(e); }
     }
 
-    // (This code path won't normally run due to early redirect, but keep a graceful fallback)
     async function showLoggedInNoticeIfAny() {
       const { data: { session} } = await supabase.auth.getSession();
       if (!session) return;
-      // Hide sign-in card and show a minimal sign-out control
       document.getElementById("signin-card").classList.add("hidden");
       status.innerHTML = `Already logged in as <strong>${session.user.user_metadata?.username || session.user.email}</strong>.`;
       const actions = document.createElement("div");
