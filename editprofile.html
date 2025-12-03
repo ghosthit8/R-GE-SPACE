@@ -48,7 +48,7 @@
       color:#000 !important;
     }
 
-    /* 🔥 FIX: Make the right-side REMOVE button neon green instead of transparent */
+    /* FIX: Song-row Remove button should be green, not transparent */
     .song-row .btn.red {
       background:var(--green) !important;
       border-color:var(--green) !important;
@@ -57,6 +57,15 @@
     }
 
     .btn.ghost{ background:transparent; color:var(--green) }
+
+    /* FIX: Make ONLY the Cancel button in the bottom actions green */
+    .actions .btn.ghost {
+      background: var(--green) !important;
+      color: #000 !important;
+      border-color: var(--green) !important;
+      box-shadow: 0 0 16px rgba(57,255,20,.55) !important;
+    }
+
     .btn.red{ border-color:var(--red); color:var(--red); background:transparent; box-shadow:0 0 16px rgba(255,0,51,.35) }
 
     .song-box{
@@ -66,7 +75,6 @@
     }
 
     .song-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap }
-
     audio{ width:100% }
 
     @media (max-width:720px){
