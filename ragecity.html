@@ -375,23 +375,29 @@
       wallInner.lineTo(leftInner, topInner);
       wallInner.strokePath();
 
-      // === DIAGONAL CORNER PIECES on inner wall ===
-      const cornerLen = 30; // tweak this for longer/shorter diagonals
+      // === DIAGONAL CONNECTORS: outer corner ↔ inner wall (tight at corners) ===
+      const bridgeOffset = corridorWidth; // distance down the inner wall
+
       const diag = this.add.graphics();
       diag.lineStyle(4, 0xffffff, 1);
       diag.beginPath();
-      // top-left corner
-      diag.moveTo(leftInner, topInner);
-      diag.lineTo(leftInner + cornerLen, topInner + cornerLen);
-      // top-right corner
-      diag.moveTo(rightInner, topInner);
-      diag.lineTo(rightInner - cornerLen, topInner + cornerLen);
-      // bottom-left corner
-      diag.moveTo(leftInner, bottomInner);
-      diag.lineTo(leftInner + cornerLen, bottomInner - cornerLen);
-      // bottom-right corner
-      diag.moveTo(rightInner, bottomInner);
-      diag.lineTo(rightInner - cornerLen, bottomInner - cornerLen);
+
+      // top-left: outer corner -> inner left
+      diag.moveTo(leftOuter, topOuter);
+      diag.lineTo(leftInner, topInner + bridgeOffset);
+
+      // top-right: outer corner -> inner right
+      diag.moveTo(rightOuter, topOuter);
+      diag.lineTo(rightInner, topInner + bridgeOffset);
+
+      // bottom-right: outer corner -> inner right
+      diag.moveTo(rightOuter, bottomOuter);
+      diag.lineTo(rightInner, bottomInner - bridgeOffset);
+
+      // bottom-left: outer corner -> inner left
+      diag.moveTo(leftOuter, bottomOuter);
+      diag.lineTo(leftInner, bottomInner - bridgeOffset);
+
       diag.strokePath();
 
       // Player starts just outside that left opening
