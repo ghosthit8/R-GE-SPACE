@@ -18,12 +18,34 @@
     .row{ display:grid; gap:10px } label{ font-size:13px; font-weight:800; color:var(--muted) }
     input[type="text"], select, textarea{ width:100%; padding:10px 12px; border-radius:10px; border:1.5px solid var(--border); background:#050505; color:var(--ink); outline:none; box-shadow: inset 0 0 10px rgba(57,255,20,.08) }
     textarea{ min-height:110px; resize:vertical } .actions{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
-    .btn{ border:2px solid var(--green); color:#000; background:var(--green); padding:12px 18px; border-radius:14px; font-weight:900; cursor:pointer; box-shadow:0 0 16px rgba(57,255,20,.55) }
-    .btn.ghost{ background:transparent; color:var(--green) } .btn.red{ border-color:var(--red); color:var(--red); background:transparent; box-shadow:0 0 16px rgba(255,0,51,.35) }
+
+    .btn{
+      border:2px solid var(--green);
+      color:#000;
+      background:var(--green);
+      padding:12px 18px;
+      border-radius:14px;
+      font-weight:900;
+      cursor:pointer;
+      box-shadow:0 0 16px rgba(57,255,20,.55)
+    }
+
+    /* 🔥 FIX — ensure all green buttons use black text */
+    .btn,
+    .song-row .btn,
+    #uploadSongBtn,
+    #useYouTubeBtn {
+      color:#000 !important;
+    }
+
+    .btn.ghost{ background:transparent; color:var(--green) }
+    .btn.red{ border-color:var(--red); color:var(--red); background:transparent; box-shadow:0 0 16px rgba(255,0,51,.35) }
+
     .song-box{ display:flex; flex-direction:column; gap:10px; padding:12px; border:1px dashed var(--border); border-radius:12px; background:#080808 }
     .song-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap } audio{ width:100% }
+
     @media (max-width:720px){ .grid{ grid-template-columns:1fr } .grid-3{ grid-template-columns:1fr } }
-    #status{ display:inline-block; max-width:320px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    #status{ display:inline-block; max-width:280px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -67,12 +89,12 @@
 
       <!-- YouTube -->
       <div class="row" style="margin-top:16px">
-        <label for="songYouTube">Theme Song (YouTube link or ID)</label>
+        <label for="songYouTube">Theme Song (YouTube link)</label>
         <div class="song-box">
           <div class="song-row">
-            <input id="songYouTube" type="text" placeholder="https://youtu.be/... or https://youtube.com/watch?v=... or 11-char ID" />
+            <input id="songYouTube" type="text" placeholder="https://youtu.be/... or https://youtube.com/watch?v=..." />
             <button id="useYouTubeBtn" type="button" class="btn">Use YouTube Link</button>
-            <small class="hint">Optional. Overrides upload. On profile it autoplays muted and unmutes on first tap.</small>
+            <small class="hint">Optional. Overrides upload. Autoplays muted on profile.</small>
           </div>
           <iframe id="ytPreview" width="560" height="315" style="max-width:100%; aspect-ratio:16/9; border:0; display:none" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
         </div>
@@ -87,20 +109,11 @@
   </main>
 
   <script>
-    // ---------- Error reporter to page ----------
-    window.addEventListener('error', (e)=>{
-      const s=document.getElementById('status');
-      if(s){ s.textContent = 'Script error: ' + (e.message||'unknown'); s.style.color='var(--red)'; }
-    });
-
-    // ---------- Supabase ----------
-    const sb = supabase.createClient(
-      "https://tuqvpcevrhciursxrgav.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
-    );
+    // ===== Supabase =====
+    const sb = supabase.createClient("YOUR_SUPABASE_URL","YOUR_ANON_KEY");
     const SONG_BUCKET='songs';
 
-    // ---------- Refs ----------
+    // el refs
     const statusEl=document.getElementById('status');
     const backLink=document.getElementById('backLink'); const cancelLink=document.getElementById('cancelLink');
     const pronounsEl=document.getElementById('pronouns'); const sunEl=document.getElementById('sun');
@@ -112,46 +125,43 @@
     const songYouTubeEl=document.getElementById('songYouTube'); const useYouTubeBtn=document.getElementById('useYouTubeBtn'); const ytPreview=document.getElementById('ytPreview');
     const form=document.getElementById('editForm');
 
-    let userId=null;
-    // `songValue` holds either a YouTube ID (11 chars) OR an uploaded file URL
-    let songValue=null;
+    let userId=null; let songUrl=null;
 
-    // ---------- Utils ----------
     function say(m,b=false){statusEl.textContent=m||'';statusEl.style.color=b?'var(--red)':'var(--muted)'}
     function stringToSkills(s){return (s||'').split(',').map(v=>v.trim()).filter(Boolean)}
     function skillsToString(a){return Array.isArray(a)?a.join(', '):(a||'')}
     function fileName(prefix,file){const ext=(file?.name?.split('.').pop()||'bin').toLowerCase();return `${prefix}/${crypto.randomUUID()}.${ext}`}
-    function isYouTubeLike(u){return /youtu\.?be|youtube\.com/i.test(u||'')}
+    function isYouTubeUrl(u){return /youtu\.?be|youtube\.com/i.test(u||'')}
 
-    // Extract a robust YouTube ID, or return null
-    function extractYTId(input) {
+    function extractYouTubeIdStrict(input) {
       if (!input) return null;
       const s = String(input).trim();
       const idOnly = s.match(/^[A-Za-z0-9_-]{11}$/);
       if (idOnly) return idOnly[0];
       try {
         const u = new URL(s, location.href);
-        if (u.hostname.includes('youtu.be')) {
+        if (/\byoutu\.be$/i.test(u.hostname)) {
           const id = u.pathname.split('/').filter(Boolean)[0];
           if (id && id.length === 11) return id;
         }
-        if (u.hostname.includes('youtube.com')) {
+        if (/\byoutube\.com$/i.test(u.hostname)) {
           const v = u.searchParams.get('v');
           if (v && v.length === 11) return v;
           const parts = u.pathname.split('/').filter(Boolean);
-          if (parts[0] && (parts[0]==='shorts' || parts[0]==='embed' || parts[0]==='live')) {
-            const id2 = parts[1]; if (id2 && id2.length===11) return id2;
+          if (parts.length >= 2 && ['embed','shorts','live'].includes(parts[0])) {
+            const id = parts[1];
+            if (id && id.length === 11) return id;
           }
         }
       } catch {}
       const m = s.match(/([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/);
       return m ? m[1] : null;
     }
-    function embedFromId(id){
+
+    function makeYouTubeEmbed(id){
       return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&controls=1`;
     }
 
-    // ---------- Return target ----------
     const DEFAULT_TARGET='profile.html';
     function safePath(urlLike){
       try{
@@ -159,14 +169,14 @@
         if(u.origin!==location.origin)throw 0;
         let p=u.pathname.endsWith('/')?(u.pathname+'profile.html'):u.pathname;
         if(!/\/[^/]+\.[^/]+$/.test(p))p=DEFAULT_TARGET;
-        return p+u.search+u.hash;
-      }catch{ return DEFAULT_TARGET }
+        return p+u.search+u.hash
+      }catch{ return DEFAULT_TARGET}
     }
     const params=new URLSearchParams(location.search); const safeReturn=safePath(params.get('return')||'profile.html');
     backLink.href=safeReturn; cancelLink.href=safeReturn;
+
     function afterSaveRedirect(){const u=new URL(safeReturn,location.href); u.searchParams.set('saved','1'); u.searchParams.set('v',Date.now().toString()); location.href=u.toString()}
 
-    // ---------- DB helpers ----------
     async function ensureProfileRow(){await sb.from('profiles').upsert({id:userId,updated_at:new Date().toISOString()},{onConflict:'id'})}
 
     async function loadProfile(){
@@ -179,26 +189,16 @@
       loveLangEl.value=data.love_language||''; skillsEl.value=Array.isArray(data.skills)?skillsToString(data.skills):(data.skills||'');
       voidMsgEl.value=data.void_message||''; funnyStoryEl.value=data.funny_story||'';
 
-      // song_url may be a file URL or a YT URL/ID from older saves
-      if(data.song_url){
-        const maybeId = extractYTId(data.song_url);
-        if (maybeId) {
-          songValue = maybeId;                      // store ID
-          songYouTubeEl.value = `https://youtu.be/${maybeId}`;
-          ytPreview.src = embedFromId(maybeId); ytPreview.style.display='block';
-          songPreview.removeAttribute('src');
-        } else {
-          songValue = data.song_url;                // treat as file URL
-          songPreview.src = songValue;
-          ytPreview.removeAttribute('src'); ytPreview.style.display='none';
-          songYouTubeEl.value='';
-        }
-      }else{
-        songValue=null;
-        songPreview.removeAttribute('src');
-        ytPreview.removeAttribute('src'); ytPreview.style.display='none';
-        songYouTubeEl.value='';
+      songUrl=data.song_url||null;
+
+      if(songUrl&&isYouTubeUrl(songUrl)){
+        ytPreview.src=songUrl; ytPreview.style.display='block'; songYouTubeEl.value=songUrl; songPreview.removeAttribute('src');
+      } else if(songUrl){
+        songPreview.src=songUrl; songYouTubeEl.value=''; ytPreview.removeAttribute('src'); ytPreview.style.display='none';
+      } else {
+        songPreview.removeAttribute('src'); songYouTubeEl.value=''; ytPreview.removeAttribute('src'); ytPreview.style.display='none';
       }
+
       say('');
     }
 
@@ -210,84 +210,68 @@
         const {error:upErr}=await sb.storage.from(SONG_BUCKET).upload(path,file,{upsert:false});
         if(upErr)throw upErr;
         const {data}=sb.storage.from(SONG_BUCKET).getPublicUrl(path);
-        songValue=data.publicUrl;                   // save file URL
-        songPreview.src=songValue;
-        ytPreview.style.display='none'; ytPreview.removeAttribute('src');
-        songYouTubeEl.value='';
+        songUrl=data.publicUrl; songPreview.src=songUrl; ytPreview.style.display='none'; ytPreview.removeAttribute('src'); songYouTubeEl.value='';
         say('Song uploaded. Remember to Save Changes.');
       }catch(e){ console.error(e); say(`Upload failed: ${e.message||e}`,true) }
       finally{ songFileEl.value=''; }
     }
+
     function removeSong(){
-      songValue=null;
+      songUrl=null;
       songPreview.removeAttribute('src');
       ytPreview.style.display='none'; ytPreview.removeAttribute('src');
       songYouTubeEl.value='';
       say('Song cleared. Remember to Save Changes.');
     }
 
-    // ---------- Event bindings ----------
-    document.addEventListener("DOMContentLoaded", async ()=>{
-      try{
-        const {data:{session}}=await sb.auth.getSession();
-        if(!session){ location.href="./login.html"; return; }
-        userId=session.user.id;
+    uploadSongBtn.addEventListener('click',uploadSong);
+    removeSongBtn.addEventListener('click',removeSong);
 
-        uploadSongBtn.addEventListener('click',uploadSong);
-        removeSongBtn.addEventListener('click',removeSong);
+    useYouTubeBtn.addEventListener('click', () => {
+      const raw = (songYouTubeEl.value || '').trim();
+      const id = extractYouTubeIdStrict(raw);
 
-        useYouTubeBtn.addEventListener('click', ()=>{
-          try{
-            const raw = songYouTubeEl.value.trim();
-            const id = extractYTId(raw);
-            if(!id){ say('Invalid YouTube link/ID', true); ytPreview.style.display='none'; ytPreview.removeAttribute('src'); return; }
-            // Save just the ID
-            songValue = id;
-            ytPreview.src = embedFromId(id);
-            ytPreview.style.display = 'block';
-            songPreview.removeAttribute('src');
-            say('YouTube set. Remember to Save Changes.');
-          }catch(err){
-            console.error(err); say('Error: '+(err.message||err), true);
-          }
-        });
-
-        await ensureProfileRow();
-        await loadProfile();
-
-        form.addEventListener('submit', async (e)=>{
-          e.preventDefault(); say('Saving...');
-          const payloadArr={
-            id:userId,
-            pronouns:pronounsEl.value.trim(),
-            sun:sunEl.value.trim(),
-            moon:moonEl.value.trim(),
-            rising:risingEl.value.trim(),
-            love_language:loveLangEl.value||null,
-            skills:stringToSkills(skillsEl.value),
-            void_message:voidMsgEl.value.trim(),
-            funny_story:funnyStoryEl.value.trim(),
-            song_url:songValue || null,             // <-- stores YT ID or file URL
-            updated_at:new Date().toISOString()
-          };
-
-          let { error } = await sb.from('profiles').upsert(payloadArr,{onConflict:'id'});
-
-          // If skills column is TEXT not TEXT[]
-          if(error && /array|text\[\]|cannot cast/i.test(JSON.stringify(error))){
-            const payloadTxt={ ...payloadArr, skills: skillsEl.value.trim() };
-            ({ error } = await sb.from('profiles').upsert(payloadTxt,{onConflict:'id'}));
-          }
-
-          if(error){ console.error('UPSERT ERROR →',error); say(`Save failed: ${error.message}`,true); return; }
-          say('Saved!'); afterSaveRedirect();
-        });
-
-      }catch(e){
-        console.error(e); say('Boot error: '+(e.message||e), true);
+      if (!id) {
+        say('Invalid YouTube link. Paste a full URL or ID.', true);
+        ytPreview.style.display = 'none';
+        ytPreview.removeAttribute('src');
+        return;
       }
+
+      const embed = makeYouTubeEmbed(id);
+      songUrl = embed;
+      ytPreview.src = embed;
+      ytPreview.style.display = 'block';
+      songPreview.removeAttribute('src');
+
+      say('YouTube link set. Remember to Save Changes.');
+      console.log('YouTube embed set:', embed);
+    });
+
+    form.addEventListener('submit',async e=>{
+      e.preventDefault(); say('Saving...');
+      const payloadArr={ id:userId, pronouns:pronounsEl.value.trim(), sun:sunEl.value.trim(), moon:moonEl.value.trim(), rising:risingEl.value.trim(),
+        love_language:loveLangEl.value||null, skills:stringToSkills(skillsEl.value), void_message:voidMsgEl.value.trim(),
+        funny_story:funnyStoryEl.value.trim(), song_url:songUrl||null, updated_at:new Date().toISOString() };
+
+      let { error } = await sb.from('profiles').upsert(payloadArr,{onConflict:'id'});
+
+      if(error && /array|text\[\]|cannot cast/i.test(JSON.stringify(error))){
+        const payloadTxt={ ...payloadArr, skills: skillsEl.value.trim() };
+        ({ error } = await sb.from('profiles').upsert(payloadTxt,{onConflict:'id'}));
+      }
+
+      if(error){ console.error('UPSERT ERROR →',error); say(`Save failed: ${error.message}`,true); return; }
+      say('Saved!'); afterSaveRedirect();
+    });
+
+    document.addEventListener('DOMContentLoaded',async()=>{
+      const {data:{session}}=await sb.auth.getSession();
+      if(!session){ location.href="./login.html"; return; }
+      userId=session.user.id;
+      await ensureProfileRow(); await loadProfile();
     });
   </script>
-<script src="js/auth-guard.js" type="module"></script>
+  <script src="js/auth-guard.js" type="module"></script>
 </body>
 </html>
