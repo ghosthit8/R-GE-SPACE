@@ -15,7 +15,7 @@
     h1{ margin:18px 0 16px; font-size:28px; letter-spacing:.02em; text-shadow:0 0 10px var(--red) }
     .card{ background:linear-gradient(180deg,#0a0a0a,#050505); border:1px solid var(--green); border-radius:16px; padding:16px; box-shadow:0 0 20px rgba(57,255,20,.12) }
     .grid{ display:grid; gap:14px; grid-template-columns: 1fr 1fr; }
-    .grid-3{ display:grid; gap:12px; grid-template-columns: 1fr 1fr 1fr; }
+    .grid-3{ display:grid; gap:12px; grid-template-columns: 1fr 1 fr; }
     .row{ display:grid; gap:10px }
     label{ font-size:13px; font-weight:800; color:var(--muted) }
 
@@ -48,7 +48,7 @@
       color:#000 !important;
     }
 
-    /* FIX: Song-row Remove button should be green, not transparent */
+    /* Song-row Remove button should be green, not transparent */
     .song-row .btn.red {
       background:var(--green) !important;
       border-color:var(--green) !important;
@@ -58,7 +58,7 @@
 
     .btn.ghost{ background:transparent; color:var(--green) }
 
-    /* FIX: Make ONLY the Cancel button in the bottom actions green */
+    /* Make ONLY the Cancel button in the bottom actions green */
     .actions .btn.ghost {
       background: var(--green) !important;
       color: #000 !important;
@@ -159,7 +159,12 @@
   </main>
 
 <script>
-  const sb = supabase.createClient("YOUR_SUPABASE_URL","YOUR_ANON_KEY");
+  /* ✅ FIXED: use your real Supabase project, same as profile.html */
+  const sb = supabase.createClient(
+    "https://tuqvpcevrhciursxrgav.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"
+  );
+
   const SONG_BUCKET='songs';
 
   const statusEl=document.getElementById('status');
