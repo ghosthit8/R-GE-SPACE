@@ -1,6 +1,5 @@
 // Full-size artwork URLs for frames & sculpture
-const PAINTING_FULL_URL =
-  "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2000&q=80";
+const PAINTING_FULL_URL = null; // paintings start with no full-size art
 const SCULPTURE_FULL_URL =
   "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=2000&q=80";
 
@@ -11,8 +10,11 @@ const artImg = document.getElementById("art-overlay-img");
 const artMsg = document.getElementById("art-overlay-msg");
 
 function openArtOverlay(imageUrl) {
+  // If no image assigned (null painting), do nothing
+  if (!imageUrl) return;
+
   artOpen = true;
-  if (imageUrl && artImg) artImg.src = imageUrl;
+  if (artImg) artImg.src = imageUrl;
   if (artOverlayEl) artOverlayEl.style.display = "flex";
   if (artMsg) artMsg.style.display = "block";
 }
@@ -39,7 +41,7 @@ function toggleArtFullscreen() {
   ) {
     if (document.exitFullscreen) document.exitFullscreen();
   } else {
-    if (artImg.requestFullscreen) {
+    if (artImg && artImg.requestFullscreen) {
       artImg.requestFullscreen();
     }
   }
