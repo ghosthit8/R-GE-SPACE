@@ -294,6 +294,9 @@ function create() {
     addTrapezoidFrame(this, x, midBottomY, "bottom");
   });
 
+  // Expose frames globally so overlay.js can reach them
+  window.galleryFrames = galleryFrames;
+
   // ===== SCULPTURE CUBE =====
   const centerX = (leftOuter + rightOuter) / 2;
   const centerY = (topOuter + bottomOuter) / 2;
@@ -425,6 +428,17 @@ function update(time, delta) {
   const justPressedA = inputState.A && !prevA;
   const justPressedB = inputState.B && !prevB;
 
+  // If the add-art menu is open, only let B close it
+  if (addArtOpen) {
+    if (justPressedB) {
+      closeAddArtMenu();
+    }
+    prevA = inputState.A;
+    prevB = inputState.B;
+    return;
+  }
+
+  // If we're viewing art, keep existing fullscreen / close behavior
   if (artOpen) {
     if (justPressedA) toggleArtFullscreen();
     if (justPressedB) closeArtOverlay();
@@ -453,14 +467,20 @@ function update(time, delta) {
   let nearestItem = null;
   let nearestDist = Infinity;
 
-  galleryFrames.forEach((f) => {
+  // Look for nearest painting frame
+  galleryFrames.forEach((f, idx) => {
     const d = Phaser.Math.Distance.Between(player.x, player.y, f.x, f.y);
     if (d < nearestDist) {
       nearestDist = d;
-      nearestItem = { type: "painting", fullUrl: f.fullUrl };
+      nearestItem = {
+        type: "painting",
+        fullUrl: f.fullUrl,
+        frameIndex: idx
+      };
     }
   });
 
+  // Compare with sculpture spot
   if (sculptureSpot) {
     const d = Phaser.Math.Distance.Between(
       player.x,
@@ -470,27 +490,44 @@ function update(time, delta) {
     );
     if (d < nearestDist) {
       nearestDist = d;
-      nearestItem = { type: "sculpture", fullUrl: sculptureSpot.fullUrl };
+      nearestItem = {
+        type: "sculpture",
+        fullUrl: sculptureSpot.fullUrl
+      };
     }
   }
 
+  // Prompt text
   if (promptText) {
     if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
-      promptText.setText(
-        nearestItem.type === "sculpture"
-          ? "Press A to inspect sculpture"
-          : "Press A to view art"
-      );
+      if (nearestItem.type === "sculpture") {
+        promptText.setText("Press A to inspect sculpture");
+      } else {
+        // painting
+        promptText.setText(
+          nearestItem.fullUrl ? "Press A to view art" : "Press A to add art"
+        );
+      }
     } else {
       promptText.setVisible(false);
     }
   }
 
+  // Interaction when pressing A near something
   if (nearestItem && nearestDist < 60 && justPressedA) {
-    // open only if that frame actually has art
-    if (nearestItem.fullUrl) {
-      openArtOverlay(nearestItem.fullUrl);
+    if (nearestItem.type === "sculpture") {
+      if (nearestItem.fullUrl) {
+        openArtOverlay(nearestItem.fullUrl);
+      }
+    } else if (nearestItem.type === "painting") {
+      if (nearestItem.fullUrl) {
+        // has art → view it
+        openArtOverlay(nearestItem.fullUrl);
+      } else {
+        // empty frame → open add-art menu
+        openAddArtMenu(nearestItem.frameIndex);
+      }
     }
   }
 
