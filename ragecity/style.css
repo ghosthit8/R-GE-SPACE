@@ -108,6 +108,57 @@ body {
   display: block;
 }
 
+/* NEW: Add-art overlay styles */
+#add-art-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;
+}
+
+#add-art-menu {
+  background: #050608;
+  border: 1px solid var(--green);
+  box-shadow: 0 0 20px rgba(57, 255, 20, 0.8);
+  border-radius: 12px;
+  padding: 16px 20px;
+  max-width: 320px;
+  width: 90%;
+  text-align: center;
+}
+
+.add-art-title {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.add-art-option,
+.add-art-hint {
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.add-art-button,
+.add-art-cancel {
+  display: block;
+  width: 100%;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(57, 255, 20, 0.8);
+  background: #000;
+  color: var(--green);
+  font-size: 0.9rem;
+}
+
+.add-art-cancel {
+  border-color: var(--red);
+  color: var(--red);
+}
+
 .controls-overlay {
   position: fixed;
   left: 0;
