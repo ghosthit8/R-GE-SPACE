@@ -428,9 +428,15 @@ function update(time, delta) {
   const justPressedA = inputState.A && !prevA;
   const justPressedB = inputState.B && !prevB;
 
-  // If the add-art menu is open, only let B close it
+  // If the add-art menu is open:
+  //  - A triggers the file picker
+  //  - B closes the menu
   if (addArtOpen) {
-    if (justPressedB) {
+    if (justPressedA) {
+      if (typeof triggerAddArtFilePicker === "function") {
+        triggerAddArtFilePicker();
+      }
+    } else if (justPressedB) {
       closeAddArtMenu();
     }
     prevA = inputState.A;
