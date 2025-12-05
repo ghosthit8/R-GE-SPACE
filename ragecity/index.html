@@ -17,6 +17,7 @@
   <div id="game-container">
     <div id="game-fallback">Loading Rage City…</div>
 
+    <!-- Existing art viewer overlay -->
     <div id="art-overlay">
       <div id="art-overlay-msg">Press "A" for fullscreen</div>
       <img
@@ -24,6 +25,31 @@
         src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2000&q=80"
         alt="Gallery art"
       />
+    </div>
+
+    <!-- NEW: Add-art menu overlay -->
+    <div id="add-art-overlay">
+      <div id="add-art-menu">
+        <div class="add-art-title">Add art to this frame</div>
+        <div class="add-art-option">
+          Use A / tap to choose an image from your device.
+        </div>
+        <button id="add-art-upload-button" class="add-art-button">
+          Choose file
+        </button>
+        <input
+          id="add-art-file-input"
+          type="file"
+          accept="image/*"
+          style="display: none;"
+        />
+        <div class="add-art-hint">
+          Press B or tap Cancel to go back
+        </div>
+        <button id="add-art-cancel" class="add-art-cancel">
+          Cancel
+        </button>
+      </div>
     </div>
   </div>
 
