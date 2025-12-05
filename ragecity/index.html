@@ -17,7 +17,7 @@
   <div id="game-container">
     <div id="game-fallback">Loading Rage City…</div>
 
-    <!-- Existing art viewer overlay -->
+    <!-- Art viewer overlay -->
     <div id="art-overlay">
       <div id="art-overlay-msg">Press "A" for fullscreen</div>
       <img
@@ -27,7 +27,7 @@
       />
     </div>
 
-    <!-- NEW: Add-art menu overlay -->
+    <!-- Add-art menu overlay -->
     <div id="add-art-overlay">
       <div id="add-art-menu">
         <div class="add-art-title">Add art to this frame</div>
@@ -78,6 +78,10 @@
 
   <!-- Phaser -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+
+  <!-- Supabase for Rage City -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./js/ragecity_supabase.js"></script>
 
   <!-- Rage City scripts -->
   <script src="./js/input.js"></script>
