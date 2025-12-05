@@ -18,6 +18,16 @@ const addArtFileInput = document.getElementById("add-art-file-input");
 const addArtUploadButton = document.getElementById("add-art-upload-button");
 const addArtCancelButton = document.getElementById("add-art-cancel");
 
+const RAGECITY_BUCKET = "ragecity-art";
+
+function getSupabase() {
+  const supa = window.supabaseClient;
+  if (!supa) {
+    console.warn("Supabase client not configured for Rage City.");
+  }
+  return supa;
+}
+
 function openArtOverlay(imageUrl) {
   // If no image assigned (null painting), do nothing
   if (!imageUrl) return;
@@ -73,6 +83,7 @@ function closeAddArtMenu() {
 // Trigger the file picker (used by button and by A key)
 function triggerAddArtFilePicker() {
   if (addArtFileInput) {
+    addArtFileInput.value = ""; // reset
     addArtFileInput.click();
   }
 }
@@ -90,51 +101,98 @@ if (addArtCancelButton) {
   });
 }
 
-// Handle file selection
+// Helper: apply a public URL to a frame (thumbnail + full)
+function applyUrlToFrame(frameIndex, publicUrl) {
+  if (!window.galleryFrames) return;
+  const frame = window.galleryFrames[frameIndex];
+  if (!frame || !publicUrl) return;
+
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = function () {
+    const texKey = "frame_upload_" + frameIndex;
+    const game = Phaser.GAMES && Phaser.GAMES[0];
+
+    if (game && game.textures) {
+      if (game.textures.exists(texKey)) {
+        game.textures.remove(texKey);
+      }
+      game.textures.addImage(texKey, img);
+    }
+
+    frame.img.setTexture(texKey);
+    frame.fullUrl = publicUrl;
+  };
+  img.src = publicUrl;
+}
+
+// Handle file selection → upload to Supabase
 if (addArtFileInput) {
-  addArtFileInput.addEventListener("change", (e) => {
+  addArtFileInput.addEventListener("change", async (e) => {
+    const supa = getSupabase();
+    if (!supa) {
+      closeAddArtMenu();
+      return;
+    }
+
     const file = e.target.files && e.target.files[0];
-    if (!file || addArtFrameIndex == null || !window.galleryFrames) {
+    if (!file || addArtFrameIndex == null) {
       closeAddArtMenu();
       return;
     }
 
-    const frame = window.galleryFrames[addArtFrameIndex];
-    if (!frame) {
-      closeAddArtMenu();
-      return;
-    }
-
-    // For now we support images only
     if (!file.type.startsWith("image/")) {
       alert("For now, please choose an image file.");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = function (evt) {
-      const imgData = evt.target.result;
-      const img = new Image();
-      img.onload = function () {
-        const texKey = "frame_upload_" + addArtFrameIndex;
-        const game = Phaser.GAMES && Phaser.GAMES[0];
+    try {
+      const pathSafeName = file.name.replace(/[^a-zA-Z0-9_.-]/g, "_");
+      const storagePath = `frame-${addArtFrameIndex}-${Date.now()}-${pathSafeName}`;
 
-        // Safely add/update the texture if we have a game instance
-        if (game && game.textures) {
-          if (game.textures.exists(texKey)) {
-            game.textures.remove(texKey);
-          }
-          game.textures.addImage(texKey, img);
+      // 1) Upload to bucket
+      const { error: uploadError } = await supa.storage
+        .from(RAGECITY_BUCKET)
+        .upload(storagePath, file, {
+          cacheControl: "3600",
+          upsert: true
+        });
 
-          // Update the thumbnail + full-size URL in the frame
-          frame.img.setTexture(texKey);
-          frame.fullUrl = imgData;
-        }
-
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        alert("Error uploading image.");
         closeAddArtMenu();
-      };
-      img.src = imgData;
-    };
-    reader.readAsDataURL(file);
+        return;
+      }
+
+      // 2) Get public URL
+      const { data: pub } = supa.storage.from(RAGECITY_BUCKET).getPublicUrl(storagePath);
+      const publicUrl = pub?.publicUrl;
+      if (!publicUrl) {
+        alert("Could not generate image URL.");
+        closeAddArtMenu();
+        return;
+      }
+
+      // 3) Upsert DB row
+      const { error: upsertError } = await supa
+        .from("ragecity_frames")
+        .upsert(
+          { frame_index: addArtFrameIndex, storage_path: storagePath },
+          { onConflict: "frame_index" }
+        );
+
+      if (upsertError) {
+        console.error("DB upsert error:", upsertError);
+      }
+
+      // 4) Update the running game
+      applyUrlToFrame(addArtFrameIndex, publicUrl);
+    } catch (err) {
+      console.error("Unexpected upload error:", err);
+      alert("Error uploading image.");
+    } finally {
+      closeAddArtMenu();
+    }
   });
 }
