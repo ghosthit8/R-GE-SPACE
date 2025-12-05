@@ -7,7 +7,7 @@ let prevA = false;
 let prevB = false;
 
 function preload() {
-  // Blank 1x1 black texture for all paintings by default
+  // Blank 1x1 black texture so frames start empty
   this.load.image(
     "artThumb",
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIW2NkYGBgAAAABAABJzQnCgAAAABJRU5ErkJggg=="
@@ -109,7 +109,7 @@ function create() {
   diag.moveTo(rightOuter, topOuter);
   diag.lineTo(rightInner, topInner);
   diag.moveTo(rightOuter, bottomOuter);
-  diag.lineTo	rightInner, bottomInner);
+  diag.lineTo(rightInner, bottomInner);
   diag.moveTo(leftOuter, bottomOuter);
   diag.lineTo(leftInner, bottomInner);
   diag.strokePath();
@@ -250,7 +250,7 @@ function create() {
       frameGfx: g,
       matGfx: gMat,
       img,
-      fullUrl: null // ← starts with no assigned art
+      fullUrl: null // start with no art bound
     });
   }
 
@@ -488,7 +488,7 @@ function update(time, delta) {
   }
 
   if (nearestItem && nearestDist < 60 && justPressedA) {
-    // Only opens if fullUrl is not null/undefined
+    // open only if that frame actually has art
     if (nearestItem.fullUrl) {
       openArtOverlay(nearestItem.fullUrl);
     }
