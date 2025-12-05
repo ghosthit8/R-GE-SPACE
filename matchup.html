@@ -476,6 +476,28 @@
   }
 
   const order = [
+    // Final & Semis first (so when they’re live, they’re on top)
+    {key:"final", label:"Final"},
+    {key:"s1", label:"Semi 1", semi:true},
+    {key:"s2", label:"Semi 2", semi:true},
+
+    // Quarterfinals
+    {key:"q1", label:"QF A–B", left:"q1_a_url", right:"q1_b_url", lct:"q1_a_count", rct:"q1_b_count", fbLeft:"seed_a_url", fbRight:"seed_b_url", fbLct:"seed_a_count", fbRct:"seed_b_count"},
+    {key:"q2", label:"QF C–D", left:"q2_c_url", right:"q2_d_url", lct:"q2_c_count", rct:"q2_d_count", fbLeft:"seed_c_url", fbRight:"seed_d_url", fbLct:"seed_c_count", fbRct:"seed_d_count"},
+    {key:"q3", label:"QF E–F", left:"q3_e_url", right:"q3_f_url", lct:"q3_e_count", rct:"q3_f_count", fbLeft:"seed_e_url", fbRight:"seed_f_url", fbLct:"seed_e_count", fbRct:"seed_f_count"},
+    {key:"q4", label:"QF G–H", left:"q4_g_url", right:"q4_h_url", lct:"q4_g_count", rct:"q4_h_count", fbLeft:"seed_g_url", fbRight:"seed_h_url", fbLct:"seed_g_count", fbRct:"seed_h_count"},
+
+    // Round of 16
+    {key:"r1", label:"R16 A–B", left:"seed_a_url", right:"seed_b_url", lct:"seed_a_count", rct:"seed_b_count"},
+    {key:"r2", label:"R16 C–D", left:"seed_c_url", right:"seed_d_url", lct:"seed_c_count", rct:"seed_d_count"},
+    {key:"r3", label:"R16 E–F", left:"seed_e_url", right:"seed_f_url", lct:"seed_e_count", rct:"seed_f_count"},
+    {key:"r4", label:"R16 G–H", left:"seed_g_url", right:"seed_h_url", lct:"seed_g_count", rct:"seed_h_count"},
+    {key:"r5", label:"R16 I–J", left:"seed_i_url", right:"seed_j_url", lct:"seed_i_count", rct:"seed_j_count"},
+    {key:"r6", label:"R16 K–L", left:"seed_k_url", right:"seed_l_url", lct:"seed_k_count", rct:"seed_l_count"},
+    {key:"r7", label:"R16 M–N", left:"seed_m_url", right:"seed_n_url", lct:"seed_m_count", rct:"seed_n_count"},
+    {key:"r8", label:"R16 O–P", left:"seed_o_url", right:"seed_p_url", lct:"seed_o_count", rct:"seed_p_count"},
+
+    // R32 last (oldest), so they sink to the bottom
     {key:"rr1",  label:"R32 1",  left:"seed_a_url",  right:"seed_b_url",  lct:"seed_a_count",  rct:"seed_b_count"},
     {key:"rr2",  label:"R32 2",  left:"seed_c_url",  right:"seed_d_url",  lct:"seed_c_count",  rct:"seed_d_count"},
     {key:"rr3",  label:"R32 3",  left:"seed_e_url",  right:"seed_f_url",  lct:"seed_e_count",  rct:"seed_f_count"},
@@ -491,24 +513,7 @@
     {key:"rr13", label:"R32 13", left:"seed_y_url",  right:"seed_z_url",  lct:"seed_y_count",  rct:"seed_z_count"},
     {key:"rr14", label:"R32 14", left:"seed_aa_url", right:"seed_ab_url", lct:"seed_aa_count", rct:"seed_ab_count"},
     {key:"rr15", label:"R32 15", left:"seed_ac_url", right:"seed_ad_url", lct:"seed_ac_count", rct:"seed_ad_count"},
-    {key:"rr16", label:"R32 16", left:"seed_ae_url", right:"seed_af_url", lct:"seed_ae_count", rct:"seed_af_count"},
-
-    {key:"r1", label:"R16 A–B", left:"seed_a_url", right:"seed_b_url", lct:"seed_a_count", rct:"seed_b_count"},
-    {key:"r2", label:"R16 C–D", left:"seed_c_url", right:"seed_d_url", lct:"seed_c_count", rct:"seed_d_count"},
-    {key:"r3", label:"R16 E–F", left:"seed_e_url", right:"seed_f_url", lct:"seed_e_count", rct:"seed_f_count"},
-    {key:"r4", label:"R16 G–H", left:"seed_g_url", right:"seed_h_url", lct:"seed_g_count", rct:"seed_h_count"},
-    {key:"r5", label:"R16 I–J", left:"seed_i_url", right:"seed_j_url", lct:"seed_i_count", rct:"seed_j_count"},
-    {key:"r6", label:"R16 K–L", left:"seed_k_url", right:"seed_l_url", lct:"seed_k_count", rct:"seed_l_count"},
-    {key:"r7", label:"R16 M–N", left:"seed_m_url", right:"seed_n_url", lct:"seed_m_count", rct:"seed_n_count"},
-    {key:"r8", label:"R16 O–P", left:"seed_o_url", right:"seed_p_url", lct:"seed_o_count", rct:"seed_p_count"},
-
-    {key:"q1", label:"QF A–B", left:"q1_a_url", right:"q1_b_url", lct:"q1_a_count", rct:"q1_b_count", fbLeft:"seed_a_url", fbRight:"seed_b_url", fbLct:"seed_a_count", fbRct:"seed_b_count"},
-    {key:"q2", label:"QF C–D", left:"q2_c_url", right:"q2_d_url", lct:"q2_c_count", rct:"q2_d_count", fbLeft:"seed_c_url", fbRight:"seed_d_url", fbLct:"seed_c_count", fbRct:"seed_d_count"},
-    {key:"q3", label:"QF E–F", left:"q3_e_url", right:"q3_f_url", lct:"q3_e_count", rct:"q3_f_count", fbLeft:"seed_e_url", fbRight:"seed_f_url", fbLct:"seed_e_count", fbRct:"seed_f_count"},
-    {key:"q4", label:"QF G–H", left:"q4_g_url", right:"q4_h_url", lct:"q4_g_count", rct:"q4_h_count", fbLeft:"seed_g_url", fbRight:"seed_h_url", fbLct:"seed_g_count", fbRct:"seed_h_count"},
-    {key:"s1", label:"Semi 1", semi:true},
-    {key:"s2", label:"Semi 2", semi:true},
-    {key:"final", label:"Final"}
+    {key:"rr16", label:"R32 16", left:"seed_ae_url", right:"seed_af_url", lct:"seed_ae_count", rct:"seed_af_count"}
   ];
 
   const thumbs = {};
