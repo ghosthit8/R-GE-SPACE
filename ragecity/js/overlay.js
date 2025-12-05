@@ -70,10 +70,17 @@ function closeAddArtMenu() {
   if (addArtOverlayEl) addArtOverlayEl.style.display = "none";
 }
 
+// Trigger the file picker (used by button and by A key)
+function triggerAddArtFilePicker() {
+  if (addArtFileInput) {
+    addArtFileInput.click();
+  }
+}
+
 // Button wiring
 if (addArtUploadButton && addArtFileInput) {
   addArtUploadButton.addEventListener("click", () => {
-    addArtFileInput.click();
+    triggerAddArtFilePicker();
   });
 }
 
@@ -112,16 +119,17 @@ if (addArtFileInput) {
         const texKey = "frame_upload_" + addArtFrameIndex;
         const game = Phaser.GAMES && Phaser.GAMES[0];
 
+        // Safely add/update the texture if we have a game instance
         if (game && game.textures) {
           if (game.textures.exists(texKey)) {
             game.textures.remove(texKey);
           }
           game.textures.addImage(texKey, img);
-        }
 
-        // Update the thumbnail + full-size URL
-        frame.img.setTexture(texKey);
-        frame.fullUrl = imgData;
+          // Update the thumbnail + full-size URL in the frame
+          frame.img.setTexture(texKey);
+          frame.fullUrl = imgData;
+        }
 
         closeAddArtMenu();
       };
