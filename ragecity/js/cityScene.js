@@ -7,9 +7,10 @@ let prevA = false;
 let prevB = false;
 
 function preload() {
+  // Blank 1x1 black texture for all paintings by default
   this.load.image(
     "artThumb",
-    "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1000&q=80"
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIW2NkYGBgAAAABAABJzQnCgAAAABJRU5ErkJggg=="
   );
 }
 
@@ -108,7 +109,7 @@ function create() {
   diag.moveTo(rightOuter, topOuter);
   diag.lineTo(rightInner, topInner);
   diag.moveTo(rightOuter, bottomOuter);
-  diag.lineTo(rightInner, bottomInner);
+  diag.lineTo	rightInner, bottomInner);
   diag.moveTo(leftOuter, bottomOuter);
   diag.lineTo(leftInner, bottomInner);
   diag.strokePath();
@@ -249,7 +250,7 @@ function create() {
       frameGfx: g,
       matGfx: gMat,
       img,
-      fullUrl: PAINTING_FULL_URL
+      fullUrl: null // ← starts with no assigned art
     });
   }
 
@@ -487,7 +488,10 @@ function update(time, delta) {
   }
 
   if (nearestItem && nearestDist < 60 && justPressedA) {
-    openArtOverlay(nearestItem.fullUrl);
+    // Only opens if fullUrl is not null/undefined
+    if (nearestItem.fullUrl) {
+      openArtOverlay(nearestItem.fullUrl);
+    }
   }
 
   prevA = inputState.A;
