@@ -160,7 +160,7 @@ if (addArtFileInput) {
 
       if (uploadError) {
         console.error("Upload error:", uploadError);
-        alert("Error uploading image.");
+        alert("Upload error: " + uploadError.message);
         closeAddArtMenu();
         return;
       }
@@ -184,13 +184,14 @@ if (addArtFileInput) {
 
       if (upsertError) {
         console.error("DB upsert error:", upsertError);
+        // not fatal for showing the art
       }
 
       // 4) Update the running game
       applyUrlToFrame(addArtFrameIndex, publicUrl);
     } catch (err) {
       console.error("Unexpected upload error:", err);
-      alert("Error uploading image.");
+      alert("Upload error: " + err.message);
     } finally {
       closeAddArtMenu();
     }
