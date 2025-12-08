@@ -1,5 +1,3 @@
-// cityScene.js
-
 let player;
 let promptText;
 let galleryFrames = [];
@@ -17,111 +15,116 @@ function preload() {
 }
 
 function create() {
-  const fb = document.getElementById("game-fallback");
-  if (fb) fb.style.display = "none";
+  const width = this.scale.width;
+  const height = this.scale.height;
 
-  const w = this.scale.width;
-  const h = this.scale.height;
+  // Center playable area
+  const margin = 20;
+  const playWidth = width - margin * 2;
+  const playHeight = height - margin * 2;
 
-  this.physics.world.setBounds(0, 0, w, h);
+  // Outer boundaries
+  const leftOuter = margin;
+  const rightOuter = margin + playWidth;
+  const topOuter = margin;
+  const bottomOuter = margin + playHeight;
+
+  // Inner gallery room box
+  const boxMargin = 60;
+  const leftInner = leftOuter + boxMargin;
+  const rightInner = rightOuter - boxMargin;
+  const topInner = topOuter + boxMargin;
+  const bottomInner = bottomOuter - boxMargin;
+
+  // Create a group for walls so it's easier to debug collisions
   wallsGroup = this.physics.add.staticGroup();
-  const scene = this;
 
-  function addWallRect(x1, y1, x2, y2, thickness = 14) {
-    if (x1 === x2 && y1 !== y2) {
-      const height = Math.abs(y2 - y1);
-      const centerY = (y1 + y2) / 2;
-      const wall = scene.add.rectangle(x1, centerY, thickness, height, 0x00ff00, 0);
-      wall.setVisible(false);
-      scene.physics.add.existing(wall, true);
-      wallsGroup.add(wall);
-    } else if (y1 === y2 && x1 !== x2) {
-      const width = Math.abs(x2 - x1);
-      const centerX = (x1 + x2) / 2;
-      const wall = scene.add.rectangle(centerX, y1, width, thickness, 0x00ff00, 0);
-      wall.setVisible(false);
-      scene.physics.add.existing(wall, true);
-      wallsGroup.add(wall);
-    }
+  // Outer neon rectangle (visual only)
+  const outerRect = this.add.graphics();
+  outerRect.lineStyle(4, 0x00ff00, 1);
+  outerRect.strokeRect(
+    leftOuter,
+    topOuter,
+    rightOuter - leftOuter,
+    bottomOuter - topOuter
+  );
+
+  // Inner neon rectangle
+  const innerRect = this.add.graphics();
+  innerRect.lineStyle(4, 0xffffff, 1);
+  innerRect.strokeRect(
+    leftInner,
+    topInner,
+    rightInner - leftInner,
+    bottomInner - topInner
+  );
+
+  // Collider walls on inner box (we'll make small corridors later)
+  const wallThickness = 4;
+
+  function addWall(x, y, width, height, label) {
+    const wall = wallsGroup.create(x + width / 2, y + height / 2, null);
+    wall.body.setSize(width, height);
+    wall.body.immovable = true;
+    wall.label = label;
   }
 
-  function addWallBlock(x, y, size = 16) {
-    const wall = scene.add.rectangle(x, y, size, size, 0x00ff00, 0);
-    wall.setVisible(false);
-    scene.physics.add.existing(wall, true);
-    wallsGroup.add(wall);
-  }
+  // Top inner
+  addWall(leftInner, topInner, rightInner - leftInner, wallThickness, "top");
+  // Bottom inner
+  addWall(
+    leftInner,
+    bottomInner - wallThickness,
+    rightInner - leftInner,
+    wallThickness,
+    "bottom"
+  );
+  // Left inner
+  addWall(leftInner, topInner, wallThickness, bottomInner - topInner, "left");
+  // Right inner
+  addWall(
+    rightInner - wallThickness,
+    topInner,
+    wallThickness,
+    bottomInner - topInner,
+    "right"
+  );
 
-  // ==== ROOM GEOMETRY ====
-  const marginX = 60;
-  const marginY = 90;
+  // Adding corridors for sculpture box
+  const corridorWidth = 40;
+  const corridorOffset = 80;
 
-  const leftOuter = marginX;
-  const rightOuter = w - marginX;
-  const topOuter = marginY;
-  const bottomOuter = h - marginY;
+  // Top corridor
+  addWall(
+    leftInner + corridorOffset,
+    topInner,
+    corridorWidth,
+    wallThickness,
+    "topCorridor"
+  );
+  // Bottom corridor
+  addWall(
+    rightInner - corridorWidth - corridorOffset,
+    bottomInner - wallThickness,
+    corridorWidth,
+    wallThickness,
+    "bottomCorridor"
+  );
 
-  const corridorWidth = 32;
-  const leftInner = leftOuter + corridorWidth;
-  const rightInner = rightOuter - corridorWidth;
-  const topInner = topOuter + corridorWidth;
-  const bottomInner = bottomOuter - corridorWidth;
-
-  const doorWidth = 90;
-
-  const doorCenterY = topInner + (bottomInner - topInner) * 0.65;
-  const gapOuterTopY = doorCenterY - doorWidth / 2;
-  const gapOuterBotY = doorCenterY + doorWidth / 2;
-
-  const gapInnerTopY = doorCenterY - doorWidth / 2;
-  const gapInnerBotY = doorCenterY + doorWidth / 2;
-
-  // Outer wall
-  const wallOuter = this.add.graphics();
-  wallOuter.lineStyle(4, 0xffffff, 1);
-  wallOuter.beginPath();
-  wallOuter.moveTo(leftOuter, topOuter);
-  wallOuter.lineTo(rightOuter, topOuter);
-  wallOuter.lineTo(rightOuter, bottomOuter);
-  wallOuter.lineTo(leftOuter, bottomOuter);
-  wallOuter.lineTo(leftOuter, gapOuterBotY);
-  wallOuter.moveTo(leftOuter, gapOuterTopY);
-  wallOuter.lineTo(leftOuter, topOuter);
-  wallOuter.strokePath();
-
-  // Inner wall
-  const wallInner = this.add.graphics();
-  wallInner.lineStyle(4, 0xffffff, 1);
-  wallInner.beginPath();
-  wallInner.moveTo(leftInner, topInner);
-  wallInner.lineTo(rightInner, topInner);
-  wallInner.lineTo(rightInner, bottomInner);
-  wallInner.lineTo(leftInner, bottomInner);
-  wallInner.lineTo(leftInner, gapInnerBotY);
-  wallInner.moveTo(leftInner, gapInnerTopY);
-  wallInner.lineTo(leftInner, topInner);
-  wallInner.strokePath();
-
-  // Diagonals
+  // Neon diagonal from top-left inner corner to bottom-left outer corner
   const diag = this.add.graphics();
-  diag.lineStyle(4, 0xffffff, 1);
+  diag.lineStyle(4, 0x00ff00, 1);
   diag.beginPath();
-  diag.moveTo(leftOuter, topOuter);
-  diag.lineTo(leftInner, topInner);
-  diag.moveTo(rightOuter, topOuter);
-  diag.lineTo(rightInner, topInner);
-  diag.moveTo(rightOuter, bottomOuter);
-  diag.lineTo(rightInner, bottomInner);
-  diag.moveTo(leftOuter, bottomOuter);
-  diag.lineTo(leftInner, bottomInner);
+  diag.moveTo(leftInner, topInner);
+  diag.lineTo(leftOuter, bottomOuter);
   diag.strokePath();
 
   // Ledges
   const ledges = this.add.graphics();
   ledges.lineStyle(4, 0xffffff, 1);
   const ledgeLength = leftInner - leftOuter;
-  const upperLedgeY = gapInnerTopY;
-  const lowerLedgeY = gapInnerBotY;
+  const upperLedgeY = (topInner + bottomInner) / 2 - 40;
+  const lowerLedgeY = (topInner + bottomInner) / 2 + 40;
   ledges.beginPath();
   ledges.moveTo(leftOuter, upperLedgeY);
   ledges.lineTo(leftOuter + ledgeLength, upperLedgeY);
@@ -129,310 +132,137 @@ function create() {
   ledges.lineTo(leftOuter + ledgeLength, lowerLedgeY);
   ledges.strokePath();
 
-  // WALL COLLIDERS
-  addWallRect(leftOuter, topOuter, rightOuter, topOuter);
-  addWallRect(rightOuter, topOuter, rightOuter, bottomOuter);
-  addWallRect(leftOuter, bottomOuter, rightOuter, bottomOuter);
-  addWallRect(leftOuter, topOuter, leftOuter, gapOuterTopY);
-  addWallRect(leftOuter, gapOuterBotY, leftOuter, bottomOuter);
+  // Sculpture box in the middle
+  const sculptureBox = this.add.graphics();
+  sculptureBox.lineStyle(4, 0xffffff, 1);
+  const sculptureSize = 120;
+  const sculptureX = (leftInner + rightInner) / 2;
+  const sculptureY = (topInner + bottomInner) / 2;
+  const halfSize = sculptureSize / 2;
+  sculptureBox.strokeRect(
+    sculptureX - halfSize,
+    sculptureY - halfSize,
+    sculptureSize,
+    sculptureSize
+  );
 
-  addWallRect(leftInner, topInner, rightInner, topInner);
-  addWallRect(rightInner, topInner, rightInner, bottomInner);
-  addWallRect(leftInner, bottomInner, rightInner, bottomInner);
-  addWallRect(leftInner, topInner, leftInner, gapInnerTopY);
-  addWallRect(leftInner, gapInnerBotY, leftInner, bottomInner);
+  // Collider for sculpture box (only around the square we want)
+  const sculptureColliderSize = 80;
+  const sculptureColliderHalf = sculptureColliderSize / 2;
+  const sculptureColliderX = sculptureX;
+  const sculptureColliderY = sculptureY + 10; // Slightly lower
+  addWall(
+    sculptureColliderX - sculptureColliderHalf,
+    sculptureColliderY - sculptureColliderHalf,
+    sculptureColliderSize,
+    sculptureColliderSize,
+    "sculptureBox"
+  );
 
-  addWallRect(leftOuter, upperLedgeY, leftOuter + ledgeLength, upperLedgeY);
-  addWallRect(leftOuter, lowerLedgeY, leftOuter + ledgeLength, lowerLedgeY);
+  // Create frames and their hit areas
+  galleryFrames = [];
+  const frameSize = 80;
+  const frameOffset = 20;
 
-  const steps = 6;
-  for (let i = 0; i <= steps; i++) {
-    let t = i / steps;
-    let x = Phaser.Math.Linear(leftOuter, leftInner, t);
-    let y = Phaser.Math.Linear(topOuter, topInner, t);
-    addWallBlock(x, y, 14);
-    x = Phaser.Math.Linear(rightOuter, rightInner, t);
-    y = Phaser.Math.Linear(topOuter, topInner, t);
-    addWallBlock(x, y, 14);
-    x = Phaser.Math.Linear(rightOuter, rightInner, t);
-    y = Phaser.Math.Linear(bottomOuter, bottomInner, t);
-    addWallBlock(x, y, 14);
-    x = Phaser.Math.Linear(leftOuter, leftInner, t);
-    y = Phaser.Math.Linear(bottomOuter, bottomInner, t);
-    addWallBlock(x, y, 14);
+  // Helper to create a frame with a collider
+  function createFrame(x, y, isPainting, frameIndex) {
+    const frameRect = this.add.graphics();
+    frameRect.lineStyle(4, 0xffffff, 1);
+    frameRect.strokeRect(
+      x - frameSize / 2,
+      y - frameSize / 2,
+      frameSize,
+      frameSize
+    );
+
+    const img = this.add
+      .image(x, y, "artThumb")
+      .setDisplaySize(frameSize - frameOffset, frameSize - frameOffset);
+
+    const frameCollider = wallsGroup.create(x, y, null);
+    frameCollider.body.setSize(frameSize, frameSize);
+    frameCollider.body.immovable = true;
+    frameCollider.isFrame = true;
+    frameCollider.frameIndex = frameIndex;
+    frameCollider.isPainting = isPainting;
+
+    const frameData = {
+      frameIndex,
+      img,
+      isPainting,
+      fullUrl: null
+    };
+
+    galleryFrames.push(frameData);
+
+    if (!isPainting) {
+      sculptureSpot = frameData;
+    }
   }
+
+  // Sculpture frame (center)
+  createFrame.call(this, sculptureX, sculptureY, false, 0);
+
+  // Paintings on the walls
+  const paintingYTop = topInner + frameSize;
+  const paintingYBottom = bottomInner - frameSize;
+  const paintingXLeft = leftInner + frameSize;
+  const paintingXRight = rightInner - frameSize;
+
+  let frameIndex = 1;
+
+  // Top row frames
+  for (let i = 0; i < 3; i++) {
+    const x = leftInner + (i + 1) * ((rightInner - leftInner) / 4);
+    createFrame.call(this, x, paintingYTop, true, frameIndex++);
+  }
+
+  // Bottom row frames
+  for (let i = 0; i < 3; i++) {
+    const x = leftInner + (i + 1) * ((rightInner - leftInner) / 4);
+    createFrame.call(this, x, paintingYBottom, true, frameIndex++);
+  }
+
+  // Left wall frames
+  createFrame.call(this, paintingXLeft, (topInner + bottomInner) / 2, true, frameIndex++);
+
+  // Right wall frames
+  createFrame.call(this, paintingXRight, (topInner + bottomInner) / 2, true, frameIndex++);
 
   // Player
-  player = this.add.rectangle(leftOuter - 20, doorCenterY, 20, 20, 0x39ff14);
-  this.physics.add.existing(player);
-  player.body.setCollideWorldBounds(true);
+  player = this.physics.add
+    .rectangle((leftInner + rightInner) / 2, bottomInner - 40, 20, 20, 0x00ff00)
+    .setOrigin(0.5, 0.5);
+
   this.physics.add.collider(player, wallsGroup);
 
-  // FRAMES
-  const tex = this.textures.get("artThumb").getSourceImage();
-  const natW = tex.width;
-  const natH = tex.height;
-  const imgMaxW = 26;
-  const imgMaxH = 26;
-  const imgScale = Math.min(imgMaxW / natW, imgMaxH / natH);
-  galleryFrames = [];
+  // Prompt text
+  promptText = this.add
+    .text(width / 2, bottomOuter + 30, "", {
+      fontFamily: "monospace",
+      fontSize: "16px",
+      color: "#00ff00",
+      align: "center"
+    })
+    .setOrigin(0.5, 0)
+    .setScrollFactor(0)
+    .setDepth(1000);
 
-  function addTrapezoidFrame(scene2, x, y, side) {
-    const g = scene2.add.graphics();
-    g.lineStyle(3, 0x39ff14, 1);
-    const wTop = 18;
-    const wBottom = 28;
-    const h2 = 26;
-    const skew = 5;
-    let points;
-    if (side === "left") {
-      points = [
-        { x: -wBottom / 2, y: -h2 / 2 },
-        { x:  wTop / 2,    y: -h2 / 2 + skew },
-        { x:  wTop / 2,    y:  h2 / 2 - skew },
-        { x: -wBottom / 2, y:  h2 / 2 }
-      ];
-    } else if (side === "right") {
-      points = [
-        { x: -wTop / 2,    y: -h2 / 2 + skew },
-        { x:  wBottom / 2, y: -h2 / 2 },
-        { x:  wBottom / 2, y:  h2 / 2 },
-        { x: -wTop / 2,    y:  h2 / 2 - skew }
-      ];
-    } else if (side === "top") {
-      points = [
-        { x: -wBottom / 2, y: -h2 / 2 },
-        { x:  wBottom / 2, y: -h2 / 2 },
-        { x:  wTop / 2,    y:  h2 / 2 },
-        { x: -wTop / 2,    y:  h2 / 2 }
-      ];
-    } else {
-      points = [
-        { x: -wTop / 2,    y: -h2 / 2 },
-        { x:  wTop / 2,    y: -h2 / 2 },
-        { x:  wBottom / 2, y:  h2 / 2 },
-        { x: -wBottom / 2, y:  h2 / 2 }
-      ];
-    }
-
-    g.beginPath();
-    g.moveTo(x + points[0].x, y + points[0].y);
-    for (let i = 1; i < points.length; i++) {
-      g.lineTo(x + points[i].x, y + points[i].y);
-    }
-    g.closePath();
-    g.strokePath();
-
-    const gMat = scene2.add.graphics();
-    gMat.lineStyle(2, 0x1a8f3a, 1);
-    gMat.fillStyle(0x000000, 1);
-    const matScale = 0.78;
-    gMat.beginPath();
-    gMat.moveTo(
-      x + points[0].x * matScale,
-      y + points[0].y * matScale
-    );
-    for (let i = 1; i < points.length; i++) {
-      gMat.lineTo(
-        x + points[i].x * matScale,
-        y + points[i].y * matScale
-      );
-    }
-    gMat.closePath();
-    gMat.fillPath();
-    gMat.strokePath();
-
-    const img = scene2.add.image(x, y, "artThumb");
-    img.setScale(imgScale * 0.9);
-
-    galleryFrames.push({
-      x,
-      y,
-      side,
-      frameGfx: g,
-      matGfx: gMat,
-      img,
-      fullUrl: null // start with no art bound
-    });
-  }
-
-  const midLeftX   = (leftOuter  + leftInner)  / 2;
-  const midRightX  = (rightOuter + rightInner) / 2;
-  const midTopY    = (topOuter   + topInner)   / 2;
-  const midBottomY = (bottomOuter+ bottomInner)/ 2;
-
-  const topCount = 4;
-  const topStartX = leftInner + 35;
-  const topEndX   = rightInner - 35;
-  for (let i = 0; i < topCount; i++) {
-    const t = topCount === 1 ? 0.5 : i / (topCount - 1);
-    const x = Phaser.Math.Linear(topStartX, topEndX, t);
-    addTrapezoidFrame(this, x, midTopY, "top");
-  }
-
-  const rightCount = 4;
-  for (let i = 0; i < rightCount; i++) {
-    const t = i / (rightCount - 1);
-    const y = Phaser.Math.Linear(topInner + 40, bottomInner - 40, t);
-    addTrapezoidFrame(this, midRightX, y, "right");
-  }
-
-  const leftYPositions = [
-    topInner + 55,
-    gapInnerTopY - 22
-  ];
-  leftYPositions.forEach((y) => {
-    addTrapezoidFrame(this, midLeftX, y, "left");
-  });
-
-  const bottomPositions = [
-    leftInner + 24,
-    leftInner + 90,
-    (leftInner + rightInner) / 2,
-    rightInner - 90,
-    rightInner - 24
-  ];
-  bottomPositions.forEach((x) => {
-    addTrapezoidFrame(this, x, midBottomY, "bottom");
-  });
-
-  // Expose frames globally so overlay.js can reach them
-  window.galleryFrames = galleryFrames;
-
-  // ===== SCULPTURE CUBE =====
-  const centerX = (leftOuter + rightOuter) / 2;
-  const centerY = (topOuter + bottomOuter) / 2;
-  const sculptureX = centerX + 35;
-  const sculptureY = centerY + 60;
-
-  const cube = this.add.graphics();
-  cube.lineStyle(3, 0xffffff, 1);
-
-  const size = 46;   // outer front square
-  const depth = 10;
-
-  const frontX = sculptureX - size / 2;
-  const frontY = sculptureY - size / 2;
-  cube.strokeRect(frontX, frontY, size, size);
-
-  const backX = frontX - depth;
-  const backY = frontY - depth;
-  cube.strokeRect(backX, backY, size, size);
-
-  cube.beginPath();
-  cube.moveTo(frontX, frontY);
-  cube.lineTo(backX, backY);
-  cube.moveTo(frontX + size, frontY);
-  cube.lineTo(backX + size, backY);
-  cube.moveTo(frontX, frontY + size);
-  cube.lineTo(backX, backY + size);
-  cube.moveTo(frontX + size, frontY + size);
-  cube.lineTo(backX + size, backY + size);
-  cube.strokePath();
-
-  const innerSize = 22; // inner green
-  const inner = this.add.rectangle(
-    sculptureX,
-    sculptureY,
-    innerSize,
-    innerSize,
-    0x000000
-  );
-  inner.setStrokeStyle(2, 0x39ff14, 1);
-
-  sculptureSpot = {
-    x: sculptureX,
-    y: sculptureY,
-    fullUrl: typeof SCULPTURE_FULL_URL !== "undefined" ? SCULPTURE_FULL_URL : null,
-    type: "sculpture"
-  };
-
-  // ===== SCULPTURE COLLIDER (adjustable on all sides) =====
-  const midSize = (size + innerSize) / 2;
-
-  const expandLeft   = 18;
-  const expandRight  = -3;
-  const expandTop    = 18;
-  const expandBottom = -3;
-
-  const colliderWidth  = midSize + expandLeft + expandRight;
-  const colliderHeight = midSize + expandTop + expandBottom;
-
-  const frontCollider = this.add.rectangle(
-    sculptureX + (expandRight - expandLeft) / 2,
-    sculptureY + (expandBottom - expandTop) / 2,
-    colliderWidth,
-    colliderHeight,
-    0x00ff00,
-    0
-  );
-  frontCollider.setVisible(false);
-  this.physics.add.existing(frontCollider, true);
-  wallsGroup.add(frontCollider);
-
-  // prompt text
-  promptText = this.add.text(w / 2, h - 40, "", {
-    fontFamily:
-      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    fontSize: "14px",
-    color: "#39ff14"
-  });
-  promptText.setOrigin(0.5);
   promptText.setVisible(false);
 
-  this.scale.on("resize", (gameSize) => {
-    promptText.setPosition(gameSize.width / 2, gameSize.height - 40);
-  });
+  // Expose galleryFrames to window for overlay.js
+  window.galleryFrames = galleryFrames;
 
-  // controls + fullscreen
-  setupKeyboard(this);
-  setupTouchButton("btn-left", "left");
-  setupTouchButton("btn-right", "right");
-  setupTouchButton("btn-up", "up");
-  setupTouchButton("btn-down", "down");
-  setupTouchButton("btn-a", "A");
-  setupTouchButton("btn-b", "B");
-  setupFullscreenButton();
-
-  if (typeof artOverlayEl !== "undefined" && artOverlayEl) {
-    artOverlayEl.addEventListener("click", () => {
-      if (artOpen && typeof closeArtOverlay === "function") {
-        closeArtOverlay();
-      }
-    });
-  }
-
-  // Load any existing frame art from Supabase
-  loadFrameArtFromSupabase(this);
+  // Load existing art URLs from Supabase for each frame
+  loadRageCityFramesFromSupabase();
 }
 
-function setupFullscreenButton() {
-  const btn = document.getElementById("btn-fullscreen");
-  if (!btn) return;
-
-  btn.addEventListener("click", () => {
-    const elem = document.documentElement;
-    if (!document.fullscreenElement) {
-      if (elem.requestFullscreen) elem.requestFullscreen();
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
-    }
-  });
-
-  document.addEventListener("fullscreenchange", () => {
-    if (!btn) return;
-    btn.textContent = document.fullscreenElement
-      ? "⛶ Exit Fullscreen"
-      : "⛶ Fullscreen";
-  });
-}
-
-// Load existing frame art from ragecity_frames + bucket
-async function loadFrameArtFromSupabase(scene) {
+async function loadRageCityFramesFromSupabase() {
   const supa = window.supabaseClient;
-  if (!supa) return;
+  if (!supa) {
+    console.warn("Supabase client not configured for Rage City.");
+    return;
+  }
 
   try {
     const { data, error } = await supa
@@ -440,41 +270,46 @@ async function loadFrameArtFromSupabase(scene) {
       .select("frame_index, storage_path");
 
     if (error) {
-      console.error("Error loading Rage City frames:", error);
+      console.error("Error fetching Rage City frames:", error);
       return;
     }
 
     if (!data) return;
 
-    data.forEach((row) => {
-      const { frame_index, storage_path } = row;
-      const { data: pub } = supa
-        .storage
-        .from("ragecity-art")
-        .getPublicUrl(storage_path);
-      const publicUrl = pub?.publicUrl;
-      if (!publicUrl) return;
+    const bucketName = "ragecity-art";
 
-      // Reuse overlay's helper if available, otherwise do our own
-      if (typeof applyUrlToFrame === "function") {
-        applyUrlToFrame(frame_index, publicUrl);
-      } else if (window.galleryFrames && window.galleryFrames[frame_index]) {
-        const frame = window.galleryFrames[frame_index];
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = function () {
-          const texKey = "frame_remote_" + frame_index;
-          const game = scene.game;
-          if (game && game.textures) {
-            if (game.textures.exists(texKey)) game.textures.remove(texKey);
-            game.textures.addImage(texKey, img);
-            frame.img.setTexture(texKey);
-            frame.fullUrl = publicUrl;
+    for (const row of data) {
+      const frameIndex = row.frame_index;
+      const storagePath = row.storage_path;
+
+      const frame = galleryFrames.find((f) => f.frameIndex === frameIndex);
+      if (!frame) continue;
+
+      const { data: pub } = supa.storage
+        .from(bucketName)
+        .getPublicUrl(storagePath);
+
+      const publicUrl = pub?.publicUrl;
+      if (!publicUrl) continue;
+
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = function () {
+        const texKey = "frame_upload_" + frameIndex;
+        const game = Phaser.GAMES && Phaser.GAMES[0];
+
+        if (game && game.textures) {
+          if (game.textures.exists(texKey)) {
+            game.textures.remove(texKey);
           }
-        };
-        img.src = publicUrl;
-      }
-    });
+          game.textures.addImage(texKey, img);
+        }
+
+        frame.img.setTexture(texKey);
+        frame.fullUrl = publicUrl;
+      };
+      img.src = publicUrl;
+    }
   } catch (err) {
     console.error("Unexpected error loading Rage City frames:", err);
   }
@@ -486,126 +321,123 @@ function update(time, delta) {
   const justPressedA = inputState.A && !prevA;
   const justPressedB = inputState.B && !prevB;
 
+  // DEBUG: log button presses + overlay state when A/B is pressed
+  if (justPressedA || justPressedB) {
+    console.log("[RageCity INPUT] A/B press", {
+      A: inputState.A,
+      B: inputState.B,
+      justPressedA,
+      justPressedB,
+      artOpen: window.artOpen,
+      addArtOpen: window.addArtOpen
+    });
+  }
+
   // If the add-art menu is open:
-  if (window.addArtOpen) {
-    if (justPressedA && typeof triggerAddArtFilePicker === "function") {
-      console.log("RageCity: A pressed while add-art menu open → file picker");
-      triggerAddArtFilePicker();
-    } else if (justPressedB && typeof closeAddArtMenu === "function") {
-      console.log("RageCity: B pressed while add-art menu open → close");
-      closeAddArtMenu();
+  //  - A triggers the file picker
+  //  - B closes the menu
+  if (addArtOpen) {
+    if (justPressedA) {
+      if (typeof triggerAddArtFilePicker === "function") {
+        triggerAddArtFilePicker();
+      }
+    } else if (justPressedB) {
+      if (typeof closeAddArtMenu === "function") {
+        closeAddArtMenu();
+      }
     }
+
     prevA = inputState.A;
     prevB = inputState.B;
     return;
   }
 
-  // If we're viewing art, keep existing fullscreen / close behavior
-  if (window.artOpen) {
-    if (justPressedA && typeof toggleArtFullscreen === "function") {
-      console.log("RageCity: A pressed while art open → toggle fullscreen");
-      toggleArtFullscreen();
+  // If the art overlay is open:
+  //  - A toggles fullscreen
+  //  - B closes the overlay
+  if (artOpen) {
+    if (justPressedA) {
+      if (typeof toggleArtFullscreen === "function") {
+        toggleArtFullscreen();
+      }
+    } else if (justPressedB) {
+      if (typeof closeArtOverlay === "function") {
+        closeArtOverlay();
+      }
     }
-    if (justPressedB && typeof closeArtOverlay === "function") {
-      console.log("RageCity: B pressed while art open → close overlay");
-      closeArtOverlay();
-    }
+
     prevA = inputState.A;
     prevB = inputState.B;
     return;
   }
 
-  const speed = 120;
+  // Movement
+  const speed = 200;
   let vx = 0;
   let vy = 0;
 
-  if (inputState.left) vx -= 1;
-  if (inputState.right) vx += 1;
-  if (inputState.up) vy -= 1;
-  if (inputState.down) vy += 1;
-
-  if (vx !== 0 || vy !== 0) {
-    const len = Math.sqrt(vx * vx + vy * vy);
-    vx = (vx / len) * speed;
-    vy = (vy / len) * speed;
-  }
+  if (inputState.left) vx -= speed;
+  if (inputState.right) vx += speed;
+  if (inputState.up) vy -= speed;
+  if (inputState.down) vy += speed;
 
   player.body.setVelocity(vx, vy);
+  player.body.velocity.normalize().scale(speed);
 
+  // Find nearest frame/sculpture
   let nearestItem = null;
   let nearestDist = Infinity;
 
-  // Look for nearest painting frame
-  galleryFrames.forEach((f, idx) => {
-    const d = Phaser.Math.Distance.Between(player.x, player.y, f.x, f.y);
-    if (d < nearestDist) {
-      nearestDist = d;
-      nearestItem = {
-        type: "painting",
-        fullUrl: f.fullUrl,
-        frameIndex: idx
-      };
-    }
-  });
+  const playerX = player.x;
+  const playerY = player.y;
 
-  // Compare with sculpture spot
-  if (sculptureSpot) {
-    const d = Phaser.Math.Distance.Between(
-      player.x,
-      player.y,
-      sculptureSpot.x,
-      sculptureSpot.y
-    );
-    if (d < nearestDist) {
-      nearestDist = d;
-      nearestItem = {
-        type: "sculpture",
-        fullUrl: sculptureSpot.fullUrl
-      };
+  for (const frame of galleryFrames) {
+    const dx = frame.img.x - playerX;
+    const dy = frame.img.y - playerY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearestItem = frame;
     }
   }
 
-  // Prompt text
-  if (promptText) {
-    if (nearestItem && nearestDist < 80) {
-      promptText.setVisible(true);
-      if (nearestItem.type === "sculpture") {
-        promptText.setText("Press A to inspect sculpture");
+  // Show prompt if close enough
+  if (nearestItem && nearestDist < 60) {
+    if (nearestItem.isPainting) {
+      if (nearestItem.fullUrl) {
+        promptText.setText("Press A to view art");
       } else {
-        // painting
-        promptText.setText(
-          nearestItem.fullUrl ? "Press A to view art" : "Press A to add art"
-        );
+        promptText.setText("Press A to add art");
       }
     } else {
-      promptText.setVisible(false);
+      // sculpture
+      if (nearestItem.fullUrl) {
+        promptText.setText("Press A to inspect sculpture");
+      } else {
+        promptText.setText("Press A to add sculpture art");
+      }
     }
+    promptText.setVisible(true);
+  } else {
+    promptText.setVisible(false);
   }
 
   // Interaction when pressing A near something
   if (nearestItem && nearestDist < 60 && justPressedA) {
-    if (nearestItem.type === "sculpture") {
-      if (nearestItem.fullUrl && typeof openArtOverlay === "function") {
-        console.log("RageCity: Opening SCULPTURE art overlay");
-        openArtOverlay(nearestItem.fullUrl);
-      }
-    } else if (nearestItem.type === "painting") {
+    if (!nearestItem.isPainting) {
+      // Sculpture
       if (nearestItem.fullUrl) {
-        if (typeof openArtOverlay === "function") {
-          console.log(
-            "RageCity: Opening PAINTING art overlay for frame",
-            nearestItem.frameIndex
-          );
-          openArtOverlay(nearestItem.fullUrl);
-        }
+        openArtOverlay(nearestItem.fullUrl);
       } else {
-        if (typeof openAddArtMenu === "function") {
-          console.log(
-            "RageCity: Opening add-art menu for frame",
-            nearestItem.frameIndex
-          );
-          openAddArtMenu(nearestItem.frameIndex);
-        }
+        openAddArtMenu(nearestItem.frameIndex);
+      }
+    } else {
+      // Painting
+      if (nearestItem.fullUrl) {
+        openArtOverlay(nearestItem.fullUrl);
+      } else {
+        openAddArtMenu(nearestItem.frameIndex);
       }
     }
   }
