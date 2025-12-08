@@ -1,3 +1,4 @@
+// overlay.js
 // Full-size artwork URLs for frames & sculpture
 // Paintings start empty; sculpture still has a default piece.
 const PAINTING_FULL_URL = null;
@@ -20,6 +21,14 @@ const addArtCancelButton = document.getElementById("add-art-cancel");
 
 const RAGECITY_BUCKET = "ragecity-art";
 
+// Simple logger so we can see overlay activity clearly in the console
+function overlayDbg(msg) {
+  console.log(
+    "%c[RageCity OVERLAY] " + msg,
+    "color:#0f0;background:#000;padding:2px 4px;"
+  );
+}
+
 function getSupabase() {
   const supa = window.supabaseClient;
   if (!supa) {
@@ -30,18 +39,41 @@ function getSupabase() {
 
 function openArtOverlay(imageUrl) {
   // If no image assigned (null painting), do nothing
-  if (!imageUrl) return;
+  if (!imageUrl) {
+    overlayDbg("openArtOverlay called with empty URL – ignoring");
+    return;
+  }
+
+  overlayDbg("openArtOverlay called with URL: " + imageUrl);
 
   artOpen = true;
-  if (artImg) artImg.src = imageUrl;
-  if (artOverlayEl) artOverlayEl.style.display = "flex";
-  if (artMsg) artMsg.style.display = "block";
+  if (artImg) {
+    artImg.src = imageUrl;
+    artImg.style.opacity = "1";
+  }
+  if (artOverlayEl) {
+    artOverlayEl.style.display = "flex";
+    artOverlayEl.style.opacity = "1";
+    artOverlayEl.style.pointerEvents = "auto";
+  }
+  if (artMsg) {
+    artMsg.style.display = "block";
+    artMsg.style.opacity = "1";
+  }
 }
 
 function closeArtOverlay() {
+  overlayDbg("closeArtOverlay called");
   artOpen = false;
-  if (artOverlayEl) artOverlayEl.style.display = "none";
-  if (artMsg) artMsg.style.display = "none";
+  if (artOverlayEl) {
+    artOverlayEl.style.opacity = "0";
+    artOverlayEl.style.display = "none";
+    artOverlayEl.style.pointerEvents = "none";
+  }
+  if (artMsg) {
+    artMsg.style.display = "none";
+    artMsg.style.opacity = "0";
+  }
 
   if (
     (document.fullscreenElement === artImg ||
@@ -53,6 +85,7 @@ function closeArtOverlay() {
 }
 
 function toggleArtFullscreen() {
+  overlayDbg("toggleArtFullscreen called");
   if (artMsg) artMsg.style.display = "none";
   if (
     document.fullscreenElement === artImg ||
@@ -69,19 +102,30 @@ function toggleArtFullscreen() {
 // ===== ADD-ART MENU LOGIC =====
 
 function openAddArtMenu(frameIndex) {
+  overlayDbg("openAddArtMenu for frameIndex=" + frameIndex);
   addArtFrameIndex = frameIndex;
   addArtOpen = true;
-  if (addArtOverlayEl) addArtOverlayEl.style.display = "flex";
+  if (addArtOverlayEl) {
+    addArtOverlayEl.style.display = "flex";
+    addArtOverlayEl.style.opacity = "1";
+    addArtOverlayEl.style.pointerEvents = "auto";
+  }
 }
 
 function closeAddArtMenu() {
+  overlayDbg("closeAddArtMenu called");
   addArtOpen = false;
   addArtFrameIndex = null;
-  if (addArtOverlayEl) addArtOverlayEl.style.display = "none";
+  if (addArtOverlayEl) {
+    addArtOverlayEl.style.display = "none";
+    addArtOverlayEl.style.opacity = "0";
+    addArtOverlayEl.style.pointerEvents = "none";
+  }
 }
 
 // Trigger the file picker (used by button and by A key)
 function triggerAddArtFilePicker() {
+  overlayDbg("triggerAddArtFilePicker called");
   if (addArtFileInput) {
     addArtFileInput.value = ""; // reset
     addArtFileInput.click();
@@ -91,21 +135,30 @@ function triggerAddArtFilePicker() {
 // Button wiring
 if (addArtUploadButton && addArtFileInput) {
   addArtUploadButton.addEventListener("click", () => {
+    overlayDbg("Upload button clicked");
     triggerAddArtFilePicker();
   });
 }
 
 if (addArtCancelButton) {
   addArtCancelButton.addEventListener("click", () => {
+    overlayDbg("Cancel button clicked");
     closeAddArtMenu();
   });
 }
 
 // Helper: apply a public URL to a frame (thumbnail + full)
 function applyUrlToFrame(frameIndex, publicUrl) {
-  if (!window.galleryFrames) return;
+  overlayDbg("applyUrlToFrame(" + frameIndex + ", " + publicUrl + ")");
+  if (!window.galleryFrames) {
+    overlayDbg("No galleryFrames on window yet");
+    return;
+  }
   const frame = window.galleryFrames[frameIndex];
-  if (!frame || !publicUrl) return;
+  if (!frame || !publicUrl) {
+    overlayDbg("Frame not found or URL missing");
+    return;
+  }
 
   const img = new Image();
   img.crossOrigin = "anonymous";
@@ -131,20 +184,32 @@ if (addArtFileInput) {
   addArtFileInput.addEventListener("change", async (e) => {
     const supa = getSupabase();
     if (!supa) {
+      overlayDbg("No Supabase client; cannot upload");
       closeAddArtMenu();
       return;
     }
 
     const file = e.target.files && e.target.files[0];
     if (!file || addArtFrameIndex == null) {
+      overlayDbg("No file or frame index; closing menu");
       closeAddArtMenu();
       return;
     }
 
     if (!file.type.startsWith("image/")) {
       alert("For now, please choose an image file.");
+      overlayDbg("Non-image file selected: " + file.type);
       return;
     }
+
+    overlayDbg(
+      "Starting upload for frame " +
+        addArtFrameIndex +
+        " file=" +
+        file.name +
+        " type=" +
+        file.type
+    );
 
     try {
       const pathSafeName = file.name.replace(/[^a-zA-Z0-9_.-]/g, "_");
@@ -161,14 +226,18 @@ if (addArtFileInput) {
       if (uploadError) {
         console.error("Upload error:", uploadError);
         alert("Upload error: " + uploadError.message);
+        overlayDbg("Upload error: " + uploadError.message);
         closeAddArtMenu();
         return;
       }
 
       // 2) Get public URL
-      const { data: pub } = supa.storage.from(RAGECITY_BUCKET).getPublicUrl(storagePath);
+      const { data: pub } = supa.storage
+        .from(RAGECITY_BUCKET)
+        .getPublicUrl(storagePath);
       const publicUrl = pub?.publicUrl;
       if (!publicUrl) {
+        overlayDbg("Could not generate public URL");
         alert("Could not generate image URL.");
         closeAddArtMenu();
         return;
@@ -184,13 +253,16 @@ if (addArtFileInput) {
 
       if (upsertError) {
         console.error("DB upsert error:", upsertError);
-        // not fatal for showing the art
+        overlayDbg("DB upsert error: " + upsertError.message);
+        // still continue; art will show even if DB doesn't track it perfectly
       }
 
       // 4) Update the running game
+      overlayDbg("Upload + DB done; applying to frame");
       applyUrlToFrame(addArtFrameIndex, publicUrl);
     } catch (err) {
       console.error("Unexpected upload error:", err);
+      overlayDbg("Unexpected upload error: " + err.message);
       alert("Upload error: " + err.message);
     } finally {
       closeAddArtMenu();
