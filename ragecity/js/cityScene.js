@@ -29,14 +29,28 @@ function create() {
     if (x1 === x2 && y1 !== y2) {
       const height = Math.abs(y2 - y1);
       const centerY = (y1 + y2) / 2;
-      const wall = scene.add.rectangle(x1, centerY, thickness, height, 0x00ff00, 0);
+      const wall = scene.add.rectangle(
+        x1,
+        centerY,
+        thickness,
+        height,
+        0x00ff00,
+        0
+      );
       wall.setVisible(false);
       scene.physics.add.existing(wall, true);
       wallsGroup.add(wall);
     } else if (y1 === y2 && x1 !== x2) {
       const width = Math.abs(x2 - x1);
       const centerX = (x1 + x2) / 2;
-      const wall = scene.add.rectangle(centerX, y1, width, thickness, 0x00ff00, 0);
+      const wall = scene.add.rectangle(
+        centerX,
+        y1,
+        width,
+        thickness,
+        0x00ff00,
+        0
+      );
       wall.setVisible(false);
       scene.physics.add.existing(wall, true);
       wallsGroup.add(wall);
@@ -74,7 +88,7 @@ function create() {
   const gapInnerTopY = doorCenterY - doorWidth / 2;
   const gapInnerBotY = doorCenterY + doorWidth / 2;
 
-  // Outer wall
+  // Outer wall (white lines)
   const wallOuter = this.add.graphics();
   wallOuter.lineStyle(4, 0xffffff, 1);
   wallOuter.beginPath();
@@ -87,7 +101,7 @@ function create() {
   wallOuter.lineTo(leftOuter, topOuter);
   wallOuter.strokePath();
 
-  // Inner wall
+  // Inner wall (white lines)
   const wallInner = this.add.graphics();
   wallInner.lineStyle(4, 0xffffff, 1);
   wallInner.beginPath();
@@ -127,7 +141,7 @@ function create() {
   ledges.lineTo(leftOuter + ledgeLength, lowerLedgeY);
   ledges.strokePath();
 
-  // WALL COLLIDERS
+  // WALL COLLIDERS (invisible; keep player inside)
   addWallRect(leftOuter, topOuter, rightOuter, topOuter);
   addWallRect(rightOuter, topOuter, rightOuter, bottomOuter);
   addWallRect(leftOuter, bottomOuter, rightOuter, bottomOuter);
@@ -186,30 +200,31 @@ function create() {
     if (side === "left") {
       points = [
         { x: -wBottom / 2, y: -h2 / 2 },
-        { x:  wTop / 2,    y: -h2 / 2 + skew },
-        { x:  wTop / 2,    y:  h2 / 2 - skew },
-        { x: -wBottom / 2, y:  h2 / 2 }
+        { x: wTop / 2, y: -h2 / 2 + skew },
+        { x: wTop / 2, y: h2 / 2 - skew },
+        { x: -wBottom / 2, y: h2 / 2 }
       ];
     } else if (side === "right") {
       points = [
-        { x: -wTop / 2,    y: -h2 / 2 + skew },
-        { x:  wBottom / 2, y: -h2 / 2 },
-        { x:  wBottom / 2, y:  h2 / 2 },
-        { x: -wTop / 2,    y:  h2 / 2 - skew }
+        { x: -wTop / 2, y: -h2 / 2 + skew },
+        { x: wBottom / 2, y: -h2 / 2 },
+        { x: wBottom / 2, y: h2 / 2 },
+        { x: -wTop / 2, y: h2 / 2 - skew }
       ];
     } else if (side === "top") {
       points = [
         { x: -wBottom / 2, y: -h2 / 2 },
-        { x:  wBottom / 2, y: -h2 / 2 },
-        { x:  wTop / 2,    y:  h2 / 2 },
-        { x: -wTop / 2,    y:  h2 / 2 }
+        { x: wBottom / 2, y: -h2 / 2 },
+        { x: wTop / 2, y: h2 / 2 },
+        { x: -wTop / 2, y: h2 / 2 }
       ];
     } else {
+      // bottom
       points = [
-        { x: -wTop / 2,    y: -h2 / 2 },
-        { x:  wTop / 2,    y: -h2 / 2 },
-        { x:  wBottom / 2, y:  h2 / 2 },
-        { x: -wBottom / 2, y:  h2 / 2 }
+        { x: -wTop / 2, y: -h2 / 2 },
+        { x: wTop / 2, y: -h2 / 2 },
+        { x: wBottom / 2, y: h2 / 2 },
+        { x: -wBottom / 2, y: h2 / 2 }
       ];
     }
 
@@ -226,10 +241,7 @@ function create() {
     gMat.fillStyle(0x000000, 1);
     const matScale = 0.78;
     gMat.beginPath();
-    gMat.moveTo(
-      x + points[0].x * matScale,
-      y + points[0].y * matScale
-    );
+    gMat.moveTo(x + points[0].x * matScale, y + points[0].y * matScale);
     for (let i = 1; i < points.length; i++) {
       gMat.lineTo(
         x + points[i].x * matScale,
@@ -254,20 +266,22 @@ function create() {
     });
   }
 
-  const midLeftX   = (leftOuter  + leftInner)  / 2;
-  const midRightX  = (rightOuter + rightInner) / 2;
-  const midTopY    = (topOuter   + topInner)   / 2;
-  const midBottomY = (bottomOuter+ bottomInner)/ 2;
+  const midLeftX = (leftOuter + leftInner) / 2;
+  const midRightX = (rightOuter + rightInner) / 2;
+  const midTopY = (topOuter + topInner) / 2;
+  const midBottomY = (bottomOuter + bottomInner) / 2;
 
+  // top wall frames
   const topCount = 4;
   const topStartX = leftInner + 35;
-  const topEndX   = rightInner - 35;
+  const topEndX = rightInner - 35;
   for (let i = 0; i < topCount; i++) {
     const t = topCount === 1 ? 0.5 : i / (topCount - 1);
     const x = Phaser.Math.Linear(topStartX, topEndX, t);
     addTrapezoidFrame(this, x, midTopY, "top");
   }
 
+  // right wall frames
   const rightCount = 4;
   for (let i = 0; i < rightCount; i++) {
     const t = i / (rightCount - 1);
@@ -275,14 +289,13 @@ function create() {
     addTrapezoidFrame(this, midRightX, y, "right");
   }
 
-  const leftYPositions = [
-    topInner + 55,
-    gapInnerTopY - 22
-  ];
+  // left wall frames (avoiding door)
+  const leftYPositions = [topInner + 55, gapInnerTopY - 22];
   leftYPositions.forEach((y) => {
     addTrapezoidFrame(this, midLeftX, y, "left");
   });
 
+  // bottom wall frames
   const bottomPositions = [
     leftInner + 24,
     leftInner + 90,
@@ -306,7 +319,7 @@ function create() {
   const cube = this.add.graphics();
   cube.lineStyle(3, 0xffffff, 1);
 
-  const size = 46;   // outer front square
+  const size = 46; // outer front square
   const depth = 10;
 
   const frontX = sculptureX - size / 2;
@@ -351,12 +364,12 @@ function create() {
   // ===== SCULPTURE COLLIDER (adjustable on all sides) =====
   const midSize = (size + innerSize) / 2;
 
-  const expandLeft   = 18;
-  const expandRight  = -3;
-  const expandTop    = 18;
+  const expandLeft = 18;
+  const expandRight = -3;
+  const expandTop = 18;
   const expandBottom = -3;
 
-  const colliderWidth  = midSize + expandLeft + expandRight;
+  const colliderWidth = midSize + expandLeft + expandRight;
   const colliderHeight = midSize + expandTop + expandBottom;
 
   const frontCollider = this.add.rectangle(
@@ -395,6 +408,7 @@ function create() {
   setupTouchButton("btn-b", "B");
   setupFullscreenButton();
 
+  // Safe bind for overlay click (in case overlay.js didn't load correctly)
   if (typeof artOverlayEl !== "undefined" && artOverlayEl) {
     artOverlayEl.addEventListener("click", () => {
       if (
@@ -488,13 +502,16 @@ async function loadFrameArtFromSupabase(scene) {
 function update(time, delta) {
   if (!player || !player.body) return;
 
+  // Use SAME range for prompt + interaction, so A always works
+  const PROMPT_RANGE = 80;
+  const INTERACT_RANGE = PROMPT_RANGE;
+
   const justPressedA = inputState && inputState.A && !prevA;
   const justPressedB = inputState && inputState.B && !prevB;
 
   const addArtIsOpen =
     typeof addArtOpen !== "undefined" ? addArtOpen : false;
-  const artIsOpen =
-    typeof artOpen !== "undefined" ? artOpen : false;
+  const artIsOpen = typeof artOpen !== "undefined" ? artOpen : false;
 
   // If the add-art menu is open:
   //  - A triggers the file picker
@@ -579,7 +596,7 @@ function update(time, delta) {
 
   // Prompt text
   if (promptText) {
-    if (nearestItem && nearestDist < 80) {
+    if (nearestItem && nearestDist < PROMPT_RANGE) {
       promptText.setVisible(true);
       if (nearestItem.type === "sculpture") {
         promptText.setText("Press A to inspect sculpture");
@@ -595,7 +612,7 @@ function update(time, delta) {
   }
 
   // Interaction when pressing A near something
-  if (nearestItem && nearestDist < 60 && justPressedA) {
+  if (nearestItem && nearestDist < INTERACT_RANGE && justPressedA) {
     if (nearestItem.type === "sculpture") {
       if (nearestItem.fullUrl && typeof openArtOverlay === "function") {
         openArtOverlay(nearestItem.fullUrl);
