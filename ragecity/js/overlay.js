@@ -270,32 +270,26 @@ if (addArtFileInput) {
   });
 }
 
-// ===== Auto-debug & test overlay on page load =====
+// ===== Auto-debug on page load: click the "Debug" button =====
 window.addEventListener("load", () => {
   overlayDbg("Auto-debug init on page load");
-  // mark that we're in debug mode for any other scripts
   window.__RAGECITY_DEBUG = true;
 
-  // Bump overlay z-indexes just to be extra safe visually
+  // Make sure overlays sit above the canvas
   const ao = document.getElementById("art-overlay");
   const aa = document.getElementById("add-art-overlay");
-  if (ao) {
-    ao.style.zIndex = "999999";
-  }
-  if (aa) {
-    aa.style.zIndex = "1000000";
-  }
+  if (ao) ao.style.zIndex = "999999";
+  if (aa) aa.style.zIndex = "1000000";
 
-  // Force-open an overlay so any graphics / layering issues are visible immediately
-  setTimeout(() => {
-    if (typeof openArtOverlay === "function") {
-      overlayDbg("Auto-opening test art overlay on load");
-      const testUrl =
-        SCULPTURE_FULL_URL ||
-        "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2000&q=80";
-      openArtOverlay(testUrl);
-    } else {
-      overlayDbg("openArtOverlay not defined yet on load");
-    }
-  }, 800);
+  // Try to find a button whose text includes "Debug" and click it
+  const buttons = Array.from(document.getElementsByTagName("button"));
+  const debugBtn = buttons.find((b) =>
+    /debug/i.test((b.textContent || "").trim())
+  );
+  if (debugBtn) {
+    overlayDbg('Found debug button, clicking it on load');
+    debugBtn.click();
+  } else {
+    overlayDbg('No debug button found on load');
+  }
 });
