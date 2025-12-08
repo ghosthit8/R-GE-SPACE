@@ -269,3 +269,33 @@ if (addArtFileInput) {
     }
   });
 }
+
+// ===== Auto-debug & test overlay on page load =====
+window.addEventListener("load", () => {
+  overlayDbg("Auto-debug init on page load");
+  // mark that we're in debug mode for any other scripts
+  window.__RAGECITY_DEBUG = true;
+
+  // Bump overlay z-indexes just to be extra safe visually
+  const ao = document.getElementById("art-overlay");
+  const aa = document.getElementById("add-art-overlay");
+  if (ao) {
+    ao.style.zIndex = "999999";
+  }
+  if (aa) {
+    aa.style.zIndex = "1000000";
+  }
+
+  // Force-open an overlay so any graphics / layering issues are visible immediately
+  setTimeout(() => {
+    if (typeof openArtOverlay === "function") {
+      overlayDbg("Auto-opening test art overlay on load");
+      const testUrl =
+        SCULPTURE_FULL_URL ||
+        "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2000&q=80";
+      openArtOverlay(testUrl);
+    } else {
+      overlayDbg("openArtOverlay not defined yet on load");
+    }
+  }, 800);
+});
