@@ -6,9 +6,6 @@ let wallsGroup;
 let prevA = false;
 let prevB = false;
 
-// track whether the player has moved at least once
-let hasMoved = false;
-
 function preload() {
   // Blank 1x1 black texture so frames start empty
   this.load.image(
@@ -32,28 +29,14 @@ function create() {
     if (x1 === x2 && y1 !== y2) {
       const height = Math.abs(y2 - y1);
       const centerY = (y1 + y2) / 2;
-      const wall = scene.add.rectangle(
-        x1,
-        centerY,
-        thickness,
-        height,
-        0x00ff00,
-        0
-      );
+      const wall = scene.add.rectangle(x1, centerY, thickness, height, 0x00ff00, 0);
       wall.setVisible(false);
       scene.physics.add.existing(wall, true);
       wallsGroup.add(wall);
     } else if (y1 === y2 && x1 !== x2) {
       const width = Math.abs(x2 - x1);
       const centerX = (x1 + x2) / 2;
-      const wall = scene.add.rectangle(
-        centerX,
-        y1,
-        width,
-        thickness,
-        0x00ff00,
-        0
-      );
+      const wall = scene.add.rectangle(centerX, y1, width, thickness, 0x00ff00, 0);
       wall.setVisible(false);
       scene.physics.add.existing(wall, true);
       wallsGroup.add(wall);
@@ -184,8 +167,12 @@ function create() {
   this.physics.add.collider(player, wallsGroup);
 
   // FRAMES
-  // fixed thumbnail size so layout never warps when using large images
-  const FRAME_THUMB_SIZE = 26;
+  const tex = this.textures.get("artThumb").getSourceImage();
+  const natW = tex.width;
+  const natH = tex.height;
+  const imgMaxW = 26;
+  const imgMaxH = 26;
+  const imgScale = Math.min(imgMaxW / natW, imgMaxH / natH);
   galleryFrames = [];
 
   function addTrapezoidFrame(scene2, x, y, side) {
@@ -199,30 +186,30 @@ function create() {
     if (side === "left") {
       points = [
         { x: -wBottom / 2, y: -h2 / 2 },
-        { x: wTop / 2, y: -h2 / 2 + skew },
-        { x: wTop / 2, y: h2 / 2 - skew },
-        { x: -wBottom / 2, y: h2 / 2 }
+        { x:  wTop / 2,    y: -h2 / 2 + skew },
+        { x:  wTop / 2,    y:  h2 / 2 - skew },
+        { x: -wBottom / 2, y:  h2 / 2 }
       ];
     } else if (side === "right") {
       points = [
-        { x: -wTop / 2, y: -h2 / 2 + skew },
-        { x: wBottom / 2, y: -h2 / 2 },
-        { x: wBottom / 2, y: h2 / 2 },
-        { x: -wTop / 2, y: h2 / 2 - skew }
+        { x: -wTop / 2,    y: -h2 / 2 + skew },
+        { x:  wBottom / 2, y: -h2 / 2 },
+        { x:  wBottom / 2, y:  h2 / 2 },
+        { x: -wTop / 2,    y:  h2 / 2 - skew }
       ];
     } else if (side === "top") {
       points = [
         { x: -wBottom / 2, y: -h2 / 2 },
-        { x: wBottom / 2, y: -h2 / 2 },
-        { x: wTop / 2, y: h2 / 2 },
-        { x: -wTop / 2, y: h2 / 2 }
+        { x:  wBottom / 2, y: -h2 / 2 },
+        { x:  wTop / 2,    y:  h2 / 2 },
+        { x: -wTop / 2,    y:  h2 / 2 }
       ];
     } else {
       points = [
-        { x: -wTop / 2, y: -h2 / 2 },
-        { x: wTop / 2, y: -h2 / 2 },
-        { x: wBottom / 2, y: h2 / 2 },
-        { x: -wBottom / 2, y: h2 / 2 }
+        { x: -wTop / 2,    y: -h2 / 2 },
+        { x:  wTop / 2,    y: -h2 / 2 },
+        { x:  wBottom / 2, y:  h2 / 2 },
+        { x: -wBottom / 2, y:  h2 / 2 }
       ];
     }
 
@@ -239,17 +226,22 @@ function create() {
     gMat.fillStyle(0x000000, 1);
     const matScale = 0.78;
     gMat.beginPath();
-    gMat.moveTo(x + points[0].x * matScale, y + points[0].y * matScale);
+    gMat.moveTo(
+      x + points[0].x * matScale,
+      y + points[0].y * matScale
+    );
     for (let i = 1; i < points.length; i++) {
-      gMat.lineTo(x + points[i].x * matScale, y + points[i].y * matScale);
+      gMat.lineTo(
+        x + points[i].x * matScale,
+        y + points[i].y * matScale
+      );
     }
     gMat.closePath();
     gMat.fillPath();
     gMat.strokePath();
 
     const img = scene2.add.image(x, y, "artThumb");
-    // force thumbnail display size regardless of underlying texture resolution
-    img.setDisplaySize(FRAME_THUMB_SIZE, FRAME_THUMB_SIZE);
+    img.setScale(imgScale * 0.9);
 
     galleryFrames.push({
       x,
@@ -262,14 +254,14 @@ function create() {
     });
   }
 
-  const midLeftX = (leftOuter + leftInner) / 2;
-  const midRightX = (rightOuter + rightInner) / 2;
-  const midTopY = (topOuter + topInner) / 2;
-  const midBottomY = (bottomOuter + bottomInner) / 2;
+  const midLeftX   = (leftOuter  + leftInner)  / 2;
+  const midRightX  = (rightOuter + rightInner) / 2;
+  const midTopY    = (topOuter   + topInner)   / 2;
+  const midBottomY = (bottomOuter+ bottomInner)/ 2;
 
   const topCount = 4;
   const topStartX = leftInner + 35;
-  const topEndX = rightInner - 35;
+  const topEndX   = rightInner - 35;
   for (let i = 0; i < topCount; i++) {
     const t = topCount === 1 ? 0.5 : i / (topCount - 1);
     const x = Phaser.Math.Linear(topStartX, topEndX, t);
@@ -283,7 +275,10 @@ function create() {
     addTrapezoidFrame(this, midRightX, y, "right");
   }
 
-  const leftYPositions = [topInner + 55, gapInnerTopY - 22];
+  const leftYPositions = [
+    topInner + 55,
+    gapInnerTopY - 22
+  ];
   leftYPositions.forEach((y) => {
     addTrapezoidFrame(this, midLeftX, y, "left");
   });
@@ -311,7 +306,7 @@ function create() {
   const cube = this.add.graphics();
   cube.lineStyle(3, 0xffffff, 1);
 
-  const size = 46; // outer front square
+  const size = 46;   // outer front square
   const depth = 10;
 
   const frontX = sculptureX - size / 2;
@@ -343,22 +338,25 @@ function create() {
   );
   inner.setStrokeStyle(2, 0x39ff14, 1);
 
+  const sculptureFullUrl =
+    typeof SCULPTURE_FULL_URL !== "undefined" ? SCULPTURE_FULL_URL : null;
+
   sculptureSpot = {
     x: sculptureX,
     y: sculptureY,
-    fullUrl: SCULPTURE_FULL_URL,
+    fullUrl: sculptureFullUrl,
     type: "sculpture"
   };
 
   // ===== SCULPTURE COLLIDER (adjustable on all sides) =====
   const midSize = (size + innerSize) / 2;
 
-  const expandLeft = 18;
-  const expandRight = -3;
-  const expandTop = 18;
+  const expandLeft   = 18;
+  const expandRight  = -3;
+  const expandTop    = 18;
   const expandBottom = -3;
 
-  const colliderWidth = midSize + expandLeft + expandRight;
+  const colliderWidth  = midSize + expandLeft + expandRight;
   const colliderHeight = midSize + expandTop + expandBottom;
 
   const frontCollider = this.add.rectangle(
@@ -397,9 +395,15 @@ function create() {
   setupTouchButton("btn-b", "B");
   setupFullscreenButton();
 
-  if (artOverlayEl) {
+  if (typeof artOverlayEl !== "undefined" && artOverlayEl) {
     artOverlayEl.addEventListener("click", () => {
-      if (artOpen) closeArtOverlay();
+      if (
+        typeof artOpen !== "undefined" &&
+        typeof closeArtOverlay === "function" &&
+        artOpen
+      ) {
+        closeArtOverlay();
+      }
     });
   }
 
@@ -449,7 +453,8 @@ async function loadFrameArtFromSupabase(scene) {
 
     data.forEach((row) => {
       const { frame_index, storage_path } = row;
-      const { data: pub } = supa.storage
+      const { data: pub } = supa
+        .storage
         .from("ragecity-art")
         .getPublicUrl(storage_path);
       const publicUrl = pub?.publicUrl;
@@ -469,8 +474,6 @@ async function loadFrameArtFromSupabase(scene) {
             if (game.textures.exists(texKey)) game.textures.remove(texKey);
             game.textures.addImage(texKey, img);
             frame.img.setTexture(texKey);
-            // keep thumbnails fixed-size even after remote load
-            frame.img.setDisplaySize(FRAME_THUMB_SIZE, FRAME_THUMB_SIZE);
             frame.fullUrl = publicUrl;
           }
         };
@@ -485,19 +488,26 @@ async function loadFrameArtFromSupabase(scene) {
 function update(time, delta) {
   if (!player || !player.body) return;
 
-  const justPressedA = inputState.A && !prevA;
-  const justPressedB = inputState.B && !prevB;
+  const justPressedA = inputState && inputState.A && !prevA;
+  const justPressedB = inputState && inputState.B && !prevB;
+
+  const addArtIsOpen =
+    typeof addArtOpen !== "undefined" ? addArtOpen : false;
+  const artIsOpen =
+    typeof artOpen !== "undefined" ? artOpen : false;
 
   // If the add-art menu is open:
   //  - A triggers the file picker
   //  - B closes the menu
-  if (addArtOpen) {
+  if (addArtIsOpen) {
     if (justPressedA) {
       if (typeof triggerAddArtFilePicker === "function") {
         triggerAddArtFilePicker();
       }
     } else if (justPressedB) {
-      closeAddArtMenu();
+      if (typeof closeAddArtMenu === "function") {
+        closeAddArtMenu();
+      }
     }
     prevA = inputState.A;
     prevB = inputState.B;
@@ -505,9 +515,13 @@ function update(time, delta) {
   }
 
   // If we're viewing art, keep existing fullscreen / close behavior
-  if (artOpen) {
-    if (justPressedA) toggleArtFullscreen();
-    if (justPressedB) closeArtOverlay();
+  if (artIsOpen) {
+    if (justPressedA && typeof toggleArtFullscreen === "function") {
+      toggleArtFullscreen();
+    }
+    if (justPressedB && typeof closeArtOverlay === "function") {
+      closeArtOverlay();
+    }
     prevA = inputState.A;
     prevB = inputState.B;
     return;
@@ -526,9 +540,6 @@ function update(time, delta) {
     const len = Math.sqrt(vx * vx + vy * vy);
     vx = (vx / len) * speed;
     vy = (vy / len) * speed;
-
-    // mark that the player has moved at least once
-    hasMoved = true;
   }
 
   player.body.setVelocity(vx, vy);
@@ -568,8 +579,7 @@ function update(time, delta) {
 
   // Prompt text
   if (promptText) {
-    // do not show prompts until player has moved at least once
-    if (hasMoved && nearestItem && nearestDist < 80) {
+    if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
       if (nearestItem.type === "sculpture") {
         promptText.setText("Press A to inspect sculpture");
@@ -587,16 +597,20 @@ function update(time, delta) {
   // Interaction when pressing A near something
   if (nearestItem && nearestDist < 60 && justPressedA) {
     if (nearestItem.type === "sculpture") {
-      if (nearestItem.fullUrl) {
+      if (nearestItem.fullUrl && typeof openArtOverlay === "function") {
         openArtOverlay(nearestItem.fullUrl);
       }
     } else if (nearestItem.type === "painting") {
       if (nearestItem.fullUrl) {
         // has art → view it
-        openArtOverlay(nearestItem.fullUrl);
+        if (typeof openArtOverlay === "function") {
+          openArtOverlay(nearestItem.fullUrl);
+        }
       } else {
         // empty frame → open add-art menu
-        openAddArtMenu(nearestItem.frameIndex);
+        if (typeof openAddArtMenu === "function") {
+          openAddArtMenu(nearestItem.frameIndex);
+        }
       }
     }
   }
