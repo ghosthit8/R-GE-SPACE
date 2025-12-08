@@ -69,6 +69,13 @@ body {
   margin-right: auto;
 }
 
+/* Ensure the Phaser canvas sits inside the container with low z-index */
+#game-container canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
 #game-fallback {
   position: absolute;
   inset: 0;
@@ -87,8 +94,10 @@ body {
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 5;
+  z-index: 1000; /* above canvas */
   flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
 }
 
 #art-overlay-img {
@@ -108,7 +117,7 @@ body {
   display: block;
 }
 
-/* NEW: Add-art overlay styles */
+/* Add-art overlay styles */
 #add-art-overlay {
   position: absolute;
   inset: 0;
@@ -116,7 +125,9 @@ body {
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 6;
+  z-index: 1100; /* above art-overlay */
+  opacity: 0;
+  pointer-events: none;
 }
 
 #add-art-menu {
@@ -265,4 +276,39 @@ body {
     width: 56px;
     height: 56px;
   }
+}
+
+/* ===== DEBUG VISUALS FOR LAYERING ===== */
+#game-container,
+#game-container canvas,
+#art-overlay,
+#add-art-overlay,
+#art-overlay-img,
+#art-overlay-msg {
+  outline-offset: -1px;
+}
+
+#game-container {
+  outline: 2px solid rgba(0, 255, 0, 0.3);
+}
+
+#game-container canvas {
+  outline: 2px solid rgba(0, 128, 255, 0.5);
+}
+
+#art-overlay {
+  outline: 3px solid rgba(255, 0, 0, 0.7);
+}
+
+#add-art-overlay {
+  outline: 3px solid rgba(255, 255, 0, 0.7);
+}
+
+#art-overlay-img {
+  outline: 3px solid rgba(255, 0, 255, 0.7);
+}
+
+#art-overlay-msg {
+  background: rgba(0, 0, 0, 0.6);
+  outline: 2px dashed rgba(0, 255, 255, 0.8);
 }
