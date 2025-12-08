@@ -1,13 +1,18 @@
 // overlay.js
+
 // Full-size artwork URLs for frames & sculpture
 // Paintings start empty; sculpture still has a default piece.
 const PAINTING_FULL_URL = null;
 const SCULPTURE_FULL_URL =
   "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=2000&q=80";
 
+// Local + global flags so cityScene.js can see them
 let artOpen = false;
 let addArtOpen = false;
 let addArtFrameIndex = null;
+
+window.artOpen = false;
+window.addArtOpen = false;
 
 const artOverlayEl = document.getElementById("art-overlay");
 const artImg = document.getElementById("art-overlay-img");
@@ -47,6 +52,8 @@ function openArtOverlay(imageUrl) {
   overlayDbg("openArtOverlay called with URL: " + imageUrl);
 
   artOpen = true;
+  window.artOpen = true;
+
   if (artImg) {
     artImg.src = imageUrl;
     artImg.style.opacity = "1";
@@ -65,6 +72,8 @@ function openArtOverlay(imageUrl) {
 function closeArtOverlay() {
   overlayDbg("closeArtOverlay called");
   artOpen = false;
+  window.artOpen = false;
+
   if (artOverlayEl) {
     artOverlayEl.style.opacity = "0";
     artOverlayEl.style.display = "none";
@@ -87,6 +96,7 @@ function closeArtOverlay() {
 function toggleArtFullscreen() {
   overlayDbg("toggleArtFullscreen called");
   if (artMsg) artMsg.style.display = "none";
+
   if (
     document.fullscreenElement === artImg ||
     document.webkitFullscreenElement === artImg
@@ -105,6 +115,8 @@ function openAddArtMenu(frameIndex) {
   overlayDbg("openAddArtMenu for frameIndex=" + frameIndex);
   addArtFrameIndex = frameIndex;
   addArtOpen = true;
+  window.addArtOpen = true;
+
   if (addArtOverlayEl) {
     addArtOverlayEl.style.display = "flex";
     addArtOverlayEl.style.opacity = "1";
@@ -115,7 +127,9 @@ function openAddArtMenu(frameIndex) {
 function closeAddArtMenu() {
   overlayDbg("closeAddArtMenu called");
   addArtOpen = false;
+  window.addArtOpen = false;
   addArtFrameIndex = null;
+
   if (addArtOverlayEl) {
     addArtOverlayEl.style.display = "none";
     addArtOverlayEl.style.opacity = "0";
@@ -287,9 +301,9 @@ window.addEventListener("load", () => {
     /debug/i.test((b.textContent || "").trim())
   );
   if (debugBtn) {
-    overlayDbg('Found debug button, clicking it on load');
+    overlayDbg("Found debug button, clicking it on load");
     debugBtn.click();
   } else {
-    overlayDbg('No debug button found on load');
+    overlayDbg("No debug button found on load");
   }
 });
