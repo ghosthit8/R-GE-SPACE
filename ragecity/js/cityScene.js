@@ -6,8 +6,8 @@ let wallsGroup;
 let prevA = false;
 let prevB = false;
 
-// All frame thumbnails will be forced to this size
-const FRAME_THUMB_SIZE = 26;
+// track whether the player has moved at least once
+let hasMoved = false;
 
 function preload() {
   // Blank 1x1 black texture so frames start empty
@@ -32,14 +32,28 @@ function create() {
     if (x1 === x2 && y1 !== y2) {
       const height = Math.abs(y2 - y1);
       const centerY = (y1 + y2) / 2;
-      const wall = scene.add.rectangle(x1, centerY, thickness, height, 0x00ff00, 0);
+      const wall = scene.add.rectangle(
+        x1,
+        centerY,
+        thickness,
+        height,
+        0x00ff00,
+        0
+      );
       wall.setVisible(false);
       scene.physics.add.existing(wall, true);
       wallsGroup.add(wall);
     } else if (y1 === y2 && x1 !== x2) {
       const width = Math.abs(x2 - x1);
       const centerX = (x1 + x2) / 2;
-      const wall = scene.add.rectangle(centerX, y1, width, thickness, 0x00ff00, 0);
+      const wall = scene.add.rectangle(
+        centerX,
+        y1,
+        width,
+        thickness,
+        0x00ff00,
+        0
+      );
       wall.setVisible(false);
       scene.physics.add.existing(wall, true);
       wallsGroup.add(wall);
@@ -169,7 +183,9 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
-  // FRAMES (fixed-size thumbnails)
+  // FRAMES
+  // fixed thumbnail size so layout never warps when using large images
+  const FRAME_THUMB_SIZE = 26;
   galleryFrames = [];
 
   function addTrapezoidFrame(scene2, x, y, side) {
@@ -183,30 +199,30 @@ function create() {
     if (side === "left") {
       points = [
         { x: -wBottom / 2, y: -h2 / 2 },
-        { x:  wTop / 2,    y: -h2 / 2 + skew },
-        { x:  wTop / 2,    y:  h2 / 2 - skew },
-        { x: -wBottom / 2, y:  h2 / 2 }
+        { x: wTop / 2, y: -h2 / 2 + skew },
+        { x: wTop / 2, y: h2 / 2 - skew },
+        { x: -wBottom / 2, y: h2 / 2 }
       ];
     } else if (side === "right") {
       points = [
-        { x: -wTop / 2,    y: -h2 / 2 + skew },
-        { x:  wBottom / 2, y: -h2 / 2 },
-        { x:  wBottom / 2, y:  h2 / 2 },
-        { x: -wTop / 2,    y:  h2 / 2 - skew }
+        { x: -wTop / 2, y: -h2 / 2 + skew },
+        { x: wBottom / 2, y: -h2 / 2 },
+        { x: wBottom / 2, y: h2 / 2 },
+        { x: -wTop / 2, y: h2 / 2 - skew }
       ];
     } else if (side === "top") {
       points = [
         { x: -wBottom / 2, y: -h2 / 2 },
-        { x:  wBottom / 2, y: -h2 / 2 },
-        { x:  wTop / 2,    y:  h2 / 2 },
-        { x: -wTop / 2,    y:  h2 / 2 }
+        { x: wBottom / 2, y: -h2 / 2 },
+        { x: wTop / 2, y: h2 / 2 },
+        { x: -wTop / 2, y: h2 / 2 }
       ];
     } else {
       points = [
-        { x: -wTop / 2,    y: -h2 / 2 },
-        { x:  wTop / 2,    y: -h2 / 2 },
-        { x:  wBottom / 2, y:  h2 / 2 },
-        { x: -wBottom / 2, y:  h2 / 2 }
+        { x: -wTop / 2, y: -h2 / 2 },
+        { x: wTop / 2, y: -h2 / 2 },
+        { x: wBottom / 2, y: h2 / 2 },
+        { x: -wBottom / 2, y: h2 / 2 }
       ];
     }
 
@@ -223,22 +239,16 @@ function create() {
     gMat.fillStyle(0x000000, 1);
     const matScale = 0.78;
     gMat.beginPath();
-    gMat.moveTo(
-      x + points[0].x * matScale,
-      y + points[0].y * matScale
-    );
+    gMat.moveTo(x + points[0].x * matScale, y + points[0].y * matScale);
     for (let i = 1; i < points.length; i++) {
-      gMat.lineTo(
-        x + points[i].x * matScale,
-        y + points[i].y * matScale
-      );
+      gMat.lineTo(x + points[i].x * matScale, y + points[i].y * matScale);
     }
     gMat.closePath();
     gMat.fillPath();
     gMat.strokePath();
 
     const img = scene2.add.image(x, y, "artThumb");
-    // 🔹 Keep thumbnails a fixed size so big uploads don't blow up layout
+    // force thumbnail display size regardless of underlying texture resolution
     img.setDisplaySize(FRAME_THUMB_SIZE, FRAME_THUMB_SIZE);
 
     galleryFrames.push({
@@ -252,14 +262,14 @@ function create() {
     });
   }
 
-  const midLeftX   = (leftOuter  + leftInner)  / 2;
-  const midRightX  = (rightOuter + rightInner) / 2;
-  const midTopY    = (topOuter   + topInner)   / 2;
-  const midBottomY = (bottomOuter+ bottomInner)/ 2;
+  const midLeftX = (leftOuter + leftInner) / 2;
+  const midRightX = (rightOuter + rightInner) / 2;
+  const midTopY = (topOuter + topInner) / 2;
+  const midBottomY = (bottomOuter + bottomInner) / 2;
 
   const topCount = 4;
   const topStartX = leftInner + 35;
-  const topEndX   = rightInner - 35;
+  const topEndX = rightInner - 35;
   for (let i = 0; i < topCount; i++) {
     const t = topCount === 1 ? 0.5 : i / (topCount - 1);
     const x = Phaser.Math.Linear(topStartX, topEndX, t);
@@ -273,10 +283,7 @@ function create() {
     addTrapezoidFrame(this, midRightX, y, "right");
   }
 
-  const leftYPositions = [
-    topInner + 55,
-    gapInnerTopY - 22
-  ];
+  const leftYPositions = [topInner + 55, gapInnerTopY - 22];
   leftYPositions.forEach((y) => {
     addTrapezoidFrame(this, midLeftX, y, "left");
   });
@@ -304,7 +311,7 @@ function create() {
   const cube = this.add.graphics();
   cube.lineStyle(3, 0xffffff, 1);
 
-  const size = 46;   // outer front square
+  const size = 46; // outer front square
   const depth = 10;
 
   const frontX = sculptureX - size / 2;
@@ -346,12 +353,12 @@ function create() {
   // ===== SCULPTURE COLLIDER (adjustable on all sides) =====
   const midSize = (size + innerSize) / 2;
 
-  const expandLeft   = 18;
-  const expandRight  = -3;
-  const expandTop    = 18;
+  const expandLeft = 18;
+  const expandRight = -3;
+  const expandTop = 18;
   const expandBottom = -3;
 
-  const colliderWidth  = midSize + expandLeft + expandRight;
+  const colliderWidth = midSize + expandLeft + expandRight;
   const colliderHeight = midSize + expandTop + expandBottom;
 
   const frontCollider = this.add.rectangle(
@@ -442,8 +449,7 @@ async function loadFrameArtFromSupabase(scene) {
 
     data.forEach((row) => {
       const { frame_index, storage_path } = row;
-      const { data: pub } = supa
-        .storage
+      const { data: pub } = supa.storage
         .from("ragecity-art")
         .getPublicUrl(storage_path);
       const publicUrl = pub?.publicUrl;
@@ -463,7 +469,7 @@ async function loadFrameArtFromSupabase(scene) {
             if (game.textures.exists(texKey)) game.textures.remove(texKey);
             game.textures.addImage(texKey, img);
             frame.img.setTexture(texKey);
-            // 🔹 Again, clamp to fixed thumbnail size
+            // keep thumbnails fixed-size even after remote load
             frame.img.setDisplaySize(FRAME_THUMB_SIZE, FRAME_THUMB_SIZE);
             frame.fullUrl = publicUrl;
           }
@@ -520,6 +526,9 @@ function update(time, delta) {
     const len = Math.sqrt(vx * vx + vy * vy);
     vx = (vx / len) * speed;
     vy = (vy / len) * speed;
+
+    // mark that the player has moved at least once
+    hasMoved = true;
   }
 
   player.body.setVelocity(vx, vy);
@@ -559,7 +568,8 @@ function update(time, delta) {
 
   // Prompt text
   if (promptText) {
-    if (nearestItem && nearestDist < 80) {
+    // do not show prompts until player has moved at least once
+    if (hasMoved && nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
       if (nearestItem.type === "sculpture") {
         promptText.setText("Press A to inspect sculpture");
