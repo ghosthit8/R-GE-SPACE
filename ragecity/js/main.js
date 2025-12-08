@@ -1,4 +1,4 @@
-// Phaser game config + boot
+// Phaser game config + boot for RageCity
 
 const GAME_WIDTH = 960;
 const GAME_HEIGHT = 540;
@@ -7,7 +7,7 @@ const config = {
   type: Phaser.AUTO,
   parent: "game-container",
 
-  // Base game resolution
+  // Base resolution of the playfield (keep this 16:9)
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
 
@@ -15,11 +15,11 @@ const config = {
   backgroundColor: "#111122",
 
   scale: {
-    // <-- KEY CHANGE: use FIT instead of RESIZE
+    // IMPORTANT: keep proportions, don’t stretch.
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
 
-    // tell the scaler what "native" size is
+    // Tell the scaler what our “native” size is
     width: GAME_WIDTH,
     height: GAME_HEIGHT
   },
@@ -32,7 +32,7 @@ const config = {
     }
   },
 
-  // CityScene functions come from cityScene.js
+  // Scene functions are defined in CityScene.js
   scene: { preload, create, update }
 };
 
