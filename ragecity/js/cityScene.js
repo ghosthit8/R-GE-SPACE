@@ -15,245 +15,204 @@ function preload() {
 }
 
 function create() {
-  const width = this.scale.width;
-  const height = this.scale.height;
+  const w = this.scale.width;
+  const h = this.scale.height;
 
-  // Center playable area
-  const margin = 20;
-  const playWidth = width - margin * 2;
-  const playHeight = height - margin * 2;
+  const marginX = 40;
+  const marginY = 40;
 
-  // Outer boundaries
-  const leftOuter = margin;
-  const rightOuter = margin + playWidth;
-  const topOuter = margin;
-  const bottomOuter = margin + playHeight;
+  const leftOuter = marginX;
+  const rightOuter = w - marginX;
+  const topOuter = marginY;
+  const bottomOuter = h - marginY;
 
-  // Inner gallery room box
-  const boxMargin = 60;
-  const leftInner = leftOuter + boxMargin;
-  const rightInner = rightOuter - boxMargin;
-  const topInner = topOuter + boxMargin;
-  const bottomInner = bottomOuter - boxMargin;
+  const corridorWidth = 32;
+  const leftInner = leftOuter + corridorWidth;
+  const rightInner = rightOuter - corridorWidth;
+  const topInner = topOuter + corridorWidth;
+  const bottomInner = bottomOuter - corridorWidth;
 
-  // Create a group for walls so it's easier to debug collisions
-  wallsGroup = this.physics.add.staticGroup();
+  const doorWidth = 90;
 
-  // Outer neon rectangle (visual only)
-  const outerRect = this.add.graphics();
-  outerRect.lineStyle(4, 0x00ff00, 1);
-  outerRect.strokeRect(
+  const graphics = this.add.graphics();
+  graphics.lineStyle(6, 0x39ff14, 1);
+  graphics.strokeRect(
     leftOuter,
     topOuter,
     rightOuter - leftOuter,
     bottomOuter - topOuter
   );
 
-  // Inner neon rectangle
-  const innerRect = this.add.graphics();
-  innerRect.lineStyle(4, 0xffffff, 1);
-  innerRect.strokeRect(
+  graphics.lineStyle(6, 0xffffff, 1);
+  graphics.strokeRect(
     leftInner,
     topInner,
     rightInner - leftInner,
     bottomInner - topInner
   );
 
-  // Collider walls on inner box (we'll make small corridors later)
-  const wallThickness = 4;
+  graphics.lineStyle(6, 0x39ff14, 1);
+  graphics.beginPath();
+  graphics.moveTo(leftOuter, bottomOuter);
+  graphics.lineTo(leftInner, topInner);
+  graphics.strokePath();
 
-  function addWall(x, y, width, height, label) {
-    const wall = wallsGroup.create(x + width / 2, y + height / 2, null);
-    wall.body.setSize(width, height);
-    wall.body.immovable = true;
-    wall.label = label;
-  }
+  const midY = (topInner + bottomInner) / 2;
+  const ledgeOffsetY = 46;
+  const ledgeShort = 90;
+  const ledgeLong = 170;
 
-  // Top inner
-  addWall(leftInner, topInner, rightInner - leftInner, wallThickness, "top");
-  // Bottom inner
-  addWall(
-    leftInner,
-    bottomInner - wallThickness,
-    rightInner - leftInner,
-    wallThickness,
-    "bottom"
-  );
-  // Left inner
-  addWall(leftInner, topInner, wallThickness, bottomInner - topInner, "left");
-  // Right inner
-  addWall(
-    rightInner - wallThickness,
-    topInner,
-    wallThickness,
-    bottomInner - topInner,
-    "right"
-  );
+  graphics.lineStyle(6, 0xffffff, 1);
+  graphics.beginPath();
+  graphics.moveTo(leftOuter, midY - ledgeOffsetY);
+  graphics.lineTo(leftOuter + ledgeShort, midY - ledgeOffsetY);
+  graphics.strokePath();
 
-  // Adding corridors for sculpture box
-  const corridorWidth = 40;
-  const corridorOffset = 80;
+  graphics.beginPath();
+  graphics.moveTo(leftOuter, midY + ledgeOffsetY);
+  graphics.lineTo(leftOuter + ledgeLong, midY + ledgeOffsetY);
+  graphics.strokePath();
 
-  // Top corridor
-  addWall(
-    leftInner + corridorOffset,
-    topInner,
-    corridorWidth,
-    wallThickness,
-    "topCorridor"
-  );
-  // Bottom corridor
-  addWall(
-    rightInner - corridorWidth - corridorOffset,
-    bottomInner - wallThickness,
-    corridorWidth,
-    wallThickness,
-    "bottomCorridor"
+  const centerX = (leftInner + rightInner) / 2;
+  const centerY = (topInner + bottomInner) / 2;
+  const sculptureSizeOuter = 170;
+  const sculptureSizeInner = 140;
+
+  graphics.lineStyle(6, 0xffffff, 1);
+  graphics.strokeRect(
+    centerX - sculptureSizeOuter / 2,
+    centerY - sculptureSizeOuter / 2,
+    sculptureSizeOuter,
+    sculptureSizeOuter
   );
 
-  // Neon diagonal from top-left inner corner to bottom-left outer corner
-  const diag = this.add.graphics();
-  diag.lineStyle(4, 0x00ff00, 1);
-  diag.beginPath();
-  diag.moveTo(leftInner, topInner);
-  diag.lineTo(leftOuter, bottomOuter);
-  diag.strokePath();
-
-  // Ledges
-  const ledges = this.add.graphics();
-  ledges.lineStyle(4, 0xffffff, 1);
-  const ledgeLength = leftInner - leftOuter;
-  const upperLedgeY = (topInner + bottomInner) / 2 - 40;
-  const lowerLedgeY = (topInner + bottomInner) / 2 + 40;
-  ledges.beginPath();
-  ledges.moveTo(leftOuter, upperLedgeY);
-  ledges.lineTo(leftOuter + ledgeLength, upperLedgeY);
-  ledges.moveTo(leftOuter, lowerLedgeY);
-  ledges.lineTo(leftOuter + ledgeLength, lowerLedgeY);
-  ledges.strokePath();
-
-  // Sculpture box in the middle
-  const sculptureBox = this.add.graphics();
-  sculptureBox.lineStyle(4, 0xffffff, 1);
-  const sculptureSize = 120;
-  const sculptureX = (leftInner + rightInner) / 2;
-  const sculptureY = (topInner + bottomInner) / 2;
-  const halfSize = sculptureSize / 2;
-  sculptureBox.strokeRect(
-    sculptureX - halfSize,
-    sculptureY - halfSize,
-    sculptureSize,
-    sculptureSize
+  graphics.lineStyle(6, 0x39ff14, 1);
+  graphics.strokeRect(
+    centerX - sculptureSizeInner / 2,
+    centerY - sculptureSizeInner / 2,
+    sculptureSizeInner,
+    sculptureSizeInner
   );
 
-  // Collider for sculpture box (only around the square we want)
-  const sculptureColliderSize = 80;
-  const sculptureColliderHalf = sculptureColliderSize / 2;
-  const sculptureColliderX = sculptureX;
-  const sculptureColliderY = sculptureY + 10; // Slightly lower
-  addWall(
-    sculptureColliderX - sculptureColliderHalf,
-    sculptureColliderY - sculptureColliderHalf,
-    sculptureColliderSize,
-    sculptureColliderSize,
-    "sculptureBox"
-  );
+  const frameSize = 70;
+  const framePadding = 12;
 
-  // Create frames and their hit areas
+  const framePositions = [
+    { x: centerX, y: topInner - frameSize / 2 - 22, kind: "painting" },
+    { x: leftInner - frameSize / 2 - 22, y: topInner + (bottomInner - topInner) / 4, kind: "painting" },
+    { x: leftInner - frameSize / 2 - 22, y: topInner + (bottomInner - topInner) * 0.75, kind: "painting" },
+    { x: centerX, y: bottomInner + frameSize / 2 + 22, kind: "painting" },
+    { x: rightInner + frameSize / 2 + 22, y: topInner + (bottomInner - topInner) / 4, kind: "painting" },
+    { x: rightInner + frameSize / 2 + 22, y: topInner + (bottomInner - topInner) * 0.75, kind: "painting" },
+    { x: centerX, y: centerY, kind: "sculpture" }
+  ];
+
   galleryFrames = [];
-  const frameSize = 80;
-  const frameOffset = 20;
+  sculptureSpot = null;
 
-  // Helper to create a frame with a collider
-  function createFrame(x, y, isPainting, frameIndex) {
-    const frameRect = this.add.graphics();
-    frameRect.lineStyle(4, 0xffffff, 1);
-    frameRect.strokeRect(
-      x - frameSize / 2,
-      y - frameSize / 2,
+  framePositions.forEach((pos, idx) => {
+    const frameGraphics = this.add.graphics();
+    frameGraphics.lineStyle(4, 0x39ff14, 1);
+    frameGraphics.strokeRect(
+      pos.x - frameSize / 2,
+      pos.y - frameSize / 2,
       frameSize,
       frameSize
     );
 
-    const img = this.add
-      .image(x, y, "artThumb")
-      .setDisplaySize(frameSize - frameOffset, frameSize - frameOffset);
+    const diag = this.add.graphics();
+    diag.lineStyle(2, 0x39ff14, 1);
+    diag.beginPath();
+    diag.moveTo(pos.x - frameSize / 2, pos.y + frameSize / 2);
+    diag.lineTo(pos.x + frameSize / 2, pos.y - frameSize / 2);
+    diag.strokePath();
 
-    const frameCollider = wallsGroup.create(x, y, null);
-    frameCollider.body.setSize(frameSize, frameSize);
-    frameCollider.body.immovable = true;
-    frameCollider.isFrame = true;
-    frameCollider.frameIndex = frameIndex;
-    frameCollider.isPainting = isPainting;
+    const thumb = this.add
+      .image(pos.x, pos.y, "artThumb")
+      .setDisplaySize(frameSize - framePadding, frameSize - framePadding);
 
-    const frameData = {
-      frameIndex,
-      img,
-      isPainting,
-      fullUrl: null
+    const item = {
+      id: idx,
+      kind: pos.kind,
+      sprite: thumb,
+      fullUrl: pos.kind === "sculpture" ? SCULPTURE_FULL_URL : PAINTING_FULL_URL
     };
 
-    galleryFrames.push(frameData);
+    galleryFrames.push(item);
 
-    if (!isPainting) {
-      sculptureSpot = frameData;
+    if (pos.kind === "sculpture") {
+      sculptureSpot = item;
+    }
+  });
+
+  player = this.physics.add
+    .image(leftInner + 100, bottomInner - 50, "artThumb")
+    .setDisplaySize(26, 26);
+
+  player.setTint(0x39ff14);
+
+  wallsGroup = this.physics.add.staticGroup();
+  const scene = this;
+
+  function addWallRect(x1, y1, x2, y2, thickness = 14) {
+    if (x1 === x2 && y1 !== y2) {
+      const height = Math.abs(y2 - y1);
+      const centerY = (y1 + y2) / 2;
+      const wall = scene.add.rectangle(x1, centerY, thickness, height, 0x00ff00, 0);
+      wall.setVisible(false);
+      scene.physics.add.existing(wall, true);
+      wallsGroup.add(wall);
+    } else if (y1 === y2 && x1 !== x2) {
+      const width = Math.abs(x2 - x1);
+      const centerX = (x1 + x2) / 2;
+      const wall = scene.add.rectangle(centerX, y1, width, thickness, 0x00ff00, 0);
+      wall.setVisible(false);
+      scene.physics.add.existing(wall, true);
+      wallsGroup.add(wall);
     }
   }
 
-  // Sculpture frame (center)
-  createFrame.call(this, sculptureX, sculptureY, false, 0);
+  addWallRect(leftInner, topInner, rightInner, topInner);
+  addWallRect(leftInner, bottomInner, rightInner, bottomInner);
+  addWallRect(leftInner, topInner, leftInner, bottomInner);
+  addWallRect(rightInner, topInner, rightInner, bottomInner);
 
-  // Paintings on the walls
-  const paintingYTop = topInner + frameSize;
-  const paintingYBottom = bottomInner - frameSize;
-  const paintingXLeft = leftInner + frameSize;
-  const paintingXRight = rightInner - frameSize;
+  const sculptureColliderSize = 90;
+  const sculptureCollider = scene.add.rectangle(
+    centerX,
+    centerY,
+    sculptureColliderSize,
+    sculptureColliderSize,
+    0x00ff00,
+    0
+  );
+  sculptureCollider.setVisible(false);
+  scene.physics.add.existing(sculptureCollider, true);
+  wallsGroup.add(sculptureCollider);
 
-  let frameIndex = 1;
+  const corridorOffsetY = 110;
 
-  // Top row frames
-  for (let i = 0; i < 3; i++) {
-    const x = leftInner + (i + 1) * ((rightInner - leftInner) / 4);
-    createFrame.call(this, x, paintingYTop, true, frameIndex++);
-  }
+  const bottomBlockLeftX = leftInner + 60;
+  const bottomBlockRightX = rightInner - 60;
 
-  // Bottom row frames
-  for (let i = 0; i < 3; i++) {
-    const x = leftInner + (i + 1) * ((rightInner - leftInner) / 4);
-    createFrame.call(this, x, paintingYBottom, true, frameIndex++);
-  }
-
-  // Left wall frames
-  createFrame.call(this, paintingXLeft, (topInner + bottomInner) / 2, true, frameIndex++);
-
-  // Right wall frames
-  createFrame.call(this, paintingXRight, (topInner + bottomInner) / 2, true, frameIndex++);
-
-  // Player
-  player = this.physics.add
-    .rectangle((leftInner + rightInner) / 2, bottomInner - 40, 20, 20, 0x00ff00)
-    .setOrigin(0.5, 0.5);
+  addWallRect(bottomBlockLeftX, bottomInner, bottomBlockLeftX, bottomInner + 80);
+  addWallRect(bottomBlockRightX, bottomInner, bottomBlockRightX, bottomInner + 80);
 
   this.physics.add.collider(player, wallsGroup);
 
-  // Prompt text
   promptText = this.add
-    .text(width / 2, bottomOuter + 30, "", {
+    .text(w / 2, bottomOuter + 20, "", {
       fontFamily: "monospace",
-      fontSize: "16px",
-      color: "#00ff00",
-      align: "center"
+      fontSize: "20px",
+      color: "#39ff14"
     })
     .setOrigin(0.5, 0)
-    .setScrollFactor(0)
-    .setDepth(1000);
+    .setDepth(10);
 
   promptText.setVisible(false);
 
-  // Expose galleryFrames to window for overlay.js
   window.galleryFrames = galleryFrames;
 
-  // Load existing art URLs from Supabase for each frame
   loadRageCityFramesFromSupabase();
 }
 
@@ -282,7 +241,7 @@ async function loadRageCityFramesFromSupabase() {
       const frameIndex = row.frame_index;
       const storagePath = row.storage_path;
 
-      const frame = galleryFrames.find((f) => f.frameIndex === frameIndex);
+      const frame = galleryFrames.find((f) => f.id === frameIndex);
       if (!frame) continue;
 
       const { data: pub } = supa.storage
@@ -305,7 +264,7 @@ async function loadRageCityFramesFromSupabase() {
           game.textures.addImage(texKey, img);
         }
 
-        frame.img.setTexture(texKey);
+        frame.sprite.setTexture(texKey);
         frame.fullUrl = publicUrl;
       };
       img.src = publicUrl;
@@ -342,9 +301,7 @@ function update(time, delta) {
         triggerAddArtFilePicker();
       }
     } else if (justPressedB) {
-      if (typeof closeAddArtMenu === "function") {
-        closeAddArtMenu();
-      }
+      closeAddArtMenu();
     }
 
     prevA = inputState.A;
@@ -371,51 +328,49 @@ function update(time, delta) {
     return;
   }
 
-  // Movement
-  const speed = 200;
+  const speed = 250;
   let vx = 0;
   let vy = 0;
 
-  if (inputState.left) vx -= speed;
-  if (inputState.right) vx += speed;
-  if (inputState.up) vy -= speed;
-  if (inputState.down) vy += speed;
+  if (inputState.left) vx -= 1;
+  if (inputState.right) vx += 1;
+  if (inputState.up) vy -= 1;
+  if (inputState.down) vy += 1;
+
+  if (vx !== 0 || vy !== 0) {
+    const len = Math.sqrt(vx * vx + vy * vy);
+    vx = (vx / len) * speed;
+    vy = (vy / len) * speed;
+  }
 
   player.body.setVelocity(vx, vy);
-  player.body.velocity.normalize().scale(speed);
 
-  // Find nearest frame/sculpture
   let nearestItem = null;
   let nearestDist = Infinity;
 
-  const playerX = player.x;
-  const playerY = player.y;
-
-  for (const frame of galleryFrames) {
-    const dx = frame.img.x - playerX;
-    const dy = frame.img.y - playerY;
+  // Look for nearest frame/sculpture
+  for (const item of galleryFrames) {
+    const dx = item.sprite.x - player.x;
+    const dy = item.sprite.y - player.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-
     if (dist < nearestDist) {
       nearestDist = dist;
-      nearestItem = frame;
+      nearestItem = item;
     }
   }
 
-  // Show prompt if close enough
-  if (nearestItem && nearestDist < 60) {
-    if (nearestItem.isPainting) {
-      if (nearestItem.fullUrl) {
-        promptText.setText("Press A to view art");
-      } else {
-        promptText.setText("Press A to add art");
-      }
-    } else {
-      // sculpture
+  if (nearestItem && nearestDist < 90) {
+    if (nearestItem.kind === "sculpture") {
       if (nearestItem.fullUrl) {
         promptText.setText("Press A to inspect sculpture");
       } else {
         promptText.setText("Press A to add sculpture art");
+      }
+    } else {
+      if (nearestItem.fullUrl) {
+        promptText.setText("Press A to view art");
+      } else {
+        promptText.setText("Press A to add art");
       }
     }
     promptText.setVisible(true);
@@ -423,22 +378,11 @@ function update(time, delta) {
     promptText.setVisible(false);
   }
 
-  // Interaction when pressing A near something
-  if (nearestItem && nearestDist < 60 && justPressedA) {
-    if (!nearestItem.isPainting) {
-      // Sculpture
-      if (nearestItem.fullUrl) {
-        openArtOverlay(nearestItem.fullUrl);
-      } else {
-        openAddArtMenu(nearestItem.frameIndex);
-      }
+  if (nearestItem && nearestDist < 90 && justPressedA) {
+    if (nearestItem.fullUrl) {
+      openArtOverlay(nearestItem.fullUrl);
     } else {
-      // Painting
-      if (nearestItem.fullUrl) {
-        openArtOverlay(nearestItem.fullUrl);
-      } else {
-        openAddArtMenu(nearestItem.frameIndex);
-      }
+      openAddArtMenu(nearestItem.id);
     }
   }
 
