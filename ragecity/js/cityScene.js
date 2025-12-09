@@ -6,7 +6,12 @@ let wallsGroup;
 let prevA = false;
 let prevB = false;
 
+// NEW: for per-painting uploads
+let paintingUploadInput = null;
+let currentPaintingIndex = null;
+
 function preload() {
+  // You can leave this or remove it; it's no longer used for the frames.
   this.load.image(
     "artThumb",
     "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1000&q=80"
@@ -165,13 +170,8 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
-  // FRAMES
-  const tex = this.textures.get("artThumb").getSourceImage();
-  const natW = tex.width;
-  const natH = tex.height;
-  const imgMaxW = 26;
-  const imgMaxH = 26;
-  const imgScale = Math.min(imgMaxW / natW, imgMaxH / natH);
+  // FRAMES (now start BLACK, no thumbnail art)
+  const imgDisplaySize = 26; // how big user art thumbnails should be
   galleryFrames = [];
 
   function addTrapezoidFrame(scene2, x, y, side) {
@@ -212,6 +212,7 @@ function create() {
       ];
     }
 
+    // Outer neon frame
     g.beginPath();
     g.moveTo(x + points[0].x, y + points[0].y);
     for (let i = 1; i < points.length; i++) {
@@ -220,6 +221,7 @@ function create() {
     g.closePath();
     g.strokePath();
 
+    // Black mat inside
     const gMat = scene2.add.graphics();
     gMat.lineStyle(2, 0x1a8f3a, 1);
     gMat.fillStyle(0x000000, 1);
@@ -239,8 +241,9 @@ function create() {
     gMat.fillPath();
     gMat.strokePath();
 
-    const img = scene2.add.image(x, y, "artThumb");
-    img.setScale(imgScale * 0.9);
+    // NOTE: we NO LONGER create an image here.
+    // Art is only added after the user uploads.
+    const img = null;
 
     galleryFrames.push({
       x,
@@ -249,7 +252,7 @@ function create() {
       frameGfx: g,
       matGfx: gMat,
       img,
-      fullUrl: PAINTING_FULL_URL
+      fullUrl: null // will hold a dataURL once user uploads art
     });
   }
 
@@ -393,6 +396,43 @@ function create() {
       if (artOpen) closeArtOverlay();
     });
   }
+
+  // ====== NEW: hook the hidden <input type="file" id="paintingUpload"> ======
+  paintingUploadInput = document.getElementById("paintingUpload");
+  if (paintingUploadInput) {
+    paintingUploadInput.addEventListener("change", function (e) {
+      const file = this.files && this.files[0];
+      if (!file || currentPaintingIndex === null) return;
+
+      const reader = new FileReader();
+      reader.onload = function (ev) {
+        const dataUrl = ev.target.result;
+        const frame = galleryFrames[currentPaintingIndex];
+        if (!frame) return;
+
+        const texKey = `userPainting-${currentPaintingIndex}`;
+
+        if (scene.textures.exists(texKey)) {
+          scene.textures.remove(texKey);
+        }
+
+        scene.textures.addBase64(texKey, dataUrl);
+
+        if (frame.img) {
+          frame.img.destroy();
+        }
+
+        const img = scene.add.image(frame.x, frame.y, texKey);
+        img.setDisplaySize(imgDisplaySize, imgDisplaySize);
+        frame.img = img;
+        frame.fullUrl = dataUrl;
+      };
+
+      reader.readAsDataURL(file);
+      // reset so same file can be chosen again if needed
+      this.value = "";
+    });
+  }
 }
 
 function setupFullscreenButton() {
@@ -452,14 +492,16 @@ function update(time, delta) {
   let nearestItem = null;
   let nearestDist = Infinity;
 
-  galleryFrames.forEach((f) => {
+  // find closest painting (track index so we know which one to edit)
+  galleryFrames.forEach((f, index) => {
     const d = Phaser.Math.Distance.Between(player.x, player.y, f.x, f.y);
     if (d < nearestDist) {
       nearestDist = d;
-      nearestItem = { type: "painting", fullUrl: f.fullUrl };
+      nearestItem = { type: "painting", index };
     }
   });
 
+  // compare sculpture
   if (sculptureSpot) {
     const d = Phaser.Math.Distance.Between(
       player.x,
@@ -469,25 +511,46 @@ function update(time, delta) {
     );
     if (d < nearestDist) {
       nearestDist = d;
-      nearestItem = { type: "sculpture", fullUrl: sculptureSpot.fullUrl };
+      nearestItem = {
+        type: "sculpture",
+        fullUrl: sculptureSpot.fullUrl
+      };
     }
   }
 
   if (promptText) {
     if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
-      promptText.setText(
-        nearestItem.type === "sculpture"
-          ? "Press A to inspect sculpture"
-          : "Press A to view art"
-      );
+      if (nearestItem.type === "sculpture") {
+        promptText.setText("Press A to inspect sculpture");
+      } else {
+        const frame = galleryFrames[nearestItem.index];
+        const hasArt = frame && !!frame.fullUrl;
+        promptText.setText(
+          hasArt ? "Press A to view art" : "Press A to add art"
+        );
+      }
     } else {
       promptText.setVisible(false);
     }
   }
 
   if (nearestItem && nearestDist < 60 && justPressedA) {
-    openArtOverlay(nearestItem.fullUrl);
+    if (nearestItem.type === "sculpture") {
+      if (nearestItem.fullUrl) openArtOverlay(nearestItem.fullUrl);
+    } else {
+      currentPaintingIndex = nearestItem.index;
+      const frame = galleryFrames[currentPaintingIndex];
+      if (!frame) return;
+
+      if (!frame.fullUrl) {
+        // no art yet → open file picker
+        if (paintingUploadInput) paintingUploadInput.click();
+      } else {
+        // has art → view it
+        openArtOverlay(frame.fullUrl);
+      }
+    }
   }
 
   prevA = inputState.A;
