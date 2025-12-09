@@ -25,14 +25,38 @@ function closeArtOverlay() {
 
 function toggleArtFullscreen() {
   if (artMsg) artMsg.style.display = "none";
-  if (
-    document.fullscreenElement === artImg ||
-    document.webkitFullscreenElement === artImg
-  ) {
-    if (document.exitFullscreen) document.exitFullscreen();
+
+  const fsEl =
+    document.fullscreenElement || document.webkitFullscreenElement;
+
+  if (fsEl === artImg) {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    }
   } else {
     if (artImg.requestFullscreen) {
       artImg.requestFullscreen();
+    } else if (artImg.webkitRequestFullscreen) {
+      artImg.webkitRequestFullscreen();
     }
   }
 }
+
+// NEW: if art is open in fullscreen, clicking anywhere exits fullscreen
+document.addEventListener("click", function () {
+  if (!artOpen) return;
+
+  const fsEl =
+    document.fullscreenElement || document.webkitFullscreenElement;
+
+  // Only react when the art image itself is what's fullscreen
+  if (fsEl === artImg) {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    }
+  }
+});
