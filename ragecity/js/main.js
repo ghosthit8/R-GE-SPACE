@@ -1,16 +1,13 @@
-// Phaser game config + boot for Rage City
+// Phaser game config + boot
 
-const rageCityConfig = {
+const config = {
   type: Phaser.AUTO,
   width: 960,
   height: 540,
-  // IMPORTANT: this must match the div in your HTML
-  // <div id="phaser-container"></div>
-  parent: "phaser-container",
+  parent: "game-container",   // IMPORTANT: matches <div id="game-container">
   pixelArt: false,
   backgroundColor: "#111122",
   scale: {
-    // RESIZE lets the canvas stretch to fill the green frame
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
@@ -21,15 +18,7 @@ const rageCityConfig = {
       debug: false
     }
   },
-  // These come from CityScene.js
-  scene: {
-    preload,
-    create,
-    update
-  }
+  scene: { preload, create, update }   // from CityScene.js
 };
 
-// Wait for DOM loaded so the container div exists
-window.addEventListener("load", () => {
-  new Phaser.Game(rageCityConfig);
-});
+new Phaser.Game(config);
