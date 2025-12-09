@@ -27,12 +27,13 @@ function setupKeyboard(scene) {
       case "KeyS":
         inputState.down = true;
         break;
-      case "KeyZ":
-      case "Enter":
+      case "KeyJ":
         inputState.A = true;
         break;
-      case "KeyX":
+      case "KeyK":
         inputState.B = true;
+        break;
+      default:
         break;
     }
   });
@@ -55,24 +56,47 @@ function setupKeyboard(scene) {
       case "KeyS":
         inputState.down = false;
         break;
-      case "KeyZ":
-      case "Enter":
+      case "KeyJ":
         inputState.A = false;
         break;
-      case "KeyX":
+      case "KeyK":
         inputState.B = false;
+        break;
+      default:
         break;
     }
   });
 }
 
+// Attach on-screen controls to the shared inputState
 function setupTouchButton(id, key) {
   const el = document.getElementById(id);
   if (!el) return;
 
-  function setPressed(pressed) {
-    inputState[key] = pressed;
-  }
+  const setPressed = (pressed) => {
+    switch (key) {
+      case "left":
+        inputState.left = pressed;
+        break;
+      case "right":
+        inputState.right = pressed;
+        break;
+      case "up":
+        inputState.up = pressed;
+        break;
+      case "down":
+        inputState.down = pressed;
+        break;
+      case "A":
+        inputState.A = pressed;
+        break;
+      case "B":
+        inputState.B = pressed;
+        break;
+      default:
+        break;
+    }
+  };
 
   function start(e) {
     e.preventDefault();
