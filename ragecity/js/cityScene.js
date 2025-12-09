@@ -5,12 +5,8 @@ let sculptureSpot = null;
 let wallsGroup;
 let prevA = false;
 let prevB = false;
-let paintingUploadInput = null;
-let currentPaintingIndex = null;
 
 function preload() {
-  // You can remove this if you really want no remote loads at all.
-  // Kept in case you use it elsewhere.
   this.load.image(
     "artThumb",
     "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1000&q=80"
@@ -18,115 +14,40 @@ function preload() {
 }
 
 function create() {
-  const { width, height } = this.scale.gameSize;
+  const fb = document.getElementById("game-fallback");
+  if (fb) fb.style.display = "none";
 
-  // Physics
-  this.physics.world.setBounds(0, 0, width, height);
+  const w = this.scale.width;
+  const h = this.scale.height;
+
+  this.physics.world.setBounds(0, 0, w, h);
   wallsGroup = this.physics.add.staticGroup();
+  const scene = this;
 
-  // Player (green square)
-  player = this.add.rectangle(width / 2, height - 80, 20, 20, 0x00ff00);
-  this.physics.add.existing(player);
-  player.body.setCollideWorldBounds(true);
-
-  // Prompt text
-  promptText = this.add
-    .text(width / 2, height - 40, 'Press A to view art', {
-      fontSize: "18px",
-      color: "#00ff55",
-      fontFamily: "monospace"
-    })
-    .setOrigin(0.5, 0.5);
-  promptText.setVisible(false);
-
-  // Scene reference globally so other scripts can call into it
-  window.rageCityScene = this;
-
-  // Build the room, frames, sculpture, etc.
-  buildRoomAndFrames.call(this);
-
-  // Collider with walls
-  this.physics.add.collider(player, wallsGroup);
-
-  // Handle resizing
-  this.scale.on("resize", (gameSize) => {
-    if (!gameSize) return;
-    const w = gameSize.width;
-    const h = gameSize.height;
-    this.physics.world.setBounds(0, 0, w, h);
-    if (promptText) promptText.setPosition(w / 2, h - 40);
-  });
-
-  // Hook up hidden <input type="file" id="paintingUpload"> for user art
-  paintingUploadInput = document.getElementById("paintingUpload");
-  if (paintingUploadInput) {
-    paintingUploadInput.addEventListener("change", function (e) {
-      const file = this.files && this.files[0];
-      if (!file || currentPaintingIndex === null) return;
-
-      const reader = new FileReader();
-      reader.onload = function (ev) {
-        const dataUrl = ev.target.result;
-        const frame = galleryFrames[currentPaintingIndex];
-        if (!frame || !window.rageCityScene) return;
-
-        const sceneRef = window.rageCityScene;
-        const texKey = `userPainting-${currentPaintingIndex}`;
-
-        // Remove previous texture for this slot if there was one
-        if (sceneRef.textures.exists(texKey)) {
-          sceneRef.textures.remove(texKey);
-        }
-
-        sceneRef.textures.addBase64(texKey, dataUrl);
-
-        // Remove previous thumbnail sprite if it existed
-        if (frame.img) {
-          frame.img.destroy();
-        }
-
-        // Create a small thumbnail inside the frame
-        const img = sceneRef.add.image(frame.x, frame.y, texKey);
-        img.setDisplaySize(26, 26);
-        frame.img = img;
-
-        // Store full data URL for fullscreen overlay
-        frame.fullUrl = dataUrl;
-      };
-
-      reader.readAsDataURL(file);
-
-      // Reset so the same file can be chosen again later if needed
-      this.value = "";
-    });
+  function addWallRect(x1, y1, x2, y2, thickness = 14) {
+    if (x1 === x2 && y1 !== y2) {
+      const height = Math.abs(y2 - y1);
+      const centerY = (y1 + y2) / 2;
+      const wall = scene.add.rectangle(x1, centerY, thickness, height, 0x00ff00, 0);
+      wall.setVisible(false);
+      scene.physics.add.existing(wall, true);
+      wallsGroup.add(wall);
+    } else if (y1 === y2 && x1 !== x2) {
+      const width = Math.abs(x2 - x1);
+      const centerX = (x1 + x2) / 2;
+      const wall = scene.add.rectangle(centerX, y1, width, thickness, 0x00ff00, 0);
+      wall.setVisible(false);
+      scene.physics.add.existing(wall, true);
+      wallsGroup.add(wall);
+    }
   }
 
-  // Controls + fullscreen
-  setupKeyboard(this);
-  setupTouchButton("btn-left", "left");
-  setupTouchButton("btn-right", "right");
-  setupTouchButton("btn-up", "up");
-  setupTouchButton("btn-down", "down");
-  setupTouchButton("btn-A", "A");
-  setupTouchButton("btn-B", "B");
-
-  const fullscreenBtn = document.getElementById("fullscreen-btn");
-  if (fullscreenBtn) {
-    fullscreenBtn.addEventListener("click", () => {
-      const container = document.getElementById("phaser-container");
-      if (!container) return;
-      if (!document.fullscreenElement) {
-        container.requestFullscreen?.();
-      } else {
-        document.exitFullscreen?.();
-      }
-    });
+  function addWallBlock(x, y, size = 16) {
+    const wall = scene.add.rectangle(x, y, size, size, 0x00ff00, 0);
+    wall.setVisible(false);
+    scene.physics.add.existing(wall, true);
+    wallsGroup.add(wall);
   }
-}
-
-function buildRoomAndFrames() {
-  const w = this.scale.gameSize.width;
-  const h = this.scale.gameSize.height;
 
   // ==== ROOM GEOMETRY ====
   const marginX = 60;
@@ -143,138 +64,54 @@ function buildRoomAndFrames() {
   const topInner = topOuter + corridorWidth;
   const bottomInner = bottomOuter - corridorWidth;
 
-  // Gaps for the corridor (bottom side)
-  const gapOuterWidth = 100;
-  const gapInnerWidth = gapOuterWidth - 40;
+  const doorWidth = 90;
 
-  const gapOuterCenterX = (leftOuter + rightOuter) / 2;
-  const gapOuterLeftX = gapOuterCenterX - gapOuterWidth / 2;
-  const gapOuterRightX = gapOuterCenterX + gapOuterWidth / 2;
+  const doorCenterY = topInner + (bottomInner - topInner) * 0.65;
+  const gapOuterTopY = doorCenterY - doorWidth / 2;
+  const gapOuterBotY = doorCenterY + doorWidth / 2;
 
-  const gapInnerCenterX = gapOuterCenterX + 8;
-  const gapInnerLeftX = gapInnerCenterX - gapInnerWidth / 2;
-  const gapInnerRightX = gapInnerCenterX + gapInnerWidth / 2;
+  const gapInnerTopY = doorCenterY - doorWidth / 2;
+  const gapInnerBotY = doorCenterY + doorWidth / 2;
 
-  const gapOuterTopY = bottomOuter - corridorWidth;
-  const gapOuterBotY = bottomOuter;
-  const gapInnerTopY = bottomInner;
-  const gapInnerBotY = bottomInner + corridorWidth - 4;
+  // Outer wall
+  const wallOuter = this.add.graphics();
+  wallOuter.lineStyle(4, 0xffffff, 1);
+  wallOuter.beginPath();
+  wallOuter.moveTo(leftOuter, topOuter);
+  wallOuter.lineTo(rightOuter, topOuter);
+  wallOuter.lineTo(rightOuter, bottomOuter);
+  wallOuter.lineTo(leftOuter, bottomOuter);
+  wallOuter.lineTo(leftOuter, gapOuterBotY);
+  wallOuter.moveTo(leftOuter, gapOuterTopY);
+  wallOuter.lineTo(leftOuter, topOuter);
+  wallOuter.strokePath();
 
-  // WALL LINES
-  const wallGraphics = this.add.graphics();
-  wallGraphics.lineStyle(3, 0xffffff, 1);
+  // Inner wall
+  const wallInner = this.add.graphics();
+  wallInner.lineStyle(4, 0xffffff, 1);
+  wallInner.beginPath();
+  wallInner.moveTo(leftInner, topInner);
+  wallInner.lineTo(rightInner, topInner);
+  wallInner.lineTo(rightInner, bottomInner);
+  wallInner.lineTo(leftInner, bottomInner);
+  wallInner.lineTo(leftInner, gapInnerBotY);
+  wallInner.moveTo(leftInner, gapInnerTopY);
+  wallInner.lineTo(leftInner, topInner);
+  wallInner.strokePath();
 
-  // Outer rectangle
-  wallGraphics.strokeRect(
-    leftOuter,
-    topOuter,
-    rightOuter - leftOuter,
-    bottomOuter - topOuter
-  );
-
-  // Inner rectangle
-  wallGraphics.strokeRect(
-    leftInner,
-    topInner,
-    rightInner - leftInner,
-    bottomInner - topInner
-  );
-
-  // Remove corridor sections
-  wallGraphics.clear();
-
-  // Outer with gap
-  wallGraphics.beginPath();
-  wallGraphics.moveTo(leftOuter, topOuter);
-  wallGraphics.lineTo(rightOuter, topOuter);
-  wallGraphics.lineTo(rightOuter, bottomOuter);
-  wallGraphics.lineTo(gapOuterRightX, bottomOuter);
-  wallGraphics.moveTo(gapOuterLeftX, bottomOuter);
-  wallGraphics.lineTo(leftOuter, bottomOuter);
-  wallGraphics.lineTo(leftOuter, topOuter);
-  wallGraphics.closePath();
-  wallGraphics.strokePath();
-
-  // Inner with gap
-  wallGraphics.beginPath();
-  wallGraphics.moveTo(leftInner, topInner);
-  wallGraphics.lineTo(rightInner, topInner);
-  wallGraphics.lineTo(rightInner, bottomInner);
-  wallGraphics.lineTo(gapInnerRightX, bottomInner);
-  wallGraphics.moveTo(gapInnerLeftX, bottomInner);
-  wallGraphics.lineTo(leftInner, bottomInner);
-  wallGraphics.lineTo(leftInner, topInner);
-  wallGraphics.closePath();
-  wallGraphics.strokePath();
-
-  // Diagonals in corners
-  const cornerOffset = 18;
+  // Diagonals
   const diag = this.add.graphics();
-  diag.lineStyle(3, 0xffffff, 1);
-
-  const corners = [
-    { outer: [leftOuter, topOuter], inner: [leftInner, topInner] },
-    { outer: [rightOuter, topOuter], inner: [rightInner, topInner] },
-    { outer: [rightOuter, bottomOuter], inner: [rightInner, bottomInner] },
-    { outer: [leftOuter, bottomOuter], inner: [leftInner, bottomInner] }
-  ];
-
-  corners.forEach((c) => {
-    const [ox, oy] = c.outer;
-    const [ix, iy] = c.inner;
-    const leftOuter = ox;
-    const topOuter = oy;
-    const rightOuter = ox;
-    const bottomOuter = oy;
-    const leftInner = ix;
-    const topInner = iy;
-    const rightInner = ix;
-    const bottomInner = iy;
-
-    const g = this.add.graphics();
-    g.lineStyle(3, 0xffffff, 1);
-
-    const points = [
-      { x: ox, y: oy },
-      { x: ix, y: iy }
-    ];
-
-    g.beginPath();
-    g.moveTo(points[0].x, points[0].y);
-    g.lineTo(points[1].x, points[1].y);
-    g.strokePath();
-  });
-
-  // Barrier colliders for walls (outer & inner rectangles + corridor sides)
-  const addWallRect = (x1, y1, x2, y2) => {
-    const midX = (x1 + x2) / 2;
-    const midY = (y1 + y2) / 2;
-    const width = Math.abs(x2 - x1) || 4;
-    const height = Math.abs(y2 - y1) || 4;
-    const wall = wallsGroup.create(midX, midY, null);
-    wall.body.setSize(width, height);
-    wall.body.setImmovable(true);
-  };
-
-  // Outer walls
-  addWallRect(leftOuter, topOuter, rightOuter, topOuter);
-  addWallRect(rightOuter, topOuter, rightOuter, bottomOuter);
-  addWallRect(leftOuter, bottomOuter, rightOuter, bottomOuter);
-  addWallRect(leftOuter, topOuter, leftOuter, gapOuterTopY);
-  addWallRect(leftOuter, gapOuterBotY, leftOuter, bottomOuter);
-
-  // Inner walls
-  addWallRect(leftInner, topInner, rightInner, topInner);
-  addWallRect(rightInner, topInner, rightInner, bottomInner);
-  addWallRect(leftInner, bottomInner, rightInner, bottomInner);
-  addWallRect(leftInner, topInner, leftInner, gapInnerTopY);
-  addWallRect(leftInner, gapInnerBotY, leftInner, bottomInner);
-
-  // Corridor vertical edges
-  addWallRect(gapOuterLeftX, gapOuterTopY, gapOuterLeftX, gapOuterBotY);
-  addWallRect(gapOuterRightX, gapOuterTopY, gapOuterRightX, gapOuterBotY);
-  addWallRect(gapInnerLeftX, gapInnerTopY, gapInnerLeftX, gapInnerBotY);
-  addWallRect(gapInnerRightX, gapInnerTopY, gapInnerRightX, gapInnerBotY);
+  diag.lineStyle(4, 0xffffff, 1);
+  diag.beginPath();
+  diag.moveTo(leftOuter, topOuter);
+  diag.lineTo(leftInner, topInner);
+  diag.moveTo(rightOuter, topOuter);
+  diag.lineTo(rightInner, topInner);
+  diag.moveTo(rightOuter, bottomOuter);
+  diag.lineTo(rightInner, bottomInner);
+  diag.moveTo(leftOuter, bottomOuter);
+  diag.lineTo(leftInner, bottomInner);
+  diag.strokePath();
 
   // Ledges
   const ledges = this.add.graphics();
@@ -289,79 +126,174 @@ function buildRoomAndFrames() {
   ledges.lineTo(leftOuter + ledgeLength, lowerLedgeY);
   ledges.strokePath();
 
-  // ==== GALLERY FRAMES (all start black, no thumbnails) ====
+  // WALL COLLIDERS
+  addWallRect(leftOuter, topOuter, rightOuter, topOuter);
+  addWallRect(rightOuter, topOuter, rightOuter, bottomOuter);
+  addWallRect(leftOuter, bottomOuter, rightOuter, bottomOuter);
+  addWallRect(leftOuter, topOuter, leftOuter, gapOuterTopY);
+  addWallRect(leftOuter, gapOuterBotY, leftOuter, bottomOuter);
+
+  addWallRect(leftInner, topInner, rightInner, topInner);
+  addWallRect(rightInner, topInner, rightInner, bottomInner);
+  addWallRect(leftInner, bottomInner, rightInner, bottomInner);
+  addWallRect(leftInner, topInner, leftInner, gapInnerTopY);
+  addWallRect(leftInner, gapInnerBotY, leftInner, bottomInner);
+
+  addWallRect(leftOuter, upperLedgeY, leftOuter + ledgeLength, upperLedgeY);
+  addWallRect(leftOuter, lowerLedgeY, leftOuter + ledgeLength, lowerLedgeY);
+
+  const steps = 6;
+  for (let i = 0; i <= steps; i++) {
+    let t = i / steps;
+    let x = Phaser.Math.Linear(leftOuter, leftInner, t);
+    let y = Phaser.Math.Linear(topOuter, topInner, t);
+    addWallBlock(x, y, 14);
+    x = Phaser.Math.Linear(rightOuter, rightInner, t);
+    y = Phaser.Math.Linear(topOuter, topInner, t);
+    addWallBlock(x, y, 14);
+    x = Phaser.Math.Linear(rightOuter, rightInner, t);
+    y = Phaser.Math.Linear(bottomOuter, bottomInner, t);
+    addWallBlock(x, y, 14);
+    x = Phaser.Math.Linear(leftOuter, leftInner, t);
+    y = Phaser.Math.Linear(bottomOuter, bottomInner, t);
+    addWallBlock(x, y, 14);
+  }
+
+  // Player
+  player = this.add.rectangle(leftOuter - 20, doorCenterY, 20, 20, 0x39ff14);
+  this.physics.add.existing(player);
+  player.body.setCollideWorldBounds(true);
+  this.physics.add.collider(player, wallsGroup);
+
+  // FRAMES
+  const tex = this.textures.get("artThumb").getSourceImage();
+  const natW = tex.width;
+  const natH = tex.height;
+  const imgMaxW = 26;
+  const imgMaxH = 26;
+  const imgScale = Math.min(imgMaxW / natW, imgMaxH / natH);
   galleryFrames = [];
 
-  const frameThickness = 3;
-  const matInset = 6;
-  const frameSize = 32;
+  function addTrapezoidFrame(scene2, x, y, side) {
+    const g = scene2.add.graphics();
+    g.lineStyle(3, 0x39ff14, 1);
+    const wTop = 18;
+    const wBottom = 28;
+    const h2 = 26;
+    const skew = 5;
+    let points;
+    if (side === "left") {
+      points = [
+        { x: -wBottom / 2, y: -h2 / 2 },
+        { x:  wTop / 2,    y: -h2 / 2 + skew },
+        { x:  wTop / 2,    y:  h2 / 2 - skew },
+        { x: -wBottom / 2, y:  h2 / 2 }
+      ];
+    } else if (side === "right") {
+      points = [
+        { x: -wTop / 2,    y: -h2 / 2 + skew },
+        { x:  wBottom / 2, y: -h2 / 2 },
+        { x:  wBottom / 2, y:  h2 / 2 },
+        { x: -wTop / 2,    y:  h2 / 2 - skew }
+      ];
+    } else if (side === "top") {
+      points = [
+        { x: -wBottom / 2, y: -h2 / 2 },
+        { x:  wBottom / 2, y: -h2 / 2 },
+        { x:  wTop / 2,    y:  h2 / 2 },
+        { x: -wTop / 2,    y:  h2 / 2 }
+      ];
+    } else {
+      points = [
+        { x: -wTop / 2,    y: -h2 / 2 },
+        { x:  wTop / 2,    y: -h2 / 2 },
+        { x:  wBottom / 2, y:  h2 / 2 },
+        { x: -wBottom / 2, y:  h2 / 2 }
+      ];
+    }
 
-  const makeFrame = (x, y, side) => {
-    // Frame outline
-    const g = this.add.graphics();
-    g.lineStyle(frameThickness, 0xffffff, 1);
-    g.strokeRect(
-      x - frameSize / 2,
-      y - frameSize / 2,
-      frameSize,
-      frameSize
-    );
+    g.beginPath();
+    g.moveTo(x + points[0].x, y + points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      g.lineTo(x + points[i].x, y + points[i].y);
+    }
+    g.closePath();
+    g.strokePath();
 
-    // Black mat (inner filled square)
-    const gMat = this.add.graphics();
-    gMat.lineStyle(1, 0x00ff55, 0.6);
+    const gMat = scene2.add.graphics();
+    gMat.lineStyle(2, 0x1a8f3a, 1);
     gMat.fillStyle(0x000000, 1);
-    gMat.fillRect(
-      x - frameSize / 2 + matInset,
-      y - frameSize / 2 + matInset,
-      frameSize - matInset * 2,
-      frameSize - matInset * 2
+    const matScale = 0.78;
+    gMat.beginPath();
+    gMat.moveTo(
+      x + points[0].x * matScale,
+      y + points[0].y * matScale
     );
-    gMat.strokeRect(
-      x - frameSize / 2 + matInset,
-      y - frameSize / 2 + matInset,
-      frameSize - matInset * 2,
-      frameSize - matInset * 2
-    );
+    for (let i = 1; i < points.length; i++) {
+      gMat.lineTo(
+        x + points[i].x * matScale,
+        y + points[i].y * matScale
+      );
+    }
+    gMat.closePath();
+    gMat.fillPath();
+    gMat.strokePath();
 
-    // No thumbnail yet — img will be created after the user uploads.
+    const img = scene2.add.image(x, y, "artThumb");
+    img.setScale(imgScale * 0.9);
+
     galleryFrames.push({
       x,
       y,
       side,
       frameGfx: g,
       matGfx: gMat,
-      img: null,
-      fullUrl: null // will hold a data URL after upload
+      img,
+      fullUrl: PAINTING_FULL_URL
     });
-  };
-
-  // Distribute frames around the outer corridor walls
-  const spacing = 70;
-
-  // Top wall frames
-  for (let x = leftInner + spacing; x < rightInner - spacing; x += spacing) {
-    makeFrame(x, topInner + 16, "top");
   }
 
-  // Bottom wall frames
-  for (let x = leftInner + spacing; x < rightInner - spacing; x += spacing) {
-    if (x < gapInnerLeftX - spacing || x > gapInnerRightX + spacing) {
-      makeFrame(x, bottomInner - 16, "bottom");
-    }
+  const midLeftX   = (leftOuter  + leftInner)  / 2;
+  const midRightX  = (rightOuter + rightInner) / 2;
+  const midTopY    = (topOuter   + topInner)   / 2;
+  const midBottomY = (bottomOuter+ bottomInner)/ 2;
+
+  const topCount = 4;
+  const topStartX = leftInner + 35;
+  const topEndX   = rightInner - 35;
+  for (let i = 0; i < topCount; i++) {
+    const t = topCount === 1 ? 0.5 : i / (topCount - 1);
+    const x = Phaser.Math.Linear(topStartX, topEndX, t);
+    addTrapezoidFrame(this, x, midTopY, "top");
   }
 
-  // Left wall frames
-  for (let y = topInner + spacing; y < bottomInner - spacing; y += spacing) {
-    makeFrame(leftInner + 16, y, "left");
+  const rightCount = 4;
+  for (let i = 0; i < rightCount; i++) {
+    const t = i / (rightCount - 1);
+    const y = Phaser.Math.Linear(topInner + 40, bottomInner - 40, t);
+    addTrapezoidFrame(this, midRightX, y, "right");
   }
 
-  // Right wall frames
-  for (let y = topInner + spacing; y < bottomInner - spacing; y += spacing) {
-    makeFrame(rightInner - 16, y, "right");
-  }
+  const leftYPositions = [
+    topInner + 55,
+    gapInnerTopY - 22
+  ];
+  leftYPositions.forEach((y) => {
+    addTrapezoidFrame(this, midLeftX, y, "left");
+  });
 
-  // ==== SCULPTURE CUBE (can also display art if you want later) ====
+  const bottomPositions = [
+    leftInner + 24,
+    leftInner + 90,
+    (leftInner + rightInner) / 2,
+    rightInner - 90,
+    rightInner - 24
+  ];
+  bottomPositions.forEach((x) => {
+    addTrapezoidFrame(this, x, midBottomY, "bottom");
+  });
+
+  // ===== SCULPTURE CUBE =====
   const centerX = (leftOuter + rightOuter) / 2;
   const centerY = (topOuter + bottomOuter) / 2;
   const sculptureX = centerX + 35;
@@ -369,20 +301,121 @@ function buildRoomAndFrames() {
 
   const cube = this.add.graphics();
   cube.lineStyle(3, 0xffffff, 1);
-  const s = 40;
-  cube.strokeRect(sculptureX - s / 2, sculptureY - s / 2, s, s);
-  cube.strokeRect(sculptureX - s / 4, sculptureY - s / 4, s / 2, s / 2);
 
-  // collider for sculpture
-  const sculptureCollider = wallsGroup.create(sculptureX, sculptureY, null);
-  sculptureCollider.body.setSize(s, s);
-  sculptureCollider.body.setImmovable(true);
+  const size = 46;   // outer front square
+  const depth = 10;
+
+  const frontX = sculptureX - size / 2;
+  const frontY = sculptureY - size / 2;
+  cube.strokeRect(frontX, frontY, size, size);
+
+  const backX = frontX - depth;
+  const backY = frontY - depth;
+  cube.strokeRect(backX, backY, size, size);
+
+  cube.beginPath();
+  cube.moveTo(frontX, frontY);
+  cube.lineTo(backX, backY);
+  cube.moveTo(frontX + size, frontY);
+  cube.lineTo(backX + size, backY);
+  cube.moveTo(frontX, frontY + size);
+  cube.lineTo(backX, backY + size);
+  cube.moveTo(frontX + size, frontY + size);
+  cube.lineTo(backX + size, backY + size);
+  cube.strokePath();
+
+  const innerSize = 22; // inner green
+  const inner = this.add.rectangle(
+    sculptureX,
+    sculptureY,
+    innerSize,
+    innerSize,
+    0x000000
+  );
+  inner.setStrokeStyle(2, 0x39ff14, 1);
 
   sculptureSpot = {
     x: sculptureX,
     y: sculptureY,
-    fullUrl: null // can set later if you want sculpture art upload too
+    fullUrl: SCULPTURE_FULL_URL,
+    type: "sculpture"
   };
+
+  // ===== SCULPTURE COLLIDER (adjustable on all sides) =====
+  const midSize = (size + innerSize) / 2;
+
+  const expandLeft   = 18;
+  const expandRight  = -3;
+  const expandTop    = 18;
+  const expandBottom = -3;
+
+  const colliderWidth  = midSize + expandLeft + expandRight;
+  const colliderHeight = midSize + expandTop + expandBottom;
+
+  const frontCollider = this.add.rectangle(
+    sculptureX + (expandRight - expandLeft) / 2,
+    sculptureY + (expandBottom - expandTop) / 2,
+    colliderWidth,
+    colliderHeight,
+    0x00ff00,
+    0
+  );
+  frontCollider.setVisible(false);
+  this.physics.add.existing(frontCollider, true);
+  wallsGroup.add(frontCollider);
+
+  // prompt text
+  promptText = this.add.text(w / 2, h - 40, "", {
+    fontFamily:
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontSize: "14px",
+    color: "#39ff14"
+  });
+  promptText.setOrigin(0.5);
+  promptText.setVisible(false);
+
+  this.scale.on("resize", (gameSize) => {
+    promptText.setPosition(gameSize.width / 2, gameSize.height - 40);
+  });
+
+  // controls + fullscreen
+  setupKeyboard(this);
+  setupTouchButton("btn-left", "left");
+  setupTouchButton("btn-right", "right");
+  setupTouchButton("btn-up", "up");
+  setupTouchButton("btn-down", "down");
+  setupTouchButton("btn-a", "A");
+  setupTouchButton("btn-b", "B");
+  setupFullscreenButton();
+
+  if (artOverlayEl) {
+    artOverlayEl.addEventListener("click", () => {
+      if (artOpen) closeArtOverlay();
+    });
+  }
+}
+
+function setupFullscreenButton() {
+  const btn = document.getElementById("btn-fullscreen");
+  if (!btn) return;
+
+  btn.addEventListener("click", () => {
+    const elem = document.documentElement;
+    if (!document.fullscreenElement) {
+      if (elem.requestFullscreen) elem.requestFullscreen();
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  });
+
+  document.addEventListener("fullscreenchange", () => {
+    if (!btn) return;
+    btn.textContent = document.fullscreenElement
+      ? "⛶ Exit Fullscreen"
+      : "⛶ Fullscreen";
+  });
 }
 
 function update(time, delta) {
@@ -391,7 +424,6 @@ function update(time, delta) {
   const justPressedA = inputState.A && !prevA;
   const justPressedB = inputState.B && !prevB;
 
-  // If overlay is open, A = toggle fullscreen, B = close
   if (artOpen) {
     if (justPressedA) toggleArtFullscreen();
     if (justPressedB) closeArtOverlay();
@@ -420,16 +452,14 @@ function update(time, delta) {
   let nearestItem = null;
   let nearestDist = Infinity;
 
-  // Find the closest painting frame
-  galleryFrames.forEach((f, index) => {
+  galleryFrames.forEach((f) => {
     const d = Phaser.Math.Distance.Between(player.x, player.y, f.x, f.y);
     if (d < nearestDist) {
       nearestDist = d;
-      nearestItem = { type: "painting", index };
+      nearestItem = { type: "painting", fullUrl: f.fullUrl };
     }
   });
 
-  // Compare with sculpture, if any
   if (sculptureSpot) {
     const d = Phaser.Math.Distance.Between(
       player.x,
@@ -439,49 +469,25 @@ function update(time, delta) {
     );
     if (d < nearestDist) {
       nearestDist = d;
-      nearestItem = { type: "sculpture" };
+      nearestItem = { type: "sculpture", fullUrl: sculptureSpot.fullUrl };
     }
   }
 
   if (promptText) {
     if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
-      if (nearestItem.type === "sculpture") {
-        promptText.setText("Press A to inspect sculpture");
-      } else {
-        const frame = galleryFrames[nearestItem.index];
-        const hasArt = frame && !!frame.fullUrl;
-        promptText.setText(
-          hasArt ? "Press A to view art" : "Press A to add art"
-        );
-      }
+      promptText.setText(
+        nearestItem.type === "sculpture"
+          ? "Press A to inspect sculpture"
+          : "Press A to view art"
+      );
     } else {
       promptText.setVisible(false);
     }
   }
 
-  // Interact on A
   if (nearestItem && nearestDist < 60 && justPressedA) {
-    if (nearestItem.type === "sculpture") {
-      if (sculptureSpot && sculptureSpot.fullUrl) {
-        openArtOverlay(sculptureSpot.fullUrl);
-      }
-    } else {
-      // painting
-      currentPaintingIndex = nearestItem.index;
-      const frame = galleryFrames[currentPaintingIndex];
-      if (!frame) return;
-
-      if (!frame.fullUrl) {
-        // No art yet — open file picker so user can upload from phone
-        if (paintingUploadInput) {
-          paintingUploadInput.click();
-        }
-      } else {
-        // Already has art — open overlay to view it
-        openArtOverlay(frame.fullUrl);
-      }
-    }
+    openArtOverlay(nearestItem.fullUrl);
   }
 
   prevA = inputState.A;
