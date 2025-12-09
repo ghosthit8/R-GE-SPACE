@@ -1,4 +1,5 @@
 // Full-size artwork URLs for frames & sculpture
+// (These constants are unused now, but you can keep/remove them.)
 const PAINTING_FULL_URL =
   "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2000&q=80";
 const SCULPTURE_FULL_URL =
@@ -20,15 +21,6 @@ function openArtOverlay(imageUrl) {
 function closeArtOverlay() {
   artOpen = false;
   if (artOverlayEl) artOverlayEl.style.display = "none";
-  if (artMsg) artMsg.style.display = "none";
-
-  if (
-    (document.fullscreenElement === artImg ||
-      document.webkitFullscreenElement === artImg) &&
-    document.exitFullscreen
-  ) {
-    document.exitFullscreen();
-  }
 }
 
 function toggleArtFullscreen() {
