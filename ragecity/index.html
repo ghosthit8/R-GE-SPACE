@@ -8,7 +8,7 @@
   />
   <title>Rage City — Proto</title>
 
-  <!-- Your main site styles (keep this if you already had it) -->
+  <!-- Main site styles if you have them -->
   <link rel="stylesheet" href="../style.css" />
 
   <style>
@@ -63,22 +63,13 @@
       letter-spacing: 0.08em;
       text-transform: uppercase;
       font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
 
     .rc-top-btn span.icon {
-      margin-right: 6px;
-    }
-
-    .rc-top-btn.left {
-      justify-content: flex-start;
-    }
-
-    .rc-top-btn.right {
-      justify-content: flex-end;
-    }
-
-    .rc-top-btn::before {
-      content: "";
       display: inline-block;
     }
 
@@ -94,9 +85,8 @@
       background: #000;
       display: flex;
       flex-direction: column;
-      /* This is the key: make the frame take almost the whole screen height */
       flex: 1 1 auto;
-      height: calc(100vh - 260px); /* adjust this number if you want more/less controls space */
+      height: calc(100vh - 260px);
     }
 
     /* Container that should be exactly the dark blue game area */
@@ -191,6 +181,36 @@
       max-width: 620px;
     }
 
+    /* ——— ART OVERLAY ——— */
+
+    #art-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.92);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 999;
+    }
+
+    #art-overlay-img {
+      max-width: 96vw;
+      max-height: 80vh;
+      border: 3px solid var(--neon-green);
+      box-shadow: 0 0 25px rgba(0, 255, 85, 0.9);
+      border-radius: 6px;
+      background: #000;
+    }
+
+    #art-overlay-msg {
+      margin-top: 12px;
+      color: var(--neon-green);
+      font-size: 12px;
+      text-shadow: 0 0 8px rgba(0, 255, 85, 0.9);
+      text-align: center;
+    }
+
     @media (min-width: 768px) {
       .rc-shell {
         padding-bottom: 32px;
@@ -206,17 +226,16 @@
   <div class="rc-shell">
     <!-- Top buttons -->
     <div class="rc-top-bar">
-      <button id="exitFullscreenBtn" class="rc-top-btn left">
-        <span class="icon">⛶</span> EXIT FULLSCREEN
+      <button id="fullscreen-btn" class="rc-top-btn">
+        <span class="icon">⛶</span> FULLSCREEN
       </button>
-      <a href="../menu.html" class="rc-top-btn right">
+      <a href="../menu.html" class="rc-top-btn">
         ← Menu
       </a>
     </div>
 
     <!-- GAME FRAME (green box) -->
     <div class="rc-frame">
-      <!-- This dark blue area will now stretch to fill the frame -->
       <div id="game-area">
         <div id="phaser-container"></div>
       </div>
@@ -227,88 +246,54 @@
       <div class="rc-dpad-row">
         <div class="rc-dpad">
           <button class="blank" disabled></button>
-          <button data-dir="up">▲</button>
+          <button id="btn-up">▲</button>
           <button class="blank" disabled></button>
 
-          <button data-dir="left">◀</button>
+          <button id="btn-left">◀</button>
           <button class="blank" disabled></button>
-          <button data-dir="right">▶</button>
+          <button id="btn-right">▶</button>
 
           <button class="blank" disabled></button>
-          <button data-dir="down">▼</button>
+          <button id="btn-down">▼</button>
           <button class="blank" disabled></button>
         </div>
 
         <div style="display: flex; gap: 16px; align-items: center;">
-          <button id="bButton" class="rc-btn-round">●</button>
-          <button id="aButton" class="rc-btn-round">A</button>
+          <button id="btn-B" class="rc-btn-round">B</button>
+          <button id="btn-A" class="rc-btn-round">A</button>
         </div>
       </div>
 
       <div class="rc-controls-hint">
-        Drag from top and touch the back button to exit full screen.
+        Walk up to a painting and press A to add art from your phone. Press A again to view it, B to close.
       </div>
     </div>
   </div>
 
-  <!-- Phaser + your Rage City game script -->
+  <!-- Hidden file input for user art uploads -->
+  <input
+    type="file"
+    id="paintingUpload"
+    accept="image/*"
+    style="display: none;"
+  />
+
+  <!-- Art overlay (fullscreen view when you press A on a painting that has art) -->
+  <div id="art-overlay" onclick="closeArtOverlay && closeArtOverlay()">
+    <img id="art-overlay-img" src="" alt="Artwork" />
+    <div id="art-overlay-msg">
+      Press A again to toggle system fullscreen. Press B (or tap anywhere) to close.
+    </div>
+  </div>
+
+  <!-- Phaser + Rage City scripts -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
-  <script src="../js/ragecity.js"></script>
 
-  <script>
-    // Hook up virtual buttons to Phaser input if you need it.
-    // This assumes ragecity.js exposes a global called `rageCityInput`.
-    // You can adjust to match whatever you’re actually using.
-
-    const dirButtons = document.querySelectorAll("[data-dir]");
-    dirButtons.forEach((btn) => {
-      const dir = btn.getAttribute("data-dir");
-      btn.addEventListener("touchstart", (e) => {
-        e.preventDefault();
-        window.rageCityInput &&
-          window.rageCityInput.onDirectionPress &&
-          window.rageCityInput.onDirectionPress(dir, true);
-      });
-      btn.addEventListener("touchend", (e) => {
-        e.preventDefault();
-        window.rageCityInput &&
-          window.rageCityInput.onDirectionPress &&
-          window.rageCityInput.onDirectionPress(dir, false);
-      });
-    });
-
-    const aButton = document.getElementById("aButton");
-    const bButton = document.getElementById("bButton");
-
-    ["touchstart", "touchend"].forEach((evt) => {
-      aButton.addEventListener(evt, (e) => {
-        e.preventDefault();
-        const down = evt === "touchstart";
-        window.rageCityInput &&
-          window.rageCityInput.onA &&
-          window.rageCityInput.onA(down);
-      });
-
-      bButton.addEventListener(evt, (e) => {
-        e.preventDefault();
-        const down = evt === "touchstart";
-        window.rageCityInput &&
-          window.rageCityInput.onB &&
-          window.rageCityInput.onB(down);
-      });
-    });
-
-    // Exit fullscreen handler
-    document
-      .getElementById("exitFullscreenBtn")
-      .addEventListener("click", () => {
-        if (document.fullscreenElement) {
-          document.exitFullscreen();
-        } else if (window.parent && window.parent.document.fullscreenElement) {
-          // if this is inside an iframe
-          window.parent.document.exitFullscreen();
-        }
-      });
-  </script>
+  <!-- Make sure these JS files are in the same folder as this HTML,
+       or adjust the paths accordingly -->
+  <script src="ragecity_input.js"></script>
+  <script src="ragecity.overlay.js"></script>
+  <script src="CityScene.js"></script>
+  <script src="ragecity.main.js"></script>
 </body>
 </html>
