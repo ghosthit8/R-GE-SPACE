@@ -11,45 +11,13 @@ let paintingUploadInput = null;
 let currentPaintingIndex = null;
 
 // --- Supabase shared gallery config ---
-const GALLERY_BUCKET = "ragecity-gallery";        // must match your bucket name
-const PAINTINGS_TABLE = "ragecity_paintings";     // must match your table name
+const GALLERY_BUCKET = "ragecity-gallery";
+const PAINTINGS_TABLE = "ragecity_paintings";
 
-// --- Local fallback persistence (per device) ---
-function savePaintingArt(index, dataUrl) {
-  try {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(`ragecity_painting_${index}`, dataUrl);
-    }
-  } catch (err) {
-    console.warn("[RageCity] Could not save painting art to localStorage", err);
-  }
-}
+// Log once when this file loads so we know if Supabase is there
+console.log("[RageCity] cityScene.js loaded. Supabase present?", !!window.supabase);
 
-function restorePaintingArt(scene, imgDisplaySize) {
-  if (typeof localStorage === "undefined") return;
-
-  galleryFrames.forEach((frame, index) => {
-    const stored = localStorage.getItem(`ragecity_painting_${index}`);
-    if (!stored) return;
-
-    const texKey = `localPainting-${index}`;
-
-    if (!scene.textures.exists(texKey)) {
-      scene.textures.addBase64(texKey, stored);
-    }
-
-    if (frame.img) {
-      frame.img.destroy();
-    }
-
-    const img = scene.add.image(frame.x, frame.y, texKey);
-    img.setDisplaySize(imgDisplaySize, imgDisplaySize);
-    frame.img = img;
-    frame.fullUrl = stored; // local dataURL fallback
-  });
-}
-
-// Load all painting URLs from Supabase and apply to frames (shared gallery)
+// Load all painting URLs from Supabase and apply to frames
 async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
   if (!window.supabase) {
     console.warn("[RageCity] Supabase client missing; skipping shared gallery load.");
@@ -57,6 +25,8 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
   }
 
   try {
+    console.log("[RageCity] Loading paintings from Supabase table:", PAINTINGS_TABLE);
+
     const { data, error } = await window.supabase
       .from(PAINTINGS_TABLE)
       .select("frame_index, image_url");
@@ -66,6 +36,8 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
       return;
     }
 
+    console.log("[RageCity] Paintings loaded from table:", data);
+
     if (!data || !data.length) return;
 
     // Queue all image loads
@@ -73,17 +45,27 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
       const idx = row.frame_index;
       if (idx < 0 || idx >= galleryFrames.length) return;
       const texKey = `supPainting-${idx}`;
+      console.log(
+        `[RageCity] Queueing image load for frame ${idx}:`,
+        row.image_url,
+        "→ texture key:",
+        texKey
+      );
       scene.load.image(texKey, row.image_url);
     });
 
     // When all queued images are loaded, attach them to frames
     scene.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      console.log("[RageCity] Supabase images load COMPLETE event fired.");
       data.forEach((row) => {
         const idx = row.frame_index;
         const frame = galleryFrames[idx];
         if (!frame) return;
         const texKey = `supPainting-${idx}`;
-        if (!scene.textures.exists(texKey)) return;
+        if (!scene.textures.exists(texKey)) {
+          console.warn("[RageCity] Texture key missing for frame", idx, texKey);
+          return;
+        }
 
         if (frame.img) {
           frame.img.destroy();
@@ -92,7 +74,9 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
         const img = scene.add.image(frame.x, frame.y, texKey);
         img.setDisplaySize(imgDisplaySize, imgDisplaySize);
         frame.img = img;
-        frame.fullUrl = row.image_url; // shared URL overrides local fallback
+        frame.fullUrl = row.image_url;
+
+        console.log("[RageCity] Applied Supabase painting to frame", idx, row.image_url);
       });
     });
 
@@ -114,28 +98,48 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     const fileName = `painting_${frameIndex}.${ext}`;
     const filePath = `paintings/${fileName}`;
 
-    const { error: uploadError } = await window.supabase
+    console.log("[RageCity] Starting upload to Supabase:", {
+      bucket: GALLERY_BUCKET,
+      filePath,
+      frameIndex,
+      fileType: file.type,
+      fileSize: file.size,
+    });
+
+    const { data: uploadData, error: uploadError } = await window.supabase
       .storage
       .from(GALLERY_BUCKET)
       .upload(filePath, file, { upsert: true });
 
     if (uploadError) {
       console.error("[RageCity] Error uploading painting to bucket:", uploadError);
+      alert("RageCity upload error (Storage): " + uploadError.message);
       return null;
     }
 
-    const { data: publicData } = window.supabase
+    console.log("[RageCity] Storage upload success:", uploadData);
+
+    const { data: publicData, error: publicErr } = window.supabase
       .storage
       .from(GALLERY_BUCKET)
       .getPublicUrl(filePath);
 
-    const publicUrl = publicData?.publicUrl;
-    if (!publicUrl) {
-      console.error("[RageCity] Could not get public URL for painting.");
+    if (publicErr) {
+      console.error("[RageCity] Error getting public URL:", publicErr);
+      alert("RageCity upload error (public URL): " + publicErr.message);
       return null;
     }
 
-    const { error: upsertError } = await window.supabase
+    const publicUrl = publicData?.publicUrl;
+    console.log("[RageCity] Public URL for painting:", publicUrl);
+
+    if (!publicUrl) {
+      console.error("[RageCity] Could not get public URL for painting.");
+      alert("RageCity upload error: public URL missing");
+      return null;
+    }
+
+    const { data: upsertData, error: upsertError } = await window.supabase
       .from(PAINTINGS_TABLE)
       .upsert(
         { frame_index: frameIndex, image_url: publicUrl },
@@ -144,13 +148,17 @@ async function uploadPaintingToSupabase(frameIndex, file) {
 
     if (upsertError) {
       console.error("[RageCity] Error upserting painting record:", upsertError);
+      alert("RageCity upload error (DB upsert): " + upsertError.message);
       // still return publicUrl so the current user sees it
+    } else {
+      console.log("[RageCity] Painting DB upsert success:", upsertData);
     }
 
-    console.log("[RageCity] Painting uploaded + saved:", frameIndex, publicUrl);
+    console.log("[RageCity] Upload + DB save complete for frame", frameIndex);
     return publicUrl;
   } catch (err) {
     console.error("[RageCity] Unexpected error uploading painting:", err);
+    alert("RageCity upload error (unexpected): " + err.message);
     return null;
   }
 }
@@ -173,6 +181,8 @@ function create() {
   this.physics.world.setBounds(0, 0, w, h);
   wallsGroup = this.physics.add.staticGroup();
   const scene = this;
+
+  console.log("[RageCity] Phaser scene created. World bounds:", { w, h });
 
   function addWallRect(x1, y1, x2, y2, thickness = 14) {
     if (x1 === x2 && y1 !== y2) {
@@ -329,7 +339,7 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
-  // FRAMES (start BLACK, Supabase + local will populate any that have art)
+  // FRAMES (start BLACK, Supabase will populate any that have art)
   const imgDisplaySize = 26;
   galleryFrames = [];
 
@@ -451,10 +461,9 @@ function create() {
     addTrapezoidFrame(this, x, midBottomY, "bottom");
   });
 
-  // 1) Restore any local (device) paintings so refresh works even if Supabase is empty
-  restorePaintingArt(this, imgDisplaySize);
+  console.log("[RageCity] Total gallery frames:", galleryFrames.length);
 
-  // 2) Load shared gallery from Supabase (overrides local for frames that exist remotely)
+  // 🔄 Load shared gallery from Supabase
   loadPaintingsFromSupabase(this, imgDisplaySize);
 
   // ===== SCULPTURE CUBE =====
@@ -560,9 +569,16 @@ function create() {
 
   // ====== hook the hidden <input type="file" id="paintingUpload"> ======
   paintingUploadInput = document.getElementById("paintingUpload");
+  console.log("[RageCity] paintingUpload input found?", !!paintingUploadInput);
+
   if (paintingUploadInput) {
     paintingUploadInput.addEventListener("change", function () {
       const file = this.files && this.files[0];
+      console.log("[RageCity] paintingUpload change event:", {
+        hasFile: !!file,
+        currentPaintingIndex,
+      });
+
       if (!file || currentPaintingIndex === null) {
         this.value = "";
         return;
@@ -571,15 +587,25 @@ function create() {
       const frameIndex = currentPaintingIndex;
       const frame = galleryFrames[frameIndex];
       if (!frame) {
+        console.warn("[RageCity] No frame found for index", frameIndex);
         this.value = "";
         return;
       }
 
-      // 1) Show thumbnail immediately + save to localStorage
+      console.log("[RageCity] Selected file for frame:", {
+        frameIndex,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+      });
+
+      // 1) Show thumbnail immediately using FileReader (local)
       const reader = new FileReader();
       reader.onload = function (ev) {
         const dataUrl = ev.target.result;
         const texKeyLocal = `localPainting-${frameIndex}`;
+
+        console.log("[RageCity] FileReader loaded data URL for frame", frameIndex);
 
         if (scene.textures.exists(texKeyLocal)) {
           scene.textures.remove(texKeyLocal);
@@ -594,19 +620,31 @@ function create() {
         const img = scene.add.image(frame.x, frame.y, texKeyLocal);
         img.setDisplaySize(imgDisplaySize, imgDisplaySize);
         frame.img = img;
+
+        // Local fallback URL (in case Supabase fails)
         frame.fullUrl = dataUrl;
 
-        // Local persistence so refresh works even if Supabase fails
-        savePaintingArt(frameIndex, dataUrl);
+        console.log("[RageCity] Local preview applied for frame", frameIndex);
 
         // 2) Fire Supabase upload in the background
         (async () => {
           const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
           if (publicUrl) {
-            frame.fullUrl = publicUrl;          // use shared URL now
-            savePaintingArt(frameIndex, publicUrl); // also mirror to localStorage
+            // Update to shared URL so other devices can see it
+            frame.fullUrl = publicUrl;
+            console.log("[RageCity] Frame updated with Supabase URL", {
+              frameIndex,
+              publicUrl,
+            });
+          } else {
+            console.warn("[RageCity] Supabase upload returned null for frame", frameIndex);
           }
         })();
+      };
+
+      reader.onerror = function (ev) {
+        console.error("[RageCity] FileReader error:", ev);
+        alert("RageCity error reading file from device.");
       };
 
       reader.readAsDataURL(file);
@@ -726,9 +764,11 @@ function update(time, delta) {
 
       if (!frame.fullUrl) {
         // no art yet → open file picker
+        console.log("[RageCity] Opening file picker for frame", currentPaintingIndex);
         if (paintingUploadInput) paintingUploadInput.click();
       } else {
         // has art → view it
+        console.log("[RageCity] Opening overlay for existing art on frame", currentPaintingIndex);
         openArtOverlay(frame.fullUrl);
       }
     }
