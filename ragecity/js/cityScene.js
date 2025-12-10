@@ -6,47 +6,121 @@ let wallsGroup;
 let prevA = false;
 let prevB = false;
 
-// NEW: for per-painting uploads
+// for per-painting uploads
 let paintingUploadInput = null;
 let currentPaintingIndex = null;
 
-// --- Painting persistence helpers (localStorage) ---
+// --- Supabase shared gallery config ---
+const GALLERY_BUCKET = "ragecity-gallery";
+const PAINTINGS_TABLE = "ragecity_paintings";
 
-function savePaintingArt(index, dataUrl) {
+// Load all painting URLs from Supabase and apply to frames
+async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
+  if (!window.supabase) {
+    console.warn("[RageCity] Supabase client missing; skipping shared gallery load.");
+    return;
+  }
+
   try {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(`ragecity_painting_${index}`, dataUrl);
+    const { data, error } = await window.supabase
+      .from(PAINTINGS_TABLE)
+      .select("frame_index, image_url");
+
+    if (error) {
+      console.error("[RageCity] Error loading paintings from Supabase:", error);
+      return;
     }
+
+    if (!data || !data.length) return;
+
+    // Queue all image loads
+    data.forEach((row) => {
+      const idx = row.frame_index;
+      if (idx < 0 || idx >= galleryFrames.length) return;
+      const texKey = `supPainting-${idx}`;
+      scene.load.image(texKey, row.image_url);
+    });
+
+    // When all queued images are loaded, attach them to frames
+    scene.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      data.forEach((row) => {
+        const idx = row.frame_index;
+        const frame = galleryFrames[idx];
+        if (!frame) return;
+        const texKey = `supPainting-${idx}`;
+        if (!scene.textures.exists(texKey)) return;
+
+        if (frame.img) {
+          frame.img.destroy();
+        }
+
+        const img = scene.add.image(frame.x, frame.y, texKey);
+        img.setDisplaySize(imgDisplaySize, imgDisplaySize);
+        frame.img = img;
+        frame.fullUrl = row.image_url; // public URL from Supabase
+      });
+    });
+
+    scene.load.start();
   } catch (err) {
-    console.warn("Could not save painting art", err);
+    console.error("[RageCity] Unexpected error loading paintings:", err);
   }
 }
 
-function restorePaintingArt(scene, imgDisplaySize) {
-  if (typeof localStorage === "undefined") return;
+// Upload a file to Supabase bucket + upsert DB row, return public URL
+async function uploadPaintingToSupabase(frameIndex, file) {
+  if (!window.supabase) {
+    console.warn("[RageCity] Supabase client missing; cannot upload.");
+    return null;
+  }
 
-  galleryFrames.forEach((frame, index) => {
-    const stored = localStorage.getItem(`ragecity_painting_${index}`);
-    if (!stored) return;
+  try {
+    const ext = (file.type && file.type.split("/")[1]) || "png";
+    const fileName = `painting_${frameIndex}.${ext}`;
+    const filePath = `paintings/${fileName}`;
 
-    const texKey = `userPainting-${index}`;
+    const { data: uploadData, error: uploadError } = await window.supabase
+      .storage
+      .from(GALLERY_BUCKET)
+      .upload(filePath, file, { upsert: true });
 
-    // Rebuild texture from stored base64
-    if (!scene.textures.exists(texKey)) {
-      scene.textures.addBase64(texKey, stored);
+    if (uploadError) {
+      console.error("[RageCity] Error uploading painting to bucket:", uploadError);
+      return null;
     }
 
-    // Recreate the thumbnail image in the frame
-    const img = scene.add.image(frame.x, frame.y, texKey);
-    img.setDisplaySize(imgDisplaySize, imgDisplaySize);
+    const { data: publicData } = window.supabase
+      .storage
+      .from(GALLERY_BUCKET)
+      .getPublicUrl(filePath);
 
-    frame.img = img;
-    frame.fullUrl = stored;
-  });
+    const publicUrl = publicData?.publicUrl;
+    if (!publicUrl) {
+      console.error("[RageCity] Could not get public URL for painting.");
+      return null;
+    }
+
+    const { error: upsertError } = await window.supabase
+      .from(PAINTINGS_TABLE)
+      .upsert(
+        { frame_index: frameIndex, image_url: publicUrl },
+        { onConflict: "frame_index" }
+      );
+
+    if (upsertError) {
+      console.error("[RageCity] Error upserting painting record:", upsertError);
+      // still return publicUrl so the current user sees it
+    }
+
+    return publicUrl;
+  } catch (err) {
+    console.error("[RageCity] Unexpected error uploading painting:", err);
+    return null;
+  }
 }
 
 function preload() {
-  // You can leave this or remove it; it's no longer used for the frames.
+  // Kept for reference; not used for frames anymore.
   this.load.image(
     "artThumb",
     "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1000&q=80"
@@ -68,14 +142,28 @@ function create() {
     if (x1 === x2 && y1 !== y2) {
       const height = Math.abs(y2 - y1);
       const centerY = (y1 + y2) / 2;
-      const wall = scene.add.rectangle(x1, centerY, thickness, height, 0x00ff00, 0);
+      const wall = scene.add.rectangle(
+        x1,
+        centerY,
+        thickness,
+        height,
+        0x00ff00,
+        0
+      );
       wall.setVisible(false);
       scene.physics.add.existing(wall, true);
       wallsGroup.add(wall);
     } else if (y1 === y2 && x1 !== x2) {
       const width = Math.abs(x2 - x1);
       const centerX = (x1 + x2) / 2;
-      const wall = scene.add.rectangle(centerX, y1, width, thickness, 0x00ff00, 0);
+      const wall = scene.add.rectangle(
+        centerX,
+        y1,
+        width,
+        thickness,
+        0x00ff00,
+        0
+      );
       wall.setVisible(false);
       scene.physics.add.existing(wall, true);
       wallsGroup.add(wall);
@@ -205,8 +293,8 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
-  // FRAMES (now start BLACK, no thumbnail art)
-  const imgDisplaySize = 26; // how big user art thumbnails should be
+  // FRAMES (start BLACK, Supabase will populate any that have art)
+  const imgDisplaySize = 26;
   galleryFrames = [];
 
   function addTrapezoidFrame(scene2, x, y, side) {
@@ -276,18 +364,14 @@ function create() {
     gMat.fillPath();
     gMat.strokePath();
 
-    // NOTE: we NO LONGER create an image here.
-    // Art is only added after the user uploads.
-    const img = null;
-
     galleryFrames.push({
       x,
       y,
       side,
       frameGfx: g,
       matGfx: gMat,
-      img,
-      fullUrl: null // will hold a dataURL once user uploads art
+      img: null,        // thumbnail sprite (set later)
+      fullUrl: null     // Supabase public URL
     });
   }
 
@@ -331,8 +415,8 @@ function create() {
     addTrapezoidFrame(this, x, midBottomY, "bottom");
   });
 
-  // 🔄 Restore any saved art into frames
-  restorePaintingArt(this, imgDisplaySize);
+  // 🔄 Load shared gallery from Supabase
+  loadPaintingsFromSupabase(this, imgDisplaySize);
 
   // ===== SCULPTURE CUBE =====
   const centerX = (leftOuter + rightOuter) / 2;
@@ -438,38 +522,42 @@ function create() {
   // ====== hook the hidden <input type="file" id="paintingUpload"> ======
   paintingUploadInput = document.getElementById("paintingUpload");
   if (paintingUploadInput) {
-    paintingUploadInput.addEventListener("change", function (e) {
+    paintingUploadInput.addEventListener("change", function () {
       const file = this.files && this.files[0];
       if (!file || currentPaintingIndex === null) return;
 
-      const reader = new FileReader();
-      reader.onload = function (ev) {
-        const dataUrl = ev.target.result;
+      (async () => {
+        const publicUrl = await uploadPaintingToSupabase(
+          currentPaintingIndex,
+          file
+        );
+        if (!publicUrl) {
+          this.value = "";
+          return;
+        }
+
         const frame = galleryFrames[currentPaintingIndex];
-        if (!frame) return;
+        if (!frame) {
+          this.value = "";
+          return;
+        }
 
         const texKey = `userPainting-${currentPaintingIndex}`;
+        scene.load.image(texKey, publicUrl);
 
-        if (scene.textures.exists(texKey)) {
-          scene.textures.remove(texKey);
-        }
+        scene.load.once(Phaser.Loader.Events.COMPLETE, () => {
+          if (frame.img) {
+            frame.img.destroy();
+          }
+          const img = scene.add.image(frame.x, frame.y, texKey);
+          img.setDisplaySize(imgDisplaySize, imgDisplaySize);
+          frame.img = img;
+          frame.fullUrl = publicUrl;
+        });
 
-        scene.textures.addBase64(texKey, dataUrl);
+        scene.load.start();
+      })();
 
-        if (frame.img) {
-          frame.img.destroy();
-        }
-
-        const img = scene.add.image(frame.x, frame.y, texKey);
-        img.setDisplaySize(imgDisplaySize, imgDisplaySize);
-        frame.img = img;
-        frame.fullUrl = dataUrl;
-
-        // 🔒 persist this painting on this device
-        savePaintingArt(currentPaintingIndex, dataUrl);
-      };
-
-      reader.readAsDataURL(file);
       // reset so same file can be chosen again if needed
       this.value = "";
     });
