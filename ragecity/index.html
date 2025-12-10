@@ -50,7 +50,7 @@
     </div>
   </div>
 
-  <!-- 🔧 NEW: hidden file input for per-painting uploads -->
+  <!-- 🔧 Hidden file input for per-painting uploads -->
   <input
     type="file"
     id="paintingUpload"
@@ -60,6 +60,17 @@
 
   <!-- Phaser -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+
+  <!-- Supabase JS (global client for Rage City gallery) -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    // 🔑 Supabase project config for Rage City
+    const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY_HERE"; // ← paste your anon key
+
+    // Make a global client so cityScene.js and others can use `window.supabase`
+    window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  </script>
 
   <!-- Rage City scripts -->
   <script src="./js/input.js"></script>
