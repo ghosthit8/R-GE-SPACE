@@ -95,7 +95,10 @@ async function uploadPaintingToSupabase(frameIndex, file) {
 
   try {
     const ext = (file.type && file.type.split("/")[1]) || "png";
-    const fileName = `painting_${frameIndex}.${ext}`;
+
+    // 🔥 IMPORTANT CHANGE: versioned filename so each replace gets a new URL
+    const timestamp = Date.now();
+    const fileName = `painting_${frameIndex}_${timestamp}.${ext}`;
     const filePath = `paintings/${fileName}`;
 
     console.log("[RageCity] Starting upload to Supabase:", {
