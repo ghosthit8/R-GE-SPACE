@@ -10,6 +10,41 @@ let prevB = false;
 let paintingUploadInput = null;
 let currentPaintingIndex = null;
 
+// --- Painting persistence helpers (localStorage) ---
+
+function savePaintingArt(index, dataUrl) {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(`ragecity_painting_${index}`, dataUrl);
+    }
+  } catch (err) {
+    console.warn("Could not save painting art", err);
+  }
+}
+
+function restorePaintingArt(scene, imgDisplaySize) {
+  if (typeof localStorage === "undefined") return;
+
+  galleryFrames.forEach((frame, index) => {
+    const stored = localStorage.getItem(`ragecity_painting_${index}`);
+    if (!stored) return;
+
+    const texKey = `userPainting-${index}`;
+
+    // Rebuild texture from stored base64
+    if (!scene.textures.exists(texKey)) {
+      scene.textures.addBase64(texKey, stored);
+    }
+
+    // Recreate the thumbnail image in the frame
+    const img = scene.add.image(frame.x, frame.y, texKey);
+    img.setDisplaySize(imgDisplaySize, imgDisplaySize);
+
+    frame.img = img;
+    frame.fullUrl = stored;
+  });
+}
+
 function preload() {
   // You can leave this or remove it; it's no longer used for the frames.
   this.load.image(
@@ -296,6 +331,9 @@ function create() {
     addTrapezoidFrame(this, x, midBottomY, "bottom");
   });
 
+  // 🔄 Restore any saved art into frames
+  restorePaintingArt(this, imgDisplaySize);
+
   // ===== SCULPTURE CUBE =====
   const centerX = (leftOuter + rightOuter) / 2;
   const centerY = (topOuter + bottomOuter) / 2;
@@ -397,7 +435,7 @@ function create() {
     });
   }
 
-  // ====== NEW: hook the hidden <input type="file" id="paintingUpload"> ======
+  // ====== hook the hidden <input type="file" id="paintingUpload"> ======
   paintingUploadInput = document.getElementById("paintingUpload");
   if (paintingUploadInput) {
     paintingUploadInput.addEventListener("change", function (e) {
@@ -426,6 +464,9 @@ function create() {
         img.setDisplaySize(imgDisplaySize, imgDisplaySize);
         frame.img = img;
         frame.fullUrl = dataUrl;
+
+        // 🔒 persist this painting on this device
+        savePaintingArt(currentPaintingIndex, dataUrl);
       };
 
       reader.readAsDataURL(file);
