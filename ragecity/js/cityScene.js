@@ -6,7 +6,7 @@ let wallsGroup;
 let prevA = false;
 let prevB = false;
 
-// for per-painting uploads
+// For per-painting uploads
 let paintingUploadInput = null;
 let currentPaintingIndex = null;
 
@@ -57,7 +57,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
         const img = scene.add.image(frame.x, frame.y, texKey);
         img.setDisplaySize(imgDisplaySize, imgDisplaySize);
         frame.img = img;
-        frame.fullUrl = row.image_url; // public URL from Supabase
+        frame.fullUrl = row.image_url;
       });
     });
 
@@ -79,7 +79,7 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     const fileName = `painting_${frameIndex}.${ext}`;
     const filePath = `paintings/${fileName}`;
 
-    const { data: uploadData, error: uploadError } = await window.supabase
+    const { error: uploadError } = await window.supabase
       .storage
       .from(GALLERY_BUCKET)
       .upload(filePath, file, { upsert: true });
@@ -120,7 +120,7 @@ async function uploadPaintingToSupabase(frameIndex, file) {
 }
 
 function preload() {
-  // Kept for reference; not used for frames anymore.
+  // Not used for frames anymore, but safe to leave.
   this.load.image(
     "artThumb",
     "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1000&q=80"
@@ -370,8 +370,8 @@ function create() {
       side,
       frameGfx: g,
       matGfx: gMat,
-      img: null,        // thumbnail sprite (set later)
-      fullUrl: null     // Supabase public URL
+      img: null,
+      fullUrl: null
     });
   }
 
@@ -524,40 +524,52 @@ function create() {
   if (paintingUploadInput) {
     paintingUploadInput.addEventListener("change", function () {
       const file = this.files && this.files[0];
-      if (!file || currentPaintingIndex === null) return;
+      if (!file || currentPaintingIndex === null) {
+        this.value = "";
+        return;
+      }
 
-      (async () => {
-        const publicUrl = await uploadPaintingToSupabase(
-          currentPaintingIndex,
-          file
-        );
-        if (!publicUrl) {
-          this.value = "";
-          return;
+      const frameIndex = currentPaintingIndex;
+      const frame = galleryFrames[frameIndex];
+      if (!frame) {
+        this.value = "";
+        return;
+      }
+
+      // 1) Show thumbnail immediately using FileReader (local)
+      const reader = new FileReader();
+      reader.onload = function (ev) {
+        const dataUrl = ev.target.result;
+        const texKeyLocal = `localPainting-${frameIndex}`;
+
+        if (scene.textures.exists(texKeyLocal)) {
+          scene.textures.remove(texKeyLocal);
         }
 
-        const frame = galleryFrames[currentPaintingIndex];
-        if (!frame) {
-          this.value = "";
-          return;
+        scene.textures.addBase64(texKeyLocal, dataUrl);
+
+        if (frame.img) {
+          frame.img.destroy();
         }
 
-        const texKey = `userPainting-${currentPaintingIndex}`;
-        scene.load.image(texKey, publicUrl);
+        const img = scene.add.image(frame.x, frame.y, texKeyLocal);
+        img.setDisplaySize(imgDisplaySize, imgDisplaySize);
+        frame.img = img;
 
-        scene.load.once(Phaser.Loader.Events.COMPLETE, () => {
-          if (frame.img) {
-            frame.img.destroy();
+        // Local fallback URL (in case Supabase fails)
+        frame.fullUrl = dataUrl;
+
+        // 2) Fire Supabase upload in the background
+        (async () => {
+          const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
+          if (publicUrl) {
+            // Update to shared URL so other devices can see it
+            frame.fullUrl = publicUrl;
           }
-          const img = scene.add.image(frame.x, frame.y, texKey);
-          img.setDisplaySize(imgDisplaySize, imgDisplaySize);
-          frame.img = img;
-          frame.fullUrl = publicUrl;
-        });
+        })();
+      };
 
-        scene.load.start();
-      })();
-
+      reader.readAsDataURL(file);
       // reset so same file can be chosen again if needed
       this.value = "";
     });
