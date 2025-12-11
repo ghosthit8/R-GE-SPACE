@@ -14,58 +14,60 @@ let currentPaintingIndex = null;
 const GALLERY_BUCKET = "ragecity-gallery";
 const PAINTINGS_TABLE = "ragecity_paintings";
 
-// Log once when this file loads so we know if Supabase is there
-console.log("[RageCity] cityScene.js loaded. Supabase present?", !!window.supabase);
+// Extract the relative storage path (e.g. "paintings/painting_0_123.png")
+// from a public URL that includes ".../storage/v1/object/public/<bucket>/".
+function getPathFromPublicUrl(url) {
+  if (!url) return null;
+  const marker = `/storage/v1/object/public/${GALLERY_BUCKET}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  return url.substring(idx + marker.length);
+}
 
 // Load all painting URLs from Supabase and apply to frames
 async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
   if (!window.supabase) {
-    console.warn("[RageCity] Supabase client missing; skipping shared gallery load.");
+    console.warn(
+      "[RageCity] Supabase client missing; skipping shared gallery load."
+    );
     return;
   }
 
   try {
-    console.log("[RageCity] Loading paintings from Supabase table:", PAINTINGS_TABLE);
-
     const { data, error } = await window.supabase
       .from(PAINTINGS_TABLE)
       .select("frame_index, image_url");
 
     if (error) {
-      console.error("[RageCity] Error loading paintings from Supabase:", error);
+      console.error(
+        "[RageCity] Error loading paintings from Supabase:",
+        error
+      );
       return;
     }
 
-    console.log("[RageCity] Paintings loaded from table:", data);
+    if (!data || data.length === 0) return;
 
-    if (!data || !data.length) return;
-
-    // Queue all image loads
     data.forEach((row) => {
       const idx = row.frame_index;
-      if (idx < 0 || idx >= galleryFrames.length) return;
+      const frame = galleryFrames[idx];
+      if (!frame) return;
+
+      frame.fullUrl = row.image_url;
+
       const texKey = `supPainting-${idx}`;
-      console.log(
-        `[RageCity] Queueing image load for frame ${idx}:`,
-        row.image_url,
-        "→ texture key:",
-        texKey
-      );
-      scene.load.image(texKey, row.image_url);
+      if (!scene.textures.exists(texKey)) {
+        scene.load.image(texKey, row.image_url);
+      }
     });
 
-    // When all queued images are loaded, attach them to frames
     scene.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      console.log("[RageCity] Supabase images load COMPLETE event fired.");
       data.forEach((row) => {
         const idx = row.frame_index;
         const frame = galleryFrames[idx];
         if (!frame) return;
         const texKey = `supPainting-${idx}`;
-        if (!scene.textures.exists(texKey)) {
-          console.warn("[RageCity] Texture key missing for frame", idx, texKey);
-          return;
-        }
+        if (!scene.textures.exists(texKey)) return;
 
         if (frame.img) {
           frame.img.destroy();
@@ -74,9 +76,6 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
         const img = scene.add.image(frame.x, frame.y, texKey);
         img.setDisplaySize(imgDisplaySize, imgDisplaySize);
         frame.img = img;
-        frame.fullUrl = row.image_url;
-
-        console.log("[RageCity] Applied Supabase painting to frame", idx, row.image_url);
       });
     });
 
@@ -86,8 +85,10 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
   }
 }
 
-// Upload a file to Supabase bucket + upsert DB row, return public URL
-async function uploadPaintingToSupabase(frameIndex, file) {
+// Upload a file to Supabase bucket + upsert DB row, return public URL.
+// If oldPath is provided, we will delete that object from the bucket
+// after the new upload + DB upsert succeed.
+async function uploadPaintingToSupabase(frameIndex, file, oldPath) {
   if (!window.supabase) {
     console.warn("[RageCity] Supabase client missing; cannot upload.");
     return null;
@@ -95,54 +96,38 @@ async function uploadPaintingToSupabase(frameIndex, file) {
 
   try {
     const ext = (file.type && file.type.split("/")[1]) || "png";
-
-    // 🔥 IMPORTANT CHANGE: versioned filename so each replace gets a new URL
+    // Use a timestamp in the filename so each upload is a fresh object.
     const timestamp = Date.now();
     const fileName = `painting_${frameIndex}_${timestamp}.${ext}`;
     const filePath = `paintings/${fileName}`;
 
-    console.log("[RageCity] Starting upload to Supabase:", {
-      bucket: GALLERY_BUCKET,
-      filePath,
-      frameIndex,
-      fileType: file.type,
-      fileSize: file.size,
-    });
-
-    const { data: uploadData, error: uploadError } = await window.supabase
+    const { error: uploadError } = await window.supabase
       .storage
       .from(GALLERY_BUCKET)
       .upload(filePath, file, { upsert: true });
 
     if (uploadError) {
-      console.error("[RageCity] Error uploading painting to bucket:", uploadError);
-      alert("RageCity upload error (Storage): " + uploadError.message);
+      console.error(
+        "[RageCity] Error uploading painting to bucket:",
+        uploadError
+      );
       return null;
     }
 
-    console.log("[RageCity] Storage upload success:", uploadData);
-
-    const { data: publicData, error: publicErr } = window.supabase
+    const { data: publicData } = window.supabase
       .storage
       .from(GALLERY_BUCKET)
       .getPublicUrl(filePath);
 
-    if (publicErr) {
-      console.error("[RageCity] Error getting public URL:", publicErr);
-      alert("RageCity upload error (public URL): " + publicErr.message);
-      return null;
-    }
-
-    const publicUrl = publicData?.publicUrl;
-    console.log("[RageCity] Public URL for painting:", publicUrl);
-
+    const publicUrl = publicData && publicData.publicUrl;
     if (!publicUrl) {
-      console.error("[RageCity] Could not get public URL for painting.");
-      alert("RageCity upload error: public URL missing");
+      console.error(
+        "[RageCity] Could not get public URL for painting"
+      );
       return null;
     }
 
-    const { data: upsertData, error: upsertError } = await window.supabase
+    const { error: upsertError } = await window.supabase
       .from(PAINTINGS_TABLE)
       .upsert(
         { frame_index: frameIndex, image_url: publicUrl },
@@ -150,303 +135,311 @@ async function uploadPaintingToSupabase(frameIndex, file) {
       );
 
     if (upsertError) {
-      console.error("[RageCity] Error upserting painting record:", upsertError);
-      alert("RageCity upload error (DB upsert): " + upsertError.message);
+      console.error(
+        "[RageCity] Error upserting painting record:",
+        upsertError
+      );
       // still return publicUrl so the current user sees it
-    } else {
-      console.log("[RageCity] Painting DB upsert success:", upsertData);
     }
 
-    console.log("[RageCity] Upload + DB save complete for frame", frameIndex);
+    // If we had an older object path, delete it now to clean up the bucket.
+    if (oldPath) {
+      const { error: deleteError } = await window.supabase
+        .storage
+        .from(GALLERY_BUCKET)
+        .remove([oldPath]);
+      if (deleteError) {
+        console.warn(
+          "[RageCity] Failed to delete old painting object:",
+          deleteError
+        );
+      }
+    }
+
     return publicUrl;
   } catch (err) {
     console.error("[RageCity] Unexpected error uploading painting:", err);
-    alert("RageCity upload error (unexpected): " + err.message);
     return null;
   }
 }
 
 function preload() {
-  // Not used for frames anymore, but safe to leave.
-  this.load.image(
-    "artThumb",
-    "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1000&q=80"
-  );
+  this.load.image("player", "assets/player.png");
 }
 
 function create() {
-  const fb = document.getElementById("game-fallback");
-  if (fb) fb.style.display = "none";
+  const width = this.scale.width;
+  const height = this.scale.height;
 
-  const w = this.scale.width;
-  const h = this.scale.height;
+  const bg = this.add.rectangle(
+    width / 2,
+    height / 2,
+    width,
+    height,
+    0x050714
+  );
+  bg.setOrigin(0.5);
 
-  this.physics.world.setBounds(0, 0, w, h);
   wallsGroup = this.physics.add.staticGroup();
-  const scene = this;
 
-  console.log("[RageCity] Phaser scene created. World bounds:", { w, h });
+  const marginSides = 60;
+  const marginTop = 40;
+  const marginBottom = 120;
 
-  function addWallRect(x1, y1, x2, y2, thickness = 14) {
-    if (x1 === x2 && y1 !== y2) {
-      const height = Math.abs(y2 - y1);
-      const centerY = (y1 + y2) / 2;
-      const wall = scene.add.rectangle(
-        x1,
-        centerY,
-        thickness,
-        height,
-        0x00ff00,
-        0
-      );
-      wall.setVisible(false);
-      scene.physics.add.existing(wall, true);
-      wallsGroup.add(wall);
-    } else if (y1 === y2 && x1 !== x2) {
-      const width = Math.abs(x2 - x1);
-      const centerX = (x1 + x2) / 2;
-      const wall = scene.add.rectangle(
-        centerX,
-        y1,
-        width,
-        thickness,
-        0x00ff00,
-        0
-      );
-      wall.setVisible(false);
-      scene.physics.add.existing(wall, true);
-      wallsGroup.add(wall);
-    }
-  }
+  const leftOuter = marginSides;
+  const rightOuter = width - marginSides;
+  const topOuter = marginTop;
+  const bottomOuter = height - marginBottom;
 
-  function addWallBlock(x, y, size = 16) {
-    const wall = scene.add.rectangle(x, y, size, size, 0x00ff00, 0);
-    wall.setVisible(false);
-    scene.physics.add.existing(wall, true);
-    wallsGroup.add(wall);
-  }
+  const leftWall = this.add.rectangle(
+    leftOuter,
+    (topOuter + bottomOuter) / 2,
+    4,
+    bottomOuter - topOuter,
+    0xffffff
+  );
+  const rightWall = this.add.rectangle(
+    rightOuter,
+    (topOuter + bottomOuter) / 2,
+    4,
+    bottomOuter - topOuter,
+    0xffffff
+  );
+  const topWall = this.add.rectangle(
+    (leftOuter + rightOuter) / 2,
+    topOuter,
+    rightOuter - leftOuter,
+    4,
+    0xffffff
+  );
+  const bottomWall = this.add.rectangle(
+    (leftOuter + rightOuter) / 2,
+    bottomOuter,
+    rightOuter - leftOuter,
+    4,
+    0xffffff
+  );
 
-  // ==== ROOM GEOMETRY ====
-  const marginX = 60;
-  const marginY = 90;
+  wallsGroup.add(leftWall);
+  wallsGroup.add(rightWall);
+  wallsGroup.add(topWall);
+  wallsGroup.add(bottomWall);
 
-  const leftOuter = marginX;
-  const rightOuter = w - marginX;
-  const topOuter = marginY;
-  const bottomOuter = h - marginY;
+  const cornerOffset = 60;
 
-  const corridorWidth = 32;
-  const leftInner = leftOuter + corridorWidth;
-  const rightInner = rightOuter - corridorWidth;
-  const topInner = topOuter + corridorWidth;
-  const bottomInner = bottomOuter - corridorWidth;
+  const topLeftDiag = this.add.line(
+    leftOuter + cornerOffset,
+    topOuter + cornerOffset,
+    0,
+    0,
+    cornerOffset,
+    -cornerOffset,
+    0xffffff
+  );
+  const topRightDiag = this.add.line(
+    rightOuter - cornerOffset,
+    topOuter + cornerOffset,
+    0,
+    0,
+    -cornerOffset,
+    -cornerOffset,
+    0xffffff
+  );
+  const bottomLeftDiag = this.add.line(
+    leftOuter + cornerOffset,
+    bottomOuter - cornerOffset,
+    0,
+    0,
+    cornerOffset,
+    cornerOffset,
+    0xffffff
+  );
+  const bottomRightDiag = this.add.line(
+    rightOuter - cornerOffset,
+    bottomOuter - cornerOffset,
+    0,
+    0,
+    -cornerOffset,
+    cornerOffset,
+    0xffffff
+  );
 
-  const doorWidth = 90;
+  wallsGroup.add(topLeftDiag);
+  wallsGroup.add(topRightDiag);
+  wallsGroup.add(bottomLeftDiag);
+  wallsGroup.add(bottomRightDiag);
 
-  const doorCenterY = topInner + (bottomInner - topInner) * 0.65;
-  const gapOuterTopY = doorCenterY - doorWidth / 2;
-  const gapOuterBotY = doorCenterY + doorWidth / 2;
+  const leftInner = leftOuter + 60;
+  const rightInner = rightOuter - 60;
+  const topInner = topOuter + 60;
+  const bottomInner = bottomOuter - 60;
 
-  const gapInnerTopY = doorCenterY - doorWidth / 2;
-  const gapInnerBotY = doorCenterY + doorWidth / 2;
+  const leftInnerWall = this.add.rectangle(
+    leftInner,
+    (topInner + bottomInner) / 2,
+    4,
+    bottomInner - topInner,
+    0xffffff
+  );
+  const rightInnerWall = this.add.rectangle(
+    rightInner,
+    (topInner + bottomInner) / 2,
+    4,
+    bottomInner - topInner,
+    0xffffff
+  );
+  const topInnerWall = this.add.rectangle(
+    (leftInner + rightInner) / 2,
+    topInner,
+    rightInner - leftInner,
+    4,
+    0xffffff
+  );
+  const bottomInnerWall = this.add.rectangle(
+    (leftInner + rightInner) / 2,
+    bottomInner,
+    rightInner - leftInner,
+    4,
+    0xffffff
+  );
 
-  // Outer wall
-  const wallOuter = this.add.graphics();
-  wallOuter.lineStyle(4, 0xffffff, 1);
-  wallOuter.beginPath();
-  wallOuter.moveTo(leftOuter, topOuter);
-  wallOuter.lineTo(rightOuter, topOuter);
-  wallOuter.lineTo(rightOuter, bottomOuter);
-  wallOuter.lineTo(leftOuter, bottomOuter);
-  wallOuter.lineTo(leftOuter, gapOuterBotY);
-  wallOuter.moveTo(leftOuter, gapOuterTopY);
-  wallOuter.lineTo(leftOuter, topOuter);
-  wallOuter.strokePath();
+  wallsGroup.add(leftInnerWall);
+  wallsGroup.add(rightInnerWall);
+  wallsGroup.add(topInnerWall);
+  wallsGroup.add(bottomInnerWall);
 
-  // Inner wall
-  const wallInner = this.add.graphics();
-  wallInner.lineStyle(4, 0xffffff, 1);
-  wallInner.beginPath();
-  wallInner.moveTo(leftInner, topInner);
-  wallInner.lineTo(rightInner, topInner);
-  wallInner.lineTo(rightInner, bottomInner);
-  wallInner.lineTo(leftInner, bottomInner);
-  wallInner.lineTo(leftInner, gapInnerBotY);
-  wallInner.moveTo(leftInner, gapInnerTopY);
-  wallInner.lineTo(leftInner, topInner);
-  wallInner.strokePath();
+  player = this.physics.add.rectangle(
+    leftInner + 40,
+    bottomInner - 80,
+    18,
+    18,
+    0x39ff14
+  );
+  player.setOrigin(0.5);
 
-  // Diagonals
-  const diag = this.add.graphics();
-  diag.lineStyle(4, 0xffffff, 1);
-  diag.beginPath();
-  diag.moveTo(leftOuter, topOuter);
-  diag.lineTo(leftInner, topInner);
-  diag.moveTo(rightOuter, topOuter);
-  diag.lineTo(rightInner, topInner);
-  diag.moveTo(rightOuter, bottomOuter);
-  diag.lineTo(rightInner, bottomInner);
-  diag.moveTo(leftOuter, bottomOuter);
-  diag.lineTo(leftInner, bottomInner);
-  diag.strokePath();
-
-  // Ledges
-  const ledges = this.add.graphics();
-  ledges.lineStyle(4, 0xffffff, 1);
-  const ledgeLength = leftInner - leftOuter;
-  const upperLedgeY = gapInnerTopY;
-  const lowerLedgeY = gapInnerBotY;
-  ledges.beginPath();
-  ledges.moveTo(leftOuter, upperLedgeY);
-  ledges.lineTo(leftOuter + ledgeLength, upperLedgeY);
-  ledges.moveTo(leftOuter, lowerLedgeY);
-  ledges.lineTo(leftOuter + ledgeLength, lowerLedgeY);
-  ledges.strokePath();
-
-  // WALL COLLIDERS
-  addWallRect(leftOuter, topOuter, rightOuter, topOuter);
-  addWallRect(rightOuter, topOuter, rightOuter, bottomOuter);
-  addWallRect(leftOuter, bottomOuter, rightOuter, bottomOuter);
-  addWallRect(leftOuter, topOuter, leftOuter, gapOuterTopY);
-  addWallRect(leftOuter, gapOuterBotY, leftOuter, bottomOuter);
-
-  addWallRect(leftInner, topInner, rightInner, topInner);
-  addWallRect(rightInner, topInner, rightInner, bottomInner);
-  addWallRect(leftInner, bottomInner, rightInner, bottomInner);
-  addWallRect(leftInner, topInner, leftInner, gapInnerTopY);
-  addWallRect(leftInner, gapInnerBotY, leftInner, bottomInner);
-
-  addWallRect(leftOuter, upperLedgeY, leftOuter + ledgeLength, upperLedgeY);
-  addWallRect(leftOuter, lowerLedgeY, leftOuter + ledgeLength, lowerLedgeY);
-
-  const steps = 6;
-  for (let i = 0; i <= steps; i++) {
-    let t = i / steps;
-    let x = Phaser.Math.Linear(leftOuter, leftInner, t);
-    let y = Phaser.Math.Linear(topOuter, topInner, t);
-    addWallBlock(x, y, 14);
-    x = Phaser.Math.Linear(rightOuter, rightInner, t);
-    y = Phaser.Math.Linear(topOuter, topInner, t);
-    addWallBlock(x, y, 14);
-    x = Phaser.Math.Linear(rightOuter, rightInner, t);
-    y = Phaser.Math.Linear(bottomOuter, bottomInner, t);
-    addWallBlock(x, y, 14);
-    x = Phaser.Math.Linear(leftOuter, leftInner, t);
-    y = Phaser.Math.Linear(bottomOuter, bottomInner, t);
-    addWallBlock(x, y, 14);
-  }
-
-  // Player
-  player = this.add.rectangle(leftOuter - 20, doorCenterY, 20, 20, 0x39ff14);
   this.physics.add.existing(player);
   player.body.setCollideWorldBounds(true);
+
   this.physics.add.collider(player, wallsGroup);
 
-  // FRAMES (start BLACK, Supabase will populate any that have art)
-  const imgDisplaySize = 26;
-  galleryFrames = [];
+  const addTrapezoidFrame = (scene, x, y, side) => {
+    const outer = scene.add.graphics();
+    outer.lineStyle(3, 0xffffff, 1);
 
-  function addTrapezoidFrame(scene2, x, y, side) {
-    const g = scene2.add.graphics();
-    g.lineStyle(3, 0x39ff14, 1);
-    const wTop = 18;
-    const wBottom = 28;
-    const h2 = 26;
-    const skew = 5;
-    let points;
-    if (side === "left") {
-      points = [
-        { x: -wBottom / 2, y: -h2 / 2 },
-        { x:  wTop / 2,    y: -h2 / 2 + skew },
-        { x:  wTop / 2,    y:  h2 / 2 - skew },
-        { x: -wBottom / 2, y:  h2 / 2 }
-      ];
-    } else if (side === "right") {
-      points = [
-        { x: -wTop / 2,    y: -h2 / 2 + skew },
-        { x:  wBottom / 2, y: -h2 / 2 },
-        { x:  wBottom / 2, y:  h2 / 2 },
-        { x: -wTop / 2,    y:  h2 / 2 - skew }
-      ];
-    } else if (side === "top") {
-      points = [
-        { x: -wBottom / 2, y: -h2 / 2 },
-        { x:  wBottom / 2, y: -h2 / 2 },
-        { x:  wTop / 2,    y:  h2 / 2 },
-        { x: -wTop / 2,    y:  h2 / 2 }
-      ];
+    const wTop = 50;
+    const wBottom = 50;
+    const h = 40;
+
+    let t1x, t1y, t2x, t2y, b1x, b1y, b2x, b2y;
+
+    if (side === "top") {
+      t1x = x - wTop / 2;
+      t1y = y - h / 2;
+      t2x = x + wTop / 2;
+      t2y = y - h / 2;
+      b1x = x - wBottom / 2;
+      b1y = y + h / 2;
+      b2x = x + wBottom / 2;
+      b2y = y + h / 2;
+    } else if (side === "bottom") {
+      t1x = x - wTop / 2;
+      t1y = y + h / 2;
+      t2x = x + wTop / 2;
+      t2y = y + h / 2;
+      b1x = x - wBottom / 2;
+      b1y = y - h / 2;
+      b2x = x + wBottom / 2;
+      b2y = y - h / 2;
+    } else if (side === "left") {
+      t1x = x - wTop / 2;
+      t1y = y - h / 2;
+      t2x = x + wTop / 2;
+      t2y = y - h / 2;
+      b1x = x - wBottom / 2;
+      b1y = y + h / 2;
+      b2x = x + wBottom / 2;
+      b2y = y + h / 2;
     } else {
-      points = [
-        { x: -wTop / 2,    y: -h2 / 2 },
-        { x:  wTop / 2,    y: -h2 / 2 },
-        { x:  wBottom / 2, y:  h2 / 2 },
-        { x: -wBottom / 2, y:  h2 / 2 }
-      ];
+      t1x = x - wTop / 2;
+      t1y = y - h / 2;
+      t2x = x + wTop / 2;
+      t2y = y - h / 2;
+      b1x = x - wBottom / 2;
+      b1y = y + h / 2;
+      b2x = x + wBottom / 2;
+      b2y = y + h / 2;
     }
 
-    // Outer neon frame
-    g.beginPath();
-    g.moveTo(x + points[0].x, y + points[0].y);
-    for (let i = 1; i < points.length; i++) {
-      g.lineTo(x + points[i].x, y + points[i].y);
-    }
-    g.closePath();
-    g.strokePath();
+    outer.moveTo(t1x, t1y);
+    outer.lineTo(t2x, t2y);
+    outer.lineTo(b2x, b2y);
+    outer.lineTo(b1x, b1y);
+    outer.closePath();
+    outer.strokePath();
 
-    // Black mat inside
-    const gMat = scene2.add.graphics();
-    gMat.lineStyle(2, 0x1a8f3a, 1);
-    gMat.fillStyle(0x000000, 1);
-    const matScale = 0.78;
-    gMat.beginPath();
-    gMat.moveTo(
-      x + points[0].x * matScale,
-      y + points[0].y * matScale
-    );
-    for (let i = 1; i < points.length; i++) {
-      gMat.lineTo(
-        x + points[i].x * matScale,
-        y + points[i].y * matScale
-      );
-    }
-    gMat.closePath();
-    gMat.fillPath();
-    gMat.strokePath();
+    const inner = scene.add.graphics();
+    inner.lineStyle(3, 0x39ff14, 1);
 
+    const inset = 6;
+    const it1x = t1x + inset;
+    const it1y = t1y + inset;
+    const it2x = t2x - inset;
+    const it2y = t2y + inset;
+    const ib1x = b1x + inset;
+    const ib1y = b1y - inset;
+    const ib2x = b2x - inset;
+    const ib2y = b2y - inset;
+
+    inner.moveTo(it1x, it1y);
+    inner.lineTo(it2x, it2y);
+    inner.lineTo(ib2x, ib2y);
+    inner.lineTo(ib1x, ib1y);
+    inner.closePath();
+    inner.strokePath();
+
+    const frameIndex = galleryFrames.length;
     galleryFrames.push({
       x,
       y,
       side,
-      frameGfx: g,
-      matGfx: gMat,
+      outer,
+      inner,
       img: null,
+      frameIndex,
       fullUrl: null
     });
-  }
+  };
 
-  const midLeftX   = (leftOuter  + leftInner)  / 2;
-  const midRightX  = (rightOuter + rightInner) / 2;
-  const midTopY    = (topOuter   + topInner)   / 2;
-  const midBottomY = (bottomOuter+ bottomInner)/ 2;
+  const imgDisplaySize = 40;
 
-  const topCount = 4;
-  const topStartX = leftInner + 35;
-  const topEndX   = rightInner - 35;
-  for (let i = 0; i < topCount; i++) {
-    const t = topCount === 1 ? 0.5 : i / (topCount - 1);
-    const x = Phaser.Math.Linear(topStartX, topEndX, t);
-    addTrapezoidFrame(this, x, midTopY, "top");
-  }
+  const gapInnerTopY = topInner + 20;
+  const gapInnerBottomY = bottomInner - 20;
+  const gapInnerLeftX = leftInner + 20;
+  const gapInnerRightX = rightInner - 20;
 
-  const rightCount = 4;
-  for (let i = 0; i < rightCount; i++) {
-    const t = i / (rightCount - 1);
-    const y = Phaser.Math.Linear(topInner + 40, bottomInner - 40, t);
-    addTrapezoidFrame(this, midRightX, y, "right");
-  }
+  const topPositions = [
+    gapInnerLeftX + 24,
+    gapInnerLeftX + 90,
+    (gapInnerLeftX + gapInnerRightX) / 2,
+    gapInnerRightX - 90,
+    gapInnerRightX - 24
+  ];
+  topPositions.forEach((x) => {
+    addTrapezoidFrame(this, x, topInner, "top");
+  });
+
+  const rightPositions = [
+    gapInnerTopY + 24,
+    gapInnerTopY + 90,
+    (gapInnerTopY + gapInnerBottomY) / 2,
+    gapInnerBottomY - 90,
+    gapInnerBottomY - 24
+  ];
+  rightPositions.forEach((y) => {
+    addTrapezoidFrame(this, rightInner, y, "right");
+  });
 
   const leftYPositions = [
-    topInner + 55,
     gapInnerTopY - 22
   ];
   leftYPositions.forEach((y) => {
@@ -464,10 +457,8 @@ function create() {
     addTrapezoidFrame(this, x, midBottomY, "bottom");
   });
 
-  console.log("[RageCity] Total gallery frames:", galleryFrames.length);
-
-  // 🔄 Load shared gallery from Supabase
-  loadPaintingsFromSupabase(this, imgDisplaySize);
+  const midLeftX = leftInner;
+  const midBottomY = bottomInner;
 
   // ===== SCULPTURE CUBE =====
   const centerX = (leftOuter + rightOuter) / 2;
@@ -478,7 +469,7 @@ function create() {
   const cube = this.add.graphics();
   cube.lineStyle(3, 0xffffff, 1);
 
-  const size = 46;   // outer front square
+  const size = 46; // outer front square
   const depth = 10;
 
   const frontX = sculptureX - size / 2;
@@ -489,7 +480,6 @@ function create() {
   const backY = frontY - depth;
   cube.strokeRect(backX, backY, size, size);
 
-  cube.beginPath();
   cube.moveTo(frontX, frontY);
   cube.lineTo(backX, backY);
   cube.moveTo(frontX + size, frontY);
@@ -510,38 +500,10 @@ function create() {
   );
   inner.setStrokeStyle(2, 0x39ff14, 1);
 
-  sculptureSpot = {
-    x: sculptureX,
-    y: sculptureY,
-    fullUrl: SCULPTURE_FULL_URL,
-    type: "sculpture"
-  };
+  sculptureSpot = { x: sculptureX, y: sculptureY, fullUrl: null };
 
-  // ===== SCULPTURE COLLIDER (adjustable on all sides) =====
-  const midSize = (size + innerSize) / 2;
-
-  const expandLeft   = 18;
-  const expandRight  = -3;
-  const expandTop    = 18;
-  const expandBottom = -3;
-
-  const colliderWidth  = midSize + expandLeft + expandRight;
-  const colliderHeight = midSize + expandTop + expandBottom;
-
-  const frontCollider = this.add.rectangle(
-    sculptureX + (expandRight - expandLeft) / 2,
-    sculptureY + (expandBottom - expandTop) / 2,
-    colliderWidth,
-    colliderHeight,
-    0x00ff00,
-    0
-  );
-  frontCollider.setVisible(false);
-  this.physics.add.existing(frontCollider, true);
-  wallsGroup.add(frontCollider);
-
-  // prompt text
-  promptText = this.add.text(w / 2, h - 40, "", {
+  const textY = height - 40;
+  promptText = this.add.text(width / 2, textY, "", {
     fontFamily:
       "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     fontSize: "14px",
@@ -554,34 +516,22 @@ function create() {
     promptText.setPosition(gameSize.width / 2, gameSize.height - 40);
   });
 
-  // controls + fullscreen
   setupKeyboard(this);
   setupTouchButton("btn-left", "left");
   setupTouchButton("btn-right", "right");
   setupTouchButton("btn-up", "up");
   setupTouchButton("btn-down", "down");
-  setupTouchButton("btn-a", "A");
-  setupTouchButton("btn-b", "B");
+  setupTouchButton("btn-A", "A");
+  setupTouchButton("btn-B", "B");
+
   setupFullscreenButton();
 
-  if (artOverlayEl) {
-    artOverlayEl.addEventListener("click", () => {
-      if (artOpen) closeArtOverlay();
-    });
-  }
+  loadPaintingsFromSupabase(this, imgDisplaySize);
 
-  // ====== hook the hidden <input type="file" id="paintingUpload"> ======
   paintingUploadInput = document.getElementById("paintingUpload");
-  console.log("[RageCity] paintingUpload input found?", !!paintingUploadInput);
-
   if (paintingUploadInput) {
     paintingUploadInput.addEventListener("change", function () {
       const file = this.files && this.files[0];
-      console.log("[RageCity] paintingUpload change event:", {
-        hasFile: !!file,
-        currentPaintingIndex,
-      });
-
       if (!file || currentPaintingIndex === null) {
         this.value = "";
         return;
@@ -590,25 +540,16 @@ function create() {
       const frameIndex = currentPaintingIndex;
       const frame = galleryFrames[frameIndex];
       if (!frame) {
-        console.warn("[RageCity] No frame found for index", frameIndex);
         this.value = "";
         return;
       }
 
-      console.log("[RageCity] Selected file for frame:", {
-        frameIndex,
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-      });
-
       // 1) Show thumbnail immediately using FileReader (local)
+      const oldPath = getPathFromPublicUrl(frame.fullUrl);
       const reader = new FileReader();
       reader.onload = function (ev) {
         const dataUrl = ev.target.result;
         const texKeyLocal = `localPainting-${frameIndex}`;
-
-        console.log("[RageCity] FileReader loaded data URL for frame", frameIndex);
 
         if (scene.textures.exists(texKeyLocal)) {
           scene.textures.remove(texKeyLocal);
@@ -627,31 +568,20 @@ function create() {
         // Local fallback URL (in case Supabase fails)
         frame.fullUrl = dataUrl;
 
-        console.log("[RageCity] Local preview applied for frame", frameIndex);
-
         // 2) Fire Supabase upload in the background
         (async () => {
-          const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
+          const publicUrl = await uploadPaintingToSupabase(
+            frameIndex,
+            file,
+            oldPath
+          );
           if (publicUrl) {
-            // Update to shared URL so other devices can see it
             frame.fullUrl = publicUrl;
-            console.log("[RageCity] Frame updated with Supabase URL", {
-              frameIndex,
-              publicUrl,
-            });
-          } else {
-            console.warn("[RageCity] Supabase upload returned null for frame", frameIndex);
           }
         })();
       };
 
-      reader.onerror = function (ev) {
-        console.error("[RageCity] FileReader error:", ev);
-        alert("RageCity error reading file from device.");
-      };
-
       reader.readAsDataURL(file);
-      // reset so same file can be chosen again if needed
       this.value = "";
     });
   }
@@ -671,13 +601,103 @@ function setupFullscreenButton() {
       }
     }
   });
+}
 
-  document.addEventListener("fullscreenchange", () => {
-    if (!btn) return;
-    btn.textContent = document.fullscreenElement
-      ? "⛶ Exit Fullscreen"
-      : "⛶ Fullscreen";
+const inputState = {
+  left: false,
+  right: false,
+  up: false,
+  down: false,
+  A: false,
+  B: false
+};
+
+function setupKeyboard(scene) {
+  scene.input.keyboard.on("keydown", (event) => {
+    if (event.code === "ArrowLeft") inputState.left = true;
+    if (event.code === "ArrowRight") inputState.right = true;
+    if (event.code === "ArrowUp") inputState.up = true;
+    if (event.code === "ArrowDown") inputState.down = true;
+    if (event.code === "KeyZ") inputState.A = true;
+    if (event.code === "KeyX") inputState.B = true;
   });
+
+  scene.input.keyboard.on("keyup", (event) => {
+    if (event.code === "ArrowLeft") inputState.left = false;
+    if (event.code === "ArrowRight") inputState.right = false;
+    if (event.code === "ArrowUp") inputState.up = false;
+    if (event.code === "ArrowDown") inputState.down = false;
+    if (event.code === "KeyZ") inputState.A = false;
+    if (event.code === "KeyX") inputState.B = false;
+  });
+}
+
+function setupTouchButton(id, direction) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+
+  const setState = (value) => {
+    inputState[direction] = value;
+  };
+
+  btn.addEventListener("touchstart", (event) => {
+    event.preventDefault();
+    setState(true);
+  });
+
+  btn.addEventListener("touchend", (event) => {
+    event.preventDefault();
+    setState(false);
+  });
+
+  btn.addEventListener("mousedown", () => {
+    setState(true);
+  });
+
+  btn.addEventListener("mouseup", () => {
+    setState(false);
+  });
+
+  btn.addEventListener("mouseleave", () => {
+    setState(false);
+  });
+}
+
+let artOpen = false;
+
+function openArtOverlay(url) {
+  const overlay = document.getElementById("art-overlay");
+  const img = document.getElementById("art-overlay-img");
+  if (!overlay || !img) return;
+
+  img.src = url;
+  overlay.style.display = "flex";
+  artOpen = true;
+}
+
+function closeArtOverlay() {
+  const overlay = document.getElementById("art-overlay");
+  const img = document.getElementById("art-overlay-img");
+  if (!overlay || !img) return;
+
+  img.src = "";
+  overlay.style.display = "none";
+  artOpen = false;
+}
+
+function toggleArtFullscreen() {
+  const img = document.getElementById("art-overlay-img");
+  if (!img) return;
+
+  if (!document.fullscreenElement) {
+    if (img.requestFullscreen) {
+      img.requestFullscreen();
+    }
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    }
+  }
 }
 
 function update(time, delta) {
@@ -714,7 +734,6 @@ function update(time, delta) {
   let nearestItem = null;
   let nearestDist = Infinity;
 
-  // find closest painting (track index so we know which one to edit)
   galleryFrames.forEach((f, index) => {
     const d = Phaser.Math.Distance.Between(player.x, player.y, f.x, f.y);
     if (d < nearestDist) {
@@ -723,7 +742,6 @@ function update(time, delta) {
     }
   });
 
-  // compare sculpture
   if (sculptureSpot) {
     const d = Phaser.Math.Distance.Between(
       player.x,
@@ -740,7 +758,6 @@ function update(time, delta) {
     }
   }
 
-  // ===== prompt text (includes B for replace when art exists) =====
   if (promptText) {
     if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
@@ -750,7 +767,9 @@ function update(time, delta) {
         const frame = galleryFrames[nearestItem.index];
         const hasArt = frame && !!frame.fullUrl;
         if (hasArt) {
-          promptText.setText("Press A to view art\nPress B to replace art");
+          promptText.setText(
+            "Press A to view art\nPress B to replace art"
+          );
         } else {
           promptText.setText("Press A to add art");
         }
@@ -760,7 +779,6 @@ function update(time, delta) {
     }
   }
 
-  // ===== A button (view or add) =====
   if (nearestItem && nearestDist < 60 && justPressedA) {
     if (nearestItem.type === "sculpture") {
       if (nearestItem.fullUrl) openArtOverlay(nearestItem.fullUrl);
@@ -770,30 +788,20 @@ function update(time, delta) {
       if (!frame) return;
 
       if (!frame.fullUrl) {
-        // no art yet → open file picker
-        console.log("[RageCity] Opening file picker for frame", currentPaintingIndex);
         if (paintingUploadInput) paintingUploadInput.click();
       } else {
-        // has art → view it
-        console.log("[RageCity] Opening overlay for existing art on frame", currentPaintingIndex);
         openArtOverlay(frame.fullUrl);
       }
     }
   }
 
-  // ===== B button (replace art if it exists) =====
-  if (
-    nearestItem &&
-    nearestItem.type === "painting" &&
-    nearestDist < 60 &&
-    justPressedB
-  ) {
-    const frameIndex = nearestItem.index;
-    const frame = galleryFrames[frameIndex];
-    if (frame && frame.fullUrl && paintingUploadInput) {
-      currentPaintingIndex = frameIndex;
-      console.log("[RageCity] Opening file picker to REPLACE art on frame", frameIndex);
-      paintingUploadInput.click();
+  if (nearestItem && nearestItem.type === "painting" && nearestDist < 60) {
+    if (justPressedB) {
+      currentPaintingIndex = nearestItem.index;
+      const frame = galleryFrames[currentPaintingIndex];
+      if (!frame) return;
+
+      if (paintingUploadInput) paintingUploadInput.click();
     }
   }
 
