@@ -96,7 +96,7 @@ async function uploadPaintingToSupabase(frameIndex, file) {
   try {
     const ext = (file.type && file.type.split("/")[1]) || "png";
 
-    // versioned filename so each replace gets a new URL
+    // 🔥 IMPORTANT CHANGE: versioned filename so each replace gets a new URL
     const timestamp = Date.now();
     const fileName = `painting_${frameIndex}_${timestamp}.${ext}`;
     const filePath = `paintings/${fileName}`;
@@ -466,7 +466,7 @@ function create() {
 
   console.log("[RageCity] Total gallery frames:", galleryFrames.length);
 
-  // Load shared gallery from Supabase
+  // 🔄 Load shared gallery from Supabase
   loadPaintingsFromSupabase(this, imgDisplaySize);
 
   // ===== SCULPTURE CUBE =====
@@ -570,7 +570,7 @@ function create() {
     });
   }
 
-  // hook the hidden <input type="file" id="paintingUpload">
+  // ====== hook the hidden <input type="file" id="paintingUpload"> ======
   paintingUploadInput = document.getElementById("paintingUpload");
   console.log("[RageCity] paintingUpload input found?", !!paintingUploadInput);
 
@@ -602,28 +602,27 @@ function create() {
         fileSize: file.size,
       });
 
+      // 1) Show thumbnail immediately using FileReader (local)
       const reader = new FileReader();
       reader.onload = function (ev) {
         const dataUrl = ev.target.result;
         const texKeyLocal = `localPainting-${frameIndex}`;
 
-        console.log("[RageCity] Updating thumbnail immediately for frame", frameIndex);
+        console.log("[RageCity] FileReader loaded data URL for frame", frameIndex);
 
-        // 1. Remove old cached texture
-        if (scene.textures.exists(texKeyLocal)) {
-          scene.textures.remove(texKeyLocal);
-        }
-
-        // 2. Destroy any old image object
+        // IMPORTANT: destroy the old image FIRST
         if (frame.img) {
           frame.img.destroy();
           frame.img = null;
         }
 
-        // 3. Add the new Base64 texture and only then draw the image
-        scene.textures.addBase64(texKeyLocal, dataUrl, () => {
-          console.log("[RageCity] Base64 texture added, drawing new thumbnail...");
+        // remove old cached texture key so Phaser doesn't reuse old pixels
+        if (scene.textures.exists(texKeyLocal)) {
+          scene.textures.remove(texKeyLocal);
+        }
 
+        // ✅ FIX: wait until base64 is actually ready before creating the image
+        scene.textures.addBase64(texKeyLocal, dataUrl, () => {
           const img = scene.add.image(frame.x, frame.y, texKeyLocal);
           img.setDisplaySize(imgDisplaySize, imgDisplaySize);
           frame.img = img;
@@ -634,7 +633,7 @@ function create() {
           console.log("[RageCity] Local preview applied for frame", frameIndex);
         });
 
-        // 4. Upload to Supabase in the background
+        // 2) Fire Supabase upload in the background
         (async () => {
           const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
           if (publicUrl) {
@@ -745,7 +744,7 @@ function update(time, delta) {
     }
   }
 
-  // prompt text
+  // ===== prompt text (includes B for replace when art exists) =====
   if (promptText) {
     if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
@@ -765,7 +764,7 @@ function update(time, delta) {
     }
   }
 
-  // A button (view or add)
+  // ===== A button (view or add) =====
   if (nearestItem && nearestDist < 60 && justPressedA) {
     if (nearestItem.type === "sculpture") {
       if (nearestItem.fullUrl) openArtOverlay(nearestItem.fullUrl);
@@ -786,7 +785,7 @@ function update(time, delta) {
     }
   }
 
-  // B button (replace art if it exists)
+  // ===== B button (replace art if it exists) =====
   if (
     nearestItem &&
     nearestItem.type === "painting" &&
