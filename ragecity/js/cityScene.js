@@ -87,8 +87,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
 }
 
 // Upload a file to Supabase bucket + upsert DB row, return public URL
-// 🔥 now also takes oldUrl so we can delete the previous object
-async function uploadPaintingToSupabase(frameIndex, file, oldUrl) {
+async function uploadPaintingToSupabase(frameIndex, file) {
   if (!window.supabase) {
     console.warn("[RageCity] Supabase client missing; cannot upload.");
     return null;
@@ -110,7 +109,8 @@ async function uploadPaintingToSupabase(frameIndex, file, oldUrl) {
       fileSize: file.size,
     });
 
-    const { data: uploadData, error: uploadError } = await window.supabase.storage
+    const { data: uploadData, error: uploadError } = await window.supabase
+      .storage
       .from(GALLERY_BUCKET)
       .upload(filePath, file, { upsert: true });
 
@@ -122,7 +122,8 @@ async function uploadPaintingToSupabase(frameIndex, file, oldUrl) {
 
     console.log("[RageCity] Storage upload success:", uploadData);
 
-    const { data: publicData, error: publicErr } = window.supabase.storage
+    const { data: publicData, error: publicErr } = window.supabase
+      .storage
       .from(GALLERY_BUCKET)
       .getPublicUrl(filePath);
 
@@ -154,35 +155,6 @@ async function uploadPaintingToSupabase(frameIndex, file, oldUrl) {
       // still return publicUrl so the current user sees it
     } else {
       console.log("[RageCity] Painting DB upsert success:", upsertData);
-    }
-
-    // 🔥 NEW: delete previous object from bucket if we can parse its path
-    if (oldUrl && typeof oldUrl === "string" && !oldUrl.startsWith("data:")) {
-      try {
-        const marker = `/storage/v1/object/public/${GALLERY_BUCKET}/`;
-        const idx = oldUrl.indexOf(marker);
-        if (idx !== -1) {
-          const pathToDelete = oldUrl.substring(idx + marker.length); // e.g. "paintings/painting_0_123.png"
-          console.log("[RageCity] Attempting to delete old painting object:", pathToDelete);
-
-          const { error: delError } = await window.supabase.storage
-            .from(GALLERY_BUCKET)
-            .remove([pathToDelete]);
-
-          if (delError) {
-            console.warn("[RageCity] Error deleting old painting from bucket:", delError);
-          } else {
-            console.log("[RageCity] Old painting deleted from bucket:", pathToDelete);
-          }
-        } else {
-          console.log(
-            "[RageCity] Old URL does not look like a bucket object, skipping delete:",
-            oldUrl
-          );
-        }
-      } catch (delErr) {
-        console.warn("[RageCity] Unexpected error while deleting old painting:", delErr);
-      }
     }
 
     console.log("[RageCity] Upload + DB save complete for frame", frameIndex);
@@ -494,7 +466,7 @@ function create() {
 
   console.log("[RageCity] Total gallery frames:", galleryFrames.length);
 
-  // 🔄 Load shared gallery from Supabase
+  // Load shared gallery from Supabase
   loadPaintingsFromSupabase(this, imgDisplaySize);
 
   // ===== SCULPTURE CUBE =====
@@ -598,7 +570,7 @@ function create() {
     });
   }
 
-  // ====== hook the hidden <input type="file" id="paintingUpload"> ======
+  // hook the hidden <input type="file" id="paintingUpload">
   paintingUploadInput = document.getElementById("paintingUpload");
   console.log("[RageCity] paintingUpload input found?", !!paintingUploadInput);
 
@@ -623,19 +595,16 @@ function create() {
         return;
       }
 
-      // 🔥 capture old URL so we can delete the previous object after upload
-      const oldUrl = frame.fullUrl || null;
-
       console.log("[RageCity] Selected file for frame:", {
         frameIndex,
         fileName: file.name,
         fileType: file.type,
         fileSize: file.size,
-        oldUrl,
       });
 
-      // 1) Show thumbnail immediately using FileReader (local)
       const reader = new FileReader();
+
+      // 1) Show thumbnail immediately using FileReader (local preview)
       reader.onload = function (ev) {
         const dataUrl = ev.target.result;
         const texKeyLocal = `localPainting-${frameIndex}`;
@@ -646,24 +615,25 @@ function create() {
           scene.textures.remove(texKeyLocal);
         }
 
-        scene.textures.addBase64(texKeyLocal, dataUrl);
+        // IMPORTANT: wait for addBase64 to finish before creating the image
+        scene.textures.addBase64(texKeyLocal, dataUrl, () => {
+          if (frame.img) {
+            frame.img.destroy();
+          }
 
-        if (frame.img) {
-          frame.img.destroy();
-        }
+          const img = scene.add.image(frame.x, frame.y, texKeyLocal);
+          img.setDisplaySize(imgDisplaySize, imgDisplaySize);
+          frame.img = img;
 
-        const img = scene.add.image(frame.x, frame.y, texKeyLocal);
-        img.setDisplaySize(imgDisplaySize, imgDisplaySize);
-        frame.img = img;
+          // Local fallback URL (in case Supabase fails)
+          frame.fullUrl = dataUrl;
 
-        // Local fallback URL (in case Supabase fails)
-        frame.fullUrl = dataUrl;
-
-        console.log("[RageCity] Local preview applied for frame", frameIndex);
+          console.log("[RageCity] Local preview applied for frame", frameIndex);
+        });
 
         // 2) Fire Supabase upload in the background
         (async () => {
-          const publicUrl = await uploadPaintingToSupabase(frameIndex, file, oldUrl);
+          const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
           if (publicUrl) {
             // Update to shared URL so other devices can see it
             frame.fullUrl = publicUrl;
@@ -672,10 +642,7 @@ function create() {
               publicUrl,
             });
           } else {
-            console.warn(
-              "[RageCity] Supabase upload returned null for frame",
-              frameIndex
-            );
+            console.warn("[RageCity] Supabase upload returned null for frame", frameIndex);
           }
         })();
       };
@@ -775,7 +742,7 @@ function update(time, delta) {
     }
   }
 
-  // ===== prompt text (includes B for replace when art exists) =====
+  // prompt text
   if (promptText) {
     if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
@@ -795,7 +762,7 @@ function update(time, delta) {
     }
   }
 
-  // ===== A button (view or add) =====
+  // A button (view or add)
   if (nearestItem && nearestDist < 60 && justPressedA) {
     if (nearestItem.type === "sculpture") {
       if (nearestItem.fullUrl) openArtOverlay(nearestItem.fullUrl);
@@ -810,16 +777,13 @@ function update(time, delta) {
         if (paintingUploadInput) paintingUploadInput.click();
       } else {
         // has art → view it
-        console.log(
-          "[RageCity] Opening overlay for existing art on frame",
-          currentPaintingIndex
-        );
+        console.log("[RageCity] Opening overlay for existing art on frame", currentPaintingIndex);
         openArtOverlay(frame.fullUrl);
       }
     }
   }
 
-  // ===== B button (replace art if it exists) =====
+  // B button (replace art if it exists)
   if (
     nearestItem &&
     nearestItem.type === "painting" &&
