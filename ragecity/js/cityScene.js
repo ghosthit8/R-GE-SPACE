@@ -44,6 +44,11 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
     data.forEach((row) => {
       const idx = row.frame_index;
       if (idx < 0 || idx >= galleryFrames.length) return;
+
+      const frame = galleryFrames[idx];
+      // If user is in the middle of replacing this frame, don't queue/overwrite it
+      if (frame && frame.locked) return;
+
       const texKey = `supPainting-${idx}`;
       console.log(
         `[RageCity] Queueing image load for frame ${idx}:`,
@@ -60,7 +65,8 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
       data.forEach((row) => {
         const idx = row.frame_index;
         const frame = galleryFrames[idx];
-        if (!frame) return;
+        if (!frame || frame.locked) return;
+
         const texKey = `supPainting-${idx}`;
         if (!scene.textures.exists(texKey)) {
           console.warn("[RageCity] Texture key missing for frame", idx, texKey);
@@ -420,7 +426,13 @@ function create() {
       frameGfx: g,
       matGfx: gMat,
       img: null,
-      fullUrl: null
+      fullUrl: null,
+
+      // ✅ NEW: protects against async overwrites while replacing
+      locked: false,
+
+      // ✅ NEW: track local texture key so we can safely remove it later
+      localTexKey: null
     });
   }
 
@@ -602,27 +614,36 @@ function create() {
         fileSize: file.size,
       });
 
+      // ✅ lock while replacing so nothing overwrites mid-flight
+      frame.locked = true;
+
       // 1) Show thumbnail immediately using FileReader (local)
       const reader = new FileReader();
       reader.onload = function (ev) {
         const dataUrl = ev.target.result;
-        const texKeyLocal = `localPainting-${frameIndex}`;
 
         console.log("[RageCity] FileReader loaded data URL for frame", frameIndex);
 
-        // IMPORTANT: destroy the old image FIRST
+        // Destroy previous image object
         if (frame.img) {
           frame.img.destroy();
           frame.img = null;
         }
 
-        // remove old cached texture key so Phaser doesn't reuse old pixels
-        if (scene.textures.exists(texKeyLocal)) {
-          scene.textures.remove(texKeyLocal);
+        // Remove previous local texture key (if any)
+        if (frame.localTexKey && scene.textures.exists(frame.localTexKey)) {
+          scene.textures.remove(frame.localTexKey);
         }
 
-        // ✅ FIX: wait until base64 is actually ready before creating the image
+        // Use a unique key every time to avoid Phaser/GL reuse weirdness on mobile
+        const texKeyLocal = `localPainting-${frameIndex}-${Date.now()}`;
+        frame.localTexKey = texKeyLocal;
+
+        // ✅ IMPORTANT: wait for base64 texture to be ready before drawing
         scene.textures.addBase64(texKeyLocal, dataUrl, () => {
+          // If user somehow triggered another upload very fast, avoid drawing old one
+          if (frame.localTexKey !== texKeyLocal) return;
+
           const img = scene.add.image(frame.x, frame.y, texKeyLocal);
           img.setDisplaySize(imgDisplaySize, imgDisplaySize);
           frame.img = img;
@@ -635,16 +656,20 @@ function create() {
 
         // 2) Fire Supabase upload in the background
         (async () => {
-          const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
-          if (publicUrl) {
-            // Update to shared URL so other devices can see it
-            frame.fullUrl = publicUrl;
-            console.log("[RageCity] Frame updated with Supabase URL", {
-              frameIndex,
-              publicUrl,
-            });
-          } else {
-            console.warn("[RageCity] Supabase upload returned null for frame", frameIndex);
+          try {
+            const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
+            if (publicUrl) {
+              frame.fullUrl = publicUrl;
+              console.log("[RageCity] Frame updated with Supabase URL", {
+                frameIndex,
+                publicUrl,
+              });
+            } else {
+              console.warn("[RageCity] Supabase upload returned null for frame", frameIndex);
+            }
+          } finally {
+            // ✅ unlock even if upload fails
+            frame.locked = false;
           }
         })();
       };
@@ -652,6 +677,7 @@ function create() {
       reader.onerror = function (ev) {
         console.error("[RageCity] FileReader error:", ev);
         alert("RageCity error reading file from device.");
+        frame.locked = false;
       };
 
       reader.readAsDataURL(file);
