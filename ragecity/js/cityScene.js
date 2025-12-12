@@ -603,23 +603,26 @@ function create() {
       });
 
       const reader = new FileReader();
-
-      // 1) Show thumbnail immediately using FileReader (local preview)
       reader.onload = function (ev) {
         const dataUrl = ev.target.result;
         const texKeyLocal = `localPainting-${frameIndex}`;
 
-        console.log("[RageCity] FileReader loaded data URL for frame", frameIndex);
+        console.log("[RageCity] Updating thumbnail immediately for frame", frameIndex);
 
+        // 1. Remove old cached texture
         if (scene.textures.exists(texKeyLocal)) {
           scene.textures.remove(texKeyLocal);
         }
 
-        // IMPORTANT: wait for addBase64 to finish before creating the image
+        // 2. Destroy any old image object
+        if (frame.img) {
+          frame.img.destroy();
+          frame.img = null;
+        }
+
+        // 3. Add the new Base64 texture and only then draw the image
         scene.textures.addBase64(texKeyLocal, dataUrl, () => {
-          if (frame.img) {
-            frame.img.destroy();
-          }
+          console.log("[RageCity] Base64 texture added, drawing new thumbnail...");
 
           const img = scene.add.image(frame.x, frame.y, texKeyLocal);
           img.setDisplaySize(imgDisplaySize, imgDisplaySize);
@@ -631,7 +634,7 @@ function create() {
           console.log("[RageCity] Local preview applied for frame", frameIndex);
         });
 
-        // 2) Fire Supabase upload in the background
+        // 4. Upload to Supabase in the background
         (async () => {
           const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
           if (publicUrl) {
