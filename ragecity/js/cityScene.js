@@ -16,6 +16,8 @@ const PAINTINGS_TABLE = "ragecity_paintings";
 
 // Log once when this file loads so we know if Supabase is there
 console.log("[RageCity] cityScene.js loaded. Supabase present?", !!window.supabase);
+// Version marker so you can verify you're loading the new file
+console.log("[RageCity] CityScene.js VERSION: thumbsfix_2025-12-13_v1");
 
 // Load all painting URLs from Supabase and apply to frames
 async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
@@ -102,7 +104,7 @@ async function uploadPaintingToSupabase(frameIndex, file) {
   try {
     const ext = (file.type && file.type.split("/")[1]) || "png";
 
-    // 🔥 IMPORTANT CHANGE: versioned filename so each replace gets a new URL
+    // versioned filename so each replace gets a new URL
     const timestamp = Date.now();
     const fileName = `painting_${frameIndex}_${timestamp}.${ext}`;
     const filePath = `paintings/${fileName}`;
@@ -428,10 +430,10 @@ function create() {
       img: null,
       fullUrl: null,
 
-      // ✅ NEW: protects against async overwrites while replacing
+      // prevent Supabase loader from overwriting while replacing
       locked: false,
 
-      // ✅ NEW: track local texture key so we can safely remove it later
+      // track local texture key so we can remove it
       localTexKey: null
     });
   }
@@ -478,7 +480,7 @@ function create() {
 
   console.log("[RageCity] Total gallery frames:", galleryFrames.length);
 
-  // 🔄 Load shared gallery from Supabase
+  // Load shared gallery from Supabase
   loadPaintingsFromSupabase(this, imgDisplaySize);
 
   // ===== SCULPTURE CUBE =====
@@ -490,7 +492,7 @@ function create() {
   const cube = this.add.graphics();
   cube.lineStyle(3, 0xffffff, 1);
 
-  const size = 46;   // outer front square
+  const size = 46;
   const depth = 10;
 
   const frontX = sculptureX - size / 2;
@@ -512,7 +514,7 @@ function create() {
   cube.lineTo(backX + size, backY + size);
   cube.strokePath();
 
-  const innerSize = 22; // inner green
+  const innerSize = 22;
   const inner = this.add.rectangle(
     sculptureX,
     sculptureY,
@@ -529,7 +531,7 @@ function create() {
     type: "sculpture"
   };
 
-  // ===== SCULPTURE COLLIDER (adjustable on all sides) =====
+  // ===== SCULPTURE COLLIDER =====
   const midSize = (size + innerSize) / 2;
 
   const expandLeft   = 18;
@@ -582,7 +584,7 @@ function create() {
     });
   }
 
-  // ====== hook the hidden <input type="file" id="paintingUpload"> ======
+  // hook the hidden <input type="file" id="paintingUpload">
   paintingUploadInput = document.getElementById("paintingUpload");
   console.log("[RageCity] paintingUpload input found?", !!paintingUploadInput);
 
@@ -614,10 +616,9 @@ function create() {
         fileSize: file.size,
       });
 
-      // ✅ lock while replacing so nothing overwrites mid-flight
+      // lock while replacing so nothing overwrites mid-flight
       frame.locked = true;
 
-      // 1) Show thumbnail immediately using FileReader (local)
       const reader = new FileReader();
       reader.onload = function (ev) {
         const dataUrl = ev.target.result;
@@ -639,7 +640,7 @@ function create() {
         const texKeyLocal = `localPainting-${frameIndex}-${Date.now()}`;
         frame.localTexKey = texKeyLocal;
 
-        // ✅ IMPORTANT: wait for base64 texture to be ready before drawing
+        // IMPORTANT: wait for base64 texture to be ready before drawing
         scene.textures.addBase64(texKeyLocal, dataUrl, () => {
           // If user somehow triggered another upload very fast, avoid drawing old one
           if (frame.localTexKey !== texKeyLocal) return;
@@ -648,13 +649,16 @@ function create() {
           img.setDisplaySize(imgDisplaySize, imgDisplaySize);
           frame.img = img;
 
+          // Make sure the thumb is above mats/frames
+          scene.children.bringToTop(frame.img);
+
           // Local fallback URL (in case Supabase fails)
           frame.fullUrl = dataUrl;
 
           console.log("[RageCity] Local preview applied for frame", frameIndex);
         });
 
-        // 2) Fire Supabase upload in the background
+        // Fire Supabase upload in the background
         (async () => {
           try {
             const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
@@ -668,7 +672,7 @@ function create() {
               console.warn("[RageCity] Supabase upload returned null for frame", frameIndex);
             }
           } finally {
-            // ✅ unlock even if upload fails
+            // unlock even if upload fails
             frame.locked = false;
           }
         })();
@@ -770,7 +774,7 @@ function update(time, delta) {
     }
   }
 
-  // ===== prompt text (includes B for replace when art exists) =====
+  // prompt text
   if (promptText) {
     if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
@@ -790,7 +794,7 @@ function update(time, delta) {
     }
   }
 
-  // ===== A button (view or add) =====
+  // A button (view or add)
   if (nearestItem && nearestDist < 60 && justPressedA) {
     if (nearestItem.type === "sculpture") {
       if (nearestItem.fullUrl) openArtOverlay(nearestItem.fullUrl);
@@ -811,7 +815,7 @@ function update(time, delta) {
     }
   }
 
-  // ===== B button (replace art if it exists) =====
+  // B button (replace art if it exists)
   if (
     nearestItem &&
     nearestItem.type === "painting" &&
