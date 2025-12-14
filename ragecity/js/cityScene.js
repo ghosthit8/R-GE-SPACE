@@ -17,7 +17,7 @@ const PAINTINGS_TABLE = "ragecity_paintings";
 // Log once when this file loads so we know if Supabase is there
 console.log("[RageCity] cityScene.js loaded. Supabase present?", !!window.supabase);
 // Version marker so you can verify you're loading the new file
-console.log("[RageCity] CityScene.js VERSION: thumbsfix_2025-12-13_v1");
+console.log("[RageCity] CityScene.js VERSION: thumbsfix_2025-12-13_v2_depthfix");
 
 // Load all painting URLs from Supabase and apply to frames
 async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
@@ -81,6 +81,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
 
         const img = scene.add.image(frame.x, frame.y, texKey);
         img.setDisplaySize(imgDisplaySize, imgDisplaySize);
+        img.setDepth(10);
         frame.img = img;
         frame.fullUrl = row.image_url;
 
@@ -647,6 +648,10 @@ function create() {
 
           const img = scene.add.image(frame.x, frame.y, texKeyLocal);
           img.setDisplaySize(imgDisplaySize, imgDisplaySize);
+
+          // ✅ Extra safety: force above mats/frames on mobile GPUs
+          img.setDepth(10);
+
           frame.img = img;
 
           // Make sure the thumb is above mats/frames
