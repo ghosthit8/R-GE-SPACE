@@ -17,7 +17,7 @@ const PAINTINGS_TABLE = "ragecity_paintings";
 // Log once when this file loads so we know if Supabase is there
 console.log("[RageCity] cityScene.js loaded. Supabase present?", !!window.supabase);
 // Version marker so you can verify you're loading the new file
-console.log("[RageCity] CityScene.js VERSION: thumbsfix_2025-12-13_v3_mobile_debug_flush");
+console.log("[RageCity] CityScene.js VERSION: thumbsfix_2025-12-13_v4_mobile_flush");
 
 // Load all painting URLs from Supabase and apply to frames
 async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
@@ -387,30 +387,30 @@ function create() {
     if (side === "left") {
       points = [
         { x: -wBottom / 2, y: -h2 / 2 },
-        { x: wTop / 2, y: -h2 / 2 + skew },
-        { x: wTop / 2, y: h2 / 2 - skew },
-        { x: -wBottom / 2, y: h2 / 2 }
+        { x:  wTop / 2,    y: -h2 / 2 + skew },
+        { x:  wTop / 2,    y:  h2 / 2 - skew },
+        { x: -wBottom / 2, y:  h2 / 2 }
       ];
     } else if (side === "right") {
       points = [
-        { x: -wTop / 2, y: -h2 / 2 + skew },
-        { x: wBottom / 2, y: -h2 / 2 },
-        { x: wBottom / 2, y: h2 / 2 },
-        { x: -wTop / 2, y: h2 / 2 - skew }
+        { x: -wTop / 2,    y: -h2 / 2 + skew },
+        { x:  wBottom / 2, y: -h2 / 2 },
+        { x:  wBottom / 2, y:  h2 / 2 },
+        { x: -wTop / 2,    y:  h2 / 2 - skew }
       ];
     } else if (side === "top") {
       points = [
         { x: -wBottom / 2, y: -h2 / 2 },
-        { x: wBottom / 2, y: -h2 / 2 },
-        { x: wTop / 2, y: h2 / 2 },
-        { x: -wTop / 2, y: h2 / 2 }
+        { x:  wBottom / 2, y: -h2 / 2 },
+        { x:  wTop / 2,    y:  h2 / 2 },
+        { x: -wTop / 2,    y:  h2 / 2 }
       ];
     } else {
       points = [
-        { x: -wTop / 2, y: -h2 / 2 },
-        { x: wTop / 2, y: -h2 / 2 },
-        { x: wBottom / 2, y: h2 / 2 },
-        { x: -wBottom / 2, y: h2 / 2 }
+        { x: -wTop / 2,    y: -h2 / 2 },
+        { x:  wTop / 2,    y: -h2 / 2 },
+        { x:  wBottom / 2, y:  h2 / 2 },
+        { x: -wBottom / 2, y:  h2 / 2 }
       ];
     }
 
@@ -429,9 +429,15 @@ function create() {
     gMat.fillStyle(0x000000, 1);
     const matScale = 0.78;
     gMat.beginPath();
-    gMat.moveTo(x + points[0].x * matScale, y + points[0].y * matScale);
+    gMat.moveTo(
+      x + points[0].x * matScale,
+      y + points[0].y * matScale
+    );
     for (let i = 1; i < points.length; i++) {
-      gMat.lineTo(x + points[i].x * matScale, y + points[i].y * matScale);
+      gMat.lineTo(
+        x + points[i].x * matScale,
+        y + points[i].y * matScale
+      );
     }
     gMat.closePath();
     gMat.fillPath();
@@ -445,19 +451,23 @@ function create() {
       matGfx: gMat,
       img: null,
       fullUrl: null,
+
+      // prevent Supabase loader from overwriting while replacing
       locked: false,
+
+      // track local texture key so we can remove it
       localTexKey: null
     });
   }
 
-  const midLeftX = (leftOuter + leftInner) / 2;
-  const midRightX = (rightOuter + rightInner) / 2;
-  const midTopY = (topOuter + topInner) / 2;
-  const midBottomY = (bottomOuter + bottomInner) / 2;
+  const midLeftX   = (leftOuter  + leftInner)  / 2;
+  const midRightX  = (rightOuter + rightInner) / 2;
+  const midTopY    = (topOuter   + topInner)   / 2;
+  const midBottomY = (bottomOuter+ bottomInner)/ 2;
 
   const topCount = 4;
   const topStartX = leftInner + 35;
-  const topEndX = rightInner - 35;
+  const topEndX   = rightInner - 35;
   for (let i = 0; i < topCount; i++) {
     const t = topCount === 1 ? 0.5 : i / (topCount - 1);
     const x = Phaser.Math.Linear(topStartX, topEndX, t);
@@ -471,7 +481,10 @@ function create() {
     addTrapezoidFrame(this, midRightX, y, "right");
   }
 
-  const leftYPositions = [topInner + 55, gapInnerTopY - 22];
+  const leftYPositions = [
+    topInner + 55,
+    gapInnerTopY - 22
+  ];
   leftYPositions.forEach((y) => {
     addTrapezoidFrame(this, midLeftX, y, "left");
   });
@@ -524,7 +537,13 @@ function create() {
   cube.strokePath();
 
   const innerSize = 22;
-  const inner = this.add.rectangle(sculptureX, sculptureY, innerSize, innerSize, 0x000000);
+  const inner = this.add.rectangle(
+    sculptureX,
+    sculptureY,
+    innerSize,
+    innerSize,
+    0x000000
+  );
   inner.setStrokeStyle(2, 0x39ff14, 1);
 
   sculptureSpot = {
@@ -537,12 +556,12 @@ function create() {
   // ===== SCULPTURE COLLIDER =====
   const midSize = (size + innerSize) / 2;
 
-  const expandLeft = 18;
-  const expandRight = -3;
-  const expandTop = 18;
+  const expandLeft   = 18;
+  const expandRight  = -3;
+  const expandTop    = 18;
   const expandBottom = -3;
 
-  const colliderWidth = midSize + expandLeft + expandRight;
+  const colliderWidth  = midSize + expandLeft + expandRight;
   const colliderHeight = midSize + expandTop + expandBottom;
 
   const frontCollider = this.add.rectangle(
@@ -559,7 +578,8 @@ function create() {
 
   // prompt text
   promptText = this.add.text(w / 2, h - 40, "", {
-    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily:
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     fontSize: "14px",
     color: "#39ff14"
   });
@@ -659,7 +679,7 @@ function create() {
             img.setDisplaySize(imgDisplaySize, imgDisplaySize);
             img.setDepth(10);
 
-            // ✅ HARD mobile flush: force a known-good pipeline bind
+            // ✅ Known-good pipeline bind
             img.setPipeline("TextureTintPipeline");
 
             frame.img = img;
@@ -670,8 +690,16 @@ function create() {
             // Local fallback URL (in case Supabase fails)
             frame.fullUrl = dataUrl;
 
-            logDbg("Thumbnail rendered ✔");
+            // ✅ HARD WebGL flush (fixes Android “doesn’t show until refresh”)
+            try {
+              if (scene.sys && scene.sys.game && scene.sys.game.renderer && scene.sys.game.renderer.flush) {
+                scene.sys.game.renderer.flush();
+              }
+            } catch (e) {
+              console.warn("[RageCity] renderer.flush failed:", e);
+            }
 
+            logDbg("Thumbnail rendered ✔");
             console.log("[RageCity] Local preview applied for frame", frameIndex);
           });
         });
