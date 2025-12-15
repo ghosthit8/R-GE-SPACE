@@ -17,7 +17,7 @@ const PAINTINGS_TABLE = "ragecity_paintings";
 // Log once when this file loads so we know if Supabase is there
 console.log("[RageCity] cityScene.js loaded. Supabase present?", !!window.supabase);
 // Version marker so you can verify you're loading the new file
-console.log("[RageCity] CityScene.js VERSION: thumbsfix_2025-12-13_v4_mobile_flush");
+console.log("[RageCity] CityScene.js VERSION: thumbsfix_2025-12-14_v5_blob_preview");
 
 // Load all painting URLs from Supabase and apply to frames
 async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
@@ -197,7 +197,7 @@ function create() {
   console.log("[RageCity] Phaser scene created. World bounds:", { w, h });
 
   // ==========================
-  // ✅ MOBILE DEBUG OVERLAY
+  // ✅ MOBILE DEBUG OVERLAY (last 4 lines)
   // ==========================
   const dbg = scene.add.text(8, 8, "", {
     fontSize: "12px",
@@ -208,13 +208,12 @@ function create() {
     .setScrollFactor(0)
     .setDepth(9999);
 
+  let dbgLines = [];
   function logDbg(msg) {
-    try {
-      console.log(msg);
-      dbg.setText(msg);
-    } catch (e) {
-      console.log(msg);
-    }
+    console.log(msg);
+    dbgLines.push(String(msg));
+    if (dbgLines.length > 4) dbgLines.shift();
+    dbg.setText(dbgLines.join("\n"));
   }
 
   function addWallRect(x1, y1, x2, y2, thickness = 14) {
@@ -451,11 +450,7 @@ function create() {
       matGfx: gMat,
       img: null,
       fullUrl: null,
-
-      // prevent Supabase loader from overwriting while replacing
       locked: false,
-
-      // track local texture key so we can remove it
       localTexKey: null
     });
   }
@@ -641,101 +636,100 @@ function create() {
       // lock while replacing so nothing overwrites mid-flight
       frame.locked = true;
 
-      const reader = new FileReader();
-      reader.onload = function (ev) {
-        const dataUrl = ev.target.result;
+      // Destroy previous image object
+      if (frame.img) {
+        frame.img.destroy();
+        frame.img = null;
+      }
 
-        console.log("[RageCity] FileReader loaded data URL for frame", frameIndex);
+      // Remove previous local texture key (if any)
+      if (frame.localTexKey && scene.textures.exists(frame.localTexKey)) {
+        scene.textures.remove(frame.localTexKey);
+      }
 
-        // Destroy previous image object
-        if (frame.img) {
-          frame.img.destroy();
-          frame.img = null;
-        }
+      // Unique texture key
+      const texKeyLocal = `localPainting-${frameIndex}-${Date.now()}`;
+      frame.localTexKey = texKeyLocal;
 
-        // Remove previous local texture key (if any)
-        if (frame.localTexKey && scene.textures.exists(frame.localTexKey)) {
-          scene.textures.remove(frame.localTexKey);
-        }
+      // ✅ MOBILE-SAFE LOCAL PREVIEW (Blob URL → HTMLImage → textures.addImage)
+      try {
+        logDbg("Preview: building blob…");
 
-        // Use a unique key every time to avoid Phaser/GL reuse weirdness on mobile
-        const texKeyLocal = `localPainting-${frameIndex}-${Date.now()}`;
-        frame.localTexKey = texKeyLocal;
-
-        logDbg("Uploading: adding texture…");
-
-        // IMPORTANT: wait for base64 texture to be ready before drawing
-        scene.textures.addBase64(texKeyLocal, dataUrl, () => {
-          // If user somehow triggered another upload very fast, avoid drawing old one
-          if (frame.localTexKey !== texKeyLocal) return;
-
-          logDbg("Texture added → waiting 1 frame");
-
-          // ✅ Force next-frame GPU commit on mobile
-          scene.time.delayedCall(0, () => {
-            logDbg("Drawing thumbnail");
-
-            const img = scene.add.image(frame.x, frame.y, texKeyLocal);
-            img.setDisplaySize(imgDisplaySize, imgDisplaySize);
-            img.setDepth(10);
-
-            // ✅ Known-good pipeline bind
-            img.setPipeline("TextureTintPipeline");
-
-            frame.img = img;
-
-            // Make sure the thumb is above mats/frames
-            scene.children.bringToTop(frame.img);
-
-            // Local fallback URL (in case Supabase fails)
-            frame.fullUrl = dataUrl;
-
-            // ✅ HARD WebGL flush (fixes Android “doesn’t show until refresh”)
-            try {
-              if (scene.sys && scene.sys.game && scene.sys.game.renderer && scene.sys.game.renderer.flush) {
-                scene.sys.game.renderer.flush();
-              }
-            } catch (e) {
-              console.warn("[RageCity] renderer.flush failed:", e);
-            }
-
-            logDbg("Thumbnail rendered ✔");
-            console.log("[RageCity] Local preview applied for frame", frameIndex);
-          });
-        });
-
-        // Fire Supabase upload in the background
-        (async () => {
-          try {
-            logDbg("Uploading to Supabase…");
-            const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
-            if (publicUrl) {
-              frame.fullUrl = publicUrl;
-              logDbg("Supabase saved ✔");
-              console.log("[RageCity] Frame updated with Supabase URL", {
-                frameIndex,
-                publicUrl,
-              });
-            } else {
-              logDbg("Supabase upload failed ⚠");
-              console.warn("[RageCity] Supabase upload returned null for frame", frameIndex);
-            }
-          } finally {
-            // unlock even if upload fails
-            frame.locked = false;
+        const blobUrl = URL.createObjectURL(file);
+        const imgEl = new Image();
+        imgEl.crossOrigin = "anonymous";
+        imgEl.onload = () => {
+          // If user triggered another upload fast, ignore old one
+          if (frame.localTexKey !== texKeyLocal) {
+            URL.revokeObjectURL(blobUrl);
+            return;
           }
-        })();
-      };
 
-      reader.onerror = function (ev) {
-        console.error("[RageCity] FileReader error:", ev);
-        alert("RageCity error reading file from device.");
-        frame.locked = false;
-      };
+          logDbg("Preview: image loaded");
 
-      reader.readAsDataURL(file);
-      // reset so same file can be chosen again if needed
-      this.value = "";
+          // Add texture from HTMLImageElement (more reliable on mobile than base64)
+          if (scene.textures.exists(texKeyLocal)) {
+            scene.textures.remove(texKeyLocal);
+          }
+          scene.textures.addImage(texKeyLocal, imgEl);
+
+          const phImg = scene.add.image(frame.x, frame.y, texKeyLocal);
+          phImg.setDisplaySize(imgDisplaySize, imgDisplaySize);
+          phImg.setDepth(10);
+
+          frame.img = phImg;
+
+          // Above mats
+          scene.children.bringToTop(frame.img);
+
+          // Local fallback URL (overlay can still open something)
+          frame.fullUrl = blobUrl;
+
+          logDbg("Thumbnail rendered ✔");
+
+          // Keep blobUrl alive for overlay; revoke later only when replaced again.
+          // (We revoke old blob URLs by overwriting frame.fullUrl next upload.)
+        };
+
+        imgEl.onerror = (e) => {
+          console.warn("[RageCity] Preview image failed to load:", e);
+          logDbg("Preview failed ⚠");
+          try { URL.revokeObjectURL(blobUrl); } catch (_) {}
+        };
+
+        imgEl.src = blobUrl;
+      } catch (e) {
+        console.warn("[RageCity] Blob preview failed:", e);
+        logDbg("Blob preview failed ⚠");
+      }
+
+      // Fire Supabase upload in the background
+      (async () => {
+        try {
+          logDbg("Uploading to Supabase…");
+          const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
+          if (publicUrl) {
+            // If we were using a blob URL as fullUrl, revoke it now that we have a real URL
+            if (frame.fullUrl && typeof frame.fullUrl === "string" && frame.fullUrl.startsWith("blob:")) {
+              try { URL.revokeObjectURL(frame.fullUrl); } catch (_) {}
+            }
+
+            frame.fullUrl = publicUrl;
+            logDbg("Supabase saved ✔");
+            console.log("[RageCity] Frame updated with Supabase URL", {
+              frameIndex,
+              publicUrl,
+            });
+          } else {
+            logDbg("Supabase upload failed ⚠");
+            console.warn("[RageCity] Supabase upload returned null for frame", frameIndex);
+          }
+        } finally {
+          frame.locked = false;
+          // reset so same file can be chosen again if needed
+          paintingUploadInput.value = "";
+        }
+      })();
     });
   }
 }
