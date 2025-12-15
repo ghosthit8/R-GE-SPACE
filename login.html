@@ -4,9 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Rage Space — Login</title>
-  <link rel="stylesheet" href="style.css?v=2" />
+
+  <!-- IMPORTANT: relative path for GitHub Pages -->
+  <link rel="stylesheet" href="./style.css?v=2" />
+
   <style>
-    .hidden{display:none!important}
+    .hidden { display:none !important; }
 
     /* 🔥 Make the green Sign In button text black */
     .btn.primary {
@@ -17,22 +20,30 @@
 <body>
   <main class="wrap">
     <a class="back-btn" href="./index.html">← Back to Home</a>
+
     <h1>RAGE SPACE — LOGIN</h1>
 
     <section class="card" id="signin-card">
       <h3>Sign in</h3>
+
       <input id="identifier" type="text" placeholder="username or email" />
       <input id="password" type="password" placeholder="password" />
+
       <div class="topbar" style="justify-content:flex-start; gap:8px">
         <button id="signin" class="btn primary">Sign in</button>
         <button id="forgot" class="btn">Forgot password?</button>
       </div>
+
       <div id="status" class="muted">Not logged in.</div>
       <div id="err" class="error"></div>
-      <p class="muted">Need an account? <a class="link" href="./signup.html">Go to Sign up</a></p>
+
+      <p class="muted">
+        Need an account?
+        <a class="link" href="./signup.html">Go to Sign up</a>
+      </p>
     </section>
 
-    <section class="card" id="reset-card" style="display:none">
+    <section class="card hidden" id="reset-card">
       <h3>Set a new password</h3>
       <input id="newpass" type="password" placeholder="new password" />
       <input id="newpass2" type="password" placeholder="confirm new password" />
@@ -43,108 +54,179 @@
   </main>
 
   <script type="module">
-    const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm")
-      .catch((e) => { document.getElementById("err").textContent = "Couldn't load Supabase."; throw e; });
+    /* =========================================================
+       Robust Supabase loader with CDN fallbacks
+       ========================================================= */
+    async function loadSupabase() {
+      const esmCDNs = [
+        "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm",
+        "https://esm.sh/@supabase/supabase-js@2"
+      ];
 
+      for (const url of esmCDNs) {
+        try {
+          const mod = await import(url);
+          if (mod?.createClient) return mod.createClient;
+        } catch (e) {
+          console.warn("Supabase ESM failed:", url, e);
+        }
+      }
+
+      // Final fallback: UMD
+      await new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js";
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+
+      if (window.supabase?.createClient) {
+        return window.supabase.createClient;
+      }
+
+      throw new Error("All Supabase CDNs failed");
+    }
+
+    let createClient;
+    try {
+      createClient = await loadSupabase();
+    } catch (e) {
+      document.getElementById("err").textContent =
+        "Couldn't load Supabase. Network / Private DNS / adblock is blocking CDNs.";
+      console.error(e);
+      throw e;
+    }
+
+    /* =========================================================
+       Supabase config (YOUR KEYS)
+       ========================================================= */
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+    const SUPABASE_ANON =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-    // 🚧 Early guard: if already logged in, bounce to Home and stop
+    /* =========================================================
+       Auto-redirect if already logged in
+       ========================================================= */
     {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         location.replace("./index.html");
-        throw new Error("redirected");
+        throw new Error("Already logged in");
       }
     }
 
+    /* =========================================================
+       Helpers
+       ========================================================= */
     const el = (id) => document.getElementById(id);
     const status = el("status");
     const err = el("err");
     const signinBtn = el("signin");
 
-    const looksLikeEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-    const showErr = (m="") => { err.textContent = m; if (m) console.error(m); };
-    const showStatus = (m="") => { status.textContent = m; };
+    const looksLikeEmail = (v) =>
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
-    async function resolveEmail(identifier){
+    const showErr = (m = "") => {
+      err.textContent = m;
+      if (m) console.error(m);
+    };
+
+    const showStatus = (m = "") => {
+      status.textContent = m;
+    };
+
+    /* =========================================================
+       Username → email resolver (RPC)
+       ========================================================= */
+    async function resolveEmail(identifier) {
       if (looksLikeEmail(identifier)) return identifier;
-      try {
-        const { data, error } = await supabase.rpc('email_for_username', { uname: identifier });
-        if (error) { console.warn('username lookup error:', error); showErr('Username lookup failed. Try your email.'); return null; }
-        if (!data) { showErr('No account for that username. Try your email.'); return null; }
-        return data; // email
-      } catch (e) {
-        console.warn(e);
-        showErr('Username lookup timed out. Try your email.');
+
+      const { data, error } = await supabase.rpc(
+        "email_for_username",
+        { uname: identifier }
+      );
+
+      if (error || !data) {
+        showErr("Username not found. Try your email.");
         return null;
       }
+      return data;
     }
 
-    async function handleSignin(ev){
+    /* =========================================================
+       Sign-in
+       ========================================================= */
+    async function handleSignin(ev) {
       ev?.preventDefault?.();
       showErr("");
+
       const id = el("identifier").value.trim();
       const password = el("password").value;
-      if (!id || !password) { showErr("Enter your username/email and password."); return; }
+
+      if (!id || !password) {
+        showErr("Enter your username/email and password.");
+        return;
+      }
 
       signinBtn.disabled = true;
       showStatus("Signing in…");
+
       try {
         const email = await resolveEmail(id);
-        if (!email) { showStatus("Not logged in."); return; }
+        if (!email) return;
 
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) { showErr(error.message || "Sign-in failed."); showStatus("Not logged in."); return; }
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (error) {
+          showErr(error.message);
+          showStatus("Not logged in.");
+          return;
+        }
 
         showStatus("Logged in. Redirecting…");
         setTimeout(() => location.href = "./index.html", 600);
-      } catch (e) {
-        showErr(e.message || "Unexpected error.");
-        showStatus("Not logged in.");
       } finally {
         signinBtn.disabled = false;
       }
     }
 
-    // Password reset flow
-    async function handleForgot(){
+    /* =========================================================
+       Password reset
+       ========================================================= */
+    async function handleForgot() {
       showErr("");
+
       const id = el("identifier").value.trim();
-      if (!id) return showErr("Enter your username or email first.");
+      if (!id) return showErr("Enter username or email first.");
+
       const email = await resolveEmail(id);
       if (!email) return;
-      try {
-        const redirectTo = new URL("./login.html", location.href).toString();
-        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-        if (error) return showErr(error.message || "Could not send reset email.");
-        showStatus("Reset email sent. Check your inbox.");
-      } catch (e) { showErr("Reset error. See console."); console.error(e); }
+
+      const redirectTo = new URL("./login.html", location.href).toString();
+      const { error } =
+        await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+
+      if (error) showErr(error.message);
+      else showStatus("Reset email sent.");
     }
 
-    async function showLoggedInNoticeIfAny() {
-      const { data: { session} } = await supabase.auth.getSession();
-      if (!session) return;
-      document.getElementById("signin-card").classList.add("hidden");
-      status.innerHTML = `Already logged in as <strong>${session.user.user_metadata?.username || session.user.email}</strong>.`;
-      const actions = document.createElement("div");
-      actions.style.display = "flex"; actions.style.gap = "8px"; actions.style.marginTop = "8px";
-      actions.innerHTML = `<button id="logOutHere" class="btn">Sign out</button>`;
-      status.after(actions);
-      document.getElementById("logOutHere").onclick = async () => {
-        await supabase.auth.signOut();
-        location.reload();
-      };
-    }
-    showLoggedInNoticeIfAny();
-
-    // Events
+    /* =========================================================
+       Events
+       ========================================================= */
     el("signin").addEventListener("click", handleSignin);
     el("forgot").addEventListener("click", handleForgot);
-    ["identifier","password"].forEach(id => el(id).addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") handleSignin(ev);
-    }));
+
+    ["identifier", "password"].forEach((id) =>
+      el(id).addEventListener("keydown", (e) => {
+        if (e.key === "Enter") handleSignin(e);
+      })
+    );
   </script>
 </body>
 </html>
