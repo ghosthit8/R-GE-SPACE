@@ -17,7 +17,7 @@ const PAINTINGS_TABLE = "ragecity_paintings";
 // Log once when this file loads so we know if Supabase is there
 console.log("[RageCity] cityScene.js loaded. Supabase present?", !!window.supabase);
 // Version marker so you can verify you're loading the new file
-console.log("[RageCity] CityScene.js VERSION: thumbsfix_2025-12-13_v2_depthfix");
+console.log("[RageCity] CityScene.js VERSION: thumbsfix_2025-12-13_v3_mobile_debug_flush");
 
 // Load all painting URLs from Supabase and apply to frames
 async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
@@ -196,6 +196,27 @@ function create() {
 
   console.log("[RageCity] Phaser scene created. World bounds:", { w, h });
 
+  // ==========================
+  // ✅ MOBILE DEBUG OVERLAY
+  // ==========================
+  const dbg = scene.add.text(8, 8, "", {
+    fontSize: "12px",
+    color: "#39ff14",
+    backgroundColor: "#000",
+    padding: { x: 6, y: 4 }
+  })
+    .setScrollFactor(0)
+    .setDepth(9999);
+
+  function logDbg(msg) {
+    try {
+      console.log(msg);
+      dbg.setText(msg);
+    } catch (e) {
+      console.log(msg);
+    }
+  }
+
   function addWallRect(x1, y1, x2, y2, thickness = 14) {
     if (x1 === x2 && y1 !== y2) {
       const height = Math.abs(y2 - y1);
@@ -366,30 +387,30 @@ function create() {
     if (side === "left") {
       points = [
         { x: -wBottom / 2, y: -h2 / 2 },
-        { x:  wTop / 2,    y: -h2 / 2 + skew },
-        { x:  wTop / 2,    y:  h2 / 2 - skew },
-        { x: -wBottom / 2, y:  h2 / 2 }
+        { x: wTop / 2, y: -h2 / 2 + skew },
+        { x: wTop / 2, y: h2 / 2 - skew },
+        { x: -wBottom / 2, y: h2 / 2 }
       ];
     } else if (side === "right") {
       points = [
-        { x: -wTop / 2,    y: -h2 / 2 + skew },
-        { x:  wBottom / 2, y: -h2 / 2 },
-        { x:  wBottom / 2, y:  h2 / 2 },
-        { x: -wTop / 2,    y:  h2 / 2 - skew }
+        { x: -wTop / 2, y: -h2 / 2 + skew },
+        { x: wBottom / 2, y: -h2 / 2 },
+        { x: wBottom / 2, y: h2 / 2 },
+        { x: -wTop / 2, y: h2 / 2 - skew }
       ];
     } else if (side === "top") {
       points = [
         { x: -wBottom / 2, y: -h2 / 2 },
-        { x:  wBottom / 2, y: -h2 / 2 },
-        { x:  wTop / 2,    y:  h2 / 2 },
-        { x: -wTop / 2,    y:  h2 / 2 }
+        { x: wBottom / 2, y: -h2 / 2 },
+        { x: wTop / 2, y: h2 / 2 },
+        { x: -wTop / 2, y: h2 / 2 }
       ];
     } else {
       points = [
-        { x: -wTop / 2,    y: -h2 / 2 },
-        { x:  wTop / 2,    y: -h2 / 2 },
-        { x:  wBottom / 2, y:  h2 / 2 },
-        { x: -wBottom / 2, y:  h2 / 2 }
+        { x: -wTop / 2, y: -h2 / 2 },
+        { x: wTop / 2, y: -h2 / 2 },
+        { x: wBottom / 2, y: h2 / 2 },
+        { x: -wBottom / 2, y: h2 / 2 }
       ];
     }
 
@@ -408,15 +429,9 @@ function create() {
     gMat.fillStyle(0x000000, 1);
     const matScale = 0.78;
     gMat.beginPath();
-    gMat.moveTo(
-      x + points[0].x * matScale,
-      y + points[0].y * matScale
-    );
+    gMat.moveTo(x + points[0].x * matScale, y + points[0].y * matScale);
     for (let i = 1; i < points.length; i++) {
-      gMat.lineTo(
-        x + points[i].x * matScale,
-        y + points[i].y * matScale
-      );
+      gMat.lineTo(x + points[i].x * matScale, y + points[i].y * matScale);
     }
     gMat.closePath();
     gMat.fillPath();
@@ -430,23 +445,19 @@ function create() {
       matGfx: gMat,
       img: null,
       fullUrl: null,
-
-      // prevent Supabase loader from overwriting while replacing
       locked: false,
-
-      // track local texture key so we can remove it
       localTexKey: null
     });
   }
 
-  const midLeftX   = (leftOuter  + leftInner)  / 2;
-  const midRightX  = (rightOuter + rightInner) / 2;
-  const midTopY    = (topOuter   + topInner)   / 2;
-  const midBottomY = (bottomOuter+ bottomInner)/ 2;
+  const midLeftX = (leftOuter + leftInner) / 2;
+  const midRightX = (rightOuter + rightInner) / 2;
+  const midTopY = (topOuter + topInner) / 2;
+  const midBottomY = (bottomOuter + bottomInner) / 2;
 
   const topCount = 4;
   const topStartX = leftInner + 35;
-  const topEndX   = rightInner - 35;
+  const topEndX = rightInner - 35;
   for (let i = 0; i < topCount; i++) {
     const t = topCount === 1 ? 0.5 : i / (topCount - 1);
     const x = Phaser.Math.Linear(topStartX, topEndX, t);
@@ -460,10 +471,7 @@ function create() {
     addTrapezoidFrame(this, midRightX, y, "right");
   }
 
-  const leftYPositions = [
-    topInner + 55,
-    gapInnerTopY - 22
-  ];
+  const leftYPositions = [topInner + 55, gapInnerTopY - 22];
   leftYPositions.forEach((y) => {
     addTrapezoidFrame(this, midLeftX, y, "left");
   });
@@ -516,13 +524,7 @@ function create() {
   cube.strokePath();
 
   const innerSize = 22;
-  const inner = this.add.rectangle(
-    sculptureX,
-    sculptureY,
-    innerSize,
-    innerSize,
-    0x000000
-  );
+  const inner = this.add.rectangle(sculptureX, sculptureY, innerSize, innerSize, 0x000000);
   inner.setStrokeStyle(2, 0x39ff14, 1);
 
   sculptureSpot = {
@@ -535,12 +537,12 @@ function create() {
   // ===== SCULPTURE COLLIDER =====
   const midSize = (size + innerSize) / 2;
 
-  const expandLeft   = 18;
-  const expandRight  = -3;
-  const expandTop    = 18;
+  const expandLeft = 18;
+  const expandRight = -3;
+  const expandTop = 18;
   const expandBottom = -3;
 
-  const colliderWidth  = midSize + expandLeft + expandRight;
+  const colliderWidth = midSize + expandLeft + expandRight;
   const colliderHeight = midSize + expandTop + expandBottom;
 
   const frontCollider = this.add.rectangle(
@@ -557,8 +559,7 @@ function create() {
 
   // prompt text
   promptText = this.add.text(w / 2, h - 40, "", {
-    fontFamily:
-      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     fontSize: "14px",
     color: "#39ff14"
   });
@@ -641,39 +642,54 @@ function create() {
         const texKeyLocal = `localPainting-${frameIndex}-${Date.now()}`;
         frame.localTexKey = texKeyLocal;
 
+        logDbg("Uploading: adding texture…");
+
         // IMPORTANT: wait for base64 texture to be ready before drawing
         scene.textures.addBase64(texKeyLocal, dataUrl, () => {
           // If user somehow triggered another upload very fast, avoid drawing old one
           if (frame.localTexKey !== texKeyLocal) return;
 
-          const img = scene.add.image(frame.x, frame.y, texKeyLocal);
-          img.setDisplaySize(imgDisplaySize, imgDisplaySize);
+          logDbg("Texture added → waiting 1 frame");
 
-          // ✅ Extra safety: force above mats/frames on mobile GPUs
-          img.setDepth(10);
+          // ✅ Force next-frame GPU commit on mobile
+          scene.time.delayedCall(0, () => {
+            logDbg("Drawing thumbnail");
 
-          frame.img = img;
+            const img = scene.add.image(frame.x, frame.y, texKeyLocal);
+            img.setDisplaySize(imgDisplaySize, imgDisplaySize);
+            img.setDepth(10);
 
-          // Make sure the thumb is above mats/frames
-          scene.children.bringToTop(frame.img);
+            // ✅ HARD mobile flush: force a known-good pipeline bind
+            img.setPipeline("TextureTintPipeline");
 
-          // Local fallback URL (in case Supabase fails)
-          frame.fullUrl = dataUrl;
+            frame.img = img;
 
-          console.log("[RageCity] Local preview applied for frame", frameIndex);
+            // Make sure the thumb is above mats/frames
+            scene.children.bringToTop(frame.img);
+
+            // Local fallback URL (in case Supabase fails)
+            frame.fullUrl = dataUrl;
+
+            logDbg("Thumbnail rendered ✔");
+
+            console.log("[RageCity] Local preview applied for frame", frameIndex);
+          });
         });
 
         // Fire Supabase upload in the background
         (async () => {
           try {
+            logDbg("Uploading to Supabase…");
             const publicUrl = await uploadPaintingToSupabase(frameIndex, file);
             if (publicUrl) {
               frame.fullUrl = publicUrl;
+              logDbg("Supabase saved ✔");
               console.log("[RageCity] Frame updated with Supabase URL", {
                 frameIndex,
                 publicUrl,
               });
             } else {
+              logDbg("Supabase upload failed ⚠");
               console.warn("[RageCity] Supabase upload returned null for frame", frameIndex);
             }
           } finally {
