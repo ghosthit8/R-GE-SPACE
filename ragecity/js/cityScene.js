@@ -478,24 +478,6 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
-  // ✅ Interaction prompt (shows when near a frame)
-  promptText = this.add.text(w / 2, h - 120, "", {
-    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    fontSize: "18px",
-    color: "#39ff14",
-    align: "center"
-  });
-  promptText.setOrigin(0.5, 1);
-  promptText.setScrollFactor(0);
-  promptText.setDepth(9998);
-  promptText.setVisible(false);
-
-  // Keep prompt positioned correctly on resize / rotate
-  this.scale.on("resize", (gameSize) => {
-    promptText.setPosition(gameSize.width / 2, gameSize.height - 120);
-  });
-
-
   // FRAMES (start BLACK, Supabase will populate any that have art)
   const imgDisplaySize = 26;
   galleryFrames = [];
