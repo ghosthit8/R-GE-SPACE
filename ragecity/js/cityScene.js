@@ -5,6 +5,8 @@ let sculptureSpot = null;
 let wallsGroup;
 let prevA = false;
 let prevB = false;
+let prevX = false;
+let prevY = false;
 
 // For per-painting uploads
 let paintingUploadInput = null;
@@ -214,24 +216,6 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     return null;
   }
 
-  // 1) Read the existing storage_path FIRST (so we can delete it after a successful replace)
-  let oldPath = null;
-  try {
-    const { data: existing, error: existingErr } = await window.supabase
-      .from(PAINTINGS_TABLE)
-      .select("storage_path")
-      .eq("frame_index", frameIndex)
-      .maybeSingle();
-
-    if (existingErr) {
-      console.warn("[RageCity] Could not read existing storage_path:", existingErr);
-    } else {
-      oldPath = existing?.storage_path || null;
-    }
-  } catch (e) {
-    console.warn("[RageCity] Existing path lookup failed:", e);
-  }
-
   try {
     const mimeType = file.type || "";
     const name = file.name || "";
@@ -239,7 +223,7 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     const extFromMime = (mimeType.includes("/") ? mimeType.split("/")[1] : "") || "";
     const ext = (extFromName || extFromMime || "bin").toLowerCase();
 
-    // Versioned filename so each replace gets a new path
+    // versioned filename so each replace gets a new path
     const timestamp = Date.now();
     const fileName = `painting_${frameIndex}_${timestamp}.${ext}`;
     const filePath = `paintings/${fileName}`;
@@ -250,10 +234,8 @@ async function uploadPaintingToSupabase(frameIndex, file) {
       frameIndex,
       fileType: mimeType,
       fileSize: file.size,
-      oldPath
     });
 
-    // 2) Upload new file
     const { data: uploadData, error: uploadError } = await window.supabase
       .storage
       .from(GALLERY_BUCKET)
@@ -267,7 +249,7 @@ async function uploadPaintingToSupabase(frameIndex, file) {
 
     console.log("[RageCity] Storage upload success:", uploadData);
 
-    // 3) Save DB row (private-bucket friendly)
+    // Save DB row (private-bucket friendly)
     const { data: upsertData, error: upsertError } = await window.supabase
       .from(PAINTINGS_TABLE)
       .upsert(
@@ -278,26 +260,12 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     if (upsertError) {
       console.error("[RageCity] Error upserting painting record:", upsertError);
       alert("RageCity upload error (DB upsert): " + upsertError.message);
-      // NOTE: Do NOT delete oldPath if DB save failed.
+      // still try returning a signed URL so the current user sees it
     } else {
       console.log("[RageCity] Painting DB upsert success:", upsertData);
     }
 
-    // 4) Delete the old file ONLY after new upload + DB write succeeded
-    if (!upsertError && oldPath && oldPath !== filePath) {
-      const { error: removeError } = await window.supabase
-        .storage
-        .from(GALLERY_BUCKET)
-        .remove([oldPath]);
-
-      if (removeError) {
-        console.warn("[RageCity] Could not delete old file:", oldPath, removeError);
-      } else {
-        console.log("[RageCity] Deleted old file:", oldPath);
-      }
-    }
-
-    // 5) Return a signed URL for immediate display (do NOT store this in DB; it expires)
+    // Return a signed URL for immediate display (do NOT store this in DB; it expires)
     let signedUrl = null;
     try {
       signedUrl = await getSignedUrl(GALLERY_BUCKET, filePath);
@@ -645,91 +613,6 @@ function create() {
   // Load shared gallery from Supabase
   loadPaintingsFromSupabase(this, imgDisplaySize);
 
-  // ===== SCULPTURE CUBE =====
-  const centerX = (leftOuter + rightOuter) / 2;
-  const centerY = (topOuter + bottomOuter) / 2;
-  const sculptureX = centerX + 35;
-  const sculptureY = centerY + 60;
-
-  const cube = this.add.graphics();
-  cube.lineStyle(3, 0xffffff, 1);
-
-  const size = 46;
-  const depth = 10;
-
-  const frontX = sculptureX - size / 2;
-  const frontY = sculptureY - size / 2;
-  cube.strokeRect(frontX, frontY, size, size);
-
-  const backX = frontX - depth;
-  const backY = frontY - depth;
-  cube.strokeRect(backX, backY, size, size);
-
-  cube.beginPath();
-  cube.moveTo(frontX, frontY);
-  cube.lineTo(backX, backY);
-  cube.moveTo(frontX + size, frontY);
-  cube.lineTo(backX + size, backY);
-  cube.moveTo(frontX, frontY + size);
-  cube.lineTo(backX, backY + size);
-  cube.moveTo(frontX + size, frontY + size);
-  cube.lineTo(backX + size, backY + size);
-  cube.strokePath();
-
-  const innerSize = 22;
-  const inner = this.add.rectangle(
-    sculptureX,
-    sculptureY,
-    innerSize,
-    innerSize,
-    0x000000
-  );
-  inner.setStrokeStyle(2, 0x39ff14, 1);
-
-  sculptureSpot = {
-    x: sculptureX,
-    y: sculptureY,
-    fullUrl: SCULPTURE_FULL_URL,
-    type: "sculpture"
-  };
-
-  // ===== SCULPTURE COLLIDER =====
-  const midSize = (size + innerSize) / 2;
-
-  const expandLeft   = 18;
-  const expandRight  = -3;
-  const expandTop    = 18;
-  const expandBottom = -3;
-
-  const colliderWidth  = midSize + expandLeft + expandRight;
-  const colliderHeight = midSize + expandTop + expandBottom;
-
-  const frontCollider = this.add.rectangle(
-    sculptureX + (expandRight - expandLeft) / 2,
-    sculptureY + (expandBottom - expandTop) / 2,
-    colliderWidth,
-    colliderHeight,
-    0x00ff00,
-    0
-  );
-  frontCollider.setVisible(false);
-  this.physics.add.existing(frontCollider, true);
-  wallsGroup.add(frontCollider);
-
-  // prompt text
-  promptText = this.add.text(w / 2, h - 40, "", {
-    fontFamily:
-      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    fontSize: "14px",
-    color: "#39ff14"
-  });
-  promptText.setOrigin(0.5);
-  promptText.setVisible(false);
-
-  this.scale.on("resize", (gameSize) => {
-    promptText.setPosition(gameSize.width / 2, gameSize.height - 40);
-  });
-
   // controls + fullscreen
   setupKeyboard(this);
   setupTouchButton("btn-left", "left");
@@ -738,6 +621,8 @@ function create() {
   setupTouchButton("btn-down", "down");
   setupTouchButton("btn-a", "A");
   setupTouchButton("btn-b", "B");
+  setupTouchButton("btn-x", "X");
+  setupTouchButton("btn-y", "Y");
   setupFullscreenButton();
 
   // hook the hidden <input type="file" id="paintingUpload">
@@ -901,13 +786,19 @@ function update(time, delta) {
 
   const justPressedA = inputState.A && !prevA;
   const justPressedB = inputState.B && !prevB;
+  const justPressedX = inputState.X && !prevX;
+  const justPressedY = inputState.Y && !prevY;
 
   // ✅ overlay open behavior uses globals from index.html now
   if (window.artOpen) {
-    if (justPressedA) window.toggleArtFullscreen();
-    if (justPressedB) window.closeArtOverlay();
+    // While overlay is open:
+    // A or X = fullscreen toggle, B or Y = close
+    if (justPressedA || justPressedX) window.toggleArtFullscreen();
+    if (justPressedB || justPressedY) window.closeArtOverlay();
     prevA = inputState.A;
     prevB = inputState.B;
+    prevX = inputState.X;
+    prevY = inputState.Y;
     return;
   }
 
@@ -978,6 +869,17 @@ function update(time, delta) {
     }
   }
 
+  // X / Y shortcuts (when overlay is NOT open)
+  // X = toggle page fullscreen, Y = go back to Menu
+  if (justPressedX) {
+    const fsBtn = document.getElementById("btn-fullscreen");
+    if (fsBtn) fsBtn.click();
+  }
+  if (justPressedY) {
+    const menuBtn = document.getElementById("btn-menu");
+    if (menuBtn) menuBtn.click();
+  }
+
   // A button (view or add)
   if (nearestItem && nearestDist < 60 && justPressedA) {
     if (nearestItem.type === "sculpture") {
@@ -1013,6 +915,8 @@ function update(time, delta) {
     }
   }
 
-  prevA = inputState.A;
+    prevA = inputState.A;
   prevB = inputState.B;
+  prevX = inputState.X;
+  prevY = inputState.Y;
 }
