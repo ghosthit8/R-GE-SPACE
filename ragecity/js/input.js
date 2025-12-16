@@ -5,7 +5,9 @@ const inputState = {
   up: false,
   down: false,
   A: false,
-  B: false
+  B: false,
+  X: false,
+  Y: false
 };
 
 function setupKeyboard(scene) {
@@ -33,6 +35,17 @@ function setupKeyboard(scene) {
       case "KeyK":
         inputState.B = true;
         break;
+
+      // X/Y (keyboard support)
+      case "KeyX":
+      case "KeyU":
+        inputState.X = true;
+        break;
+      case "KeyY":
+      case "KeyI":
+        inputState.Y = true;
+        break;
+
       default:
         break;
     }
@@ -62,6 +75,17 @@ function setupKeyboard(scene) {
       case "KeyK":
         inputState.B = false;
         break;
+
+      // X/Y (keyboard support)
+      case "KeyX":
+      case "KeyU":
+        inputState.X = false;
+        break;
+      case "KeyY":
+      case "KeyI":
+        inputState.Y = false;
+        break;
+
       default:
         break;
     }
@@ -92,6 +116,12 @@ function setupTouchButton(id, key) {
         break;
       case "B":
         inputState.B = pressed;
+        break;
+      case "X":
+        inputState.X = pressed;
+        break;
+      case "Y":
+        inputState.Y = pressed;
         break;
       default:
         break;
