@@ -10,7 +10,7 @@
 </head>
 <body>
   <!-- note: now goes back UP one level -->
-  <a class="home-btn" href="../menu.html">← Menu</a>
+  <a id="btn-menu" class="home-btn" href="../menu.html">← Menu</a>
 
   <button id="btn-fullscreen" class="fullscreen-btn">⛶ Fullscreen</button>
 
@@ -43,9 +43,12 @@
         <button class="empty" disabled></button>
       </div>
 
-      <div class="ab-buttons">
-        <button id="btn-b" class="btn-b">●</button>
-        <button id="btn-a" class="btn-a">●</button>
+      <!-- ABXY (Xbox-style diamond) -->
+      <div class="abxy">
+        <button id="btn-y" class="abxy-btn btn-y">●</button>
+        <button id="btn-x" class="abxy-btn btn-x">●</button>
+        <button id="btn-b" class="abxy-btn btn-b">●</button>
+        <button id="btn-a" class="abxy-btn btn-a">●</button>
       </div>
     </div>
   </div>
@@ -54,7 +57,7 @@
   <input
     type="file"
     id="paintingUpload"
-    accept="image/*"
+    accept="image/*,video/*"
     style="display:none"
   />
 
