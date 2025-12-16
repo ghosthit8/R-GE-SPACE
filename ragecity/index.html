@@ -17,13 +17,26 @@
   <div id="game-container">
     <div id="game-fallback">Loading Rage City…</div>
 
-    <div id="art-overlay">
+    <!-- Overlay container used by CityScene -->
+    <div id="art-overlay" style="display:none;">
       <div id="art-overlay-msg">Press "A" for fullscreen</div>
+
+      <!-- Image -->
       <img
         id="art-overlay-img"
-        src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2000&q=80"
+        src=""
         alt="Gallery art"
+        style="display:none;"
       />
+
+      <!-- Video -->
+      <video
+        id="art-overlay-video"
+        controls
+        playsinline
+        preload="metadata"
+        style="display:none; max-width:92vw; max-height:72vh;"
+      ></video>
     </div>
   </div>
 
@@ -54,7 +67,7 @@
   <input
     type="file"
     id="paintingUpload"
-    accept="image/*"
+    accept="image/*,video/*"
     style="display:none"
   />
 
@@ -66,7 +79,7 @@
   <script>
     // 🔑 Supabase project config for Rage City
     const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y"; // ← paste your anon key
+    const SUPABASE_ANON_KEY = "PASTE_YOUR_ANON_KEY_HERE";
 
     // Make a global client so cityScene.js and others can use `window.supabase`
     window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -74,7 +87,107 @@
 
   <!-- Rage City scripts -->
   <script src="./js/input.js"></script>
-  <script src="./js/overlay.js"></script>
+
+  <!-- ✅ NEW: overlay controller (supports image + video + fullscreen) -->
+  <script>
+    // Shared overlay state CityScene expects
+    window.artOpen = false;
+
+    const artOverlayEl = document.getElementById("art-overlay");
+    const artMsgEl = document.getElementById("art-overlay-msg");
+    const artImgEl = document.getElementById("art-overlay-img");
+    const artVidEl = document.getElementById("art-overlay-video");
+
+    // Detect video by mime or extension
+    function _isVideo(mimeType, url) {
+      const mt = (mimeType || "").toLowerCase();
+      if (mt.startsWith("video/")) return true;
+      const s = String(url || "").toLowerCase();
+      return s.endsWith(".mp4") || s.endsWith(".webm") || s.endsWith(".mov") || s.endsWith(".m4v");
+    }
+
+    // Keep current media info so toggle fullscreen knows what to fullscreen
+    let _currentUrl = null;
+    let _currentMime = "";
+
+    // openArtOverlay can accept:
+    //  - a string URL (legacy)
+    //  - { url, mimeType } (new)
+    window.openArtOverlay = function(arg) {
+      let url = null;
+      let mimeType = "";
+
+      if (typeof arg === "string") {
+        url = arg;
+      } else if (arg && typeof arg === "object") {
+        url = arg.url || null;
+        mimeType = arg.mimeType || "";
+      }
+
+      if (!url) return;
+
+      _currentUrl = url;
+      _currentMime = mimeType;
+
+      const isVid = _isVideo(mimeType, url);
+
+      // Reset
+      artImgEl.style.display = "none";
+      artVidEl.style.display = "none";
+
+      // Apply
+      if (isVid) {
+        artMsgEl.textContent = 'Tap play (video) — Press "A" for fullscreen';
+        artVidEl.src = url;
+        artVidEl.style.display = "block";
+      } else {
+        artMsgEl.textContent = 'Press "A" for fullscreen';
+        artImgEl.src = url;
+        artImgEl.style.display = "block";
+      }
+
+      artOverlayEl.style.display = "flex";
+      window.artOpen = true;
+    };
+
+    window.closeArtOverlay = function() {
+      // Stop video cleanly
+      try {
+        artVidEl.pause();
+      } catch(_) {}
+
+      artVidEl.removeAttribute("src");
+      artVidEl.load();
+
+      artImgEl.src = "";
+
+      artOverlayEl.style.display = "none";
+      window.artOpen = false;
+      _currentUrl = null;
+      _currentMime = "";
+    };
+
+    // Fullscreen toggle used by CityScene when overlay is open
+    window.toggleArtFullscreen = function() {
+      const isVid = _isVideo(_currentMime, _currentUrl);
+      const target = isVid ? artVidEl : artImgEl;
+
+      if (!target) return;
+
+      if (!document.fullscreenElement) {
+        if (target.requestFullscreen) target.requestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    };
+
+    // Click outside media closes overlay
+    artOverlayEl.addEventListener("click", (e) => {
+      if (e.target === artOverlayEl) window.closeArtOverlay();
+    });
+  </script>
+
+  <!-- Your scene + game boot -->
   <script src="./js/cityScene.js"></script>
   <script src="./js/main.js"></script>
 </body>
