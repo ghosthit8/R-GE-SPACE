@@ -214,6 +214,24 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     return null;
   }
 
+  // 1) Read the existing storage_path FIRST (so we can delete it after a successful replace)
+  let oldPath = null;
+  try {
+    const { data: existing, error: existingErr } = await window.supabase
+      .from(PAINTINGS_TABLE)
+      .select("storage_path")
+      .eq("frame_index", frameIndex)
+      .maybeSingle();
+
+    if (existingErr) {
+      console.warn("[RageCity] Could not read existing storage_path:", existingErr);
+    } else {
+      oldPath = existing?.storage_path || null;
+    }
+  } catch (e) {
+    console.warn("[RageCity] Existing path lookup failed:", e);
+  }
+
   try {
     const mimeType = file.type || "";
     const name = file.name || "";
@@ -221,7 +239,7 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     const extFromMime = (mimeType.includes("/") ? mimeType.split("/")[1] : "") || "";
     const ext = (extFromName || extFromMime || "bin").toLowerCase();
 
-    // versioned filename so each replace gets a new path
+    // Versioned filename so each replace gets a new path
     const timestamp = Date.now();
     const fileName = `painting_${frameIndex}_${timestamp}.${ext}`;
     const filePath = `paintings/${fileName}`;
@@ -232,8 +250,10 @@ async function uploadPaintingToSupabase(frameIndex, file) {
       frameIndex,
       fileType: mimeType,
       fileSize: file.size,
+      oldPath
     });
 
+    // 2) Upload new file
     const { data: uploadData, error: uploadError } = await window.supabase
       .storage
       .from(GALLERY_BUCKET)
@@ -247,7 +267,7 @@ async function uploadPaintingToSupabase(frameIndex, file) {
 
     console.log("[RageCity] Storage upload success:", uploadData);
 
-    // Save DB row (private-bucket friendly)
+    // 3) Save DB row (private-bucket friendly)
     const { data: upsertData, error: upsertError } = await window.supabase
       .from(PAINTINGS_TABLE)
       .upsert(
@@ -258,12 +278,26 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     if (upsertError) {
       console.error("[RageCity] Error upserting painting record:", upsertError);
       alert("RageCity upload error (DB upsert): " + upsertError.message);
-      // still try returning a signed URL so the current user sees it
+      // NOTE: Do NOT delete oldPath if DB save failed.
     } else {
       console.log("[RageCity] Painting DB upsert success:", upsertData);
     }
 
-    // Return a signed URL for immediate display (do NOT store this in DB; it expires)
+    // 4) Delete the old file ONLY after new upload + DB write succeeded
+    if (!upsertError && oldPath && oldPath !== filePath) {
+      const { error: removeError } = await window.supabase
+        .storage
+        .from(GALLERY_BUCKET)
+        .remove([oldPath]);
+
+      if (removeError) {
+        console.warn("[RageCity] Could not delete old file:", oldPath, removeError);
+      } else {
+        console.log("[RageCity] Deleted old file:", oldPath);
+      }
+    }
+
+    // 5) Return a signed URL for immediate display (do NOT store this in DB; it expires)
     let signedUrl = null;
     try {
       signedUrl = await getSignedUrl(GALLERY_BUCKET, filePath);
