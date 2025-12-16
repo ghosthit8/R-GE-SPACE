@@ -19,7 +19,7 @@ const PAINTINGS_TABLE = "ragecity_paintings";
 // Log once when this file loads so we know if Supabase is there
 console.log("[RageCity] cityScene.js loaded. Supabase present?", !!window.supabase);
 // Version marker so you can verify you're loading the new file
-console.log("[RageCity] CityScene.js VERSION: abxy_xy_no_actions_2025-12-16_v1");
+console.log("[RageCity] CityScene.js VERSION: videos_fullscreen_fix_2025-12-15_v1");
 
 // ===== RageCity Media Helpers (images + videos + private buckets) =====
 const SIGNED_URL_EXPIRES_SECONDS = 60 * 30; // 30 minutes
@@ -60,7 +60,7 @@ function clearFrameMedia(frame) {
   }
   frame.localTexKey = null;
   frame.mediaKind = null;
-  frame.mimeType = "";
+  frame.mimeType = ""; // ✅ NEW: reset
 }
 
 function attachVideoMarker(scene, frame) {
@@ -174,7 +174,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
 
         if (isVid) {
           frame.mediaKind = "video";
-          frame.mimeType = r.mimeType || "video/mp4";
+          frame.mimeType = r.mimeType || "video/mp4";  // ✅ NEW
           frame.fullUrl = r.url;        // signed or legacy url
           frame.storagePath = r.storagePath || null;
           attachVideoMarker(scene, frame);
@@ -194,7 +194,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
 
         frame.img = img;
         frame.mediaKind = "image";
-        frame.mimeType = r.mimeType || "image";
+        frame.mimeType = r.mimeType || "image";        // ✅ NEW
         frame.fullUrl = r.url;
         frame.storagePath = r.storagePath || null;
 
@@ -560,7 +560,7 @@ function create() {
       locked: false,
       localTexKey: null,
       mediaKind: null,
-      mimeType: "",
+      mimeType: "",          // ✅ NEW
       playIcon: null,
       storagePath: null,
       supTexKey: null,
@@ -671,7 +671,7 @@ function create() {
       // ✅ MOBILE-SAFE LOCAL PREVIEW
       try {
         const isVid = isVideoFile(file.type, file.name);
-        frame.mimeType = file.type || (isVid ? "video/mp4" : "image");
+        frame.mimeType = file.type || (isVid ? "video/mp4" : "image"); // ✅ NEW
 
         logDbg(isVid ? "Preview: video selected…" : "Preview: building blob…");
 
@@ -739,7 +739,7 @@ function create() {
             }
 
             frame.fullUrl = signedUrl;
-            frame.mimeType = file.type || frame.mimeType || "";
+            frame.mimeType = file.type || frame.mimeType || ""; // ✅ NEW
             logDbg("Supabase saved ✔");
             console.log("[RageCity] Frame updated with Supabase SIGNED URL", {
               frameIndex,
@@ -786,17 +786,15 @@ function update(time, delta) {
 
   const justPressedA = inputState.A && !prevA;
   const justPressedB = inputState.B && !prevB;
+  const justPressedX = inputState.X && !prevX;
+  const justPressedY = inputState.Y && !prevY;
 
-  // Track X/Y edge transitions (but do nothing with them yet)
-  // (we still update prevX/prevY at the end so presses don't "pile up")
-  const _justPressedX = inputState.X && !prevX;
-  const _justPressedY = inputState.Y && !prevY;
-
-  // ✅ overlay open behavior: ONLY A fullscreen, ONLY B close
+  // ✅ overlay open behavior uses globals from index.html now
   if (window.artOpen) {
-    if (justPressedA) window.toggleArtFullscreen();
-    if (justPressedB) window.closeArtOverlay();
-
+    // While overlay is open:
+    // A or X = fullscreen toggle, B or Y = close
+    if (justPressedA || justPressedX) window.toggleArtFullscreen();
+    if (justPressedB || justPressedY) window.closeArtOverlay();
     prevA = inputState.A;
     prevB = inputState.B;
     prevX = inputState.X;
@@ -846,7 +844,7 @@ function update(time, delta) {
       nearestItem = {
         type: "sculpture",
         fullUrl: sculptureSpot.fullUrl,
-        mimeType: ""
+        mimeType: "" // unknown
       };
     }
   }
@@ -869,6 +867,17 @@ function update(time, delta) {
     } else {
       promptText.setVisible(false);
     }
+  }
+
+  // X / Y shortcuts (when overlay is NOT open)
+  // X = toggle page fullscreen, Y = go back to Menu
+  if (justPressedX) {
+    const fsBtn = document.getElementById("btn-fullscreen");
+    if (fsBtn) fsBtn.click();
+  }
+  if (justPressedY) {
+    const menuBtn = document.getElementById("btn-menu");
+    if (menuBtn) menuBtn.click();
   }
 
   // A button (view or add)
@@ -906,7 +915,7 @@ function update(time, delta) {
     }
   }
 
-  prevA = inputState.A;
+    prevA = inputState.A;
   prevB = inputState.B;
   prevX = inputState.X;
   prevY = inputState.Y;
