@@ -127,7 +127,7 @@ body {
 }
 
 .dpad,
-.ab-buttons {
+.abxy {
   pointer-events: auto;
 }
 
@@ -140,7 +140,7 @@ body {
 }
 
 .dpad button,
-.ab-buttons button {
+.abxy button {
   background: rgba(0, 0, 0, 0.9);
   border: 2px solid rgba(57, 255, 20, 0.8);
   border-radius: 12px;
@@ -152,7 +152,7 @@ body {
 }
 
 .dpad button:active,
-.ab-buttons button:active {
+.abxy button:active {
   transform: scale(0.96);
   box-shadow: 0 0 4px rgba(57, 255, 20, 1);
   background: #000;
@@ -164,14 +164,15 @@ body {
   box-shadow: none;
 }
 
-.ab-buttons {
+.abxy {
   position: relative;
-  width: 180px;
-  height: 140px;
+  width: 190px;
+  height: 190px;
   opacity: 0.9;
+  pointer-events: auto;
 }
 
-.ab-buttons button {
+.abxy .abxy-btn {
   position: absolute;
   width: 64px;
   height: 64px;
@@ -179,28 +180,24 @@ body {
   font-size: 1.1rem;
 }
 
-.ab-buttons .btn-a::after,
-.ab-buttons .btn-b::after {
+/* Label letters under the dot */
+.abxy .abxy-btn::after {
   display: block;
   font-size: 0.65rem;
   margin-top: 2px;
   letter-spacing: 2px;
 }
-.ab-buttons .btn-a::after {
-  content: "A";
-}
-.ab-buttons .btn-b::after {
-  content: "B";
-}
 
-.ab-buttons .btn-b {
-  bottom: 10px;
-  left: 30px;
-}
-.ab-buttons .btn-a {
-  bottom: 40px;
-  right: 25px;
-}
+.abxy .btn-y::after { content: "Y"; }
+.abxy .btn-x::after { content: "X"; }
+.abxy .btn-b::after { content: "B"; }
+.abxy .btn-a::after { content: "A"; }
+
+/* Xbox-style diamond: Y top, X left, B right, A bottom */
+.abxy .btn-y { left: 63px; top: 0px; }
+.abxy .btn-x { left: 0px;  top: 63px; }
+.abxy .btn-b { left: 126px; top: 63px; }
+.abxy .btn-a { left: 63px; top: 126px; }
 
 @media (max-width: 600px) {
   #game-container {
@@ -210,7 +207,7 @@ body {
     grid-template-columns: 52px 52px 52px;
     grid-template-rows: 52px 52px 52px;
   }
-  .ab-buttons button {
+  .abxy button {
     width: 56px;
     height: 56px;
   }
