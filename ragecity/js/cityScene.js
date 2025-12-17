@@ -485,9 +485,9 @@ function create() {
   const cubeX = w * 0.56;
   const cubeY = h * 0.62;
 
-  const frontSize = 64;          // old cube was smaller
+  const frontSize = 52;          // old cube was smaller
   const half = frontSize / 2;
-  const backOffset = 16;         // subtle 3D offset like before
+  const backOffset = 12;         // subtle 3D offset like before
 
   const cube = this.add.graphics();
   cube.lineStyle(4, 0xffffff, 1);
