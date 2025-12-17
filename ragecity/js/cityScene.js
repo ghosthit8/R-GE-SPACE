@@ -480,35 +480,44 @@ function create() {
 
   
 
-  // ===== SCULPTURE CUBE (RESTORED) =====
-  const cubeX = w * 0.62;
+  // ===== SCULPTURE CUBE (RESTORED - ORIGINAL LOOK) =====
+  // Positioned/Scaled to match the older build (smaller, centered more inside the room)
+  const cubeX = w * 0.56;
   const cubeY = h * 0.62;
+
+  const frontSize = 64;          // old cube was smaller
+  const half = frontSize / 2;
+  const backOffset = 16;         // subtle 3D offset like before
 
   const cube = this.add.graphics();
   cube.lineStyle(4, 0xffffff, 1);
 
   // front face
-  cube.strokeRect(cubeX - 40, cubeY - 40, 80, 80);
+  cube.strokeRect(cubeX - half, cubeY - half, frontSize, frontSize);
 
-  // back face (offset)
-  cube.strokeRect(cubeX - 20, cubeY - 60, 80, 80);
+  // back face (slightly up-left)
+  cube.strokeRect(
+    cubeX - half + backOffset,
+    cubeY - half - backOffset,
+    frontSize,
+    frontSize
+  );
 
   // connecting edges
-  cube.lineBetween(cubeX - 40, cubeY - 40, cubeX - 20, cubeY - 60);
-  cube.lineBetween(cubeX + 40, cubeY - 40, cubeX + 60, cubeY - 60);
-  cube.lineBetween(cubeX - 40, cubeY + 40, cubeX - 20, cubeY + 20);
-  cube.lineBetween(cubeX + 40, cubeY + 40, cubeX + 60, cubeY + 20);
+  cube.lineBetween(cubeX - half, cubeY - half, cubeX - half + backOffset, cubeY - half - backOffset);
+  cube.lineBetween(cubeX + half, cubeY - half, cubeX + half + backOffset, cubeY - half - backOffset);
+  cube.lineBetween(cubeX - half, cubeY + half, cubeX - half + backOffset, cubeY + half - backOffset);
+  cube.lineBetween(cubeX + half, cubeY + half, cubeX + half + backOffset, cubeY + half - backOffset);
 
-  // green core
-  const core = this.add.rectangle(cubeX + 10, cubeY + 10, 26, 26, 0x39ff14);
+  // green core (centered like the old one)
+  const core = this.add.rectangle(cubeX, cubeY, 22, 22, 0x39ff14);
   core.setDepth(2);
 
-  // interaction anchor (used in update())
+  // interaction anchor
   sculptureSpot = {
     x: cubeX,
     y: cubeY,
-    fullUrl: null,
-    mimeType: ""
+    fullUrl: null
   };
 
 // ✅ Interaction prompt (shows when near a frame)
