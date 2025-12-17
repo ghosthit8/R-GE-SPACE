@@ -478,7 +478,51 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
-  // ✅ Interaction prompt (shows when near a frame)
+  
+
+  // ===== SCULPTURE CUBE (RESTORED - ORIGINAL LOOK) =====
+  // Positioned/Scaled to match the older build (smaller, centered more inside the room)
+  const cubeX = w * 0.56;
+  const cubeY = h * 0.62;
+
+  const frontSize = 64;          // old cube was smaller
+  const half = frontSize / 2;
+  const backOffset = 16;         // subtle 3D offset like before
+
+  const cube = this.add.graphics();
+  cube.lineStyle(4, 0xffffff, 1);
+
+  // front face
+  cube.strokeRect(cubeX - half, cubeY - half, frontSize, frontSize);
+
+  // back face (slightly up-left) — FIXED orientation
+  cube.strokeRect(
+    cubeX - half - backOffset,
+    cubeY - half - backOffset,
+    frontSize,
+    frontSize
+  );
+
+  // connecting edges
+  cube.lineBetween(cubeX - half, cubeY - half, cubeX - half - backOffset, cubeY - half - backOffset);
+  cube.lineBetween(cubeX + half, cubeY - half, cubeX + half - backOffset, cubeY - half - backOffset);
+  cube.lineBetween(cubeX - half, cubeY + half, cubeX - half - backOffset, cubeY + half - backOffset);
+  cube.lineBetween(cubeX + half, cubeY + half, cubeX + half - backOffset, cubeY + half - backOffset);
+
+  // green core — OPEN (outline)
+  const core = this.add.graphics();
+  core.lineStyle(3, 0x39ff14, 1);
+  core.strokeRect(cubeX - 11, cubeY - 11, 22, 22);
+  core.setDepth(2);
+
+  // interaction anchor
+  sculptureSpot = {
+    x: cubeX,
+    y: cubeY,
+    fullUrl: null
+  };
+
+// ✅ Interaction prompt (shows when near a frame)
   promptText = this.add.text(w / 2, h - 120, "", {
     fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     fontSize: "18px",
@@ -494,47 +538,6 @@ function create() {
   this.scale.on("resize", (gameSize) => {
     promptText.setPosition(gameSize.width / 2, gameSize.height - 120);
   });
-
-  // ===== SCULPTURE CUBE (CLASSIC ORIENTATION) =====
-  // Matches the older build: smaller, depth recedes up-left, inner core is OPEN (outline).
-  const cubeX = w * 0.56;
-  const cubeY = h * 0.62;
-
-  const frontSize = 64;
-  const half = frontSize / 2;
-
-  // Depth offset (flip direction to match the old screenshot)
-  const dx = -16; // left
-  const dy = -16; // up
-
-  const cube = this.add.graphics();
-  cube.lineStyle(4, 0xffffff, 1);
-
-  // front face
-  cube.strokeRect(cubeX - half, cubeY - half, frontSize, frontSize);
-
-  // back face (offset up-left)
-  cube.strokeRect(
-    cubeX - half + dx,
-    cubeY - half + dy,
-    frontSize,
-    frontSize
-  );
-
-  // connect corners
-  cube.lineBetween(cubeX - half, cubeY - half, cubeX - half + dx, cubeY - half + dy);
-  cube.lineBetween(cubeX + half, cubeY - half, cubeX + half + dx, cubeY - half + dy);
-  cube.lineBetween(cubeX - half, cubeY + half, cubeX - half + dx, cubeY + half + dy);
-  cube.lineBetween(cubeX + half, cubeY + half, cubeX + half + dx, cubeY + half + dy);
-
-  // inner "core" (open neon square)
-  const core = this.add.graphics();
-  core.lineStyle(3, 0x39ff14, 1);
-  core.strokeRect(cubeX - 11, cubeY - 11, 22, 22);
-  core.setDepth(2);
-
-  // interaction anchor
-  sculptureSpot = { x: cubeX, y: cubeY, fullUrl: null };
 
   // FRAMES (start BLACK, Supabase will populate any that have art)
   const imgDisplaySize = 26;
@@ -969,4 +972,3 @@ function update(time, delta) {
   prevX = inputState.X;
   prevY = inputState.Y;
 }
-```0
