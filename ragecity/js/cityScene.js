@@ -478,7 +478,40 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
-  // ✅ Interaction prompt (shows when near a frame)
+  
+
+  // ===== SCULPTURE CUBE (RESTORED) =====
+  const cubeX = w * 0.62;
+  const cubeY = h * 0.62;
+
+  const cube = this.add.graphics();
+  cube.lineStyle(4, 0xffffff, 1);
+
+  // front face
+  cube.strokeRect(cubeX - 40, cubeY - 40, 80, 80);
+
+  // back face (offset)
+  cube.strokeRect(cubeX - 20, cubeY - 60, 80, 80);
+
+  // connecting edges
+  cube.lineBetween(cubeX - 40, cubeY - 40, cubeX - 20, cubeY - 60);
+  cube.lineBetween(cubeX + 40, cubeY - 40, cubeX + 60, cubeY - 60);
+  cube.lineBetween(cubeX - 40, cubeY + 40, cubeX - 20, cubeY + 20);
+  cube.lineBetween(cubeX + 40, cubeY + 40, cubeX + 60, cubeY + 20);
+
+  // green core
+  const core = this.add.rectangle(cubeX + 10, cubeY + 10, 26, 26, 0x39ff14);
+  core.setDepth(2);
+
+  // interaction anchor (used in update())
+  sculptureSpot = {
+    x: cubeX,
+    y: cubeY,
+    fullUrl: null,
+    mimeType: ""
+  };
+
+// ✅ Interaction prompt (shows when near a frame)
   promptText = this.add.text(w / 2, h - 120, "", {
     fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     fontSize: "18px",
