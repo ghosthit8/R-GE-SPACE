@@ -525,8 +525,8 @@ function create() {
   // --- SCULPTURE COLLIDER (matches the red hit area you marked) ---
   // Invisible static rectangle added to wallsGroup so the player cannot walk through the cube.
   // (Does NOT change any cube visuals.)
-  const sculptureHitW = frontSize + backOffset + 5;
-  const sculptureHitH = frontSize + backOffset + 3;
+  const sculptureHitW = frontSize + backOffset + 4;
+  const sculptureHitH = frontSize + backOffset + 0;
   const sculptureHit = scene.add.rectangle(
     cubeX - backOffset / 2,
     cubeY - backOffset / 2,
