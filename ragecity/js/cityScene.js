@@ -490,7 +490,7 @@ function create() {
   const backOffset = 8;         // subtle 3D offset like before
 
   const cube = this.add.graphics();
-  cube.lineStyle(4, 0xffffff, 1);
+  cube.lineStyle(2, 0xffffff, 1);
 
   // front face
   cube.strokeRect(cubeX - half, cubeY - half, frontSize, frontSize);
