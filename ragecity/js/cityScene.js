@@ -512,7 +512,7 @@ function create() {
   // green core — OPEN (outline)
   const core = this.add.graphics();
   core.lineStyle(3, 0x39ff14, 1);
-  core.strokeRect(cubeX - 11, cubeY - 11, 22, 22);
+  core.strokeRect(cubeX - 8, cubeY - 8, 16, 16);
   core.setDepth(2);
 
   // interaction anchor
