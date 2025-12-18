@@ -478,38 +478,24 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
-  // ✅ Interaction prompt (shows when near a frame)
-  promptText = this.add.text(w / 2, h - 120, "", {
-    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    fontSize: "18px",
-    color: "#39ff14",
-    align: "center"
-  });
-  promptText.setOrigin(0.5, 1);
-  promptText.setScrollFactor(0);
-  promptText.setDepth(9998);
-  promptText.setVisible(false);
+  
 
-  // Keep prompt positioned correctly on resize / rotate
-  this.scale.on("resize", (gameSize) => {
-    promptText.setPosition(gameSize.width / 2, gameSize.height - 120);
-  });
-
-  // ===== SCULPTURE CUBE (CLASSIC ORIENTATION) =====
+  // ===== SCULPTURE CUBE (RESTORED - ORIGINAL LOOK) =====
+  // Positioned/Scaled to match the older build (smaller, centered more inside the room)
   const cubeX = w * 0.56;
   const cubeY = h * 0.62;
 
-  const frontSize = 64;      // tweak size here
+  const frontSize = 40;          // old cube was smaller
   const half = frontSize / 2;
-  const backOffset = 16;     // tweak depth here
+  const backOffset = 8;         // subtle 3D offset like before
 
   const cube = this.add.graphics();
-  cube.lineStyle(4, 0xffffff, 1);
+  cube.lineStyle(2, 0xffffff, 1);
 
   // front face
   cube.strokeRect(cubeX - half, cubeY - half, frontSize, frontSize);
 
-  // back face (slightly up-left) — fixed orientation
+  // back face (slightly up-left) — FIXED orientation
   cube.strokeRect(
     cubeX - half - backOffset,
     cubeY - half - backOffset,
@@ -526,7 +512,7 @@ function create() {
   // green core — OPEN (outline)
   const core = this.add.graphics();
   core.lineStyle(3, 0x39ff14, 1);
-  core.strokeRect(cubeX - 11, cubeY - 11, 22, 22);
+  core.strokeRect(cubeX - 8, cubeY - 8, 16, 16);
   core.setDepth(2);
 
   // interaction anchor
@@ -536,23 +522,39 @@ function create() {
     fullUrl: null
   };
 
-  // ===== SCULPTURE COLLIDER HITBOX (the red zone you marked) =====
-  // Tip: change alpha from 0 to 0.18 temporarily to VISUALIZE while tuning.
-  const sculptW = frontSize + backOffset + 18;
-  const sculptH = frontSize + backOffset + 18;
-
-  const sculptureHitbox = this.add.rectangle(
-    cubeX,
-    cubeY,
-    sculptW,
-    sculptH,
+  // --- SCULPTURE COLLIDER (matches the red hit area you marked) ---
+  // Invisible static rectangle added to wallsGroup so the player cannot walk through the cube.
+  // (Does NOT change any cube visuals.)
+  const sculptureHitW = frontSize + backOffset + 18;
+  const sculptureHitH = frontSize + backOffset + 18;
+  const sculptureHit = scene.add.rectangle(
+    cubeX - backOffset / 2,
+    cubeY - backOffset / 2,
+    sculptureHitW,
+    sculptureHitH,
     0xff0000,
     0
   );
+  sculptureHit.setVisible(false);
+  scene.physics.add.existing(sculptureHit, true);
+  wallsGroup.add(sculptureHit);
 
-  this.physics.add.existing(sculptureHitbox, true);     // static body
-  this.physics.add.collider(player, sculptureHitbox);   // solid collision
-  this.sculptureHitbox = sculptureHitbox;               // used in update()
+// ✅ Interaction prompt (shows when near a frame)
+  promptText = this.add.text(w / 2, h - 120, "", {
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontSize: "18px",
+    color: "#39ff14",
+    align: "center"
+  });
+  promptText.setOrigin(0.5, 1);
+  promptText.setScrollFactor(0);
+  promptText.setDepth(9998);
+  promptText.setVisible(false);
+
+  // Keep prompt positioned correctly on resize / rotate
+  this.scale.on("resize", (gameSize) => {
+    promptText.setPosition(gameSize.width / 2, gameSize.height - 120);
+  });
 
   // FRAMES (start BLACK, Supabase will populate any that have art)
   const imgDisplaySize = 26;
@@ -909,14 +911,22 @@ function update(time, delta) {
     }
   });
 
-  // compare sculpture (OVERLAP-based "red zone")
-  if (this.sculptureHitbox && this.physics.overlap(player, this.sculptureHitbox)) {
-    nearestItem = {
-      type: "sculpture",
-      fullUrl: sculptureSpot?.fullUrl || null,
-      mimeType: ""
-    };
-    nearestDist = 0; // force it to win
+  // compare sculpture
+  if (sculptureSpot) {
+    const d = Phaser.Math.Distance.Between(
+      player.x,
+      player.y,
+      sculptureSpot.x,
+      sculptureSpot.y
+    );
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearestItem = {
+        type: "sculpture",
+        fullUrl: sculptureSpot.fullUrl,
+        mimeType: ""
+      };
+    }
   }
 
   // prompt text
