@@ -561,21 +561,24 @@ function create() {
     sculptureHit.setVisible(false);
   }
 
-// ✅ Interaction prompt (shows when near a frame)
-  promptText = this.add.text(w / 2, h - 120, "", {
+  // ✅ Interaction prompt (shows when near a frame)
+  // Place it just under the inner green square (room boundary), not at the bottom of the screen
+  const promptY = bottomInner + 28;
+
+  promptText = this.add.text(w / 2, promptY, "", {
     fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     fontSize: "18px",
     color: "#39ff14",
     align: "center"
   });
-  promptText.setOrigin(0.5, 1);
+  promptText.setOrigin(0.5, 0); // top-aligned so it sits neatly below the square
   promptText.setScrollFactor(0);
   promptText.setDepth(9998);
   promptText.setVisible(false);
 
   // Keep prompt positioned correctly on resize / rotate
   this.scale.on("resize", (gameSize) => {
-    promptText.setPosition(gameSize.width / 2, gameSize.height - 120);
+    promptText.setPosition(gameSize.width / 2, bottomInner + 28);
   });
 
   // FRAMES (start BLACK, Supabase will populate any that have art)
