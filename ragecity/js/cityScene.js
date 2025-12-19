@@ -528,9 +528,9 @@ function create() {
 
   // ✅ EDIT THESE 6 NUMBERS ONLY
   const hitPadLeft   = 10;   // space to the left of the cube
-  const hitPadRight  = 5;   // space to the right of the cube
+  const hitPadRight  = 1;   // space to the right of the cube
   const hitPadTop    = 10;    // space above the cube
-  const hitPadBottom = 5;   // space below the cube
+  const hitPadBottom = 1;   // space below the cube
   const hitNudgeX    = 0;    // optional center nudge (X)
   const hitNudgeY    = 0;    // optional center nudge (Y)
 
