@@ -563,7 +563,7 @@ function create() {
 
   // ✅ Interaction prompt (shows when near a frame)
   // Place it just under the inner green square (room boundary), not at the bottom of the screen
-  const promptY = bottomInner + 70;
+  const promptY = bottomInner + 100;
 
   promptText = this.add.text(w / 2, promptY, "", {
     fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
