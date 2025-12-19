@@ -5,6 +5,8 @@ let sculptureSpot = null;
 let wallsGroup;
 let prevA = false;
 let prevB = false;
+let prevX = false;
+let prevY = false;
 
 // For per-painting uploads
 let paintingUploadInput = null;
@@ -17,7 +19,7 @@ const PAINTINGS_TABLE = "ragecity_paintings";
 // Log once when this file loads so we know if Supabase is there
 console.log("[RageCity] cityScene.js loaded. Supabase present?", !!window.supabase);
 // Version marker so you can verify you're loading the new file
-console.log("[RageCity] CityScene.js VERSION: videos_fullscreen_fix_2025-12-15_v1");
+console.log("[RageCity] CityScene.js VERSION: abxy_xy_no_actions_2025-12-16_v1");
 
 // ===== RageCity Media Helpers (images + videos + private buckets) =====
 const SIGNED_URL_EXPIRES_SECONDS = 60 * 30; // 30 minutes
@@ -58,7 +60,7 @@ function clearFrameMedia(frame) {
   }
   frame.localTexKey = null;
   frame.mediaKind = null;
-  frame.mimeType = ""; // ✅ NEW: reset
+  frame.mimeType = "";
 }
 
 function attachVideoMarker(scene, frame) {
@@ -172,7 +174,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
 
         if (isVid) {
           frame.mediaKind = "video";
-          frame.mimeType = r.mimeType || "video/mp4";  // ✅ NEW
+          frame.mimeType = r.mimeType || "video/mp4";
           frame.fullUrl = r.url;        // signed or legacy url
           frame.storagePath = r.storagePath || null;
           attachVideoMarker(scene, frame);
@@ -192,7 +194,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
 
         frame.img = img;
         frame.mediaKind = "image";
-        frame.mimeType = r.mimeType || "image";        // ✅ NEW
+        frame.mimeType = r.mimeType || "image";
         frame.fullUrl = r.url;
         frame.storagePath = r.storagePath || null;
 
@@ -476,6 +478,106 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
+  
+
+  // ===== SCULPTURE CUBE (RESTORED - ORIGINAL LOOK) =====
+  // Positioned/Scaled to match the older build (smaller, centered more inside the room)
+  const cubeX = w * 0.56;
+  const cubeY = h * 0.62;
+
+  const frontSize = 40;          // old cube was smaller
+  const half = frontSize / 2;
+  const backOffset = 8;         // subtle 3D offset like before
+
+  const cube = this.add.graphics();
+  cube.lineStyle(2, 0xffffff, 1);
+
+  // front face
+  cube.strokeRect(cubeX - half, cubeY - half, frontSize, frontSize);
+
+  // back face (slightly up-left) — FIXED orientation
+  cube.strokeRect(
+    cubeX - half - backOffset,
+    cubeY - half - backOffset,
+    frontSize,
+    frontSize
+  );
+
+  // connecting edges
+  cube.lineBetween(cubeX - half, cubeY - half, cubeX - half - backOffset, cubeY - half - backOffset);
+  cube.lineBetween(cubeX + half, cubeY - half, cubeX + half - backOffset, cubeY - half - backOffset);
+  cube.lineBetween(cubeX - half, cubeY + half, cubeX - half - backOffset, cubeY + half - backOffset);
+  cube.lineBetween(cubeX + half, cubeY + half, cubeX + half - backOffset, cubeY + half - backOffset);
+
+  // green core — OPEN (outline)
+  const core = this.add.graphics();
+  core.lineStyle(3, 0x39ff14, 1);
+  core.strokeRect(cubeX - 8, cubeY - 8, 16, 16);
+  core.setDepth(2);
+
+  // interaction anchor
+  sculptureSpot = {
+    x: cubeX,
+    y: cubeY,
+    fullUrl: null
+  };
+
+  // --- SCULPTURE COLLIDER (independent per-side tuning) ---
+  // Invisible static rectangle added to wallsGroup so the player cannot walk through the cube.
+  // (Does NOT change any cube visuals.)
+
+  // ✅ EDIT THESE 6 NUMBERS ONLY
+  const hitPadLeft   = 10;   // space to the left of the cube
+  const hitPadRight  = 10;   // space to the right of the cube
+  const hitPadTop    = 6;    // space above the cube
+  const hitPadBottom = 10;   // space below the cube
+  const hitNudgeX    = 0;    // optional center nudge (X)
+  const hitNudgeY    = 0;    // optional center nudge (Y)
+
+  // derived rect (use per-side pads above)
+  const hitLeft   = (cubeX - half) - hitPadLeft;
+  const hitRight  = (cubeX + half) + hitPadRight;
+  const hitTop    = (cubeY - half) - hitPadTop;
+  const hitBottom = (cubeY + half) + hitPadBottom;
+
+  const hitW = Math.max(10, hitRight - hitLeft);
+  const hitH = Math.max(10, hitBottom - hitTop);
+  const hitCX = hitLeft + hitW / 2 + hitNudgeX;
+  const hitCY = hitTop + hitH / 2 + hitNudgeY;
+
+  const sculptureHit = this.add.rectangle(hitCX, hitCY, hitW, hitH, 0xff0000, 0);
+  this.physics.add.existing(sculptureHit, true); // static body
+  if (typeof wallsGroup !== 'undefined' && wallsGroup && wallsGroup.add) {
+    wallsGroup.add(sculptureHit);
+  }
+
+  // debug toggle: set window.__DEBUG_HITBOXES = true in console to see it
+  const showHit = !!window.__DEBUG_HITBOXES;
+  if (showHit) {
+    sculptureHit.setFillStyle(0xff0000, 0.22);
+    sculptureHit.setVisible(true);
+    sculptureHit.setDepth(999999);
+  } else {
+    sculptureHit.setVisible(false);
+  }
+
+// ✅ Interaction prompt (shows when near a frame)
+  promptText = this.add.text(w / 2, h - 120, "", {
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontSize: "18px",
+    color: "#39ff14",
+    align: "center"
+  });
+  promptText.setOrigin(0.5, 1);
+  promptText.setScrollFactor(0);
+  promptText.setDepth(9998);
+  promptText.setVisible(false);
+
+  // Keep prompt positioned correctly on resize / rotate
+  this.scale.on("resize", (gameSize) => {
+    promptText.setPosition(gameSize.width / 2, gameSize.height - 120);
+  });
+
   // FRAMES (start BLACK, Supabase will populate any that have art)
   const imgDisplaySize = 26;
   galleryFrames = [];
@@ -558,7 +660,7 @@ function create() {
       locked: false,
       localTexKey: null,
       mediaKind: null,
-      mimeType: "",          // ✅ NEW
+      mimeType: "",
       playIcon: null,
       storagePath: null,
       supTexKey: null,
@@ -611,124 +713,6 @@ function create() {
   // Load shared gallery from Supabase
   loadPaintingsFromSupabase(this, imgDisplaySize);
 
-  // ===== SCULPTURE CUBE =====
-  const centerX = (leftOuter + rightOuter) / 2;
-  const centerY = (topOuter + bottomOuter) / 2;
-  const sculptureX = centerX + 35;
-  const sculptureY = centerY + 60;
-
-  const cube = this.add.graphics();
-  cube.lineStyle(3, 0xffffff, 1);
-
-  const size = 46;
-  const depth = 10;
-
-  const frontX = sculptureX - size / 2;
-  const frontY = sculptureY - size / 2;
-  cube.strokeRect(frontX, frontY, size, size);
-
-  const backX = frontX - depth;
-  const backY = frontY - depth;
-  cube.strokeRect(backX, backY, size, size);
-
-  cube.beginPath();
-  cube.moveTo(frontX, frontY);
-  cube.lineTo(backX, backY);
-  cube.moveTo(frontX + size, frontY);
-  cube.lineTo(backX + size, backY);
-  cube.moveTo(frontX, frontY + size);
-  cube.lineTo(backX, backY + size);
-  cube.moveTo(frontX + size, frontY + size);
-  cube.lineTo(backX + size, backY + size);
-  cube.strokePath();
-
-  const innerSize = 22;
-  const inner = this.add.rectangle(
-    sculptureX,
-    sculptureY,
-    innerSize,
-    innerSize,
-    0x000000
-  );
-  inner.setStrokeStyle(2, 0x39ff14, 1);
-
-  sculptureSpot = {
-    x: sculptureX,
-    y: sculptureY,
-    fullUrl: SCULPTURE_FULL_URL,
-    type: "sculpture"
-  };
-
-// --- SCULPTURE COLLIDER (independent per-side tuning) ---
-// Edit ONLY these 6 numbers to tighten/loosen each side + nudge the box:
-const hitPadLeft   = 10;  // space to LEFT  of the cube
-const hitPadRight  = 14;  // space to RIGHT of the cube
-const hitPadTop    = 6;   // space ABOVE the cube
-const hitPadBottom = 10;  // space BELOW the cube
-const hitNudgeX    = 0;   // shifts hitbox left(-)/right(+)
-const hitNudgeY    = 0;   // shifts hitbox up(-)/down(+)
-
-// Derived hitbox size + center
-const hitWidth  = frontSize + hitPadLeft + hitPadRight;
-const hitHeight = frontSize + hitPadTop + hitPadBottom;
-
-// Center shifts automatically when pads differ (so it "leans" toward the larger pad)
-const hitCenterX = cubeX + (hitPadRight - hitPadLeft) / 2 + hitNudgeX;
-const hitCenterY = cubeY + (hitPadBottom - hitPadTop) / 2 + hitNudgeY;
-
-// Invisible static rectangle added to wallsGroup so the player cannot walk through the sculpture cube.
-// (Does NOT change any cube visuals.)
-const sculptureHit = this.add.rectangle(
-  hitCenterX,
-  hitCenterY,
-  hitWidth,
-  hitHeight,
-  0xff0000,
-  0 // invisible
-);
-sculptureHit.setVisible(false);
-this.physics.add.existing(sculptureHit, true);
-wallsGroup.add(sculptureHit);
-
-
-
-  // ===== SCULPTURE COLLIDER =====
-  const midSize = (size + innerSize) / 2;
-
-  const expandLeft   = 18;
-  const expandRight  = -3;
-  const expandTop    = 18;
-  const expandBottom = -3;
-
-  const colliderWidth  = midSize + expandLeft + expandRight;
-  const colliderHeight = midSize + expandTop + expandBottom;
-
-  const frontCollider = this.add.rectangle(
-    sculptureX + (expandRight - expandLeft) / 2,
-    sculptureY + (expandBottom - expandTop) / 2,
-    colliderWidth,
-    colliderHeight,
-    0x00ff00,
-    0
-  );
-  frontCollider.setVisible(false);
-  this.physics.add.existing(frontCollider, true);
-  wallsGroup.add(frontCollider);
-
-  // prompt text
-  promptText = this.add.text(w / 2, h - 40, "", {
-    fontFamily:
-      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    fontSize: "14px",
-    color: "#39ff14"
-  });
-  promptText.setOrigin(0.5);
-  promptText.setVisible(false);
-
-  this.scale.on("resize", (gameSize) => {
-    promptText.setPosition(gameSize.width / 2, gameSize.height - 40);
-  });
-
   // controls + fullscreen
   setupKeyboard(this);
   setupTouchButton("btn-left", "left");
@@ -737,6 +721,8 @@ wallsGroup.add(sculptureHit);
   setupTouchButton("btn-down", "down");
   setupTouchButton("btn-a", "A");
   setupTouchButton("btn-b", "B");
+  setupTouchButton("btn-x", "X");
+  setupTouchButton("btn-y", "Y");
   setupFullscreenButton();
 
   // hook the hidden <input type="file" id="paintingUpload">
@@ -785,7 +771,7 @@ wallsGroup.add(sculptureHit);
       // ✅ MOBILE-SAFE LOCAL PREVIEW
       try {
         const isVid = isVideoFile(file.type, file.name);
-        frame.mimeType = file.type || (isVid ? "video/mp4" : "image"); // ✅ NEW
+        frame.mimeType = file.type || (isVid ? "video/mp4" : "image");
 
         logDbg(isVid ? "Preview: video selected…" : "Preview: building blob…");
 
@@ -853,7 +839,7 @@ wallsGroup.add(sculptureHit);
             }
 
             frame.fullUrl = signedUrl;
-            frame.mimeType = file.type || frame.mimeType || ""; // ✅ NEW
+            frame.mimeType = file.type || frame.mimeType || "";
             logDbg("Supabase saved ✔");
             console.log("[RageCity] Frame updated with Supabase SIGNED URL", {
               frameIndex,
@@ -901,12 +887,20 @@ function update(time, delta) {
   const justPressedA = inputState.A && !prevA;
   const justPressedB = inputState.B && !prevB;
 
-  // ✅ overlay open behavior uses globals from index.html now
+  // Track X/Y edge transitions (but do nothing with them yet)
+  // (we still update prevX/prevY at the end so presses don't "pile up")
+  const _justPressedX = inputState.X && !prevX;
+  const _justPressedY = inputState.Y && !prevY;
+
+  // ✅ overlay open behavior: ONLY A fullscreen, ONLY B close
   if (window.artOpen) {
     if (justPressedA) window.toggleArtFullscreen();
     if (justPressedB) window.closeArtOverlay();
+
     prevA = inputState.A;
     prevB = inputState.B;
+    prevX = inputState.X;
+    prevY = inputState.Y;
     return;
   }
 
@@ -952,7 +946,7 @@ function update(time, delta) {
       nearestItem = {
         type: "sculpture",
         fullUrl: sculptureSpot.fullUrl,
-        mimeType: "" // unknown
+        mimeType: ""
       };
     }
   }
@@ -1013,5 +1007,7 @@ function update(time, delta) {
   }
 
   prevA = inputState.A;
-}
   prevB = inputState.B;
+  prevX = inputState.X;
+  prevY = inputState.Y;
+}
