@@ -527,10 +527,10 @@ function create() {
   // (Does NOT change any cube visuals.)
 
   // ✅ EDIT THESE 6 NUMBERS ONLY
-  const hitPadLeft   = 10;   // space to the left of the cube
-  const hitPadRight  = -10;   // space to the right of the cube
-  const hitPadTop    = 10;    // space above the cube
-  const hitPadBottom = -10;   // space below the cube
+  const hitPadLeft   = 9;   // space to the left of the cube
+  const hitPadRight  = -8;   // space to the right of the cube
+  const hitPadTop    = 9;    // space above the cube
+  const hitPadBottom = -8;   // space below the cube
   const hitNudgeX    = 0;    // optional center nudge (X)
   const hitNudgeY    = 0;    // optional center nudge (Y)
 
