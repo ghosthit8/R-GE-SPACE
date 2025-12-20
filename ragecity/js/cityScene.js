@@ -8,6 +8,12 @@ let prevB = false;
 let prevX = false;
 let prevY = false;
 
+// ===== PROMPT POSITION CONTROL =====
+// Controls how far UNDER the inner green square the prompt sits.
+// Smaller = higher, bigger = lower.
+const PROMPT_OFFSET = 100;
+// =================================
+
 // For per-painting uploads
 let paintingUploadInput = null;
 let currentPaintingIndex = null;
@@ -563,7 +569,7 @@ function create() {
 
   // ✅ Interaction prompt (shows when near a frame)
   // Place it just under the inner green square (room boundary), not at the bottom of the screen
-  const promptY = bottomInner + 150;
+  const promptY = bottomInner + PROMPT_OFFSET;
 
   promptText = this.add.text(w / 2, promptY, "", {
     fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -578,7 +584,10 @@ function create() {
 
   // Keep prompt positioned correctly on resize / rotate
   this.scale.on("resize", (gameSize) => {
-    promptText.setPosition(gameSize.width / 2, bottomInner + 28);
+    // Recompute bottomInner for the NEW fullscreen/rotated height
+    const newBottomOuter = gameSize.height - marginY;
+    const newBottomInner = newBottomOuter - corridorWidth;
+    promptText.setPosition(gameSize.width / 2, newBottomInner + PROMPT_OFFSET);
   });
 
   // FRAMES (start BLACK, Supabase will populate any that have art)
