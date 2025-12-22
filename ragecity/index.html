@@ -12,7 +12,7 @@
   <!-- note: now goes back UP one level -->
   <a id="btn-menu" class="home-btn" href="../menu.html">← Menu</a>
 
-  <button id="btn-fullscreen" class="fullscreen-btn">⛶ Fullscreen</button>
+  <button id="btn-fullscreen" class="fullscreen-btn" tabindex="-1">⛶ Fullscreen</button>
 
   <div id="game-container">
     <div id="game-fallback">Loading Rage City…</div>
@@ -31,24 +31,24 @@
     <div class="controls-inner">
       <div class="dpad">
         <button class="empty" disabled></button>
-        <button id="btn-up">▲</button>
+        <button id="btn-up" tabindex="-1">▲</button>
         <button class="empty" disabled></button>
 
-        <button id="btn-left">◀</button>
+        <button id="btn-left" tabindex="-1">◀</button>
         <button class="empty" disabled></button>
-        <button id="btn-right">▶</button>
+        <button id="btn-right" tabindex="-1">▶</button>
 
         <button class="empty" disabled></button>
-        <button id="btn-down">▼</button>
+        <button id="btn-down" tabindex="-1">▼</button>
         <button class="empty" disabled></button>
       </div>
 
       <!-- ABXY (Xbox-style diamond) -->
       <div class="abxy">
-        <button id="btn-y" class="abxy-btn btn-y">●</button>
-        <button id="btn-x" class="abxy-btn btn-x">●</button>
-        <button id="btn-b" class="abxy-btn btn-b">●</button>
-        <button id="btn-a" class="abxy-btn btn-a">●</button>
+        <button id="btn-y" class="abxy-btn btn-y" tabindex="-1">●</button>
+        <button id="btn-x" class="abxy-btn btn-x" tabindex="-1">●</button>
+        <button id="btn-b" class="abxy-btn btn-b" tabindex="-1">●</button>
+        <button id="btn-a" class="abxy-btn btn-a" tabindex="-1">●</button>
       </div>
     </div>
   </div>
@@ -80,5 +80,74 @@
   <script src="./js/overlay.js"></script>
   <script src="./js/cityScene.js"></script>
   <script src="./js/main.js"></script>
+
+  <script>
+    // --- Mobile fullscreen stability helpers ---
+    (function () {
+      // Prevent virtual gamepad buttons from stealing focus (which can exit fullscreen on mobile)
+      const preventers = [
+        ...document.querySelectorAll('.controls-overlay button'),
+        document.getElementById('btn-fullscreen'),
+      ].filter(Boolean);
+
+      function preventFocus(e) { e.preventDefault(); }
+
+      preventers.forEach(btn => {
+        btn.addEventListener('touchstart', preventFocus, { passive: false });
+        btn.addEventListener('mousedown', preventFocus);
+        btn.addEventListener('pointerdown', preventFocus, { passive: false });
+      });
+
+      // Track when we *want* to be fullscreen (e.g., user pressed fullscreen once)
+      let wantFullscreen = false;
+
+      function requestAppFullscreen() {
+        const el = document.documentElement;
+        const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+        if (fsEl) return;
+        if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      }
+
+      // Expose so other scripts can call it safely
+      window.ensureAppFullscreen = function () {
+        wantFullscreen = true;
+        requestAppFullscreen();
+      };
+
+      // If the user clicks the fullscreen button, remember that fullscreen is desired.
+      const fsBtn = document.getElementById('btn-fullscreen');
+      if (fsBtn) {
+        fsBtn.addEventListener('click', () => { wantFullscreen = true; });
+        fsBtn.addEventListener('touchstart', () => { wantFullscreen = true; }, { passive: true });
+      }
+
+      // If the A button is used to open the file picker, browsers often exit fullscreen.
+      // When the picker closes (tab becomes visible again), re-enter fullscreen.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          if (wantFullscreen) requestAppFullscreen();
+        }
+      });
+
+      // Also re-assert fullscreen after file selection changes
+      const fileInput = document.getElementById('paintingUpload');
+      if (fileInput) {
+        fileInput.addEventListener('click', () => { wantFullscreen = true; });
+        fileInput.addEventListener('change', () => {
+          // give the UI a tick to settle, then re-request fullscreen
+          setTimeout(() => { if (wantFullscreen) requestAppFullscreen(); }, 200);
+        });
+      }
+
+      // When pressing the A virtual button, keep fullscreen "sticky"
+      const aBtn = document.getElementById('btn-a');
+      if (aBtn) {
+        aBtn.addEventListener('touchstart', () => { wantFullscreen = true; }, { passive: true });
+        aBtn.addEventListener('mousedown', () => { wantFullscreen = true; });
+      }
+    })();
+  </script>
+
 </body>
 </html>
