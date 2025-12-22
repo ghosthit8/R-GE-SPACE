@@ -20,6 +20,21 @@ let artVideo = document.getElementById("art-overlay-video");
 // Track which element is currently active (img or video)
 let currentMediaEl = artImg;
 
+
+// Ensure the *page* stays fullscreen (mobile browsers sometimes exit fullscreen when opening file pickers)
+function ensureAppFullscreen() {
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+  if (fsEl) return;
+  const el = document.documentElement;
+  try {
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  } catch (_) {}
+}
+// Expose (or keep existing)
+window.ensureAppFullscreen = window.ensureAppFullscreen || ensureAppFullscreen;
+
+
 // ---------- helpers ----------
 function isVideo(mimeType, url) {
   const mt = String(mimeType || "").toLowerCase();
