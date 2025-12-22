@@ -12,7 +12,7 @@
   <!-- note: now goes back UP one level -->
   <a id="btn-menu" class="home-btn" href="../menu.html">← Menu</a>
 
-  <button id="btn-fullscreen" class="fullscreen-btn" tabindex="-1">⛶ Fullscreen</button>
+  <button id="btn-fullscreen" class="fullscreen-btn">⛶ Fullscreen</button>
 
   <div id="game-container">
     <div id="game-fallback">Loading Rage City…</div>
@@ -31,24 +31,24 @@
     <div class="controls-inner">
       <div class="dpad">
         <button class="empty" disabled></button>
-        <button id="btn-up" tabindex="-1">▲</button>
+        <button id="btn-up">▲</button>
         <button class="empty" disabled></button>
 
-        <button id="btn-left" tabindex="-1">◀</button>
+        <button id="btn-left">◀</button>
         <button class="empty" disabled></button>
-        <button id="btn-right" tabindex="-1">▶</button>
+        <button id="btn-right">▶</button>
 
         <button class="empty" disabled></button>
-        <button id="btn-down" tabindex="-1">▼</button>
+        <button id="btn-down">▼</button>
         <button class="empty" disabled></button>
       </div>
 
       <!-- ABXY (Xbox-style diamond) -->
       <div class="abxy">
-        <button id="btn-y" class="abxy-btn btn-y" tabindex="-1">●</button>
-        <button id="btn-x" class="abxy-btn btn-x" tabindex="-1">●</button>
-        <button id="btn-b" class="abxy-btn btn-b" tabindex="-1">●</button>
-        <button id="btn-a" class="abxy-btn btn-a" tabindex="-1">●</button>
+        <button id="btn-y" class="abxy-btn btn-y">●</button>
+        <button id="btn-x" class="abxy-btn btn-x">●</button>
+        <button id="btn-b" class="abxy-btn btn-b">●</button>
+        <button id="btn-a" class="abxy-btn btn-a">●</button>
       </div>
     </div>
   </div>
@@ -75,79 +75,102 @@
     window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   </script>
 
+
+  <script>
+    // ==== Fullscreen fixes (mobile-safe) ====
+    // Mobile browsers require requestFullscreen() to be called directly from a user gesture
+    // (touchstart/pointerdown). Also, opening a file picker often exits fullscreen, so we
+    // "stick" fullscreen by re-requesting it when the page regains focus.
+    (function () {
+      let wantsFullscreen = false;
+
+      function requestAppFullscreen() {
+        const el = document.documentElement;
+
+        // Already fullscreen?
+        if (document.fullscreenElement || document.webkitFullscreenElement) return;
+
+        // Standard
+        if (el.requestFullscreen) {
+          el.requestFullscreen().catch(() => {});
+          return;
+        }
+        // iOS Safari
+        if (el.webkitRequestFullscreen) {
+          try { el.webkitRequestFullscreen(); } catch (e) {}
+        }
+      }
+
+      // Expose for other scripts (optional)
+      window.ensureAppFullscreen = function ensureAppFullscreen() {
+        if (!wantsFullscreen) return;
+        requestAppFullscreen();
+      };
+
+      function makeNoFocusButton(btn) {
+        if (!btn) return;
+        // Prevent focus/selection from breaking fullscreen or shifting UI
+        btn.setAttribute("tabindex", "-1");
+
+        // Prevent default scrolling / focus behavior on mobile
+        btn.addEventListener("touchstart", (e) => { e.preventDefault(); }, { passive: false });
+        btn.addEventListener("pointerdown", (e) => { e.preventDefault(); });
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const fsBtn = document.getElementById("btn-fullscreen");
+        const uploadInput = document.getElementById("paintingUpload");
+
+        // Make control buttons "no-focus" so taps don't yank fullscreen/focus
+        document.querySelectorAll(".controls-overlay button, #btn-fullscreen").forEach(makeNoFocusButton);
+
+        // Fullscreen button: use touchstart/pointerdown (NOT click) for mobile reliability
+        if (fsBtn) {
+          const goFS = (e) => {
+            if (e) e.preventDefault();
+            wantsFullscreen = true;
+            requestAppFullscreen();
+          };
+
+          fsBtn.addEventListener("touchstart", goFS, { passive: false });
+          fsBtn.addEventListener("pointerdown", goFS);
+        }
+
+        // If you were fullscreen and open the file picker, many browsers drop fullscreen.
+        // When you return to the app (window focus), re-request fullscreen.
+        if (uploadInput) {
+          uploadInput.addEventListener("click", () => {
+            // The picker is about to open; remember we want fullscreen when we come back.
+            wantsFullscreen = true;
+          });
+          uploadInput.addEventListener("change", () => {
+            wantsFullscreen = true;
+          });
+        }
+
+        // Keep fullscreen "sticky" when the user returns from file picker / app switch
+        window.addEventListener("focus", () => {
+          if (wantsFullscreen) {
+            // small delay helps after file picker closes
+            setTimeout(() => requestAppFullscreen(), 80);
+          }
+        });
+
+        // If the user manually exits fullscreen, stop forcing it
+        document.addEventListener("fullscreenchange", () => {
+          if (!document.fullscreenElement) wantsFullscreen = false;
+        });
+        document.addEventListener("webkitfullscreenchange", () => {
+          if (!document.webkitFullscreenElement) wantsFullscreen = false;
+        });
+      });
+    })();
+  </script>
+
   <!-- Rage City scripts -->
   <script src="./js/input.js"></script>
   <script src="./js/overlay.js"></script>
   <script src="./js/cityScene.js"></script>
   <script src="./js/main.js"></script>
-
-  <script>
-    // --- Mobile fullscreen stability helpers ---
-    (function () {
-      // Prevent virtual gamepad buttons from stealing focus (which can exit fullscreen on mobile)
-      const preventers = [
-        ...document.querySelectorAll('.controls-overlay button'),
-        document.getElementById('btn-fullscreen'),
-      ].filter(Boolean);
-
-      function preventFocus(e) { e.preventDefault(); }
-
-      preventers.forEach(btn => {
-        btn.addEventListener('touchstart', preventFocus, { passive: false });
-        btn.addEventListener('mousedown', preventFocus);
-        btn.addEventListener('pointerdown', preventFocus, { passive: false });
-      });
-
-      // Track when we *want* to be fullscreen (e.g., user pressed fullscreen once)
-      let wantFullscreen = false;
-
-      function requestAppFullscreen() {
-        const el = document.documentElement;
-        const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-        if (fsEl) return;
-        if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
-        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-      }
-
-      // Expose so other scripts can call it safely
-      window.ensureAppFullscreen = function () {
-        wantFullscreen = true;
-        requestAppFullscreen();
-      };
-
-      // If the user clicks the fullscreen button, remember that fullscreen is desired.
-      const fsBtn = document.getElementById('btn-fullscreen');
-      if (fsBtn) {
-        fsBtn.addEventListener('click', () => { wantFullscreen = true; });
-        fsBtn.addEventListener('touchstart', () => { wantFullscreen = true; }, { passive: true });
-      }
-
-      // If the A button is used to open the file picker, browsers often exit fullscreen.
-      // When the picker closes (tab becomes visible again), re-enter fullscreen.
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-          if (wantFullscreen) requestAppFullscreen();
-        }
-      });
-
-      // Also re-assert fullscreen after file selection changes
-      const fileInput = document.getElementById('paintingUpload');
-      if (fileInput) {
-        fileInput.addEventListener('click', () => { wantFullscreen = true; });
-        fileInput.addEventListener('change', () => {
-          // give the UI a tick to settle, then re-request fullscreen
-          setTimeout(() => { if (wantFullscreen) requestAppFullscreen(); }, 200);
-        });
-      }
-
-      // When pressing the A virtual button, keep fullscreen "sticky"
-      const aBtn = document.getElementById('btn-a');
-      if (aBtn) {
-        aBtn.addEventListener('touchstart', () => { wantFullscreen = true; }, { passive: true });
-        aBtn.addEventListener('mousedown', () => { wantFullscreen = true; });
-      }
-    })();
-  </script>
-
 </body>
 </html>
