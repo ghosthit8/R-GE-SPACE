@@ -88,11 +88,13 @@ let wantsFullscreen = false;
 let pickerOpening = false;
 let suppressClearOnce = false;
 
+function isFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
 function requestAppFullscreen() {
   const el = document.documentElement;
-
-  // Already fullscreen?
-  if (document.fullscreenElement || document.webkitFullscreenElement) return;
+  if (isFullscreen()) return;
 
   // Standard
   if (el.requestFullscreen) {
@@ -102,6 +104,16 @@ function requestAppFullscreen() {
   // iOS Safari
   if (el.webkitRequestFullscreen) {
     try { el.webkitRequestFullscreen(); } catch (e) {}
+  }
+}
+
+function exitAppFullscreen() {
+  if (document.exitFullscreen) {
+    try { document.exitFullscreen().catch(() => {}); } catch (e) {}
+    return;
+  }
+  if (document.webkitExitFullscreen) {
+    try { document.webkitExitFullscreen(); } catch (e) {}
   }
 }
 
@@ -151,15 +163,25 @@ document.addEventListener("DOMContentLoaded", () => {
   // Make control buttons "no-focus" so taps don't yank fullscreen/focus
   document.querySelectorAll(".controls-overlay button, #btn-fullscreen").forEach(makeNoFocusButton);
 
-  // Fullscreen button: use touchstart/pointerdown (NOT click) for mobile reliability
+  // Fullscreen button: TOGGLE (enter if not fullscreen, exit if fullscreen)
   if (fsBtn) {
-    const goFS = (e) => {
+    const toggleFS = (e) => {
       if (e) e.preventDefault();
-      wantsFullscreen = true;
-      requestAppFullscreenSoon();
+
+      if (isFullscreen()) {
+        // User explicitly wants to exit fullscreen -> don't auto-restore
+        wantsFullscreen = false;
+        pickerOpening = false;
+        suppressClearOnce = false;
+        exitAppFullscreen();
+      } else {
+        wantsFullscreen = true;
+        requestAppFullscreenSoon();
+      }
     };
-    fsBtn.addEventListener("touchstart", goFS, { passive: false });
-    fsBtn.addEventListener("pointerdown", goFS);
+
+    fsBtn.addEventListener("touchstart", toggleFS, { passive: false });
+    fsBtn.addEventListener("pointerdown", toggleFS);
   }
 
   // If A opens the picker (common pattern in your input.js / overlay.js),
