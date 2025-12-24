@@ -1,3 +1,8 @@
+<script>
+// CityScene.js (patched)
+// - Force 2-line prompt with Phaser multi-line arrays
+// - Slight line spacing so both lines are visible and readable
+
 let player;
 let promptText;
 let galleryFrames = [];
@@ -9,8 +14,6 @@ let prevX = false;
 let prevY = false;
 
 // ===== PROMPT POSITION CONTROL =====
-// Controls how far UNDER the inner green square the prompt sits.
-// Smaller = higher, bigger = lower.
 const PROMPT_OFFSET = 100;
 // =================================
 
@@ -25,7 +28,7 @@ const PAINTINGS_TABLE = "ragecity_paintings";
 // Log once when this file loads so we know if Supabase is there
 console.log("[RageCity] cityScene.js loaded. Supabase present?", !!window.supabase);
 // Version marker so you can verify you're loading the new file
-console.log("[RageCity] CityScene.js VERSION: abxy_xy_no_actions_2025-12-16_v1");
+console.log("[RageCity] CityScene.js VERSION: abxy_xy_no_actions_2025-12-16_v1 + prompt_lines_patch_2025-12-23");
 
 // ===== RageCity Media Helpers (images + videos + private buckets) =====
 const SIGNED_URL_EXPIRES_SECONDS = 60 * 30; // 30 minutes
@@ -60,7 +63,6 @@ function clearFrameMedia(frame) {
     frame.playIcon = null;
   }
 
-  // Remove previous local texture key (if any)
   if (frame.localTexKey && frame.scene && frame.scene.textures && frame.scene.textures.exists(frame.localTexKey)) {
     try { frame.scene.textures.remove(frame.localTexKey); } catch (_) {}
   }
@@ -70,7 +72,6 @@ function clearFrameMedia(frame) {
 }
 
 function attachVideoMarker(scene, frame) {
-  // Simple neon play marker inside the frame (since we can't texture-preview a video reliably)
   if (frame.playIcon) {
     try { frame.playIcon.destroy(); } catch (_) {}
   }
@@ -83,10 +84,8 @@ function attachVideoMarker(scene, frame) {
   frame.playIcon.setDepth(11);
   scene.children.bringToTop(frame.playIcon);
 }
-// ===== end helpers =====
 
 // Load all painting media from Supabase and apply to frames
-// Supports both legacy public "image_url" AND private-bucket rows saved as "storage_path" + "mime_type"
 async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
   if (!window.supabase) {
     console.warn("[RageCity] Supabase client missing; skipping shared gallery load.");
@@ -110,7 +109,6 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
       return;
     }
 
-    // Resolve URLs first (signed if private bucket + storage_path, otherwise legacy public image_url)
     const resolved = await Promise.all(
       data.map(async (row) => {
         const idx = row.frame_index;
@@ -121,7 +119,6 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
 
         const mimeType = row.mime_type || "";
 
-        // Prefer storage_path when present (private bucket compatible)
         if (row.storage_path) {
           try {
             const signedUrl = await getSignedUrl(GALLERY_BUCKET, row.storage_path);
@@ -132,7 +129,6 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
           }
         }
 
-        // Legacy fallback (public URL stored in DB)
         if (row.image_url) {
           return { idx, url: row.image_url, mimeType, storagePath: null };
         }
@@ -144,7 +140,6 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
     const rows = resolved.filter(Boolean);
     if (!rows.length) return;
 
-    // Queue image loads; videos don't go through the loader
     rows.forEach((r) => {
       const frame = galleryFrames[r.idx];
       if (!frame || frame.locked) return;
@@ -171,7 +166,6 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
         const frame = galleryFrames[r.idx];
         if (!frame || frame.locked) return;
 
-        // Keep a backref for clearFrameMedia()
         frame.scene = scene;
 
         const isVid = isVideoFile(r.mimeType, r.url);
@@ -181,7 +175,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
         if (isVid) {
           frame.mediaKind = "video";
           frame.mimeType = r.mimeType || "video/mp4";
-          frame.fullUrl = r.url;        // signed or legacy url
+          frame.fullUrl = r.url;
           frame.storagePath = r.storagePath || null;
           attachVideoMarker(scene, frame);
           console.log("[RageCity] Applied VIDEO to frame", r.idx, r.url);
@@ -245,7 +239,6 @@ async function deleteOldPaintingFromSupabase(frameIndex) {
 }
 
 // Upload a file to Supabase bucket + upsert DB row.
-// IMPORTANT: For PRIVATE buckets, we save storage_path + mime_type (NOT a signed URL) and return a fresh signed URL for immediate use.
 async function uploadPaintingToSupabase(frameIndex, file) {
   if (!window.supabase) {
     console.warn("[RageCity] Supabase client missing; cannot upload.");
@@ -259,10 +252,8 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     const extFromMime = (mimeType.includes("/") ? mimeType.split("/")[1] : "") || "";
     const ext = (extFromName || extFromMime || "bin").toLowerCase();
 
-    // ✅ Delete previous file first (Option A)
     await deleteOldPaintingFromSupabase(frameIndex);
 
-    // versioned filename so each replace gets a new path
     const timestamp = Date.now();
     const fileName = `painting_${frameIndex}_${timestamp}.${ext}`;
     const filePath = `paintings/${fileName}`;
@@ -288,7 +279,6 @@ async function uploadPaintingToSupabase(frameIndex, file) {
 
     console.log("[RageCity] Storage upload success:", uploadData);
 
-    // Save DB row (private-bucket friendly)
     const { data: upsertData, error: upsertError } = await window.supabase
       .from(PAINTINGS_TABLE)
       .upsert(
@@ -299,12 +289,10 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     if (upsertError) {
       console.error("[RageCity] Error upserting painting record:", upsertError);
       alert("RageCity upload error (DB upsert): " + upsertError.message);
-      // still try returning a signed URL so the current user sees it
     } else {
       console.log("[RageCity] Painting DB upsert success:", upsertData);
     }
 
-    // Return a signed URL for immediate display (do NOT store this in DB; it expires)
     let signedUrl = null;
     try {
       signedUrl = await getSignedUrl(GALLERY_BUCKET, filePath);
@@ -322,7 +310,6 @@ async function uploadPaintingToSupabase(frameIndex, file) {
 }
 
 function preload() {
-  // Not used for frames anymore, but safe to leave.
   this.load.image(
     "artThumb",
     "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1000&q=80"
@@ -517,24 +504,18 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
-  
-
   // ===== SCULPTURE CUBE (RESTORED - ORIGINAL LOOK) =====
-  // Positioned/Scaled to match the older build (smaller, centered more inside the room)
   const cubeX = w * 0.56;
   const cubeY = h * 0.62;
 
-  const frontSize = 40;          // old cube was smaller
+  const frontSize = 40;
   const half = frontSize / 2;
-  const backOffset = 8;         // subtle 3D offset like before
+  const backOffset = 8;
 
   const cube = this.add.graphics();
   cube.lineStyle(2, 0xffffff, 1);
 
-  // front face
   cube.strokeRect(cubeX - half, cubeY - half, frontSize, frontSize);
-
-  // back face (slightly up-left) — FIXED orientation
   cube.strokeRect(
     cubeX - half - backOffset,
     cubeY - half - backOffset,
@@ -542,38 +523,30 @@ function create() {
     frontSize
   );
 
-  // connecting edges
   cube.lineBetween(cubeX - half, cubeY - half, cubeX - half - backOffset, cubeY - half - backOffset);
   cube.lineBetween(cubeX + half, cubeY - half, cubeX + half - backOffset, cubeY - half - backOffset);
   cube.lineBetween(cubeX - half, cubeY + half, cubeX - half - backOffset, cubeY + half - backOffset);
   cube.lineBetween(cubeX + half, cubeY + half, cubeX + half - backOffset, cubeY + half - backOffset);
 
-  // green core — OPEN (outline)
   const core = this.add.graphics();
   core.lineStyle(3, 0x39ff14, 1);
   core.strokeRect(cubeX - 8, cubeY - 8, 16, 16);
   core.setDepth(2);
 
-  // interaction anchor
   sculptureSpot = {
     x: cubeX,
     y: cubeY,
     fullUrl: null
   };
 
-  // --- SCULPTURE COLLIDER (independent per-side tuning) ---
-  // Invisible static rectangle added to wallsGroup so the player cannot walk through the cube.
-  // (Does NOT change any cube visuals.)
+  // --- SCULPTURE COLLIDER ---
+  const hitPadLeft   = 9;
+  const hitPadRight  = -8;
+  const hitPadTop    = 9;
+  const hitPadBottom = -8;
+  const hitNudgeX    = 0;
+  const hitNudgeY    = 0;
 
-  // ✅ EDIT THESE 6 NUMBERS ONLY
-  const hitPadLeft   = 9;   // space to the left of the cube
-  const hitPadRight  = -8;   // space to the right of the cube
-  const hitPadTop    = 9;    // space above the cube
-  const hitPadBottom = -8;   // space below the cube
-  const hitNudgeX    = 0;    // optional center nudge (X)
-  const hitNudgeY    = 0;    // optional center nudge (Y)
-
-  // derived rect (use per-side pads above)
   const hitLeft   = (cubeX - half) - hitPadLeft;
   const hitRight  = (cubeX + half) + hitPadRight;
   const hitTop    = (cubeY - half) - hitPadTop;
@@ -585,12 +558,11 @@ function create() {
   const hitCY = hitTop + hitH / 2 + hitNudgeY;
 
   const sculptureHit = this.add.rectangle(hitCX, hitCY, hitW, hitH, 0xff0000, 0);
-  this.physics.add.existing(sculptureHit, true); // static body
+  this.physics.add.existing(sculptureHit, true);
   if (typeof wallsGroup !== 'undefined' && wallsGroup && wallsGroup.add) {
     wallsGroup.add(sculptureHit);
   }
 
-  // debug toggle: set window.__DEBUG_HITBOXES = true in console to see it
   const showHit = !!window.__DEBUG_HITBOXES;
   if (showHit) {
     sculptureHit.setFillStyle(0xff0000, 0.22);
@@ -601,7 +573,6 @@ function create() {
   }
 
   // ✅ Interaction prompt (shows when near a frame)
-  // Place it just under the inner green square (room boundary), not at the bottom of the screen
   const promptY = bottomInner + PROMPT_OFFSET;
 
   promptText = this.add.text(w / 2, promptY, "", {
@@ -610,14 +581,15 @@ function create() {
     color: "#39ff14",
     align: "center"
   });
-  promptText.setOrigin(0.5, 0); // top-aligned so it sits neatly below the square
+  promptText.setOrigin(0.5, 0);
   promptText.setScrollFactor(0);
   promptText.setDepth(9998);
   promptText.setVisible(false);
+  // NEW: make 2-line prompts breathe a little
+  promptText.setLineSpacing(6);
 
   // Keep prompt positioned correctly on resize / rotate
   this.scale.on("resize", (gameSize) => {
-    // Recompute bottomInner for the NEW fullscreen/rotated height
     const newBottomOuter = gameSize.height - marginY;
     const newBottomInner = newBottomOuter - corridorWidth;
     promptText.setPosition(gameSize.width / 2, newBottomInner + PROMPT_OFFSET);
@@ -665,7 +637,6 @@ function create() {
       ];
     }
 
-    // Outer neon frame
     g.beginPath();
     g.moveTo(x + points[0].x, y + points[0].y);
     for (let i = 1; i < points.length; i++) {
@@ -674,7 +645,6 @@ function create() {
     g.closePath();
     g.strokePath();
 
-    // Black mat inside
     const gMat = scene2.add.graphics();
     gMat.lineStyle(2, 0x1a8f3a, 1);
     gMat.fillStyle(0x000000, 1);
@@ -802,18 +772,14 @@ function create() {
         fileSize: file.size,
       });
 
-      // lock while replacing so nothing overwrites mid-flight
       frame.locked = true;
 
-      // Clear previous media (image/video/marker/texture)
       frame.scene = scene;
       clearFrameMedia(frame);
 
-      // Unique texture key
       const texKeyLocal = `localPainting-${frameIndex}-${Date.now()}`;
       frame.localTexKey = texKeyLocal;
 
-      // ✅ MOBILE-SAFE LOCAL PREVIEW
       try {
         const isVid = isVideoFile(file.type, file.name);
         frame.mimeType = file.type || (isVid ? "video/mp4" : "image");
@@ -860,7 +826,6 @@ function create() {
 
           imgEl.src = blobUrl;
         } else {
-          // VIDEO preview marker
           clearFrameMedia(frame);
           frame.scene = scene;
           frame.mediaKind = "video";
@@ -873,7 +838,6 @@ function create() {
         logDbg("Blob preview failed ⚠");
       }
 
-      // Fire Supabase upload in the background
       (async () => {
         try {
           logDbg("Uploading to Supabase…");
@@ -933,7 +897,6 @@ function update(time, delta) {
   const justPressedB = inputState.B && !prevB;
 
   // Track X/Y edge transitions (but do nothing with them yet)
-  // (we still update prevX/prevY at the end so presses don't "pile up")
   const _justPressedX = inputState.X && !prevX;
   const _justPressedY = inputState.Y && !prevY;
 
@@ -1006,7 +969,8 @@ function update(time, delta) {
         const frame = galleryFrames[nearestItem.index];
         const hasArt = frame && !!frame.fullUrl;
         if (hasArt) {
-          promptText.setText("Press A to view art\nPress B to replace art");
+          // 🔧 Patched: use multi-line array so both lines always render
+          promptText.setText(["Press A to view art", "Press B to replace art"]);
         } else {
           promptText.setText("Press A to add art");
         }
@@ -1056,3 +1020,4 @@ function update(time, delta) {
   prevX = inputState.X;
   prevY = inputState.Y;
 }
+</script>
