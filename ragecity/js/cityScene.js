@@ -458,8 +458,15 @@ function create() {
 
   console.log("[RageCity] Total gallery frames:", galleryFrames.length);
 
-  // Load shared gallery from Supabase
-  loadPaintingsFromSupabase(this, imgDisplaySize);
+  // Load shared gallery from Supabase (if helpers are loaded)
+  if (typeof loadPaintingsFromSupabase === "function") {
+    loadPaintingsFromSupabase(this, imgDisplaySize);
+  } else {
+    console.warn(
+      "[RageCity] loadPaintingsFromSupabase is not defined. " +
+      "Did you include ragecity-gallery-helpers.js BEFORE CityScene.js?"
+    );
+  }
 
   // controls + fullscreen
   setupKeyboard(this);
