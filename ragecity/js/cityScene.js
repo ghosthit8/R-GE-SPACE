@@ -214,6 +214,36 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
   }
 }
 
+// =============================================================
+// ✅ OPTION A: Delete previous file in bucket before uploading new
+// =============================================================
+async function deleteOldPaintingFromSupabase(frameIndex) {
+  if (!window.supabase) return;
+
+  try {
+    const { data, error } = await window.supabase
+      .from(PAINTINGS_TABLE)
+      .select("storage_path")
+      .eq("frame_index", frameIndex)
+      .single();
+
+    if (error || !data?.storage_path) return;
+
+    console.log("[RageCity] Deleting old file:", data.storage_path);
+
+    const { error: delErr } = await window.supabase
+      .storage
+      .from(GALLERY_BUCKET)
+      .remove([data.storage_path]);
+
+    if (delErr) {
+      console.warn("[RageCity] Failed to delete old file:", delErr);
+    }
+  } catch (e) {
+    console.warn("[RageCity] deleteOldPaintingFromSupabase exception:", e);
+  }
+}
+
 // Upload a file to Supabase bucket + upsert DB row.
 // IMPORTANT: For PRIVATE buckets, we save storage_path + mime_type (NOT a signed URL) and return a fresh signed URL for immediate use.
 async function uploadPaintingToSupabase(frameIndex, file) {
@@ -228,6 +258,9 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     const extFromName = (name.includes(".") ? name.split(".").pop() : "") || "";
     const extFromMime = (mimeType.includes("/") ? mimeType.split("/")[1] : "") || "";
     const ext = (extFromName || extFromMime || "bin").toLowerCase();
+
+    // ✅ Delete previous file first (Option A)
+    await deleteOldPaintingFromSupabase(frameIndex);
 
     // versioned filename so each replace gets a new path
     const timestamp = Date.now();
