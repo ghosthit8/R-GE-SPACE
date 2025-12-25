@@ -3,9 +3,7 @@ const GALLERY_BUCKET = "ragecity-gallery";
 const PAINTINGS_TABLE = "ragecity_paintings";
 
 // Log once when this file loads so we know if Supabase is there
-console.log("[RageCity] cityScene.js loaded. Supabase present?", !!window.supabase);
-// Version marker so you can verify you're loading the new file
-console.log("[RageCity] CityScene.js VERSION: abxy_xy_no_actions_2025-12-16_v1");
+console.log("[RageCity] Helpers loaded. Supabase present?", !!window.supabase);
 
 // ===== RageCity Media Helpers (images + videos + private buckets) =====
 const SIGNED_URL_EXPIRES_SECONDS = 60 * 30; // 30 minutes
@@ -23,12 +21,17 @@ function isVideoFile(mimeType, pathOrUrl) {
 }
 
 async function getSignedUrl(bucket, path, expiresSeconds = SIGNED_URL_EXPIRES_SECONDS) {
+  console.log("[RageCity] getSignedUrl →", { bucket, path, expiresSeconds });
   const { data, error } = await window.supabase
     .storage
     .from(bucket)
     .createSignedUrl(path, expiresSeconds);
 
-  if (error) throw error;
+  if (error) {
+    console.error("[RageCity] createSignedUrl ERROR:", error);
+    throw error;
+  }
+  console.log("[RageCity] getSignedUrl OK:", data?.signedUrl);
   return data?.signedUrl || null;
 }
 
@@ -95,17 +98,19 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
   }
 
   try {
-    console.log("[RageCity] Loading paintings from Supabase table:", PAINTINGS_TABLE);
+    console.log("[RageCity] === loadPaintingsFromSupabase START ===");
+    console.log("[RageCity] Using table:", PAINTINGS_TABLE);
 
     const { data, error } = await window.supabase
       .from(PAINTINGS_TABLE)
       .select("frame_index, storage_path, mime_type, image_url");
 
     if (error) {
-      console.error("[RageCity] Error loading paintings from Supabase:", error);
+      console.error("[RageCity] Supabase SELECT ERROR:", error);
       return;
     }
 
+    console.log("[RageCity] Raw rows from DB:", data);
     if (!data || !data.length) {
       console.log("[RageCity] No paintings found in table.");
       return;
@@ -114,18 +119,38 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
     // Resolve URLs (signed if private bucket + storage_path, otherwise legacy image_url)
     const resolved = await Promise.all(
       data.map(async (row) => {
+        console.log("[RageCity] Row from DB:", row);
         const idx = row.frame_index;
-        if (idx < 0 || idx >= galleryFrames.length) return null;
+        if (typeof idx !== "number") {
+          console.warn("[RageCity] frame_index is not a number:", row.frame_index);
+        }
+
+        if (idx < 0 || idx >= galleryFrames.length) {
+          console.warn("[RageCity] frame_index out of range for current layout:", {
+            idx,
+            frames: galleryFrames.length
+          });
+          return null;
+        }
 
         const frame = galleryFrames[idx];
-        if (!frame || frame.locked) return null;
+        if (!frame) {
+          console.warn("[RageCity] No frame at index (should not happen):", idx);
+          return null;
+        }
+        if (frame.locked) {
+          console.warn("[RageCity] Frame is locked; skipping load for index", idx);
+          return null;
+        }
 
         const mimeType = row.mime_type || "";
+        console.log("[RageCity] Resolving URL for frame", idx, "mimeType:", mimeType);
 
         // Prefer storage_path for private bucket
         if (row.storage_path) {
           try {
             const signedUrl = await getSignedUrl(GALLERY_BUCKET, row.storage_path);
+            console.log("[RageCity] Resolved signed URL for frame", idx, signedUrl);
             return { idx, url: signedUrl, mimeType, storagePath: row.storage_path };
           } catch (e) {
             console.error("[RageCity] Signed URL error for", row.storage_path, e);
@@ -135,14 +160,18 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
 
         // Legacy public URL
         if (row.image_url) {
+          console.log("[RageCity] Using legacy image_url for frame", idx, row.image_url);
           return { idx, url: row.image_url, mimeType, storagePath: null };
         }
 
+        console.warn("[RageCity] Row has no storage_path or image_url; skipping:", row);
         return null;
       })
     );
 
     const rows = resolved.filter(Boolean);
+    console.log("[RageCity] Resolved rows after URL resolution:", rows);
+
     if (!rows.length) {
       console.log("[RageCity] No resolved painting URLs; nothing to draw.");
       return;
@@ -154,7 +183,6 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
       if (!frame || frame.locked) return;
 
       frame.scene = scene; // for clearFrameMedia()
-
       const isVid = isVideoFile(r.mimeType, r.url);
 
       // Clear anything currently on the frame
@@ -208,6 +236,8 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
 
       imgEl.src = r.url;
     });
+
+    console.log("[RageCity] === loadPaintingsFromSupabase END ===");
   } catch (err) {
     console.error("[RageCity] Unexpected error loading paintings:", err);
   }
@@ -226,7 +256,14 @@ async function deleteOldPaintingFromSupabase(frameIndex) {
       .eq("frame_index", frameIndex)
       .single();
 
-    if (error || !data?.storage_path) return;
+    if (error) {
+      console.warn("[RageCity] deleteOldPainting SELECT error (OK if first upload):", error);
+      return;
+    }
+    if (!data?.storage_path) {
+      console.log("[RageCity] No previous storage_path for frame", frameIndex);
+      return;
+    }
 
     console.log("[RageCity] Deleting old file:", data.storage_path);
 
@@ -246,8 +283,6 @@ async function deleteOldPaintingFromSupabase(frameIndex) {
 }
 
 // Upload a file to Supabase bucket + upsert DB row.
-// IMPORTANT: For PRIVATE buckets, we save storage_path + mime_type (NOT a signed URL)
-// and return a fresh signed URL for immediate use.
 async function uploadPaintingToSupabase(frameIndex, file) {
   if (!window.supabase) {
     console.warn("[RageCity] Supabase client missing; cannot upload.");
@@ -262,7 +297,14 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     const extFromMime = (mimeType.includes("/") ? mimeType.split("/")[1] : "") || "";
     const ext = (extFromName || extFromMime || "bin").toLowerCase();
 
-    // ✅ Delete previous file first (Option A)
+    console.log("[RageCity] uploadPaintingToSupabase START:", {
+      frameIndex,
+      mimeType,
+      name,
+      ext
+    });
+
+    // Delete previous file first (Option A)
     await deleteOldPaintingFromSupabase(frameIndex);
 
     // versioned filename so each replace gets a new path
@@ -306,7 +348,6 @@ async function uploadPaintingToSupabase(frameIndex, file) {
     if (upsertError) {
       console.error("[RageCity] Error upserting painting record:", upsertError);
       alert("RageCity upload error (DB upsert): " + upsertError.message);
-      // still try returning a signed URL so the current user sees it
     } else {
       console.log("[RageCity] Painting DB upsert success:", upsertData);
     }
