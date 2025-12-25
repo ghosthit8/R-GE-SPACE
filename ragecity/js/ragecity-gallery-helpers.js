@@ -69,7 +69,6 @@ function clearFrameMedia(frame) {
  * Simple neon play marker for VIDEO frames (no video texture preview).
  */
 function attachVideoMarker(scene, frame) {
-  // Simple neon play marker inside the frame (since we can't texture-preview a video reliably)
   if (frame.playIcon) {
     try { frame.playIcon.destroy(); } catch (_) {}
   }
@@ -84,10 +83,11 @@ function attachVideoMarker(scene, frame) {
   scene.children.bringToTop(frame.playIcon);
 }
 
-// ===== end helpers =====
-
-// Load all painting media from Supabase and apply to frames
-// Supports both legacy public "image_url" AND private-bucket rows saved as "storage_path" + "mime_type"
+// ===== Load paintings into frames (NO Phaser loader, just Image()) =====
+//
+// Supports both:
+//   - storage_path + mime_type  (private bucket, preferred)
+//   - image_url                 (legacy public URL)
 async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
   if (!window.supabase) {
     console.warn("[RageCity] Supabase client missing; skipping shared gallery load.");
@@ -111,7 +111,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
       return;
     }
 
-    // Resolve URLs first (signed if private bucket + storage_path, otherwise legacy public image_url)
+    // Resolve URLs (signed if private bucket + storage_path, otherwise legacy image_url)
     const resolved = await Promise.all(
       data.map(async (row) => {
         const idx = row.frame_index;
@@ -122,7 +122,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
 
         const mimeType = row.mime_type || "";
 
-        // Prefer storage_path when present (private bucket compatible)
+        // Prefer storage_path for private bucket
         if (row.storage_path) {
           try {
             const signedUrl = await getSignedUrl(GALLERY_BUCKET, row.storage_path);
@@ -133,7 +133,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
           }
         }
 
-        // Legacy fallback (public URL stored in DB)
+        // Legacy public URL
         if (row.image_url) {
           return { idx, url: row.image_url, mimeType, storagePath: null };
         }
@@ -143,85 +143,71 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
     );
 
     const rows = resolved.filter(Boolean);
-    if (!rows.length) return;
+    if (!rows.length) {
+      console.log("[RageCity] No resolved painting URLs; nothing to draw.");
+      return;
+    }
 
-    // Queue image loads for non-video rows
+    // For each frame, use a vanilla Image() to create a texture + sprite.
     rows.forEach((r) => {
       const frame = galleryFrames[r.idx];
       if (!frame || frame.locked) return;
 
-      // Keep a backref for clearFrameMedia()
-      frame.scene = scene;
+      frame.scene = scene; // for clearFrameMedia()
 
       const isVid = isVideoFile(r.mimeType, r.url);
 
+      // Clear anything currently on the frame
       clearFrameMedia(frame);
 
       if (isVid) {
+        // Video -> marker only; overlay uses frame.fullUrl
         frame.mediaKind = "video";
         frame.mimeType = r.mimeType || "video/mp4";
-        frame.fullUrl = r.url;        // signed or legacy url
+        frame.fullUrl = r.url;
         frame.storagePath = r.storagePath || null;
         attachVideoMarker(scene, frame);
         console.log("[RageCity] Applied VIDEO to frame", r.idx, r.url);
         return;
       }
 
+      // IMAGE PATH
       const texKey = `supPainting-${r.idx}-${Date.now()}`;
-      frame.supTexKey = texKey;
 
-      console.log(
-        `[RageCity] Queueing image load for frame ${r.idx}:`,
-        r.url,
-        "→ texture key:",
-        texKey
-      );
-      scene.load.image(texKey, r.url);
-    });
+      console.log("[RageCity] Loading IMAGE into frame", r.idx, r.url);
 
-    scene.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      rows.forEach((r) => {
-        const frame = galleryFrames[r.idx];
-        if (!frame || frame.locked) return;
+      const imgEl = new Image();
+      imgEl.crossOrigin = "anonymous";
 
-        // Keep a backref for clearFrameMedia()
-        frame.scene = scene;
+      imgEl.onload = () => {
+        try {
+          if (scene.textures.exists(texKey)) {
+            scene.textures.remove(texKey);
+          }
+          scene.textures.addImage(texKey, imgEl);
 
-        const isVid = isVideoFile(r.mimeType, r.url);
+          const sprite = scene.add.image(frame.x, frame.y, texKey);
+          sprite.setDisplaySize(imgDisplaySize, imgDisplaySize);
+          sprite.setDepth(10);
 
-        clearFrameMedia(frame);
-
-        if (isVid) {
-          frame.mediaKind = "video";
-          frame.mimeType = r.mimeType || "video/mp4";
-          frame.fullUrl = r.url;        // signed or legacy url
+          frame.img = sprite;
+          frame.mediaKind = "image";
+          frame.mimeType = r.mimeType || "image/jpeg";
+          frame.fullUrl = r.url;
           frame.storagePath = r.storagePath || null;
-          attachVideoMarker(scene, frame);
-          console.log("[RageCity] Applied VIDEO to frame", r.idx, r.url);
-          return;
+
+          console.log("[RageCity] IMAGE applied to frame", r.idx);
+        } catch (e) {
+          console.error("[RageCity] Error applying image to frame", r.idx, e);
         }
+      };
 
-        const texKey = frame.supTexKey;
-        if (!texKey || !scene.textures.exists(texKey)) {
-          console.warn("[RageCity] Texture key missing for frame", r.idx, texKey);
-          return;
-        }
+      imgEl.onerror = (e) => {
+        console.warn("[RageCity] Failed to load image for frame", r.idx, r.url, e);
+      };
 
-        const img = scene.add.image(frame.x, frame.y, texKey);
-        img.setDisplaySize(imgDisplaySize, imgDisplaySize);
-        img.setDepth(10);
-
-        frame.img = img;
-        frame.mediaKind = "image";
-        frame.mimeType = r.mimeType || "image/jpeg";
-        frame.fullUrl = r.url;
-        frame.storagePath = r.storagePath || null;
-
-        console.log("[RageCity] Applied IMAGE to frame", r.idx, r.url);
-      });
+      imgEl.src = r.url;
     });
-
-    scene.load.start();
   } catch (err) {
     console.error("[RageCity] Unexpected error loading paintings:", err);
   }
