@@ -216,22 +216,18 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
-  // ===== SCULPTURE CUBE (RESTORED - ORIGINAL LOOK) =====
-  // Positioned/Scaled to match the older build (smaller, centered more inside the room)
+  // ===== SCULPTURE CUBE =====
   const cubeX = w * 0.56;
   const cubeY = h * 0.62;
 
-  const frontSize = 40;          // old cube was smaller
+  const frontSize = 40;
   const half = frontSize / 2;
-  const backOffset = 8;         // subtle 3D offset like before
+  const backOffset = 8;
 
   const cube = this.add.graphics();
   cube.lineStyle(2, 0xffffff, 1);
 
-  // front face
   cube.strokeRect(cubeX - half, cubeY - half, frontSize, frontSize);
-
-  // back face (slightly up-left) — FIXED orientation
   cube.strokeRect(
     cubeX - half - backOffset,
     cubeY - half - backOffset,
@@ -239,38 +235,30 @@ function create() {
     frontSize
   );
 
-  // connecting edges
   cube.lineBetween(cubeX - half, cubeY - half, cubeX - half - backOffset, cubeY - half - backOffset);
   cube.lineBetween(cubeX + half, cubeY - half, cubeX + half - backOffset, cubeY - half - backOffset);
   cube.lineBetween(cubeX - half, cubeY + half, cubeX - half - backOffset, cubeY + half - backOffset);
   cube.lineBetween(cubeX + half, cubeY + half, cubeX + half - backOffset, cubeY + half - backOffset);
 
-  // green core — OPEN (outline)
   const core = this.add.graphics();
   core.lineStyle(3, 0x39ff14, 1);
   core.strokeRect(cubeX - 8, cubeY - 8, 16, 16);
   core.setDepth(2);
 
-  // interaction anchor
   sculptureSpot = {
     x: cubeX,
     y: cubeY,
     fullUrl: null
   };
 
-  // --- SCULPTURE COLLIDER (independent per-side tuning) ---
-  // Invisible static rectangle added to wallsGroup so the player cannot walk through the cube.
-  // (Does NOT change any cube visuals.)
+  // --- SCULPTURE COLLIDER ---
+  const hitPadLeft   = 9;
+  const hitPadRight  = -8;
+  const hitPadTop    = 9;
+  const hitPadBottom = -8;
+  const hitNudgeX    = 0;
+  const hitNudgeY    = 0;
 
-  // ✅ EDIT THESE 6 NUMBERS ONLY
-  const hitPadLeft   = 9;   // space to the left of the cube
-  const hitPadRight  = -8;   // space to the right of the cube
-  const hitPadTop    = 9;    // space above the cube
-  const hitPadBottom = -8;   // space below the cube
-  const hitNudgeX    = 0;    // optional center nudge (X)
-  const hitNudgeY    = 0;    // optional center nudge (Y)
-
-  // derived rect (use per-side pads above)
   const hitLeft   = (cubeX - half) - hitPadLeft;
   const hitRight  = (cubeX + half) + hitPadRight;
   const hitTop    = (cubeY - half) - hitPadTop;
@@ -282,12 +270,11 @@ function create() {
   const hitCY = hitTop + hitH / 2 + hitNudgeY;
 
   const sculptureHit = this.add.rectangle(hitCX, hitCY, hitW, hitH, 0xff0000, 0);
-  this.physics.add.existing(sculptureHit, true); // static body
+  this.physics.add.existing(sculptureHit, true);
   if (typeof wallsGroup !== 'undefined' && wallsGroup && wallsGroup.add) {
     wallsGroup.add(sculptureHit);
   }
 
-  // debug toggle: set window.__DEBUG_HITBOXES = true in console to see it
   const showHit = !!window.__DEBUG_HITBOXES;
   if (showHit) {
     sculptureHit.setFillStyle(0xff0000, 0.22);
@@ -297,8 +284,7 @@ function create() {
     sculptureHit.setVisible(false);
   }
 
-  // ✅ Interaction prompt (shows when near a frame)
-  // Place it just under the inner green square (room boundary), not at the bottom of the screen
+  // ===== PROMPT TEXT =====
   const promptY = bottomInner + PROMPT_OFFSET;
 
   promptText = this.add.text(w / 2, promptY, "", {
@@ -308,25 +294,19 @@ function create() {
     align: "center"
   });
 
-  // ✅ PATCH: bottom-anchor so 2 lines grow UP (won't get cut off)
   promptText.setOrigin(0.5, 1);
   promptText.setLineSpacing(6);
-
   promptText.setScrollFactor(0);
   promptText.setDepth(9998);
   promptText.setVisible(false);
 
-  // Keep prompt positioned correctly on resize / rotate
   this.scale.on("resize", (gameSize) => {
-    // Recompute bottomInner for the NEW fullscreen/rotated height
     const newBottomOuter = gameSize.height - marginY;
     const newBottomInner = newBottomOuter - corridorWidth;
-
-    // ✅ PATCH: keep same anchor logic
     promptText.setPosition(gameSize.width / 2, newBottomInner + PROMPT_OFFSET);
   });
 
-  // FRAMES (start BLACK, Supabase will populate any that have art)
+  // FRAMES
   const imgDisplaySize = 26;
   galleryFrames = [];
 
@@ -368,7 +348,6 @@ function create() {
       ];
     }
 
-    // Outer neon frame
     g.beginPath();
     g.moveTo(x + points[0].x, y + points[0].y);
     for (let i = 1; i < points.length; i++) {
@@ -377,7 +356,6 @@ function create() {
     g.closePath();
     g.strokePath();
 
-    // Black mat inside
     const gMat = scene2.add.graphics();
     gMat.lineStyle(2, 0x1a8f3a, 1);
     gMat.fillStyle(0x000000, 1);
@@ -458,7 +436,7 @@ function create() {
 
   console.log("[RageCity] Total gallery frames:", galleryFrames.length);
 
-  // Load shared gallery from Supabase (if helpers are loaded)
+  // Load shared gallery from Supabase (helpers file)
   if (typeof loadPaintingsFromSupabase === "function") {
     loadPaintingsFromSupabase(this, imgDisplaySize);
   } else {
@@ -480,7 +458,6 @@ function create() {
   setupTouchButton("btn-y", "Y");
   setupFullscreenButton();
 
-  // hook the hidden <input type="file" id="paintingUpload">
   paintingUploadInput = document.getElementById("paintingUpload");
   console.log("[RageCity] paintingUpload input found?", !!paintingUploadInput);
 
@@ -512,18 +489,14 @@ function create() {
         fileSize: file.size,
       });
 
-      // lock while replacing so nothing overwrites mid-flight
       frame.locked = true;
 
-      // Clear previous media (image/video/marker/texture)
       frame.scene = scene;
       clearFrameMedia(frame);
 
-      // Unique texture key
       const texKeyLocal = `localPainting-${frameIndex}-${Date.now()}`;
       frame.localTexKey = texKeyLocal;
 
-      // ✅ MOBILE-SAFE LOCAL PREVIEW
       try {
         const isVid = isVideoFile(file.type, file.name);
         frame.mimeType = file.type || (isVid ? "video/mp4" : "image");
@@ -570,7 +543,6 @@ function create() {
 
           imgEl.src = blobUrl;
         } else {
-          // VIDEO preview marker
           clearFrameMedia(frame);
           frame.scene = scene;
           frame.mediaKind = "video";
@@ -583,7 +555,6 @@ function create() {
         logDbg("Blob preview failed ⚠");
       }
 
-      // Fire Supabase upload in the background
       (async () => {
         try {
           logDbg("Uploading to Supabase…");
@@ -642,12 +613,9 @@ function update(time, delta) {
   const justPressedA = inputState.A && !prevA;
   const justPressedB = inputState.B && !prevB;
 
-  // Track X/Y edge transitions (but do nothing with them yet)
-  // (we still update prevX/prevY at the end so presses don't "pile up")
   const _justPressedX = inputState.X && !prevX;
   const _justPressedY = inputState.Y && !prevY;
 
-  // ✅ overlay open behavior: ONLY A fullscreen, ONLY B close
   if (window.artOpen) {
     if (justPressedA) window.toggleArtFullscreen();
     if (justPressedB) window.closeArtOverlay();
@@ -680,7 +648,6 @@ function update(time, delta) {
   let nearestItem = null;
   let nearestDist = Infinity;
 
-  // find closest painting (track index so we know which one to edit)
   galleryFrames.forEach((f, index) => {
     const d = Phaser.Math.Distance.Between(player.x, player.y, f.x, f.y);
     if (d < nearestDist) {
@@ -689,7 +656,6 @@ function update(time, delta) {
     }
   });
 
-  // compare sculpture
   if (sculptureSpot) {
     const d = Phaser.Math.Distance.Between(
       player.x,
@@ -707,7 +673,6 @@ function update(time, delta) {
     }
   }
 
-  // prompt text
   if (promptText) {
     if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
@@ -717,7 +682,6 @@ function update(time, delta) {
         const frame = galleryFrames[nearestItem.index];
         const hasArt = frame && !!frame.fullUrl;
         if (hasArt) {
-          // ✅ PATCH: use array text + bottom-anchor so both lines show
           promptText.setText(["Press A to view art", "Press B to replace art"]);
         } else {
           promptText.setText("Press A to add art");
@@ -728,7 +692,6 @@ function update(time, delta) {
     }
   }
 
-  // A button (view or add)
   if (nearestItem && nearestDist < 60 && justPressedA) {
     if (nearestItem.type === "sculpture") {
       if (nearestItem.fullUrl) window.openArtOverlay({ url: nearestItem.fullUrl, mimeType: nearestItem.mimeType || "" });
@@ -747,7 +710,6 @@ function update(time, delta) {
     }
   }
 
-  // B button (replace art if it exists)
   if (
     nearestItem &&
     nearestItem.type === "painting" &&
