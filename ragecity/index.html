@@ -83,170 +83,172 @@
     // "stick" fullscreen by re-requesting it when the page regains focus.
     (function () {
       // We can't keep fullscreen WHILE the OS file picker is open on mobile,
-// but we *can* reliably re-enter fullscreen as soon as the user returns.
-let wantsFullscreen = false;
-let pickerOpening = false;
-let suppressClearOnce = false;
+      // but we *can* reliably re-enter fullscreen as soon as the user returns.
+      let wantsFullscreen = false;
+      let pickerOpening = false;
+      let suppressClearOnce = false;
 
-function isFullscreen() {
-  return !!(document.fullscreenElement || document.webkitFullscreenElement);
-}
+      function isFullscreen() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement);
+      }
 
-function requestAppFullscreen() {
-  const el = document.documentElement;
-  if (isFullscreen()) return;
+      function requestAppFullscreen() {
+        const el = document.documentElement;
+        if (isFullscreen()) return;
 
-  // Standard
-  if (el.requestFullscreen) {
-    try { el.requestFullscreen().catch(() => {}); } catch (e) {}
-    return;
-  }
-  // iOS Safari
-  if (el.webkitRequestFullscreen) {
-    try { el.webkitRequestFullscreen(); } catch (e) {}
-  }
-}
+        // Standard
+        if (el.requestFullscreen) {
+          try { el.requestFullscreen().catch(() => {}); } catch (e) {}
+          return;
+        }
+        // iOS Safari
+        if (el.webkitRequestFullscreen) {
+          try { el.webkitRequestFullscreen(); } catch (e) {}
+        }
+      }
 
-function exitAppFullscreen() {
-  if (document.exitFullscreen) {
-    try { document.exitFullscreen().catch(() => {}); } catch (e) {}
-    return;
-  }
-  if (document.webkitExitFullscreen) {
-    try { document.webkitExitFullscreen(); } catch (e) {}
-  }
-}
+      function exitAppFullscreen() {
+        if (document.exitFullscreen) {
+          try { document.exitFullscreen().catch(() => {}); } catch (e) {}
+          return;
+        }
+        if (document.webkitExitFullscreen) {
+          try { document.webkitExitFullscreen(); } catch (e) {}
+        }
+      }
 
-function requestAppFullscreenSoon() {
-  // Multiple delayed attempts help across Android Chrome / Samsung Internet
-  setTimeout(requestAppFullscreen, 60);
-  setTimeout(requestAppFullscreen, 250);
-  setTimeout(requestAppFullscreen, 650);
-}
+      function requestAppFullscreenSoon() {
+        // Multiple delayed attempts help across Android Chrome / Samsung Internet
+        setTimeout(requestAppFullscreen, 60);
+        setTimeout(requestAppFullscreen, 250);
+        setTimeout(requestAppFullscreen, 650);
+      }
 
-// Expose for other scripts (optional)
-window.ensureAppFullscreen = function ensureAppFullscreen() {
-  if (!wantsFullscreen) return;
-  requestAppFullscreenSoon();
-};
+      // Expose for other scripts (optional)
+      window.ensureAppFullscreen = function ensureAppFullscreen() {
+        if (!wantsFullscreen) return;
+        requestAppFullscreenSoon();
+      };
 
-function makeNoFocusButton(btn) {
-  if (!btn) return;
-  // Prevent focus/selection from breaking fullscreen or shifting UI
-  btn.setAttribute("tabindex", "-1");
+      function makeNoFocusButton(btn) {
+        if (!btn) return;
+        // Prevent focus/selection from breaking fullscreen or shifting UI
+        btn.setAttribute("tabindex", "-1");
 
-  // Prevent default scrolling / focus behavior on mobile
-  btn.addEventListener("touchstart", (e) => { e.preventDefault(); }, { passive: false });
-  btn.addEventListener("pointerdown", (e) => { e.preventDefault(); });
-}
+        // Prevent default scrolling / focus behavior on mobile
+        btn.addEventListener("touchstart", (e) => { e.preventDefault(); }, { passive: false });
+        btn.addEventListener("pointerdown", (e) => { e.preventDefault(); });
+      }
 
-function markPickerOpening() {
-  // Called immediately before triggering the file chooser.
-  wantsFullscreen = true;
-  pickerOpening = true;
-  // When the browser drops fullscreen due to picker, don't interpret it as "user exited"
-  suppressClearOnce = true;
-}
+      function markPickerOpening() {
+        // Called immediately before triggering the file chooser.
+        wantsFullscreen = true;
+        pickerOpening = true;
+        // When the browser drops fullscreen due to picker, don't interpret it as "user exited"
+        suppressClearOnce = true;
+      }
 
-function maybeRestoreAfterPicker() {
-  if (!pickerOpening) return;
-  pickerOpening = false;
-  wantsFullscreen = true;
-  requestAppFullscreenSoon();
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  const fsBtn = document.getElementById("btn-fullscreen");
-  const uploadInput = document.getElementById("paintingUpload");
-  const btnA = document.getElementById("btn-a");
-
-  // Make control buttons "no-focus" so taps don't yank fullscreen/focus
-  document.querySelectorAll(".controls-overlay button, #btn-fullscreen").forEach(makeNoFocusButton);
-
-  // Fullscreen button: TOGGLE (enter if not fullscreen, exit if fullscreen)
-  if (fsBtn) {
-    const toggleFS = (e) => {
-      if (e) e.preventDefault();
-
-      if (isFullscreen()) {
-        // User explicitly wants to exit fullscreen -> don't auto-restore
-        wantsFullscreen = false;
+      function maybeRestoreAfterPicker() {
+        if (!pickerOpening) return;
         pickerOpening = false;
-        suppressClearOnce = false;
-        exitAppFullscreen();
-      } else {
         wantsFullscreen = true;
         requestAppFullscreenSoon();
       }
-    };
 
-    fsBtn.addEventListener("touchstart", toggleFS, { passive: false });
-    fsBtn.addEventListener("pointerdown", toggleFS);
-  }
+      document.addEventListener("DOMContentLoaded", () => {
+        const fsBtn = document.getElementById("btn-fullscreen");
+        const uploadInput = document.getElementById("paintingUpload");
+        const btnA = document.getElementById("btn-a");
 
-  // If A opens the picker (common pattern in your input.js / overlay.js),
-  // mark that we intend to restore fullscreen after the picker.
-  if (btnA) {
-    const mark = (e) => {
-      if (e) e.preventDefault();
-      markPickerOpening();
-    };
-    btnA.addEventListener("touchstart", mark, { passive: false });
-    btnA.addEventListener("pointerdown", mark);
-  }
+        // Make control buttons "no-focus" so taps don't yank fullscreen/focus
+        document.querySelectorAll(".controls-overlay button, #btn-fullscreen").forEach(makeNoFocusButton);
 
-  if (uploadInput) {
-    // If any script programmatically calls uploadInput.click(), we still want to restore.
-    uploadInput.addEventListener("click", () => {
-      markPickerOpening();
-    });
+        // Fullscreen button: TOGGLE (enter if not fullscreen, exit if fullscreen)
+        if (fsBtn) {
+          const toggleFS = (e) => {
+            if (e) e.preventDefault();
 
-    // If the user selects a file, change fires when returning
-    uploadInput.addEventListener("change", () => {
-      maybeRestoreAfterPicker();
-    });
-  }
+            if (isFullscreen()) {
+              // User explicitly wants to exit fullscreen -> don't auto-restore
+              wantsFullscreen = false;
+              pickerOpening = false;
+              suppressClearOnce = false;
+              exitAppFullscreen();
+            } else {
+              wantsFullscreen = true;
+              requestAppFullscreenSoon();
+            }
+          };
 
-  // If user cancels picker, "change" may not fire; focus/visibility usually does.
-  window.addEventListener("focus", () => {
-    if (pickerOpening) maybeRestoreAfterPicker();
-    else if (wantsFullscreen) requestAppFullscreenSoon();
-  });
+          fsBtn.addEventListener("touchstart", toggleFS, { passive: false });
+          fsBtn.addEventListener("pointerdown", toggleFS);
+        }
 
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) {
-      if (pickerOpening) maybeRestoreAfterPicker();
-      else if (wantsFullscreen) requestAppFullscreenSoon();
-    }
-  });
+        // If A opens the picker (common pattern in your input.js / overlay.js),
+        // mark that we intend to restore fullscreen after the picker.
+        if (btnA) {
+          const mark = (e) => {
+            if (e) e.preventDefault();
+            markPickerOpening();
+          };
+          btnA.addEventListener("touchstart", mark, { passive: false });
+          btnA.addEventListener("pointerdown", mark);
+        }
 
-  // If the user manually exits fullscreen via system UI, stop forcing it.
-  // But don't clear the flag for the one fullscreen drop caused by the picker.
-  document.addEventListener("fullscreenchange", () => {
-    if (!document.fullscreenElement) {
-      if (suppressClearOnce) {
-        suppressClearOnce = false;
-        return;
-      }
-      wantsFullscreen = false;
-    }
-  });
-  document.addEventListener("webkitfullscreenchange", () => {
-    if (!document.webkitFullscreenElement) {
-      if (suppressClearOnce) {
-        suppressClearOnce = false;
-        return;
-      }
-      wantsFullscreen = false;
-    }
-  });
-});
+        if (uploadInput) {
+          // If any script programmatically calls uploadInput.click(), we still want to restore.
+          uploadInput.addEventListener("click", () => {
+            markPickerOpening();
+          });
+
+          // If the user selects a file, change fires when returning
+          uploadInput.addEventListener("change", () => {
+            maybeRestoreAfterPicker();
+          });
+        }
+
+        // If user cancels picker, "change" may not fire; focus/visibility usually does.
+        window.addEventListener("focus", () => {
+          if (pickerOpening) maybeRestoreAfterPicker();
+          else if (wantsFullscreen) requestAppFullscreenSoon();
+        });
+
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) {
+            if (pickerOpening) maybeRestoreAfterPicker();
+            else if (wantsFullscreen) requestAppFullscreenSoon();
+          }
+        });
+
+        // If the user manually exits fullscreen via system UI, stop forcing it.
+        // But don't clear the flag for the one fullscreen drop caused by the picker.
+        document.addEventListener("fullscreenchange", () => {
+          if (!document.fullscreenElement) {
+            if (suppressClearOnce) {
+              suppressClearOnce = false;
+              return;
+            }
+            wantsFullscreen = false;
+          }
+        });
+        document.addEventListener("webkitfullscreenchange", () => {
+          if (!document.webkitFullscreenElement) {
+            if (suppressClearOnce) {
+              suppressClearOnce = false;
+              return;
+            }
+            wantsFullscreen = false;
+          }
+        });
+      });
     })();
   </script>
 
   <!-- Rage City scripts -->
   <script src="./js/input.js"></script>
   <script src="./js/overlay.js"></script>
+  <!-- NEW: helpers must load before cityScene -->
+  <script src="./js/ragecity-gallery-helpers.js"></script>
   <script src="./js/cityScene.js"></script>
   <script src="./js/main.js"></script>
 </body>
