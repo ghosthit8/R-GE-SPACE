@@ -664,18 +664,22 @@ function update(time, delta) {
     }
   }
 
+  // ===== PROMPT TEXT (always shows B on frames) =====
   if (promptText) {
     if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
+
       if (nearestItem.type === "sculpture") {
         promptText.setText("Press A to inspect sculpture");
       } else {
         const frame = galleryFrames[nearestItem.index];
         const hasArt = frame && !!frame.fullUrl;
+
         if (hasArt) {
           promptText.setText("Press A to view art\nPress B to replace art");
         } else {
-          promptText.setText("Press A to add art");
+          // ✅ Always mention B, even when empty
+          promptText.setText("Press A to add art\nPress B to replace art");
         }
       }
     } else {
@@ -683,9 +687,12 @@ function update(time, delta) {
     }
   }
 
+  // ===== BUTTON ACTIONS =====
   if (nearestItem && nearestDist < 60 && justPressedA) {
     if (nearestItem.type === "sculpture") {
-      if (nearestItem.fullUrl) window.openArtOverlay({ url: nearestItem.fullUrl, mimeType: nearestItem.mimeType || "" });
+      if (nearestItem.fullUrl) {
+        window.openArtOverlay({ url: nearestItem.fullUrl, mimeType: nearestItem.mimeType || "" });
+      }
     } else {
       currentPaintingIndex = nearestItem.index;
       const frame = galleryFrames[currentPaintingIndex];
@@ -709,7 +716,7 @@ function update(time, delta) {
   ) {
     const frameIndex = nearestItem.index;
     const frame = galleryFrames[frameIndex];
-    if (frame && frame.fullUrl && paintingUploadInput) {
+    if (frame && paintingUploadInput) {
       currentPaintingIndex = frameIndex;
       console.log("[RageCity] Opening file picker to REPLACE art on frame", frameIndex);
       paintingUploadInput.click();
