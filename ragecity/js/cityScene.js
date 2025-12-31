@@ -8,10 +8,10 @@ let prevB = false;
 let prevX = false;
 let prevY = false;
 
-// ===== PROMPT POSITION CONTROL =====
-// Controls how far UNDER the inner green square the prompt sits.
-// Smaller = higher, bigger = lower.
-const PROMPT_OFFSET = 60; // lifted a bit so 2 lines fit
+// ===== PROMPT + RANGE CONTROL =====
+const PROMPT_OFFSET = 60;     // vertical position of text
+const PROMPT_DISTANCE = 60;   // how close to show text
+const ACTION_DISTANCE = 45;   // how close A/B actually work
 // =================================
 
 // For per-painting uploads
@@ -269,7 +269,7 @@ function create() {
 
   const sculptureHit = this.add.rectangle(hitCX, hitCY, hitW, hitH, 0xff0000, 0);
   this.physics.add.existing(sculptureHit, true);
-  if (typeof wallsGroup !== 'undefined' && wallsGroup && wallsGroup.add) {
+  if (typeof wallsGroup !== "undefined" && wallsGroup && wallsGroup.add) {
     wallsGroup.add(sculptureHit);
   }
 
@@ -286,10 +286,11 @@ function create() {
   const promptY = bottomInner + PROMPT_OFFSET;
 
   promptText = this.add.text(w / 2, promptY, "", {
-    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily:
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     fontSize: "18px",
     color: "#39ff14",
-    align: "center"
+    align: "center",
   });
   promptText.setOrigin(0.5, 0);
   promptText.setScrollFactor(0);
@@ -299,7 +300,10 @@ function create() {
   this.scale.on("resize", (gameSize) => {
     const newBottomOuter = gameSize.height - marginY;
     const newBottomInner = newBottomOuter - corridorWidth;
-    promptText.setPosition(gameSize.width / 2, newBottomInner + PROMPT_OFFSET);
+    promptText.setPosition(
+      gameSize.width / 2,
+      newBottomInner + PROMPT_OFFSET
+    );
   });
 
   // FRAMES
@@ -386,18 +390,18 @@ function create() {
       playIcon: null,
       storagePath: null,
       supTexKey: null,
-      scene: null
+      scene: null,
     });
   }
 
-  const midLeftX   = (leftOuter  + leftInner)  / 2;
-  const midRightX  = (rightOuter + rightInner) / 2;
-  const midTopY    = (topOuter   + topInner)   / 2;
-  const midBottomY = (bottomOuter+ bottomInner)/ 2;
+  const midLeftX = (leftOuter + leftInner) / 2;
+  const midRightX = (rightOuter + rightInner) / 2;
+  const midTopY = (topOuter + topInner) / 2;
+  const midBottomY = (bottomOuter + bottomInner) / 2;
 
   const topCount = 4;
   const topStartX = leftInner + 35;
-  const topEndX   = rightInner - 35;
+  const topEndX = rightInner - 35;
   for (let i = 0; i < topCount; i++) {
     const t = topCount === 1 ? 0.5 : i / (topCount - 1);
     const x = Phaser.Math.Linear(topStartX, topEndX, t);
@@ -411,10 +415,7 @@ function create() {
     addTrapezoidFrame(this, midRightX, y, "right");
   }
 
-  const leftYPositions = [
-    topInner + 55,
-    gapInnerTopY - 22
-  ];
+  const leftYPositions = [topInner + 55, gapInnerTopY - 22];
   leftYPositions.forEach((y) => {
     addTrapezoidFrame(this, midLeftX, y, "left");
   });
@@ -424,7 +425,7 @@ function create() {
     leftInner + 90,
     (leftInner + rightInner) / 2,
     rightInner - 90,
-    rightInner - 24
+    rightInner - 24,
   ];
   bottomPositions.forEach((x) => {
     addTrapezoidFrame(this, x, midBottomY, "bottom");
@@ -529,7 +530,9 @@ function create() {
           imgEl.onerror = (e) => {
             console.warn("[RageCity] Preview image failed to load:", e);
             logDbg("Preview failed ⚠");
-            try { URL.revokeObjectURL(blobUrl); } catch (_) {}
+            try {
+              URL.revokeObjectURL(blobUrl);
+            } catch (_) {}
           };
 
           imgEl.src = blobUrl;
@@ -538,7 +541,7 @@ function create() {
           frame.scene = scene;
           frame.mediaKind = "video";
           frame.fullUrl = blobUrl;
-          attachVideoMarker(scene, frame); // fixed: pass frame
+          attachVideoMarker(scene, frame);
           logDbg("Video marker ✔");
         }
       } catch (e) {
@@ -551,8 +554,14 @@ function create() {
           logDbg("Uploading to Supabase…");
           const signedUrl = await uploadPaintingToSupabase(frameIndex, file);
           if (signedUrl) {
-            if (frame.fullUrl && typeof frame.fullUrl === "string" && frame.fullUrl.startsWith("blob:")) {
-              try { URL.revokeObjectURL(frame.fullUrl); } catch (_) {}
+            if (
+              frame.fullUrl &&
+              typeof frame.fullUrl === "string" &&
+              frame.fullUrl.startsWith("blob:")
+            ) {
+              try {
+                URL.revokeObjectURL(frame.fullUrl);
+              } catch (_) {}
             }
 
             frame.fullUrl = signedUrl;
@@ -564,7 +573,10 @@ function create() {
             });
           } else {
             logDbg("Supabase upload failed ⚠");
-            console.warn("[RageCity] Supabase upload returned null for frame", frameIndex);
+            console.warn(
+              "[RageCity] Supabase upload returned null for frame",
+              frameIndex
+            );
           }
         } finally {
           frame.locked = false;
@@ -659,14 +671,14 @@ function update(time, delta) {
       nearestItem = {
         type: "sculpture",
         fullUrl: sculptureSpot.fullUrl,
-        mimeType: ""
+        mimeType: "",
       };
     }
   }
 
   // ===== PROMPT TEXT (empty vs filled frames) =====
   if (promptText) {
-    if (nearestItem && nearestDist < 80) {
+    if (nearestItem && nearestDist < PROMPT_DISTANCE) {
       promptText.setVisible(true);
 
       if (nearestItem.type === "sculpture") {
@@ -690,10 +702,13 @@ function update(time, delta) {
   }
 
   // ===== BUTTON ACTIONS =====
-  if (nearestItem && nearestDist < 60 && justPressedA) {
+  if (nearestItem && nearestDist < ACTION_DISTANCE && justPressedA) {
     if (nearestItem.type === "sculpture") {
       if (nearestItem.fullUrl) {
-        window.openArtOverlay({ url: nearestItem.fullUrl, mimeType: nearestItem.mimeType || "" });
+        window.openArtOverlay({
+          url: nearestItem.fullUrl,
+          mimeType: nearestItem.mimeType || "",
+        });
       }
     } else {
       currentPaintingIndex = nearestItem.index;
@@ -701,11 +716,20 @@ function update(time, delta) {
       if (!frame) return;
 
       if (!frame.fullUrl) {
-        console.log("[RageCity] Opening file picker for frame", currentPaintingIndex);
+        console.log(
+          "[RageCity] Opening file picker for frame",
+          currentPaintingIndex
+        );
         if (paintingUploadInput) paintingUploadInput.click();
       } else {
-        console.log("[RageCity] Opening overlay for existing art on frame", currentPaintingIndex);
-        window.openArtOverlay({ url: frame.fullUrl, mimeType: frame.mimeType || "" });
+        console.log(
+          "[RageCity] Opening overlay for existing art on frame",
+          currentPaintingIndex
+        );
+        window.openArtOverlay({
+          url: frame.fullUrl,
+          mimeType: frame.mimeType || "",
+        });
       }
     }
   }
@@ -713,14 +737,17 @@ function update(time, delta) {
   if (
     nearestItem &&
     nearestItem.type === "painting" &&
-    nearestDist < 60 &&
+    nearestDist < ACTION_DISTANCE &&
     justPressedB
   ) {
     const frameIndex = nearestItem.index;
     const frame = galleryFrames[frameIndex];
     if (frame && paintingUploadInput) {
       currentPaintingIndex = frameIndex;
-      console.log("[RageCity] Opening file picker to REPLACE art on frame", frameIndex);
+      console.log(
+        "[RageCity] Opening file picker to REPLACE art on frame",
+        frameIndex
+      );
       paintingUploadInput.click();
     }
   }
