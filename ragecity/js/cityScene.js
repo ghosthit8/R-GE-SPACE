@@ -11,7 +11,7 @@ let prevY = false;
 // ===== PROMPT POSITION CONTROL =====
 // Controls how far UNDER the inner green square the prompt sits.
 // Smaller = higher, bigger = lower.
-const PROMPT_OFFSET = 100;
+const PROMPT_OFFSET = 60; // 👈 was 100, moved up so 2 lines fit
 // =================================
 
 // For per-painting uploads
@@ -538,7 +538,7 @@ function create() {
           frame.scene = scene;
           frame.mediaKind = "video";
           frame.fullUrl = blobUrl;
-          attachVideoMarker(scene, frame);
+          attachVideoMarker(scene);
           logDbg("Video marker ✔");
         }
       } catch (e) {
