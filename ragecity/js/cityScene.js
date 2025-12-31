@@ -11,7 +11,7 @@ let prevY = false;
 // ===== PROMPT POSITION CONTROL =====
 // Controls how far UNDER the inner green square the prompt sits.
 // Smaller = higher, bigger = lower.
-const PROMPT_OFFSET = 60; // 👈 was 100, moved up so 2 lines fit
+const PROMPT_OFFSET = 60; // lifted a bit so 2 lines fit
 // =================================
 
 // For per-painting uploads
@@ -538,7 +538,7 @@ function create() {
           frame.scene = scene;
           frame.mediaKind = "video";
           frame.fullUrl = blobUrl;
-          attachVideoMarker(scene);
+          attachVideoMarker(scene, frame); // fixed: pass frame
           logDbg("Video marker ✔");
         }
       } catch (e) {
@@ -664,7 +664,7 @@ function update(time, delta) {
     }
   }
 
-  // ===== PROMPT TEXT (B line above A line for frames) =====
+  // ===== PROMPT TEXT (empty vs filled frames) =====
   if (promptText) {
     if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
@@ -677,11 +677,11 @@ function update(time, delta) {
         const hasArt = frame && !!frame.fullUrl;
 
         if (hasArt) {
-          // Frame already has art
+          // Frame already has art → show B + A
           promptText.setText("Press B to replace art\nPress A to view art");
         } else {
-          // Empty frame but still mention B
-          promptText.setText("Press B to replace art\nPress A to add art");
+          // Empty frame → only A
+          promptText.setText("Press A to add art");
         }
       }
     } else {
