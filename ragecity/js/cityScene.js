@@ -214,7 +214,7 @@ function create() {
   player.body.setCollideWorldBounds(true);
   this.physics.add.collider(player, wallsGroup);
 
-  // ===== SCULPTURE CUBE (RESTORED - ORIGINAL LOOK) =====
+  // ===== SCULPTURE CUBE =====
   const cubeX = w * 0.56;
   const cubeY = h * 0.62;
 
@@ -664,22 +664,24 @@ function update(time, delta) {
     }
   }
 
-  // ===== PROMPT TEXT (always shows B on frames) =====
+  // ===== PROMPT TEXT (B line above A line for frames) =====
   if (promptText) {
     if (nearestItem && nearestDist < 80) {
       promptText.setVisible(true);
 
       if (nearestItem.type === "sculpture") {
+        // sculpture keeps its own message
         promptText.setText("Press A to inspect sculpture");
       } else {
         const frame = galleryFrames[nearestItem.index];
         const hasArt = frame && !!frame.fullUrl;
 
         if (hasArt) {
-          promptText.setText("Press A to view art\nPress B to replace art");
+          // Frame already has art
+          promptText.setText("Press B to replace art\nPress A to view art");
         } else {
-          // ✅ Always mention B, even when empty
-          promptText.setText("Press A to add art\nPress B to replace art");
+          // Empty frame but still mention B
+          promptText.setText("Press B to replace art\nPress A to add art");
         }
       }
     } else {
