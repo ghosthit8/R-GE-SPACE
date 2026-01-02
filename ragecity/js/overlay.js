@@ -13,13 +13,16 @@ const artOverlayEl = document.getElementById("art-overlay");
 const artImg = document.getElementById("art-overlay-img");
 const artMsg = document.getElementById("art-overlay-msg");
 
+// NEW: title + description elements inside the bubble
+const artTitleEl = document.getElementById("art-overlay-title");
+const artDescEl = document.getElementById("art-overlay-description");
+
 // We will either use an existing <video id="art-overlay-video"> if you add it,
 // or we’ll create one dynamically so you don’t have to edit index.html.
 let artVideo = document.getElementById("art-overlay-video");
 
 // Track which element is currently active (img or video)
 let currentMediaEl = artImg;
-
 
 // Ensure the *page* stays fullscreen (mobile browsers sometimes exit fullscreen when opening file pickers)
 function ensureAppFullscreen() {
@@ -34,13 +37,17 @@ function ensureAppFullscreen() {
 // Expose (or keep existing)
 window.ensureAppFullscreen = window.ensureAppFullscreen || ensureAppFullscreen;
 
-
 // ---------- helpers ----------
 function isVideo(mimeType, url) {
   const mt = String(mimeType || "").toLowerCase();
   if (mt.startsWith("video/")) return true;
   const u = String(url || "").toLowerCase();
-  return u.endsWith(".mp4") || u.endsWith(".webm") || u.endsWith(".mov") || u.endsWith(".m4v");
+  return (
+    u.endsWith(".mp4") ||
+    u.endsWith(".webm") ||
+    u.endsWith(".mov") ||
+    u.endsWith(".m4v")
+  );
 }
 
 function ensureVideoEl() {
@@ -68,7 +75,9 @@ function ensureVideoEl() {
 
 function stopVideoIfAny() {
   if (!artVideo) return;
-  try { artVideo.pause(); } catch (_) {}
+  try {
+    artVideo.pause();
+  } catch (_) {}
   // Clear src so mobile browsers stop streaming
   try {
     artVideo.removeAttribute("src");
@@ -90,16 +99,20 @@ function exitArtFullscreenIfNeeded() {
 
 // Open overlay with either:
 //  - openArtOverlay("https://...")  (legacy)
-//  - openArtOverlay({ url: "https://...", mimeType: "video/mp4" })
+//  - openArtOverlay({ url, mimeType, title, description })
 function openArtOverlay(arg) {
   let url = null;
   let mimeType = "";
+  let title = "";
+  let description = "";
 
   if (typeof arg === "string") {
     url = arg;
   } else if (arg && typeof arg === "object") {
     url = arg.url || null;
     mimeType = arg.mimeType || "";
+    title = arg.title || "";
+    description = arg.description || "";
   }
 
   if (!url) return;
@@ -108,7 +121,7 @@ function openArtOverlay(arg) {
 
   const showVideo = isVideo(mimeType, url);
 
-  // Reset
+  // Reset media
   if (artImg) {
     artImg.style.display = "none";
     artImg.src = "";
@@ -118,7 +131,7 @@ function openArtOverlay(arg) {
     stopVideoIfAny();
   }
 
-  // Apply
+  // Apply media
   if (showVideo) {
     ensureVideoEl();
     if (artVideo) {
@@ -126,20 +139,22 @@ function openArtOverlay(arg) {
       artVideo.style.display = "block";
       currentMediaEl = artVideo;
     }
-    if (artMsg) {
-      artMsg.style.display = "block";
-      artMsg.textContent = 'Tap play (video) — Press "A" for fullscreen';
-    }
   } else {
     if (artImg) {
       artImg.src = url;
       artImg.style.display = "block";
       currentMediaEl = artImg;
     }
-    if (artMsg) {
-      artMsg.style.display = "block";
-      artMsg.textContent = 'Press "A" for fullscreen';
-    }
+  }
+
+  // Apply title + description to neon bubble
+  if (artTitleEl) artTitleEl.textContent = title || "";
+  if (artDescEl) artDescEl.textContent = description || "";
+
+  // Show/hide bubble depending on whether we have any text
+  if (artMsg) {
+    const hasText = (title && title.trim().length) || (description && description.trim().length);
+    artMsg.style.display = hasText ? "block" : "none";
   }
 
   if (artOverlayEl) {
@@ -157,11 +172,12 @@ function closeArtOverlay() {
   artOpen = false;
 
   if (artOverlayEl) artOverlayEl.style.display = "none";
-  if (artMsg) artMsg.style.display = "block";
+  if (artMsg) artMsg.style.display = "none";
 }
 
 // Toggle fullscreen on whichever media is currently showing
 function toggleArtFullscreen() {
+  // Hide text bubble when going fullscreen
   if (artMsg) artMsg.style.display = "none";
 
   const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
@@ -187,13 +203,16 @@ if (artOverlayEl) {
 }
 
 // Expose functions to global (CityScene calls these)
-window.artOpen = artOpen; // NOTE: CityScene reads window.artOpen, but this primitive won't auto-update.
 window.openArtOverlay = openArtOverlay;
 window.closeArtOverlay = closeArtOverlay;
 window.toggleArtFullscreen = toggleArtFullscreen;
 
 // Keep window.artOpen in sync (so CityScene overlay-open checks work)
 Object.defineProperty(window, "artOpen", {
-  get() { return artOpen; },
-  set(v) { artOpen = !!v; }
+  get() {
+    return artOpen;
+  },
+  set(v) {
+    artOpen = !!v;
+  },
 });
