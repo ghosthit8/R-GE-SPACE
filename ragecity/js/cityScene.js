@@ -391,9 +391,6 @@ function create() {
       storagePath: null,
       supTexKey: null,
       scene: null,
-      // NEW: metadata for overlay bubble
-      title: "",
-      description: ""
     });
   }
 
@@ -485,18 +482,6 @@ function create() {
 
       frame.locked = true;
 
-      // === NEW: Prompt for title + description (after choosing file)
-      const defaultTitle = frame.title || "";
-      const defaultDesc = frame.description || "";
-
-      const title = window.prompt("Title for this piece:", defaultTitle) || "";
-      const description =
-        window.prompt("Description for this piece (optional):", defaultDesc) ||
-        "";
-
-      frame.title = title;
-      frame.description = description;
-
       frame.scene = scene;
       clearFrameMedia(frame);
 
@@ -567,10 +552,7 @@ function create() {
       (async () => {
         try {
           logDbg("Uploading to Supabase…");
-          const signedUrl = await uploadPaintingToSupabase(frameIndex, file, {
-            title,
-            description,
-          });
+          const signedUrl = await uploadPaintingToSupabase(frameIndex, file);
           if (signedUrl) {
             if (
               frame.fullUrl &&
@@ -747,8 +729,6 @@ function update(time, delta) {
         window.openArtOverlay({
           url: frame.fullUrl,
           mimeType: frame.mimeType || "",
-          title: frame.title || "",
-          description: frame.description || "",
         });
       }
     }
