@@ -3,147 +3,212 @@
   --red: #ff0033;
 }
 
-* {
-  box-sizing: border-box;
-}
-
 body {
   margin: 0;
-  background: black;
+  padding: 0;
+  text-align: center;
+  background: #000;
   color: var(--green);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  overflow: hidden;
 }
 
 .home-btn {
   position: fixed;
-  top: 10px;
-  left: 12px;
-  z-index: 30;
-  color: var(--green);
-  text-decoration: none;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: 16px;
+  padding: 8px 14px;
   border: 1px solid var(--green);
-  padding: 6px 10px;
   border-radius: 8px;
-  background: rgba(0,0,0,0.6);
+  text-decoration: none;
+  color: var(--green);
+  background: transparent;
+  font-weight: bold;
   text-shadow: 0 0 6px var(--green);
+  z-index: 9999;
+  pointer-events: auto;
+}
+.home-btn:hover {
+  color: var(--red);
+  border-color: var(--red);
+  text-shadow: 0 0 6px var(--red);
 }
 
-#btn-fullscreen {
+.fullscreen-btn {
   position: fixed;
-  top: 10px;
-  right: 12px;
-  z-index: 30;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: 16px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(57, 255, 20, 0.8);
+  background: rgba(0, 0, 0, 0.85);
+  color: var(--green);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 0 8px rgba(57, 255, 20, 0.7);
+  z-index: 9999;
+  pointer-events: auto;
+}
+.fullscreen-btn:active {
+  transform: scale(0.96);
+  box-shadow: 0 0 4px rgba(57, 255, 20, 1);
 }
 
 #game-container {
+  margin-top: 80px;
+  margin-bottom: 8px;
+  width: calc(100% - 24px);
+  max-width: 720px;
   position: relative;
-  width: 100vw;
-  height: 100vh;
+  height: 520px;
+  border: 2px solid rgba(57, 255, 20, 0.9);
+  box-shadow: 0 0 16px rgba(57, 255, 20, 0.8);
+  background: #020202;
+  overflow: hidden;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 #game-fallback {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
-  background: black;
-  color: var(--green);
-  z-index: 2;
-}
-
-/* ===== CONTROLS ===== */
-.controls-overlay {
-  position: fixed;
-  inset: auto 0 0 0;
-  padding: 10px;
-  z-index: 20;
-  pointer-events: none;
-}
-
-.controls-inner {
   display: flex;
-  justify-content: space-between;
-  pointer-events: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  color: rgba(57, 255, 20, 0.7);
+  z-index: 1;
 }
 
-.controls-overlay button {
-  pointer-events: auto;
-}
-
-.dpad {
-  display: grid;
-  grid-template-columns: repeat(3, 46px);
-  grid-template-rows: repeat(3, 46px);
-  gap: 6px;
-}
-
-.abxy {
-  display: grid;
-  grid-template-columns: 46px 46px;
-  grid-template-rows: 46px 46px;
-  gap: 6px;
-}
-
-.abxy-btn,
-.dpad button,
-.fullscreen-btn {
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
-  border: 1px solid rgba(57,255,20,0.7);
-  background: rgba(0,0,0,0.6);
-  color: var(--green);
-  text-shadow: 0 0 6px var(--green);
-  box-shadow: 0 0 10px rgba(57,255,20,0.25);
-}
-
-.btn-b {
-  border-color: var(--red);
-  color: var(--red);
-  text-shadow: 0 0 6px var(--red);
-}
-
-/* ===== ART OVERLAY ===== */
 #art-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.92);
+  background: rgba(0, 0, 0, 0.9);
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 5;
+  flex-direction: column;
 }
 
 #art-overlay-img {
   max-width: 90%;
   max-height: 80%;
   border-radius: 12px;
-  box-shadow: 0 0 22px var(--green);
+  box-shadow: 0 0 20px rgba(57, 255, 20, 0.8);
 }
 
-/* Neon info bubble */
 #art-overlay-msg {
-  position: absolute;
-  left: 50%;
-  bottom: 18px;
-  transform: translateX(-50%);
-  max-width: 90%;
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid var(--green);
-  background: rgba(0,0,0,0.8);
-  text-shadow: 0 0 6px var(--green);
-  display: none;
+  width: 100%;
+  text-align: center;
+  font-size: 18px;
+  color: var(--green);
+  text-shadow: 0 0 8px var(--green);
+  margin-bottom: 12px;
+  display: block;
+}
+
+.controls-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  z-index: 999;
   pointer-events: none;
 }
 
-#art-overlay-title {
-  font-weight: 700;
-  margin-bottom: 4px;
+.controls-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 12px;
 }
 
-#art-overlay-description {
-  opacity: 0.85;
-  font-size: 14px;
+.dpad,
+.abxy {
+  pointer-events: auto;
+}
+
+.dpad {
+  display: grid;
+  grid-template-columns: 60px 60px 60px;
+  grid-template-rows: 60px 60px 60px;
+  gap: 4px;
+  opacity: 0.9;
+}
+
+.dpad button,
+.abxy button {
+  background: rgba(0, 0, 0, 0.9);
+  border: 2px solid rgba(57, 255, 20, 0.8);
+  border-radius: 12px;
+  color: var(--green);
+  font-size: 1rem;
+  font-weight: bold;
+  box-shadow: 0 0 10px rgba(57, 255, 20, 0.9);
+  touch-action: none;
+}
+
+.dpad button:active,
+.abxy button:active {
+  transform: scale(0.96);
+  box-shadow: 0 0 4px rgba(57, 255, 20, 1);
+  background: #000;
+}
+
+.dpad .empty {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.abxy {
+  position: relative;
+  width: 190px;
+  height: 190px;
+  opacity: 0.9;
+  pointer-events: auto;
+}
+
+.abxy .abxy-btn {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  font-size: 1.1rem;
+}
+
+/* Label letters under the dot */
+.abxy .abxy-btn::after {
+  display: block;
+  font-size: 0.65rem;
+  margin-top: 2px;
+  letter-spacing: 2px;
+}
+
+.abxy .btn-y::after { content: "Y"; }
+.abxy .btn-x::after { content: "X"; }
+.abxy .btn-b::after { content: "B"; }
+.abxy .btn-a::after { content: "A"; }
+
+/* Xbox-style diamond: Y top, X left, B right, A bottom */
+.abxy .btn-y { left: 63px; top: 0px; }
+.abxy .btn-x { left: 0px;  top: 63px; }
+.abxy .btn-b { left: 126px; top: 63px; }
+.abxy .btn-a { left: 63px; top: 126px; }
+
+@media (max-width: 600px) {
+  #game-container {
+    height: 480px;
+  }
+  .dpad {
+    grid-template-columns: 52px 52px 52px;
+    grid-template-rows: 52px 52px 52px;
+  }
+  .abxy button {
+    width: 56px;
+    height: 56px;
+  }
 }
