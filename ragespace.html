@@ -108,7 +108,6 @@
     font-size:11px;
     background:#041004;
   }
-  /* armed state for delete confirm */
   .msg .ops button.armed{
     border-color:var(--red);
     color:var(--red);
@@ -149,12 +148,11 @@
     border-radius:10px;
     border:1px solid rgba(57,255,20,0.35);
     box-shadow:0 0 0 1px rgba(57,255,20,0.08) inset;
-    position:relative;           /* for FS button */
+    position:relative;
     overflow:hidden;
   }
   .msg .media video, .msg .media img{ display:block; width:100%; height:auto; border-radius:10px; }
 
-  /* per-media fullscreen button */
   .media-fs-btn{
     position:absolute;
     top:4px;
@@ -168,9 +166,7 @@
     cursor:pointer;
     z-index:2;
   }
-  .media-fs-btn:hover{
-    box-shadow:0 0 8px rgba(57,255,20,0.7);
-  }
+  .media-fs-btn:hover{ box-shadow:0 0 8px rgba(57,255,20,0.7); }
 
   body.fs header{ display:none; }
   body.fs #header-spacer{ display:none; height:0 !important; }
@@ -212,8 +208,6 @@
       </h1>
     </div>
     <div class="controls">
-
-      <!-- BACK BUTTON -->
       <button id="backBtn" class="btn-ghost" title="Back to menu" onclick="window.location.href='menu.html'">
         ⟵ Back
       </button>
@@ -231,7 +225,6 @@
       <button id="userTab" class="btn-ghost" title="Show user chats">User chats</button>
       <button id="createRoomBtn" class="btn" title="Create a new room">Create room</button>
 
-      <!-- Create Room modal -->
       <dialog id="createRoomModal" class="modal">
         <form id="createRoomForm" class="card" autocomplete="off">
           <h3>Create a room</h3>
@@ -255,7 +248,6 @@
         </form>
       </dialog>
 
-      <!-- Join gate (private rooms) -->
       <dialog id="joinGate" class="modal">
         <form id="joinGateForm" class="card" autocomplete="off">
           <h3>Enter room password</h3>
@@ -323,17 +315,15 @@
         <div class="card" id="meCard"></div>
 
         <div class="footer">
-          <div>"the revolution will not be televised...”</div>
+          <div>"the revolution will not be televised…”</div>
           <div><a id="menuLink" href="menu.html">⟵ back to menu</a></div>
         </div>
       </aside>
     </div>
   </div>
 
-  <!-- Keep the UMD build (helps on non-module pages too) -->
   <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
 
-  <!-- Layout script -->
   <script>
     (function(){
       const FADE_ON_SCROLL = true;
@@ -359,7 +349,6 @@
     })();
   </script>
 
-  <!-- App logic -->
   <script type="module">
     const V = String(Date.now());
     const { createClient } = await import(`https://esm.sh/@supabase/supabase-js@2?v=${V}`);
@@ -372,10 +361,8 @@
     let BCRYPT = null;
     async function ensureBcrypt(){
       if (BCRYPT) return BCRYPT;
-      // UMD global from <script> tag
       BCRYPT = (globalThis.dcodeIO && globalThis.dcodeIO.bcrypt) || globalThis.bcrypt || null;
       if (BCRYPT) return BCRYPT;
-      // Fallback: dynamic ESM import
       try{
         const mod = await import('https://esm.sh/bcryptjs@2.4.3');
         BCRYPT = mod.default || mod;
@@ -499,9 +486,9 @@
 
     async function loadRooms(){
       const { data, error } = await supabase.from("rooms").select("id,name,is_private").order("name");
-      if(!error && data){ 
-        userRooms = data; 
-        currentRoomsCache.clear(); 
+      if(!error && data){
+        userRooms = data;
+        currentRoomsCache.clear();
         data.forEach(r => currentRoomsCache.set(r.name.toLowerCase(), r));
       }
       renderRoomDropdown();
@@ -536,7 +523,7 @@
         const bc = await ensureBcrypt();
         if(!bc){
           crError.textContent = "Password crypto library not loaded.";
-          crError.style.display=""; 
+          crError.style.display="";
           return;
         }
 
@@ -545,19 +532,17 @@
           password_hash = bc.hashSync(pass, salt);
         }catch(err){
           crError.textContent = "Password crypto failed. Reload and try again.";
-          crError.style.display=""; 
+          crError.style.display="";
           return;
         }
       }
 
-      // Uniqueness check
       const { data:exists, error:checkErr } = await supabase
         .from("rooms").select("id").ilike("name", name).maybeSingle();
 
       if(checkErr){ crError.textContent="Error checking name: " + checkErr.message; crError.style.display=""; return; }
       if(exists){ crError.textContent="That room name is already taken."; crError.style.display=""; return; }
 
-      // Create room
       const u = (await supabase.auth.getUser()).data.user;
       const { data:newRow, error:insErr } = await supabase.from("rooms")
         .insert({ name, is_private, password_hash, owner_id: u?u.id:null })
@@ -569,7 +554,6 @@
         return;
       }
 
-      // Success: close, refresh list, switch to user tab, select & auto-join
       closeCreate();
       await loadRooms();
       currentMode = "user"; updateTabUI(); renderRoomDropdown();
@@ -577,7 +561,6 @@
       joinRoom(newRow.name);
     });
 
-    /* ===== Private join gate ===== */
     async function verifyPasswordById(id, pass){
       const { data, error } = await supabase.from("rooms").select("password_hash").eq("id", id).single();
       if(error || !data?.password_hash) return false;
@@ -682,13 +665,76 @@
       return s;
     }
 
+    /* =========================================================
+       PRIVATE BUCKET FIX:
+       - bucket can stay private
+       - we store storage PATH in media_url going forward
+       - we render with signed URLs
+    ========================================================= */
+    const CHAT_BUCKET = "chat-media";
+    const SIGNED_TTL_SECONDS = 60 * 60; // 1 hour
+    const signedCache = new Map(); // key: path -> { url, expMs }
+
+    function isProbablyUrl(s){
+      return typeof s === "string" && (s.startsWith("http://") || s.startsWith("https://"));
+    }
+
+    function extractPathFromMediaUrl(val){
+      if(!val) return null;
+      const s = String(val).trim();
+      if(!s) return null;
+
+      // New behavior: we store raw storage path (e.g. "uid/123.png")
+      if(!isProbablyUrl(s)) return s;
+
+      // Old behavior: stored public URL
+      // Try to extract everything after "/chat-media/"
+      try{
+        const u = new URL(s);
+        const marker = `/${CHAT_BUCKET}/`;
+        const idx = u.pathname.indexOf(marker);
+        if(idx >= 0){
+          return decodeURIComponent(u.pathname.slice(idx + marker.length));
+        }
+      }catch(e){}
+
+      // Fallback: naive split
+      const token = `${CHAT_BUCKET}/`;
+      const j = s.indexOf(token);
+      if(j >= 0) return s.slice(j + token.length);
+
+      return null;
+    }
+
+    async function getSignedUrlForPath(path){
+      if(!path) return null;
+
+      const now = Date.now();
+      const hit = signedCache.get(path);
+      if(hit && hit.url && hit.expMs && hit.expMs > now + 10_000){
+        return hit.url;
+      }
+
+      const { data, error } = await supabase
+        .storage
+        .from(CHAT_BUCKET)
+        .createSignedUrl(path, SIGNED_TTL_SECONDS);
+
+      if(error || !data?.signedUrl){
+        return null;
+      }
+
+      signedCache.set(path, { url: data.signedUrl, expMs: now + (SIGNED_TTL_SECONDS * 1000) });
+      return data.signedUrl;
+    }
+
     function mediaNode(url, type){
       const wrap = el("div", { class:"media" });
       let mediaEl;
       if((type||"").startsWith("video")){
         mediaEl = el("video", { src:url, controls:true, playsinline:true });
       }else{
-        mediaEl = el("img", { src:url, alt:"upload" });
+        mediaEl = el("img", { src:url, alt:"upload", loading:"lazy" });
       }
 
       const btn = el("button", {
@@ -711,7 +757,6 @@
       return wrap;
     }
 
-    // two-step arm for delete
     function armDelete(btn, id){
       if(btn.dataset.armed === "1"){
         btn.dataset.armed = "0";
@@ -732,7 +777,7 @@
       }
     }
 
-    function renderMessage(m){
+    async function renderMessage(m){
       const mine = m.user_id === me.id;
       const row = el("div", {
         class:"msg" + (mine ? " me" : ""),
@@ -753,9 +798,23 @@
 
       row.append(meta);
       if (textContent) row.append(txt);
-      if (m.media_url) row.append(mediaNode(m.media_url, m.media_type));
-      row.append(ops);
 
+      // Render media using signed URL if possible
+      if (m.media_url) {
+        const path = extractPathFromMediaUrl(m.media_url);
+        let src = null;
+
+        if (path) {
+          src = await getSignedUrlForPath(path);
+        }
+
+        // If signing fails (public bucket / old public URL), fall back to original value
+        if (!src && isProbablyUrl(m.media_url)) src = m.media_url;
+
+        if (src) row.append(mediaNode(src, m.media_type));
+      }
+
+      row.append(ops);
       msgEl.appendChild(row);
     }
 
@@ -786,15 +845,22 @@
       status("Loading messages…", false);
 
       touchPresence(me.id, me.username);
-
       await subscribeRealtime(currentRoom);
 
       clearMessages();
       const { data, error, count } = await supabase
         .from("messages").select("*",{ count:"exact" })
         .eq("room", currentRoom).order("created_at",{ ascending:true }).limit(400);
-      if(error){ msgEl.appendChild(el("div",{}, "Error loading messages: " + error.message)); }
-      else{ data.forEach(renderMessage); countEl.textContent = count ?? data.length; }
+
+      if(error){
+        msgEl.appendChild(el("div",{}, "Error loading messages: " + error.message));
+      }else{
+        for (const m of data) {
+          await renderMessage(m);
+        }
+        countEl.textContent = count ?? data.length;
+      }
+
       msgEl.removeAttribute("aria-busy");
       autoscroll();
 
@@ -810,6 +876,7 @@
         .on("postgres_changes",
             { event:"INSERT", schema:"public", table:"messages", filter:`room=eq.${room}` },
             payload=>{
+              // fire and forget (async)
               renderMessage(payload.new);
               countEl.textContent=(parseInt(countEl.textContent||"0",10)+1).toString();
               touchPresence(payload.new.user_id,payload.new.username);
@@ -911,7 +978,7 @@
       const path = `${me.id}/${Date.now()}.${safeExt}`;
 
       const { error } = await supabase.storage
-        .from("chat-media")
+        .from(CHAT_BUCKET)
         .upload(path, file, {
           upsert: true,
           cacheControl: "3600",
@@ -924,9 +991,12 @@
         return null;
       }
 
-      const { data } = supabase.storage.from("chat-media").getPublicUrl(path);
       const type = file.type.startsWith("video") ? "video" : "image";
-      return { url: data.publicUrl, type };
+
+      // IMPORTANT:
+      // Store PATH in DB (works for private buckets).
+      // We'll sign it at render-time.
+      return { path, type };
     }
 
     async function ensureUsername(){
@@ -979,8 +1049,10 @@
             : ("user-" + ((window.crypto?.getRandomValues?.(new Uint32Array(1))[0] || Math.floor(Math.random()*0xffffff)).toString(16).padStart(6,"0").slice(0,6))));
 
       const base = { content, room:currentRoom, user_id:me.id, username: safeName };
+
+      // Store PATH in media_url going forward
       const withMedia = Object.assign({}, base, {
-        media_url:  media?.url ?? null,
+        media_url:  media?.path ?? null,
         media_type: media?.type ?? null
       });
 
@@ -1066,7 +1138,6 @@
     async function deleteMessage(id){
       if(!id) return;
 
-      // Fetch message to verify ownership & get media URL
       const { data: msgData, error: fetchErr } = await supabase
         .from("messages")
         .select("user_id, media_url")
@@ -1081,31 +1152,29 @@
         status("Delete failed: message not found", false);
         return;
       }
-
-      // Only allow the user who posted it
       if(msgData.user_id !== me.id){
         status("You can only delete your own messages", false);
         return;
       }
 
-      // Delete media from storage if present
+      // Remove media from storage if present
       if(msgData.media_url){
-        try{
-          const bucketPrefix = "https://tuqvpcevrhciursxrgav.supabase.co/storage/v1/object/public/chat-media/";
-          const filePath = msgData.media_url.replace(bucketPrefix, "");
-          const { error: storageErr } = await supabase
-            .storage
-            .from("chat-media")
-            .remove([filePath]);
-          if(storageErr){
-            console.warn("Storage delete error:", storageErr);
+        const path = extractPathFromMediaUrl(msgData.media_url);
+        if(path){
+          try{
+            const { error: storageErr } = await supabase
+              .storage
+              .from(CHAT_BUCKET)
+              .remove([path]);
+            if(storageErr){
+              console.warn("Storage delete error:", storageErr);
+            }
+          }catch(err){
+            console.warn("Error removing from bucket:", err);
           }
-        }catch(err){
-          console.warn("Error removing from bucket:", err);
         }
       }
 
-      // Delete the message row
       const { error } = await supabase
         .from("messages")
         .delete()
@@ -1117,7 +1186,6 @@
         return;
       }
 
-      // Immediate UI update
       const row = msgEl.querySelector(`[data-msg-id="${id}"]`);
       if(row) row.remove();
       const currentCount = parseInt(countEl.textContent || "0",10);
@@ -1128,6 +1196,7 @@
       status("Deleted ✓", true);
     }
   </script>
+
   <script src="js/auth-guard.js" type="module"></script>
 </body>
 </html>
