@@ -13,13 +13,16 @@ const artOverlayEl = document.getElementById("art-overlay");
 const artImg = document.getElementById("art-overlay-img");
 const artMsg = document.getElementById("art-overlay-msg");
 
+// ✅ NEW: optional title/description nodes (added in index.html)
+const artTitleEl = document.getElementById("art-overlay-title");
+const artDescEl = document.getElementById("art-overlay-description");
+
 // We will either use an existing <video id="art-overlay-video"> if you add it,
 // or we’ll create one dynamically so you don’t have to edit index.html.
 let artVideo = document.getElementById("art-overlay-video");
 
 // Track which element is currently active (img or video)
 let currentMediaEl = artImg;
-
 
 // Ensure the *page* stays fullscreen (mobile browsers sometimes exit fullscreen when opening file pickers)
 function ensureAppFullscreen() {
@@ -33,7 +36,6 @@ function ensureAppFullscreen() {
 }
 // Expose (or keep existing)
 window.ensureAppFullscreen = window.ensureAppFullscreen || ensureAppFullscreen;
-
 
 // ---------- helpers ----------
 function isVideo(mimeType, url) {
@@ -86,20 +88,49 @@ function exitArtFullscreenIfNeeded() {
   }
 }
 
+// ✅ NEW: helper to set neon bubble contents + show/hide
+function setOverlayText(title, description, fallbackText) {
+  // If index.html has title/desc nodes, use them
+  const hasTitleNode = !!artTitleEl;
+  const hasDescNode = !!artDescEl;
+
+  const safeTitle = (title || "").trim();
+  const safeDesc = (description || "").trim();
+
+  if (hasTitleNode) artTitleEl.textContent = safeTitle;
+  if (hasDescNode) artDescEl.textContent = safeDesc;
+
+  // If we *don't* have title/desc nodes (older index), fall back to old textContent behavior
+  if (!hasTitleNode && !hasDescNode && artMsg) {
+    artMsg.textContent = fallbackText || "";
+  }
+
+  // Show bubble only when there is something meaningful to show
+  if (artMsg) {
+    const hasMeta = !!(safeTitle || safeDesc);
+    const hasFallback = !!(fallbackText && String(fallbackText).trim());
+    artMsg.style.display = (hasMeta || (!hasTitleNode && !hasDescNode && hasFallback)) ? "block" : "none";
+  }
+}
+
 // ---------- API used by CityScene ----------
 
 // Open overlay with either:
 //  - openArtOverlay("https://...")  (legacy)
-//  - openArtOverlay({ url: "https://...", mimeType: "video/mp4" })
+//  - openArtOverlay({ url: "https://...", mimeType: "video/mp4", title: "...", description: "..." })
 function openArtOverlay(arg) {
   let url = null;
   let mimeType = "";
+  let title = "";
+  let description = "";
 
   if (typeof arg === "string") {
     url = arg;
   } else if (arg && typeof arg === "object") {
     url = arg.url || null;
     mimeType = arg.mimeType || "";
+    title = arg.title || "";
+    description = arg.description || "";
   }
 
   if (!url) return;
@@ -126,20 +157,26 @@ function openArtOverlay(arg) {
       artVideo.style.display = "block";
       currentMediaEl = artVideo;
     }
-    if (artMsg) {
-      artMsg.style.display = "block";
-      artMsg.textContent = 'Tap play (video) — Press "A" for fullscreen';
-    }
+
+    // ✅ NEW: allow metadata bubble; otherwise keep old fallback message
+    setOverlayText(
+      title,
+      description,
+      'Tap play (video) — Press "A" for fullscreen'
+    );
   } else {
     if (artImg) {
       artImg.src = url;
       artImg.style.display = "block";
       currentMediaEl = artImg;
     }
-    if (artMsg) {
-      artMsg.style.display = "block";
-      artMsg.textContent = 'Press "A" for fullscreen';
-    }
+
+    // ✅ NEW: allow metadata bubble; otherwise keep old fallback message
+    setOverlayText(
+      title,
+      description,
+      'Press "A" for fullscreen'
+    );
   }
 
   if (artOverlayEl) {
@@ -157,11 +194,13 @@ function closeArtOverlay() {
   artOpen = false;
 
   if (artOverlayEl) artOverlayEl.style.display = "none";
-  if (artMsg) artMsg.style.display = "block";
+  // ✅ old file had this set to "block" which would show bubble while overlay is closed
+  if (artMsg) artMsg.style.display = "none";
 }
 
 // Toggle fullscreen on whichever media is currently showing
 function toggleArtFullscreen() {
+  // ✅ Requirement: text disappears when fullscreen
   if (artMsg) artMsg.style.display = "none";
 
   const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
@@ -170,6 +209,7 @@ function toggleArtFullscreen() {
   if (!target) return;
 
   if (fsEl === target) {
+    // Exiting fullscreen (bubble will stay hidden until overlay re-open or you can add restore logic later)
     exitArtFullscreenIfNeeded();
     return;
   }
