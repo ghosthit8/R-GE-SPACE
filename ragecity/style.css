@@ -98,14 +98,46 @@ body {
   box-shadow: 0 0 20px rgba(57, 255, 20, 0.8);
 }
 
+/* ✅ UPDATED: overlay bubble (title + description) */
 #art-overlay-msg {
-  width: 100%;
-  text-align: center;
-  font-size: 18px;
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  width: fit-content;
+  text-align: left;
+
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(57, 255, 20, 0.85);
+  background: rgba(0, 0, 0, 0.78);
+
   color: var(--green);
   text-shadow: 0 0 8px var(--green);
-  margin-bottom: 12px;
-  display: block;
+  box-shadow: 0 0 12px rgba(57, 255, 20, 0.35);
+
+  font-size: 14px;
+  line-height: 1.35;
+
+  display: block;      /* overlay.js can still show/hide this */
+  pointer-events: none; /* never blocks clicks/taps */
+}
+
+#art-overlay-title {
+  font-weight: 800;
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+}
+
+#art-overlay-description {
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+/* If the msg is still used as plain text anywhere, keep it readable */
+#art-overlay-msg:empty {
+  display: none;
 }
 
 .controls-overlay {
