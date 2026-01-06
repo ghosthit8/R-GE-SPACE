@@ -376,50 +376,59 @@
 // --- PRIVATE BUCKET SUPPORT (art-uploads is private now) ---
 // If state contains old public storage URLs, they will 403. We convert them to signed URLs client-side.
 const __SIGNED_URL_CACHE = Object.create(null); // key: original public url -> signed url
+const __SIGNED_URL_CACHE = Object.create(null);
 
 function __needsSignedUrl(u){
-  return typeof u === "string" &&
-    u.includes("/storage/v1/object/public/") &&
-    !u.includes("/storage/v1/object/sign/");
+  return typeof u === "string"
+    && u.includes("/storage/v1/object/public/")
+    && !u.includes("/storage/v1/object/sign/");
+}
+function __alreadySigned(u){
+  return typeof u === "string" && u.includes("/storage/v1/object/sign/");
 }
 
+// Parse: /storage/v1/object/public/<bucket>/<path...>
 function __parsePublicStorageUrl(u){
   try{
     const url = new URL(u);
     const parts = url.pathname.split("/").filter(Boolean);
-    // storage/v1/object/public/<bucket>/<path...>
     const objIdx = parts.indexOf("object");
     if (objIdx === -1) return null;
-    const kind = parts[objIdx+1];
-    if (kind !== "public") return null;
-    const bucket = parts[objIdx+2];
-    const path = parts.slice(objIdx+3).join("/");
+    if (parts[objIdx + 1] !== "public") return null;
+    const bucket = parts[objIdx + 2];
+    const path = parts.slice(objIdx + 3).join("/");
     if (!bucket || !path) return null;
     return { bucket, path };
-  }catch(e){
+  } catch(e){
     return null;
   }
 }
 
-async function __ensureSignedUrl(u, expiresSec = 60*60){
+async function __toSignedUrl(u, expiresSec = 60 * 60){
+  if (!u || typeof u !== "string") return u;
+  if (__alreadySigned(u)) return u;
   if (!__needsSignedUrl(u)) return u;
+
   if (__SIGNED_URL_CACHE[u]) return __SIGNED_URL_CACHE[u];
 
   const parsed = __parsePublicStorageUrl(u);
   if (!parsed) return u;
 
   try{
-    const { data, error } = await supabase.storage.from(parsed.bucket).createSignedUrl(parsed.path, expiresSec);
-    if (!error && data?.signedUrl){
-      __SIGNED_URL_CACHE[u] = data.signedUrl;
-      return data.signedUrl;
-    }
-  }catch(e){}
-  return u;
+    const { data, error } = await supabase.storage
+      .from(parsed.bucket)
+      .createSignedUrl(parsed.path, expiresSec);
+    if (error) throw error;
+    const signed = data?.signedUrl || u;
+    __SIGNED_URL_CACHE[u] = signed;
+    return signed;
+  } catch(e){
+    console.warn("[signedUrl] failed", e);
+    return u;
+  }
 }
 
-
-  const RSID_KEY = "rsid_v2";
+const RSID_KEY = "rsid_v2";
   let RSID = localStorage.getItem(RSID_KEY);
   if (!RSID){
     RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now());
