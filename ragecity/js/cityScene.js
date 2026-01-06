@@ -392,7 +392,7 @@ function create() {
       supTexKey: null,
       scene: null,
 
-      // ✅ NEW: metadata for overlay bubble
+      // metadata for overlay bubble
       title: "",
       description: "",
     });
@@ -477,8 +477,7 @@ function create() {
         return;
       }
 
-      // ✅ NEW: Ask for title/description right after picking a file
-      // (We store these on the frame object; overlay will display them.)
+      // Ask for title/description right after picking a file
       try {
         const prevTitle = (frame.title || "").trim();
         const prevDesc = (frame.description || "").trim();
@@ -509,7 +508,7 @@ function create() {
       const texKeyLocal = `localPainting-${frameIndex}-${Date.now()}`;
       frame.localTexKey = texKeyLocal;
 
-      // ✅ MOBILE-SAFE LOCAL PREVIEW
+      // MOBILE-SAFE LOCAL PREVIEW
       try {
         const isVid = isVideoFile(file.type, file.name);
         frame.mimeType = file.type || (isVid ? "video/mp4" : "image");
@@ -573,7 +572,13 @@ function create() {
       (async () => {
         try {
           logDbg("Uploading to Supabase…");
-          const signedUrl = await uploadPaintingToSupabase(frameIndex, file);
+
+          // ✅✅✅ THE FIX: pass title/description into the upload call
+          const signedUrl = await uploadPaintingToSupabase(frameIndex, file, {
+            title: frame.title || "",
+            description: frame.description || ""
+          });
+
           if (signedUrl) {
             if (
               frame.fullUrl &&
@@ -591,6 +596,8 @@ function create() {
             console.log("[RageCity] Frame updated with Supabase SIGNED URL", {
               frameIndex,
               signedUrl,
+              title: frame.title || "",
+              description: frame.description || ""
             });
           } else {
             logDbg("Supabase upload failed ⚠");
@@ -640,7 +647,7 @@ function update(time, delta) {
   const _justPressedX = inputState.X && !prevX;
   const _justPressedY = inputState.Y && !prevY;
 
-  // ✅ overlay open behavior: ONLY A fullscreen, ONLY B close
+  // overlay open behavior: ONLY A fullscreen, ONLY B close
   if (window.artOpen) {
     if (justPressedA) window.toggleArtFullscreen();
     if (justPressedB) window.closeArtOverlay();
@@ -697,23 +704,20 @@ function update(time, delta) {
     }
   }
 
-  // ===== PROMPT TEXT (empty vs filled frames) =====
+  // PROMPT TEXT (empty vs filled frames)
   if (promptText) {
     if (nearestItem && nearestDist < PROMPT_DISTANCE) {
       promptText.setVisible(true);
 
       if (nearestItem.type === "sculpture") {
-        // sculpture keeps its own message
         promptText.setText("Press A to inspect sculpture");
       } else {
         const frame = galleryFrames[nearestItem.index];
         const hasArt = frame && !!frame.fullUrl;
 
         if (hasArt) {
-          // Frame already has art → show B + A
           promptText.setText("Press B to replace art\nPress A to view art");
         } else {
-          // Empty frame → only A
           promptText.setText("Press A to add art");
         }
       }
@@ -722,7 +726,7 @@ function update(time, delta) {
     }
   }
 
-  // ===== BUTTON ACTIONS =====
+  // BUTTON ACTIONS
   if (nearestItem && nearestDist < ACTION_DISTANCE && justPressedA) {
     if (nearestItem.type === "sculpture") {
       if (nearestItem.fullUrl) {
@@ -748,7 +752,6 @@ function update(time, delta) {
           currentPaintingIndex
         );
 
-        // ✅ NEW: pass title/description to overlay
         window.openArtOverlay({
           url: frame.fullUrl,
           mimeType: frame.mimeType || "",
