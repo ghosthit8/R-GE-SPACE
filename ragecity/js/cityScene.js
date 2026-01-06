@@ -391,6 +391,10 @@ function create() {
       storagePath: null,
       supTexKey: null,
       scene: null,
+
+      // ✅ NEW: metadata for overlay bubble
+      title: "",
+      description: "",
     });
   }
 
@@ -473,11 +477,28 @@ function create() {
         return;
       }
 
+      // ✅ NEW: Ask for title/description right after picking a file
+      // (We store these on the frame object; overlay will display them.)
+      try {
+        const prevTitle = (frame.title || "").trim();
+        const prevDesc = (frame.description || "").trim();
+
+        const t = window.prompt("Piece title:", prevTitle);
+        if (t !== null) frame.title = String(t).trim();
+
+        const d = window.prompt("Piece description:", prevDesc);
+        if (d !== null) frame.description = String(d).trim();
+      } catch (e) {
+        console.warn("[RageCity] Title/Description prompt failed:", e);
+      }
+
       console.log("[RageCity] Selected file for frame:", {
         frameIndex,
         fileName: file.name,
         fileType: file.type,
         fileSize: file.size,
+        title: frame.title || "",
+        description: frame.description || "",
       });
 
       frame.locked = true;
@@ -726,9 +747,13 @@ function update(time, delta) {
           "[RageCity] Opening overlay for existing art on frame",
           currentPaintingIndex
         );
+
+        // ✅ NEW: pass title/description to overlay
         window.openArtOverlay({
           url: frame.fullUrl,
           mimeType: frame.mimeType || "",
+          title: frame.title || "",
+          description: frame.description || "",
         });
       }
     }
