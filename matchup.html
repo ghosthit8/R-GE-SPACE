@@ -189,81 +189,9 @@
     }
     .artist-link:hover { text-decoration: underline; }
 
-    /* ===== Loading Bar Overlay ===== */
-    #loadingScreen {
-      position:fixed;
-      inset:0;
-      background:#0b0f13;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      z-index:999999;
-      color:#39ff14;
-      font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
-    }
-    .loadBox {
-      width:min(520px, 86vw);
-      border:1px solid rgba(57,255,20,.35);
-      border-radius:16px;
-      background:rgba(10,14,18,.75);
-      box-shadow:0 0 24px rgba(57,255,20,.10);
-      padding:16px 14px 14px;
-    }
-    .loadTitle {
-      font-weight:800;
-      letter-spacing:2px;
-      text-transform:uppercase;
-      font-size:14px;
-      display:flex;
-      justify-content:space-between;
-      align-items:baseline;
-      gap:10px;
-      margin-bottom:10px;
-    }
-    .loadPct {
-      font-variant-numeric:tabular-nums;
-      font-size:12px;
-      opacity:.9;
-    }
-    .loadTrack {
-      height:12px;
-      border-radius:999px;
-      background:rgba(57,255,20,.12);
-      overflow:hidden;
-      border:1px solid rgba(57,255,20,.25);
-    }
-    .loadFill {
-      height:100%;
-      width:0%;
-      background:linear-gradient(90deg, rgba(57,255,20,.25), rgba(57,255,20,1), rgba(57,255,20,.45));
-      box-shadow:0 0 18px rgba(57,255,20,.35);
-      transition:width .18s ease;
-    }
-    .loadStatus {
-      margin-top:10px;
-      font-size:12px;
-      letter-spacing:.3px;
-      color:#b8ffad;
-      opacity:.95;
-      min-height:16px;
-    }
-  </style>
+    </style>
 </head>
 <body>
-
-<!-- LOADING OVERLAY -->
-<div id="loadingScreen">
-  <div class="loadBox">
-    <div class="loadTitle">
-      <span>LOADING</span>
-      <span class="loadPct" id="loadPct">0%</span>
-    </div>
-    <div class="loadTrack" aria-label="Loading progress">
-      <div class="loadFill" id="loadFill"></div>
-    </div>
-    <div class="loadStatus" id="loadStatus">Starting…</div>
-  </div>
-</div>
 
 <div class="wrap">
   <h1 class="glitch-title" data-text="ART BATTLE. Faction I.">ART BATTLE. Faction I.</h1>
@@ -372,63 +300,7 @@
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
-
-// --- PRIVATE BUCKET SUPPORT (art-uploads is private now) ---
-// If state contains old public storage URLs, they will 403. We convert them to signed URLs client-side.
-const __SIGNED_URL_CACHE = Object.create(null); // key: original public url -> signed url
-const __SIGNED_URL_CACHE = Object.create(null);
-
-function __needsSignedUrl(u){
-  return typeof u === "string"
-    && u.includes("/storage/v1/object/public/")
-    && !u.includes("/storage/v1/object/sign/");
-}
-function __alreadySigned(u){
-  return typeof u === "string" && u.includes("/storage/v1/object/sign/");
-}
-
-// Parse: /storage/v1/object/public/<bucket>/<path...>
-function __parsePublicStorageUrl(u){
-  try{
-    const url = new URL(u);
-    const parts = url.pathname.split("/").filter(Boolean);
-    const objIdx = parts.indexOf("object");
-    if (objIdx === -1) return null;
-    if (parts[objIdx + 1] !== "public") return null;
-    const bucket = parts[objIdx + 2];
-    const path = parts.slice(objIdx + 3).join("/");
-    if (!bucket || !path) return null;
-    return { bucket, path };
-  } catch(e){
-    return null;
-  }
-}
-
-async function __toSignedUrl(u, expiresSec = 60 * 60){
-  if (!u || typeof u !== "string") return u;
-  if (__alreadySigned(u)) return u;
-  if (!__needsSignedUrl(u)) return u;
-
-  if (__SIGNED_URL_CACHE[u]) return __SIGNED_URL_CACHE[u];
-
-  const parsed = __parsePublicStorageUrl(u);
-  if (!parsed) return u;
-
-  try{
-    const { data, error } = await supabase.storage
-      .from(parsed.bucket)
-      .createSignedUrl(parsed.path, expiresSec);
-    if (error) throw error;
-    const signed = data?.signedUrl || u;
-    __SIGNED_URL_CACHE[u] = signed;
-    return signed;
-  } catch(e){
-    console.warn("[signedUrl] failed", e);
-    return u;
-  }
-}
-
-const RSID_KEY = "rsid_v2";
+  const RSID_KEY = "rsid_v2";
   let RSID = localStorage.getItem(RSID_KEY);
   if (!RSID){
     RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now());
@@ -993,34 +865,6 @@ const RSID_KEY = "rsid_v2";
     const leftKey = key + "_L";
     const rightKey = key + "_R";
 
-
-// If we have old public storage URLs (bucket is now private), asynchronously swap to signed URLs.
-if (__needsSignedUrl(leftUrl)) {
-  const originalLeft = leftUrl;
-  __ensureSignedUrl(originalLeft).then((signed)=>{
-    if (signed && signed !== originalLeft) {
-      try {
-        if (th.imgL && th.imgL.dataset.orig === originalLeft) th.imgL.src = signed;
-        if (th.vidL && th.vidL.dataset.orig === originalLeft) th.vidL.src = signed + "#t=0.1";
-        // also refresh hover-preview source if it was this url
-        if (th.box && th.box.dataset.videoUrl === originalLeft) th.box.dataset.videoUrl = signed;
-      } catch(e){}
-    }
-  });
-}
-if (__needsSignedUrl(rightUrl)) {
-  const originalRight = rightUrl;
-  __ensureSignedUrl(originalRight).then((signed)=>{
-    if (signed && signed !== originalRight) {
-      try {
-        if (th.imgR && th.imgR.dataset.orig === originalRight) th.imgR.src = signed;
-        if (th.vidR && th.vidR.dataset.orig === originalRight) th.vidR.src = signed + "#t=0.1";
-        if (th.box && th.box.dataset.videoUrl === originalRight) th.box.dataset.videoUrl = signed;
-      } catch(e){}
-    }
-  });
-}
-
     if (isRealUrl(leftUrl)) {
       lastGoodThumb[leftKey] = leftUrl;
     } else if (lastGoodThumb[leftKey]) {
@@ -1040,7 +884,6 @@ if (__needsSignedUrl(rightUrl)) {
     if (leftIsVid) {
       th.imgL.classList.add("hidden");
       th.vidL.classList.remove("hidden");
-      th.vidL.dataset.orig = leftUrl || "";
       th.vidL.src = leftUrl + "#t=0.1";
       th.vidL.preload = "metadata";
       try { th.vidL.pause(); } catch(e){}
@@ -1053,7 +896,6 @@ if (__needsSignedUrl(rightUrl)) {
     if (rightIsVid) {
       th.imgR.classList.add("hidden");
       th.vidR.classList.remove("hidden");
-      th.vidR.dataset.orig = rightUrl || "";
       th.vidR.src = rightUrl + "#t=0.1";
       th.vidR.preload = "metadata";
       try { th.vidR.pause(); } catch(e){}
@@ -1081,17 +923,6 @@ if (__needsSignedUrl(rightUrl)) {
 
     const cacheKey = which;
     let finalUrl = url;
-
-    // If we have an old public storage URL (bucket is now private), swap to a signed URL.
-    if (__needsSignedUrl(finalUrl)) {
-      const originalUrl = finalUrl;
-      __ensureSignedUrl(originalUrl).then((signed)=>{
-        if (signed && signed !== originalUrl) {
-          if (which === "active1" && activeLeftUrl === originalUrl) setActiveMedia(which, signed);
-          if (which === "active2" && activeRightUrl === originalUrl) setActiveMedia(which, signed);
-        }
-      });
-    }
 
     if (isRealUrl(finalUrl)) {
       lastGoodActive[cacheKey] = finalUrl;
@@ -1123,14 +954,6 @@ if (__needsSignedUrl(rightUrl)) {
   function setFinalMedia(idx, url){
     const img = idx===1 ? finalImg1 : finalImg2;
     const vid = idx===1 ? finalVid1 : finalVid2;
-    // If we have an old public storage URL (bucket is now private), swap to a signed URL.
-    if (__needsSignedUrl(url)) {
-      const originalUrl = url;
-      __ensureSignedUrl(originalUrl).then((signed)=>{
-        if (signed && signed !== originalUrl) setFinalMedia(idx, signed);
-      });
-    }
-
     const isVid = isVideoUrl(url);
 
     if (isVid){
@@ -1427,18 +1250,9 @@ if (__needsSignedUrl(rightUrl)) {
 
   async function fetchState(force=false){
     try{
-      const res = await fetch(`${FUNCTION_URL}?_=${Date.now()}`, {
-        headers: {
-          "apikey": SUPABASE_ANON_KEY,
-          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-        },
-        cache: "no-store"
-      });
-      const raw = await res.text();
-      let data = null;
-      try { data = JSON.parse(raw); } catch(e) { data = {}; }
-      if (!res.ok) { throw new Error(`fetchState ${res.status}`); }
-const s = (data && typeof data==="object" && "state" in data) ? data.state : data;
+      const res = await fetch(FUNCTION_URL);
+      const data = await res.json();
+      const s = (data && typeof data==="object" && "state" in data) ? data.state : data;
       state = Object.assign(state, s || {});
 
       if (!state.r32_done && !activeMatch.startsWith("rr")) activeMatch = "rr1";
@@ -1569,159 +1383,7 @@ const s = (data && typeof data==="object" && "state" in data) ? data.state : dat
 </script>
 <script src="js/auth-guard.js" type="module"></script>
 
-<!-- ===== Loading Bar Logic (replaces LOADING… text) ===== -->
-<script>
-  const loadingEl = document.getElementById("loadingScreen");
-  const loadFillEl = document.getElementById("loadFill");
-  const loadPctEl = document.getElementById("loadPct");
-  const loadStatusEl = document.getElementById("loadStatus");
 
-  const LOADER = {
-    done: false,
-    steps: {
-      authReady: false,
-      stateReady: false,
-      mediaLeft: false,
-      mediaRight: false,
-    },
-    totalCount() {
-      // 4 known steps = "accurate milestones"
-      return 4;
-    },
-    doneCount() {
-      return Object.values(this.steps).filter(Boolean).length;
-    },
-    setStatus(txt) {
-      if (loadStatusEl) loadStatusEl.textContent = txt || "";
-    },
-    render() {
-      const total = this.totalCount();
-      const done = this.doneCount();
-      const pct = total ? Math.round((done / total) * 100) : 0;
-
-      if (loadFillEl) loadFillEl.style.width = pct + "%";
-      if (loadPctEl) loadPctEl.textContent = pct + "%";
-    },
-    mark(stepKey, statusText) {
-      if (this.done) return;
-      if (stepKey && this.steps[stepKey] === false) {
-        this.steps[stepKey] = true;
-      }
-      if (statusText) this.setStatus(statusText);
-      this.render();
-
-      if (this.doneCount() >= this.totalCount()) {
-        this.finish();
-      }
-    },
-    finish() {
-      if (this.done) return;
-      this.done = true;
-      this.setStatus("Ready.");
-      this.render();
-      if (loadingEl) loadingEl.style.display = "none";
-    }
-  };
-
-  // Wait for actual image/video load events (or timeout) so the bar is real.
-  function waitForMediaLoad(url, imgEl, vidEl) {
-    return new Promise((resolve) => {
-      if (!url || typeof url !== "string") return resolve(false);
-
-      const isVid = /\.(mp4|webm|mov)(\?|#|$)/i.test(url.split("#")[0]);
-      const timeout = setTimeout(() => cleanup(false), 6500);
-
-      function cleanup(ok) {
-        clearTimeout(timeout);
-        if (isVid) {
-          if (vidEl) {
-            vidEl.removeEventListener("canplay", onOk);
-            vidEl.removeEventListener("loadeddata", onOk);
-            vidEl.removeEventListener("error", onErr);
-          }
-        } else {
-          if (imgEl) {
-            imgEl.removeEventListener("load", onOk);
-            imgEl.removeEventListener("error", onErr);
-          }
-        }
-        resolve(ok);
-      }
-
-      function onOk() { cleanup(true); }
-      function onErr() { cleanup(false); }
-
-      if (isVid) {
-        if (!vidEl) return cleanup(false);
-        // If already has enough data, count it immediately.
-        if (vidEl.readyState >= 2) return cleanup(true);
-        vidEl.addEventListener("canplay", onOk, { once:true });
-        vidEl.addEventListener("loadeddata", onOk, { once:true });
-        vidEl.addEventListener("error", onErr, { once:true });
-      } else {
-        if (!imgEl) return cleanup(false);
-        if (imgEl.complete && imgEl.naturalWidth > 0) return cleanup(true);
-        imgEl.addEventListener("load", onOk, { once:true });
-        imgEl.addEventListener("error", onErr, { once:true });
-      }
-    });
-  }
-
-  // Hook into your existing initVoteUserKey and fetchState WITHOUT changing their behavior.
-  (function wireLoaderIntoApp(){
-    LOADER.setStatus("Connecting…");
-    LOADER.render();
-
-    const originalInitVoteUserKey = initVoteUserKey;
-    initVoteUserKey = async function(){
-      LOADER.setStatus("Checking session…");
-      try {
-        const out = await originalInitVoteUserKey();
-        LOADER.mark("authReady", "Session ready.");
-        return out;
-      } catch (e) {
-        LOADER.mark("authReady", "Session ready.");
-        return originalInitVoteUserKey(); // fallback, keep behavior
-      }
-    };
-
-    const originalFetchState = fetchState;
-    fetchState = async function(force=false){
-      if (!LOADER.steps.stateReady) LOADER.setStatus("Fetching tournament state…");
-      const result = await originalFetchState(force);
-
-      if (state?.ends_at && !LOADER.steps.stateReady) {
-        LOADER.mark("stateReady", "State loaded. Loading art 1/2…");
-
-        // At this point renderActive has already run and setActiveMedia has set src.
-        // Now we wait for the ACTUAL active media elements to load/canplay.
-        const leftUrl = (typeof activeLeftUrl === "string") ? activeLeftUrl : "";
-        const rightUrl = (typeof activeRightUrl === "string") ? activeRightUrl : "";
-
-        // Left
-        waitForMediaLoad(leftUrl, imgActive1, vidActive1).then(()=>{
-          LOADER.mark("mediaLeft", "Loading art 2/2…");
-        });
-
-        // Right
-        waitForMediaLoad(rightUrl, imgActive2, vidActive2).then(()=>{
-          LOADER.mark("mediaRight", "Finalizing…");
-        });
-      }
-
-      return result;
-    };
-
-    const originalTick = tick;
-    tick = function(){
-      // If something goes wrong but the timer starts, don't leave them stuck.
-      if (state?.ends_at && !LOADER.steps.stateReady) {
-        LOADER.mark("stateReady", "State loaded. Loading art…");
-      }
-      originalTick();
-    };
-  })();
-</script>
 
 </body>
 </html>
