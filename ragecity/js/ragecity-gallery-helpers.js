@@ -8,7 +8,7 @@ const PAINTINGS_TABLE = "ragecity_paintings";
 // Log once when this file loads so we know if Supabase is there
 console.log("[RageCity] gallery helpers loaded. Supabase present?", !!window.supabase);
 // Version marker so you can verify you're loading the new file
-console.log("[RageCity] Gallery Helpers VERSION: title_desc_persist_2026-01-05_v1");
+console.log("[RageCity] Gallery Helpers VERSION: abxy_xy_title_desc_2025-12-31_v1");
 
 // ===== RageCity Media Helpers (images + videos + private buckets) =====
 const SIGNED_URL_EXPIRES_SECONDS = 60 * 30; // 30 minutes
@@ -17,7 +17,12 @@ function isVideoFile(mimeType, pathOrUrl) {
   const mt = (mimeType || "").toLowerCase();
   if (mt.startsWith("video/")) return true;
   const s = String(pathOrUrl || "").toLowerCase();
-  return s.endsWith(".mp4") || s.endsWith(".webm") || s.endsWith(".mov") || s.endsWith(".m4v");
+  return (
+    s.endsWith(".mp4") ||
+    s.endsWith(".webm") ||
+    s.endsWith(".mov") ||
+    s.endsWith(".m4v")
+  );
 }
 
 async function getSignedUrl(bucket, path, expiresSeconds = SIGNED_URL_EXPIRES_SECONDS) {
@@ -30,77 +35,47 @@ async function getSignedUrl(bucket, path, expiresSeconds = SIGNED_URL_EXPIRES_SE
   return data?.signedUrl || null;
 }
 
-// =============================================================
-// Frame cleanup helpers
-// =============================================================
 function clearFrameMedia(frame) {
   if (!frame) return;
 
-  // Remove old image sprite
-  if (frame.img && frame.img.destroy) {
+  if (frame.img) {
     try { frame.img.destroy(); } catch (_) {}
+    frame.img = null;
   }
-  frame.img = null;
 
-  // Remove old play icon if it exists
-  if (frame.playIcon && frame.playIcon.destroy) {
+  if (frame.playIcon) {
     try { frame.playIcon.destroy(); } catch (_) {}
-  }
-  frame.playIcon = null;
-
-  // Remove any old textures we created
-  if (frame.scene && frame.scene.textures) {
-    try {
-      if (frame.localTexKey && frame.scene.textures.exists(frame.localTexKey)) {
-        frame.scene.textures.remove(frame.localTexKey);
-      }
-      if (frame.supTexKey && frame.scene.textures.exists(frame.supTexKey)) {
-        frame.scene.textures.remove(frame.supTexKey);
-      }
-    } catch (_) {}
+    frame.playIcon = null;
   }
 
+  // Remove previous local texture key (if any)
+  if (frame.localTexKey && frame.scene && frame.scene.textures && frame.scene.textures.exists(frame.localTexKey)) {
+    try { frame.scene.textures.remove(frame.localTexKey); } catch (_) {}
+  }
   frame.localTexKey = null;
-  frame.supTexKey = null;
-
-  // Keep fullUrl/storagePath/mimeType; those are your current record
+  frame.mediaKind = null;
+  frame.mimeType = "";
 }
 
-// Video marker for thumbnails
 function attachVideoMarker(scene, frame) {
-  if (!scene || !frame) return;
-
-  // remove existing marker first
-  if (frame.playIcon && frame.playIcon.destroy) {
+  // Simple neon play marker inside the frame (since we can't texture-preview a video reliably)
+  if (frame.playIcon) {
     try { frame.playIcon.destroy(); } catch (_) {}
   }
-
-  const g = scene.add.graphics();
-  g.lineStyle(2, 0x39ff14, 1);
-  g.fillStyle(0x000000, 0.55);
-
-  const radius = 12;
-  g.fillCircle(frame.x, frame.y, radius);
-  g.strokeCircle(frame.x, frame.y, radius);
-
-  // Play triangle
-  g.fillStyle(0x39ff14, 0.95);
-  g.beginPath();
-  g.moveTo(frame.x - 4, frame.y - 6);
-  g.lineTo(frame.x - 4, frame.y + 6);
-  g.lineTo(frame.x + 7, frame.y);
-  g.closePath();
-  g.fillPath();
-
-  g.setDepth(11);
-
-  // store as playIcon so clearFrameMedia() removes it
-  frame.playIcon = g;
+  frame.playIcon = scene.add.text(frame.x, frame.y, "▶", {
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontSize: "18px",
+    color: "#39ff14"
+  });
+  frame.playIcon.setOrigin(0.5);
+  frame.playIcon.setDepth(11);
+  scene.children.bringToTop(frame.playIcon);
 }
+// ===== end helpers =====
 
-// =============================================================
-// Load all paintings/videos from Supabase table into frames
-// =============================================================
+// Load all painting media from Supabase and apply to frames
+// Supports both legacy public "image_url" AND private-bucket rows saved as "storage_path" + "mime_type"
+// NEW: also loads title + description so overlay bubble can show them.
 async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
   if (!window.supabase) {
     console.warn("[RageCity] Supabase client missing; skipping shared gallery load.");
@@ -110,7 +85,6 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
   try {
     console.log("[RageCity] Loading paintings from Supabase table:", PAINTINGS_TABLE);
 
-    // ✅ NEW: also load title + description
     const { data, error } = await window.supabase
       .from(PAINTINGS_TABLE)
       .select("frame_index, storage_path, mime_type, image_url, title, description");
@@ -125,7 +99,7 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
       return;
     }
 
-    // Resolve each row into a usable URL (signed URL when storage_path exists)
+    // Resolve URLs first (signed if private bucket + storage_path, otherwise legacy public image_url)
     const resolved = await Promise.all(
       data.map(async (row) => {
         const idx = row.frame_index;
@@ -135,6 +109,8 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
         if (!frame || frame.locked) return null;
 
         const mimeType = row.mime_type || "";
+        const title = row.title || "";
+        const description = row.description || "";
 
         // Prefer storage_path when present (private bucket compatible)
         if (row.storage_path) {
@@ -145,46 +121,32 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
               url: signedUrl,
               mimeType,
               storagePath: row.storage_path,
-              title: row.title || "",
-              description: row.description || ""
+              title,
+              description
             };
           } catch (e) {
-            console.warn("[RageCity] Failed to sign URL for", row.storage_path, e);
-            return {
-              idx,
-              url: null,
-              mimeType,
-              storagePath: row.storage_path,
-              title: row.title || "",
-              description: row.description || ""
-            };
+            console.error("[RageCity] Signed URL error for", row.storage_path, e);
+            return null;
           }
         }
 
-        // Legacy support (public buckets / old schema)
+        // Legacy fallback (public URL stored in DB)
         if (row.image_url) {
           return {
             idx,
             url: row.image_url,
             mimeType,
             storagePath: null,
-            title: row.title || "",
-            description: row.description || ""
+            title,
+            description
           };
         }
 
-        return {
-          idx,
-          url: null,
-          mimeType,
-          storagePath: null,
-          title: row.title || "",
-          description: row.description || ""
-        };
+        return null;
       })
     );
 
-    const rows = resolved.filter(Boolean).filter((r) => !!r.url);
+    const rows = resolved.filter(Boolean);
     if (!rows.length) return;
 
     // Queue image loads; videos don't go through the loader
@@ -217,20 +179,19 @@ async function loadPaintingsFromSupabase(scene, imgDisplaySize) {
         // Keep a backref for clearFrameMedia()
         frame.scene = scene;
 
-        // ✅ NEW: apply persisted metadata
-        frame.title = (r.title || "").toString();
-        frame.description = (r.description || "").toString();
-
         const isVid = isVideoFile(r.mimeType, r.url);
 
         clearFrameMedia(frame);
+
+        // Keep metadata regardless of media kind
+        frame.title = r.title || "";
+        frame.description = r.description || "";
 
         if (isVid) {
           frame.mediaKind = "video";
           frame.mimeType = r.mimeType || "video/mp4";
           frame.fullUrl = r.url;        // signed or legacy url
           frame.storagePath = r.storagePath || null;
-
           attachVideoMarker(scene, frame);
           console.log("[RageCity] Applied VIDEO to frame", r.idx, r.url);
           return;
@@ -273,14 +234,11 @@ async function deleteOldPaintingFromSupabase(frameIndex) {
       .from(PAINTINGS_TABLE)
       .select("storage_path")
       .eq("frame_index", frameIndex)
-      .maybeSingle();
+      .single();
 
-    if (error) {
-      console.warn("[RageCity] Failed to look up old painting record:", error);
-      return;
-    }
+    if (error || !data?.storage_path) return;
 
-    if (!data || !data.storage_path) return;
+    console.log("[RageCity] Deleting old file:", data.storage_path);
 
     const { error: delErr } = await window.supabase
       .storage
@@ -296,13 +254,17 @@ async function deleteOldPaintingFromSupabase(frameIndex) {
 }
 
 // Upload a file to Supabase bucket + upsert DB row.
-// IMPORTANT: For PRIVATE buckets, we save storage_path + mime_type,
-// and we return a fresh signed URL for immediate use.
+// IMPORTANT: For PRIVATE buckets, we save storage_path + mime_type (NOT a signed URL)
+// and return a fresh signed URL for immediate use.
+// NEW: accepts { title, description } metadata for overlay bubble.
 async function uploadPaintingToSupabase(frameIndex, file, meta = {}) {
   if (!window.supabase) {
     console.warn("[RageCity] Supabase client missing; cannot upload.");
     return null;
   }
+
+  const title = meta.title || "";
+  const description = meta.description || "";
 
   try {
     const mimeType = file.type || "";
@@ -311,38 +273,46 @@ async function uploadPaintingToSupabase(frameIndex, file, meta = {}) {
     const extFromMime = (mimeType.includes("/") ? mimeType.split("/")[1] : "") || "";
     const ext = (extFromName || extFromMime || "bin").toLowerCase();
 
-    // ✅ NEW: optional metadata to persist
-    const title = (meta && meta.title != null) ? String(meta.title).trim() : "";
-    const description = (meta && meta.description != null) ? String(meta.description).trim() : "";
-
     // ✅ Delete previous file first (Option A)
     await deleteOldPaintingFromSupabase(frameIndex);
 
-    const filePath = `frame_${frameIndex}.${Date.now()}.${ext}`;
+    // versioned filename so each replace gets a new path
+    const timestamp = Date.now();
+    const fileName = `painting_${frameIndex}_${timestamp}.${ext}`;
+    const filePath = `paintings/${fileName}`;
 
-    // Upload file to storage
+    console.log("[RageCity] Starting upload to Supabase:", {
+      bucket: GALLERY_BUCKET,
+      filePath,
+      frameIndex,
+      fileType: mimeType,
+      fileSize: file.size,
+    });
+
     const { data: uploadData, error: uploadError } = await window.supabase
       .storage
       .from(GALLERY_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: mimeType || undefined
-      });
+      .upload(filePath, file, { upsert: true });
 
     if (uploadError) {
-      console.error("[RageCity] Error uploading file to storage:", uploadError);
+      console.error("[RageCity] Error uploading painting to bucket:", uploadError);
       alert("RageCity upload error (Storage): " + uploadError.message);
       return null;
     }
 
     console.log("[RageCity] Storage upload success:", uploadData);
 
-    // Upsert row in DB (store storage_path; signed URLs expire so do NOT store them)
+    // Save DB row (private-bucket friendly) + metadata
     const { data: upsertData, error: upsertError } = await window.supabase
       .from(PAINTINGS_TABLE)
       .upsert(
-        { frame_index: frameIndex, storage_path: filePath, mime_type: mimeType, title, description },
+        {
+          frame_index: frameIndex,
+          storage_path: filePath,
+          mime_type: mimeType,
+          title,
+          description,
+        },
         { onConflict: "frame_index" }
       );
 
@@ -362,18 +332,17 @@ async function uploadPaintingToSupabase(frameIndex, file, meta = {}) {
       console.error("[RageCity] Error creating signed URL:", e);
     }
 
-    console.log("[RageCity] Upload + DB save complete for frame", frameIndex, { signedUrl, filePath, mimeType, title, description });
+    console.log("[RageCity] Upload + DB save complete for frame", frameIndex, {
+      signedUrl,
+      filePath,
+      mimeType,
+      title,
+      description,
+    });
     return signedUrl;
   } catch (err) {
     console.error("[RageCity] Unexpected error uploading painting:", err);
-    alert("RageCity upload error: " + (err?.message || err));
+    alert("RageCity upload error (unexpected): " + err.message);
     return null;
   }
 }
-
-// Expose helpers globally so CityScene can call them
-window.isVideoFile = window.isVideoFile || isVideoFile;
-window.clearFrameMedia = window.clearFrameMedia || clearFrameMedia;
-window.attachVideoMarker = window.attachVideoMarker || attachVideoMarker;
-window.loadPaintingsFromSupabase = window.loadPaintingsFromSupabase || loadPaintingsFromSupabase;
-window.uploadPaintingToSupabase = window.uploadPaintingToSupabase || uploadPaintingToSupabase;
