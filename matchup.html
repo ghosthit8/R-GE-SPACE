@@ -302,33 +302,6 @@
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
-  // ---- Timer fallback: load cycle directly from DB (works even if edge function fails) ----
-  async function loadCycleFromDB(){
-    try{
-      const url = `${SUPABASE_URL}/rest/v1/cycles_v2?select=ends_at,period_sec,base_iso&order=ends_at.desc&limit=1`;
-      const res = await fetch(url, {
-        method: "GET",
-        headers: {
-          "apikey": SUPABASE_ANON_KEY,
-          "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-          "Accept": "application/json",
-          "Cache-Control": "no-store"
-        }
-      });
-      if (!res.ok) throw new Error("cycles_v2 HTTP " + res.status);
-      const rows = await res.json();
-      const row = Array.isArray(rows) ? rows[0] : rows;
-      if (row && row.ends_at){
-        state.ends_at = row.ends_at;
-        state.period_sec = row.period_sec ?? state.period_sec;
-        state.base_iso = row.base_iso ?? state.base_iso;
-      }
-    }catch(err){
-      // keep silent (we don't want to crash the UI), but log for debugging
-      console.log("loadCycleFromDB failed:", err?.message || err);
-    }
-  }
-
   const RSID_KEY = "rsid_v2";
   let RSID = localStorage.getItem(RSID_KEY);
   if (!RSID){
@@ -1279,15 +1252,7 @@
 
   async function fetchState(force=false){
     try{
-      const res = await fetch(FUNCTION_URL + "?_=" + Date.now(), {
-        method: "GET",
-        headers: {
-          "apikey": SUPABASE_ANON_KEY,
-          "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-          "Cache-Control": "no-store"
-        }
-      });
-      if (!res.ok) throw new Error("global-timer-v2 HTTP " + res.status);
+      const res = await fetch(FUNCTION_URL);
       const data = await res.json();
       const s = (data && typeof data==="object" && "state" in data) ? data.state : data;
       state = Object.assign(state, s || {});
@@ -1412,25 +1377,11 @@
     .subscribe();
 
   initVoteUserKey();
-  loadCycleFromDB().then(()=>fetchState(true)).then(()=>{
+  fetchState(true).then(()=>{
     setTimeout(()=>fetchState(true), 600);
     setTimeout(()=>fetchState(true), 1500);
     tick();
   });
-  setInterval(loadCycleFromDB, 30000);
-  // ===== FORCE TIMER/STATE BOOT (delayed so debugger & browser caching can't hide it) =====
-  setTimeout(async ()=>{
-    try{
-      console.log("TIMER_BOOT: forcing cycles_v2 + global-timer fetch");
-      await loadCycleFromDB();            // DB timer pull
-      await fetchState(true);             // edge function pull
-      console.log("TIMER_BOOT: ends_at =", state?.ends_at, "period_sec =", state?.period_sec);
-    }catch(e){
-      console.log("TIMER_BOOT failed:", e?.message || e);
-    }
-  }, 2200);
-
-
 </script>
 <script src="js/auth-guard.js" type="module"></script>
 
@@ -1591,6 +1542,48 @@
       originalTick();
     };
   })();
+</script>
+
+
+<script>
+/* ===== FORCE TIMER FETCH (logs in your debugger via fetch wrapper) ===== */
+(function(){
+  const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+  const restUrl = `${SUPABASE_URL}/rest/v1/cycles_v2?select=id,ends_at,period_sec,base_iso&order=ends_at.desc&limit=1&_=${Date.now()}`;
+  const fnUrl = `${SUPABASE_URL}/functions/v1/global-timer-v2?_=${Date.now()}`;
+
+  function fire(){
+    try{
+      fetch(restUrl, {
+        method: "GET",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+          "Accept": "application/json",
+          "Cache-Control": "no-store"
+        }
+      }).catch(()=>{});
+    }catch(e){}
+
+    try{
+      fetch(fnUrl, {
+        method: "GET",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+          "Accept": "application/json",
+          "Cache-Control": "no-store"
+        }
+      }).catch(()=>{});
+    }catch(e){}
+  }
+
+  // Wait a beat so your debugger wrapper is definitely installed.
+  setTimeout(fire, 2200);
+  // And retry a few times so we can see something even if tab visibility changes.
+  setInterval(fire, 15000);
+})();
 </script>
 <!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
 <script>
