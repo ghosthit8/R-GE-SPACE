@@ -189,81 +189,11 @@
     }
     .artist-link:hover { text-decoration: underline; }
 
-    /* ===== Loading Bar Overlay ===== */
-    #loadingScreen {
-      position:fixed;
-      inset:0;
-      background:#0b0f13;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      z-index:999999;
-      color:#39ff14;
-      font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
-    }
-    .loadBox {
-      width:min(520px, 86vw);
-      border:1px solid rgba(57,255,20,.35);
-      border-radius:16px;
-      background:rgba(10,14,18,.75);
-      box-shadow:0 0 24px rgba(57,255,20,.10);
-      padding:16px 14px 14px;
-    }
-    .loadTitle {
-      font-weight:800;
-      letter-spacing:2px;
-      text-transform:uppercase;
-      font-size:14px;
-      display:flex;
-      justify-content:space-between;
-      align-items:baseline;
-      gap:10px;
-      margin-bottom:10px;
-    }
-    .loadPct {
-      font-variant-numeric:tabular-nums;
-      font-size:12px;
-      opacity:.9;
-    }
-    .loadTrack {
-      height:12px;
-      border-radius:999px;
-      background:rgba(57,255,20,.12);
-      overflow:hidden;
-      border:1px solid rgba(57,255,20,.25);
-    }
-    .loadFill {
-      height:100%;
-      width:0%;
-      background:linear-gradient(90deg, rgba(57,255,20,.25), rgba(57,255,20,1), rgba(57,255,20,.45));
-      box-shadow:0 0 18px rgba(57,255,20,.35);
-      transition:width .18s ease;
-    }
-    .loadStatus {
-      margin-top:10px;
-      font-size:12px;
-      letter-spacing:.3px;
-      color:#b8ffad;
-      opacity:.95;
-      min-height:16px;
-    }
-  </style>
+    </style>
 </head>
 <body>
 
-<!-- LOADING OVERLAY -->
-<div id="loadingScreen">
-  <div class="loadBox">
-    <div class="loadTitle">
-      <span>LOADING</span>
-      <span class="loadPct" id="loadPct">0%</span>
-    </div>
-    <div class="loadTrack" aria-label="Loading progress">
-      <div class="loadFill" id="loadFill"></div>
-    </div>
-    <div class="loadStatus" id="loadStatus">Starting…</div>
-  </div>
-</div>
+
 
 <div class="wrap">
   <h1 class="glitch-title" data-text="ART BATTLE. Faction I.">ART BATTLE. Faction I.</h1>
@@ -370,34 +300,7 @@
   const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  
-  // ===== Timer DB fallback helpers (keeps timer working even if Edge Function fails) =====
-  function normalizeCycleState(raw){
-    const s = (raw && typeof raw === "object") ? { ...raw } : {};
-    // common aliases (in case the function returns camelCase)
-    if (!s.ends_at && s.endsAt) s.ends_at = s.endsAt;
-    if (!s.base_iso && (s.baseIso || s.baseISO)) s.base_iso = s.baseIso || s.baseISO;
-    if (!s.period_sec && s.periodSec) s.period_sec = s.periodSec;
-    return s;
-  }
-
-  async function loadCycleFromDB(){
-    try{
-      const { data, error } = await supabase
-        .from("cycles_v2")
-        .select("ends_at, period_sec, base_iso, r32_done, r16_done, mid1_done, mid2_done, mid_done")
-        .order("ends_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error || !data) return null;
-      return normalizeCycleState(data);
-    }catch(e){
-      return null;
-    }
-  }
-
-const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
+  const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
   const RSID_KEY = "rsid_v2";
   let RSID = localStorage.getItem(RSID_KEY);
@@ -1349,28 +1252,10 @@ const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
   async function fetchState(force=false){
     try{
-      // Try Edge Function first (it may also advance phases)
-      const url = FUNCTION_URL + (FUNCTION_URL.includes("?") ? "&" : "?") + "_=" + Date.now();
-      const res = await fetch(url, {
-        headers: {
-          "apikey": SUPABASE_ANON_KEY,
-          "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-          "Cache-Control": "no-store"
-        }
-      });
-
-      let data = null;
-      try { data = await res.json(); } catch(e) { data = null; }
-
-      const raw = (data && typeof data === "object" && "state" in data) ? data.state : data;
-      const s = normalizeCycleState(raw || {});
-      state = Object.assign(state, s);
-
-      // If we still don't have ends_at, fall back to DB so the timer works no matter what.
-      if (!state.ends_at){
-        const dbs = await loadCycleFromDB();
-        if (dbs && dbs.ends_at) state = Object.assign(state, dbs);
-      }
+      const res = await fetch(FUNCTION_URL);
+      const data = await res.json();
+      const s = (data && typeof data==="object" && "state" in data) ? data.state : data;
+      state = Object.assign(state, s || {});
 
       if (!state.r32_done && !activeMatch.startsWith("rr")) activeMatch = "rr1";
       if (state.r32_done && !state.r16_done &&
@@ -1383,11 +1268,6 @@ const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
       renderActive();
       updateCurrentRoundLabel();
     }catch(e){
-      // Edge Function failed — timer still must run
-      try{
-        const dbs = await loadCycleFromDB();
-        if (dbs && dbs.ends_at) state = Object.assign(state, dbs);
-      }catch(_e){}
       renderActive();
       updateCurrentRoundLabel();
     }
@@ -1497,17 +1377,6 @@ const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
     .subscribe();
 
   initVoteUserKey();
-
-  // Preload timer directly from DB so the countdown works even if the Edge Function is blocked.
-  loadCycleFromDB().then((dbs)=>{
-    if (dbs && dbs.ends_at){
-      state = Object.assign(state, dbs);
-      renderActive();
-      updateCurrentRoundLabel();
-      tick();
-    }
-  });
-
   fetchState(true).then(()=>{
     setTimeout(()=>fetchState(true), 600);
     setTimeout(()=>fetchState(true), 1500);
@@ -1522,6 +1391,10 @@ const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
   const loadFillEl = document.getElementById("loadFill");
   const loadPctEl = document.getElementById("loadPct");
   const loadStatusEl = document.getElementById("loadStatus");
+
+  // (Loader UI removed)
+  if (loadingEl) loadingEl.remove();
+
 
   const LOADER = {
     done: false,
@@ -1542,6 +1415,7 @@ const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
       if (loadStatusEl) loadStatusEl.textContent = txt || "";
     },
     render() {
+      if (!loadingEl || !loadFillEl || !loadPctEl) return;
       const total = this.totalCount();
       const done = this.doneCount();
       const pct = total ? Math.round((done / total) * 100) : 0;
