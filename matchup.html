@@ -1418,6 +1418,18 @@
     tick();
   });
   setInterval(loadCycleFromDB, 30000);
+  // ===== FORCE TIMER/STATE BOOT (delayed so debugger & browser caching can't hide it) =====
+  setTimeout(async ()=>{
+    try{
+      console.log("TIMER_BOOT: forcing cycles_v2 + global-timer fetch");
+      await loadCycleFromDB();            // DB timer pull
+      await fetchState(true);             // edge function pull
+      console.log("TIMER_BOOT: ends_at =", state?.ends_at, "period_sec =", state?.period_sec);
+    }catch(e){
+      console.log("TIMER_BOOT failed:", e?.message || e);
+    }
+  }, 2200);
+
 
 </script>
 <script src="js/auth-guard.js" type="module"></script>
