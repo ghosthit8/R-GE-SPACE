@@ -247,9 +247,49 @@
       opacity:.95;
       min-height:16px;
     }
-  </style>
+  
+/* === FORCE-HIDE LOADER (build NOLOADER_BUILD_2026-01-07_v1) === */
+#loadingScreen, #loader, #loadingOverlay, #loading, .loadingScreen, .loading-overlay, .loader, .loading {
+  display:none !important;
+  visibility:hidden !important;
+  pointer-events:none !important;
+  opacity:0 !important;
+}
+/* On-top build stamp so we can confirm cache */
+#buildStamp {
+  position:fixed;
+  top:8px; left:8px;
+  z-index:999999;
+  padding:6px 10px;
+  border:1px solid rgba(57,255,20,.35);
+  border-radius:12px;
+  background:rgba(0,0,0,.55);
+  color:#39ff14;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size:12px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  box-shadow: 0 0 16px rgba(57,255,20,.18);
+}
+</style>
 </head>
 <body>
+  <div id="buildStamp">NOLOADER_BUILD_2026-01-07_v1</div>
+<script>
+/* build NOLOADER_BUILD_2026-01-07_v1: remove any loader nodes even if injected later */
+(function(){
+  function nuke(){
+    const ids=["loadingScreen","loader","loadingOverlay","loading"];
+    ids.forEach(id=>{ const el=document.getElementById(id); if(el) el.remove(); });
+    document.querySelectorAll('.loadingScreen,.loading-overlay,.loader,.loading').forEach(el=>el.remove());
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", nuke);
+  else nuke();
+  setTimeout(nuke, 200);
+  setTimeout(nuke, 1000);
+})();
+</script>
+
 
 <!-- LOADING OVERLAY -->
 <div id="loadingScreen">
@@ -371,53 +411,6 @@
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
-
-
-// --- PRIVATE BUCKET SUPPORT (art-uploads is private now) ---
-// If state contains old public storage URLs, they will 403. We convert them to signed URLs client-side.
-const __SIGNED_URL_CACHE = Object.create(null); // key: original public url -> signed url
-
-function __needsSignedUrl(u){
-  return typeof u === "string" &&
-    u.includes("/storage/v1/object/public/") &&
-    !u.includes("/storage/v1/object/sign/");
-}
-
-function __parsePublicStorageUrl(u){
-  try{
-    const url = new URL(u);
-    const parts = url.pathname.split("/").filter(Boolean);
-    // storage/v1/object/public/<bucket>/<path...>
-    const objIdx = parts.indexOf("object");
-    if (objIdx === -1) return null;
-    const kind = parts[objIdx+1];
-    if (kind !== "public") return null;
-    const bucket = parts[objIdx+2];
-    const path = parts.slice(objIdx+3).join("/");
-    if (!bucket || !path) return null;
-    return { bucket, path };
-  }catch(e){
-    return null;
-  }
-}
-
-async function __ensureSignedUrl(u, expiresSec = 60*60){
-  if (!__needsSignedUrl(u)) return u;
-  if (__SIGNED_URL_CACHE[u]) return __SIGNED_URL_CACHE[u];
-
-  const parsed = __parsePublicStorageUrl(u);
-  if (!parsed) return u;
-
-  try{
-    const { data, error } = await supabase.storage.from(parsed.bucket).createSignedUrl(parsed.path, expiresSec);
-    if (!error && data?.signedUrl){
-      __SIGNED_URL_CACHE[u] = data.signedUrl;
-      return data.signedUrl;
-    }
-  }catch(e){}
-  return u;
-}
-
 
   const RSID_KEY = "rsid_v2";
   let RSID = localStorage.getItem(RSID_KEY);
@@ -984,34 +977,6 @@ async function __ensureSignedUrl(u, expiresSec = 60*60){
     const leftKey = key + "_L";
     const rightKey = key + "_R";
 
-
-// If we have old public storage URLs (bucket is now private), asynchronously swap to signed URLs.
-if (__needsSignedUrl(leftUrl)) {
-  const originalLeft = leftUrl;
-  __ensureSignedUrl(originalLeft).then((signed)=>{
-    if (signed && signed !== originalLeft) {
-      try {
-        if (th.imgL && th.imgL.dataset.orig === originalLeft) th.imgL.src = signed;
-        if (th.vidL && th.vidL.dataset.orig === originalLeft) th.vidL.src = signed + "#t=0.1";
-        // also refresh hover-preview source if it was this url
-        if (th.box && th.box.dataset.videoUrl === originalLeft) th.box.dataset.videoUrl = signed;
-      } catch(e){}
-    }
-  });
-}
-if (__needsSignedUrl(rightUrl)) {
-  const originalRight = rightUrl;
-  __ensureSignedUrl(originalRight).then((signed)=>{
-    if (signed && signed !== originalRight) {
-      try {
-        if (th.imgR && th.imgR.dataset.orig === originalRight) th.imgR.src = signed;
-        if (th.vidR && th.vidR.dataset.orig === originalRight) th.vidR.src = signed + "#t=0.1";
-        if (th.box && th.box.dataset.videoUrl === originalRight) th.box.dataset.videoUrl = signed;
-      } catch(e){}
-    }
-  });
-}
-
     if (isRealUrl(leftUrl)) {
       lastGoodThumb[leftKey] = leftUrl;
     } else if (lastGoodThumb[leftKey]) {
@@ -1031,7 +996,6 @@ if (__needsSignedUrl(rightUrl)) {
     if (leftIsVid) {
       th.imgL.classList.add("hidden");
       th.vidL.classList.remove("hidden");
-      th.vidL.dataset.orig = leftUrl || "";
       th.vidL.src = leftUrl + "#t=0.1";
       th.vidL.preload = "metadata";
       try { th.vidL.pause(); } catch(e){}
@@ -1044,7 +1008,6 @@ if (__needsSignedUrl(rightUrl)) {
     if (rightIsVid) {
       th.imgR.classList.add("hidden");
       th.vidR.classList.remove("hidden");
-      th.vidR.dataset.orig = rightUrl || "";
       th.vidR.src = rightUrl + "#t=0.1";
       th.vidR.preload = "metadata";
       try { th.vidR.pause(); } catch(e){}
@@ -1072,17 +1035,6 @@ if (__needsSignedUrl(rightUrl)) {
 
     const cacheKey = which;
     let finalUrl = url;
-
-    // If we have an old public storage URL (bucket is now private), swap to a signed URL.
-    if (__needsSignedUrl(finalUrl)) {
-      const originalUrl = finalUrl;
-      __ensureSignedUrl(originalUrl).then((signed)=>{
-        if (signed && signed !== originalUrl) {
-          if (which === "active1" && activeLeftUrl === originalUrl) setActiveMedia(which, signed);
-          if (which === "active2" && activeRightUrl === originalUrl) setActiveMedia(which, signed);
-        }
-      });
-    }
 
     if (isRealUrl(finalUrl)) {
       lastGoodActive[cacheKey] = finalUrl;
@@ -1114,14 +1066,6 @@ if (__needsSignedUrl(rightUrl)) {
   function setFinalMedia(idx, url){
     const img = idx===1 ? finalImg1 : finalImg2;
     const vid = idx===1 ? finalVid1 : finalVid2;
-    // If we have an old public storage URL (bucket is now private), swap to a signed URL.
-    if (__needsSignedUrl(url)) {
-      const originalUrl = url;
-      __ensureSignedUrl(originalUrl).then((signed)=>{
-        if (signed && signed !== originalUrl) setFinalMedia(idx, signed);
-      });
-    }
-
     const isVid = isVideoUrl(url);
 
     if (isVid){
@@ -1418,18 +1362,9 @@ if (__needsSignedUrl(rightUrl)) {
 
   async function fetchState(force=false){
     try{
-      const res = await fetch(`${FUNCTION_URL}?_=${Date.now()}`, {
-        headers: {
-          "apikey": SUPABASE_ANON_KEY,
-          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-        },
-        cache: "no-store"
-      });
-      const raw = await res.text();
-      let data = null;
-      try { data = JSON.parse(raw); } catch(e) { data = {}; }
-      if (!res.ok) { throw new Error(`fetchState ${res.status}`); }
-const s = (data && typeof data==="object" && "state" in data) ? data.state : data;
+      const res = await fetch(FUNCTION_URL);
+      const data = await res.json();
+      const s = (data && typeof data==="object" && "state" in data) ? data.state : data;
       state = Object.assign(state, s || {});
 
       if (!state.r32_done && !activeMatch.startsWith("rr")) activeMatch = "rr1";
