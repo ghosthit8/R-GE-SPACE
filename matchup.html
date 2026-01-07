@@ -4,680 +4,1589 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Rage Space — Matchup (32-up → 2-up)</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <style>
-    :root{
-      --green:#39ff14;
-      --ink:#030807;
-      --panel:#06140f;
-      --panel2:#04100c;
-      --red:#ff3b3b;
-      --blue:#3aa6ff;
-      --muted:#0a2a1d;
-      --line:rgba(57,255,20,.22);
-      --glow:0 0 14px rgba(57,255,20,.35);
-      --glow2:0 0 22px rgba(57,255,20,.25);
-      --mono:'Share Tech Mono', ui-monospace, Menlo, Consolas, monospace;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family:var(--mono);
-      background:
-        radial-gradient(1200px 800px at 50% -10%, rgba(57,255,20,.15), transparent 55%),
-        radial-gradient(900px 600px at 10% 30%, rgba(57,255,20,.08), transparent 60%),
-        radial-gradient(900px 600px at 90% 60%, rgba(57,255,20,.06), transparent 60%),
-        linear-gradient(180deg, #010504 0%, #010705 40%, #000 100%);
-      color:var(--green);
-      overflow-x:hidden;
-    }
+    :root { --fg:#e5e7eb; --bg:#0b0f13; --accent:#39ff14; --muted:#8b8b8b; --card:#0f1318; --border:#20242a; }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
+    .wrap { max-width:700px; margin:0 auto; padding:16px 12px 96px; }
+    h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
+    .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid var(--border); border-radius:12px; background:var(--card); }
+    .state { color:var(--muted); font-size:12px; }
 
-    /* Scanlines */
-    body:before{
-      content:"";
-      position:fixed; inset:0;
-      pointer-events:none;
-      background:
-        repeating-linear-gradient(0deg,
-          rgba(255,255,255,.02) 0px,
-          rgba(255,255,255,.02) 1px,
-          rgba(0,0,0,.03) 2px,
-          rgba(0,0,0,.03) 4px);
-      mix-blend-mode:overlay;
-      opacity:.35;
-    }
+    .round-label { font-size:13px; color:var(--muted); }
 
-    header{
-      position:sticky; top:0; z-index:5;
-      backdrop-filter: blur(10px);
-      background:rgba(0,0,0,.55);
-      border-bottom:1px solid var(--line);
-      box-shadow:0 10px 30px rgba(0,0,0,.45);
-    }
-    .topbar{
-      max-width:1200px;
-      margin:0 auto;
-      padding:12px 14px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-    }
-    .brand{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      min-width:220px;
-    }
-    .logo{
-      width:10px;height:34px;border-radius:2px;
-      background:linear-gradient(180deg, rgba(57,255,20,1), rgba(57,255,20,.2));
-      box-shadow:var(--glow);
-    }
-    .titlewrap{line-height:1.05}
-    .title{
-      font-size:16px;
-      letter-spacing:.18em;
-      text-transform:uppercase;
-      text-shadow:var(--glow2);
-    }
-    .subtitle{
-      font-size:12px;
-      opacity:.72;
-      letter-spacing:.09em;
-    }
+    .card { margin-top:12px; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:var(--card); }
+    .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
+    .imgBox img, .imgBox video { width:100%; height:100%; object-fit:cover; display:block; }
+    .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
+    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid var(--border); }
+    .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
+    .counts { font-variant-numeric: tabular-nums; font-weight:700; }
+    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
+    .btn.ghost { color:#a0aec0; }
+    button.vote { padding:10px 14px; }
+    button.vote:disabled { opacity:.6; cursor:default; }
 
-    .timerWrap{
+    /* tiny AFK row under vote */
+    .autoRow {
       display:flex;
-      align-items:center;
-      gap:12px;
-      padding:8px 10px;
-      border:1px solid var(--line);
-      border-radius:14px;
-      background:linear-gradient(180deg, rgba(6,20,15,.65), rgba(3,10,8,.55));
-      box-shadow:var(--glow2);
-    }
-    .timerLabel{
-      font-size:11px;
-      opacity:.78;
-      letter-spacing:.14em;
-      text-transform:uppercase;
-    }
-    .timer{
-      font-size:18px;
-      letter-spacing:.12em;
-      text-shadow:var(--glow);
-      min-width:108px;
-      text-align:center;
-    }
-    .round-label{
-      font-size:11px;
-      opacity:.8;
-      letter-spacing:.14em;
-      text-transform:uppercase;
-      white-space:nowrap;
-    }
-
-    .actions{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      flex-wrap:wrap;
       justify-content:flex-end;
-    }
-    .btn{
-      appearance:none;
-      border:1px solid var(--line);
-      background:linear-gradient(180deg, rgba(6,20,15,.75), rgba(4,10,8,.65));
-      color:var(--green);
-      font-family:var(--mono);
-      padding:10px 12px;
-      border-radius:14px;
-      cursor:pointer;
-      letter-spacing:.12em;
-      text-transform:uppercase;
-      font-size:11px;
-      box-shadow:var(--glow2);
-      transition:transform .08s ease, filter .08s ease;
-      user-select:none;
-      white-space:nowrap;
-    }
-    .btn:hover{filter:brightness(1.12)}
-    .btn:active{transform:translateY(1px)}
-    .btn.red{border-color:rgba(255,59,59,.35); color:#ffb1b1; box-shadow:0 0 18px rgba(255,59,59,.15)}
-    .btn.blue{border-color:rgba(58,166,255,.35); color:#b7e0ff; box-shadow:0 0 18px rgba(58,166,255,.12)}
-    .btn.subtle{opacity:.9}
-
-    main{
-      max-width:1200px;
-      margin:0 auto;
-      padding:18px 14px 46px;
+      padding:0 12px 8px;
     }
 
-    .grid{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:14px;
-      align-items:stretch;
+    /* tiny AFK auto-vote button */
+    .autoVoteBtn {
+      padding: 2px 6px;
+      font-size: 9px;
+      border-radius: 999px;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      cursor: pointer;
+      white-space: nowrap;
     }
-    @media (max-width:900px){
-      .grid{grid-template-columns:1fr}
-      .brand{min-width:auto}
-      .timerWrap{width:100%; justify-content:space-between}
-      .actions{width:100%; justify-content:flex-start}
-    }
-
-    .card{
-      position:relative;
-      border:1px solid var(--line);
-      border-radius:18px;
-      overflow:hidden;
-      background:linear-gradient(180deg, rgba(6,20,15,.70), rgba(2,10,7,.75));
-      box-shadow:0 20px 60px rgba(0,0,0,.55);
+    .autoVoteBtn:disabled {
+      opacity: 0.5;
+      cursor: default;
     }
 
-    .media{
-      aspect-ratio:3/4;
-      width:100%;
-      display:block;
-      object-fit:cover;
-      background:linear-gradient(180deg, rgba(5,25,16,.45), rgba(0,0,0,.85));
-      filter:saturate(1.02);
+    .navArrow {
+      border: 1px solid var(--accent);
+      background: rgba(0,0,0,0.45);
+      color: var(--accent);
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .navArrow:disabled {
+      opacity: .35;
+      cursor: default;
     }
 
-    .overlay{
-      position:absolute; inset:0;
-      pointer-events:none;
-      background:
-        linear-gradient(180deg, rgba(0,0,0,.18) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,.62) 100%);
-    }
-
-    .meta{
-      position:absolute; left:12px; right:12px; bottom:12px;
-      display:flex;
-      align-items:flex-end;
-      justify-content:space-between;
-      gap:10px;
-      pointer-events:none;
-    }
-    .tag{
-      padding:8px 10px;
-      border-radius:14px;
-      border:1px solid var(--line);
-      background:rgba(0,0,0,.45);
-      font-size:11px;
-      letter-spacing:.14em;
-      text-transform:uppercase;
-      box-shadow:var(--glow2);
-      max-width:70%;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
-    .count{
-      padding:8px 10px;
-      border-radius:14px;
-      border:1px solid var(--line);
-      background:rgba(0,0,0,.45);
+    .piece-meta {
+      padding:6px 12px 10px;
+      border-top:1px solid var(--border);
       font-size:12px;
-      letter-spacing:.12em;
-      text-transform:uppercase;
-      box-shadow:var(--glow2);
-      white-space:nowrap;
+      color:var(--muted);
     }
-
-    .voteRow{
-      margin-top:12px;
-      display:flex;
-      gap:10px;
-      justify-content:space-between;
-      flex-wrap:wrap;
-    }
-    .voteRow .btn{flex:1 1 220px}
-
-    .statusRow{
-      margin-top:14px;
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-      opacity:.92;
-      font-size:12px;
-      letter-spacing:.08em;
-    }
-    .pill{
-      padding:8px 10px;
+    .piece-meta .piece-desc { white-space:pre-wrap; }
+    .piece-meta .seeMoreBtn {
+      margin-top:4px;
+      font-size:11px;
       border-radius:999px;
-      border:1px solid var(--line);
-      background:rgba(0,0,0,.35);
-      box-shadow:var(--glow2);
-      display:inline-flex;
-      gap:8px;
-      align-items:center;
+      padding:3px 8px;
+      border:1px solid var(--accent);
+      background:transparent;
+      color:var(--accent);
+      cursor:pointer;
     }
-    .dot{width:8px;height:8px;border-radius:50%}
-    .dot.ok{background:var(--green); box-shadow:0 0 12px rgba(57,255,20,.55)}
-    .dot.bad{background:#ff5757; box-shadow:0 0 12px rgba(255,87,87,.4)}
-    .muted{opacity:.72}
 
-    .modal{
-      position:fixed; inset:0;
-      z-index:50;
-      display:none;
-      align-items:center;
-      justify-content:center;
-      background:rgba(0,0,0,.82);
-      padding:20px;
-    }
-    .modal.show{display:flex}
-    .modalInner{
-      width:min(980px, 95vw);
-      border:1px solid var(--line);
-      border-radius:18px;
-      overflow:hidden;
-      background:rgba(0,0,0,.35);
-      box-shadow:0 0 30px rgba(57,255,20,.15);
+    .thumbs-wrap { margin-top:16px; }
+    .thumbs-title { font-size:12px; opacity:.6; margin-bottom:6px; }
+    .thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .thumb { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); cursor:pointer; position:relative; }
+    .thumb.disabled { opacity:.55; cursor:default; }
+    .thumb.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(57,255,20,.3); }
+
+    .thumb-img {
       position:relative;
-    }
-    .modalMedia{
       width:100%;
-      height:min(84vh, 820px);
-      object-fit:contain;
+      aspect-ratio:3/4;
+      background:#0b0f13;
+      overflow:hidden;
+    }
+    .thumb-img img,
+    .thumb-img video {
+      width:100%;
+      height:100%;
+      object-fit:cover;
       display:block;
-      background:black;
     }
-    .modalHint{
+    .thumb-img.diag img.half,
+    .thumb-img.diag video.half {
       position:absolute;
-      top:10px; left:10px; right:10px;
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      pointer-events:none;
-      font-size:11px;
-      letter-spacing:.14em;
-      text-transform:uppercase;
-      opacity:.84;
+      inset:0;
     }
-    .kbd{padding:6px 8px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.45)}
+    .thumb-img.diag img.left,
+    .thumb-img.diag video.left {
+      clip-path:polygon(0 0, 100% 0, 0 100%);
+    }
+    .thumb-img.diag img.right,
+    .thumb-img.diag video.right {
+      clip-path:polygon(100% 0, 100% 100%, 0 100%);
+    }
+    .thumb-img.diag::before {
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:linear-gradient(135deg, rgba(0,0,0,0.75) 48%, rgba(57,255,20,0.7) 50%, rgba(0,0,0,0.75) 52%);
+      mix-blend-mode:screen;
+      opacity:0.5;
+    }
 
-    footer{
-      max-width:1200px;margin:0 auto;
-      padding:0 14px 22px;
-      opacity:.7;
-      font-size:11px;
+    .video-badge {
+      position:absolute;
+      top:6px;
+      left:6px;
+      padding:2px 6px;
+      font-size:9px;
+      font-weight:700;
       letter-spacing:.12em;
       text-transform:uppercase;
+      color:#0b0f13;
+      background:var(--accent);
+      border-radius:999px;
+      box-shadow:0 0 8px rgba(57,255,20,.8);
+      pointer-events:none;
+      z-index:2;
     }
-    a{color:var(--green)}
-  </style>
+
+    .thumb-preview {
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+      z-index:3;
+    }
+
+    .thumb-label { padding:6px 8px 8px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
+    .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
+    .ghostBox { width:100%; height:100%; display:grid; place-items:center; color:#3b3b3b; font-weight:700; font-size:13px; letter-spacing:.08em; }
+
+    .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
+    .winner b { color:#39ff14; }
+
+    .final-card { margin-top:14px; }
+    .final-inner { display:flex; gap:12px; flex-wrap:wrap; padding:12px; }
+    .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed var(--border); border-radius:10px; padding:8px; text-align:center; }
+    .final-slot .label { display:block; margin-bottom:4px; }
+    .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#000; border-radius:8px; overflow:hidden; display:grid; place-items:center; position:relative; }
+    .final-slot .thumb-final img,
+    .final-slot .thumb-final video { width:100%; height:100%; object-fit:cover; }
+
+    .final-footer { padding:0 12px 12px; font-size:12px; color:#9aa0a6; }
+
+    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
+    .fullscreen-overlay img,
+    .fullscreen-overlay video { max-width:90%; max-height:90%; border-radius:8px; }
+    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
+
+    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
+    .hidden { display:none !important; }
+
+    .artist-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .artist-link:hover { text-decoration: underline; }
+
+    </style>
 </head>
 <body>
 
-<header>
-  <div class="topbar">
-    <div class="brand">
-      <div class="logo"></div>
-      <div class="titlewrap">
-        <div class="title">Rage Space</div>
-        <div class="subtitle">Matchup — 32 → 16 → 8 → 4 → 2</div>
-      </div>
-    </div>
 
-    <div class="timerWrap">
-      <div>
-        <div class="timerLabel">Time remaining (this round)</div>
-        <div class="timer" id="tRemain">04:48:00</div>
-      </div>
+
+<div class="wrap">
+  <h1 class="glitch-title" data-text="ART BATTLE. Faction I.">ART BATTLE. Faction I.</h1>
+
+  <div class="header">
+    <div class="row">
+      <div class="timer" id="tRemain">04:48:00</div>
       <div class="round-label" id="currentRound">Current round: —</div>
     </div>
-
-    <div class="actions">
-      <button class="btn subtle" id="btnRefresh">Refresh</button>
-      <button class="btn" id="btnAFK">AFK Auto-Vote</button>
-      <button class="btn red" id="btnReport">Report</button>
+    <div class="row">
+      <a class="backbtn" href="menu.html">← Menu</a>
+      <a class="linkbtn" href="winners.html">Winners</a>
+      <button class="navArrow" id="prevMatch">⟨</button>
+      <button class="navArrow" id="nextMatch">⟩</button>
     </div>
   </div>
-</header>
 
-<main>
-  <div class="grid">
-    <section class="card" id="cardLeft">
-      <img class="media" id="imgLeft" alt="Left artwork"/>
-      <div class="overlay"></div>
-      <div class="meta">
-        <div class="tag" id="tagLeft">Final slot 1</div>
-        <div class="count" id="countLeft">0</div>
-      </div>
-    </section>
-
-    <section class="card" id="cardRight">
-      <img class="media" id="imgRight" alt="Right artwork"/>
-      <div class="overlay"></div>
-      <div class="meta">
-        <div class="tag" id="tagRight">Final slot 2</div>
-        <div class="count" id="countRight">0</div>
-      </div>
-    </section>
-  </div>
-
-  <div class="voteRow">
-    <button class="btn red" id="voteLeft">Vote Left</button>
-    <button class="btn blue" id="voteRight">Vote Right</button>
-  </div>
-
-  <div class="statusRow">
-    <span class="pill"><span class="dot ok" id="dotAuth"></span>Auth <span class="muted" id="authText">…</span></span>
-    <span class="pill"><span class="dot ok" id="dotState"></span>State <span class="muted" id="stateText">…</span></span>
-    <span class="pill"><span class="dot ok" id="dotTimer"></span>Timer <span class="muted" id="timerText">…</span></span>
-  </div>
-</main>
-
-<div class="modal" id="modal">
-  <div class="modalInner">
-    <div class="modalHint">
-      <span class="kbd">Press A to fullscreen</span>
-      <span class="kbd">Press B to close</span>
+  <!-- TOP CARD -->
+  <div class="card" id="activeTop">
+    <div class="imgBox">
+      <img id="imgActive1" alt="Active top">
+      <video id="vidActive1" class="hidden" muted playsinline loop controls></video>
+      <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
     </div>
-    <img class="modalMedia" id="fullImg" alt="Fullscreen artwork"/>
+    <div class="bar">
+      <div class="label" id="labelActive1">Top</div>
+      <div class="counts" id="countActive1">0</div>
+      <button class="vote" id="btnActive1">Vote</button>
+    </div>
+    <div class="autoRow">
+      <button class="autoVoteBtn" id="autoActive1">vote this art for every round</button>
+    </div>
+    <div class="piece-meta hidden" id="metaActive1"></div>
+  </div>
+
+  <!-- BOTTOM CARD -->
+  <div class="card" id="activeBottom">
+    <div class="imgBox">
+      <img id="imgActive2" alt="Active bottom">
+      <video id="vidActive2" class="hidden" muted playsinline loop controls></video>
+      <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
+    </div>
+    <div class="bar">
+      <div class="label" id="labelActive2">Bottom</div>
+      <div class="counts" id="countActive2">0</div>
+      <button class="vote" id="btnActive2">Vote</button>
+    </div>
+    <div class="autoRow">
+      <button class="autoVoteBtn" id="autoActive2">vote this art for every round</button>
+    </div>
+    <div class="piece-meta hidden" id="metaActive2"></div>
+  </div>
+
+  <!-- THUMBS -->
+  <div class="thumbs-wrap">
+    <div class="thumbs-title">Matches (tap to switch)</div>
+    <div class="thumbs" id="thumbGrid"></div>
+  </div>
+
+  <div class="winner" id="winnerText">
+    R32 locks at 69,120s remaining → R16 at 51,840s → Quarters at 34,560s → Semis at 17,280s → Final at 0s.
+  </div>
+
+  <!-- FINAL BOX -->
+  <div class="card final-card" id="finalCard">
+    <div class="bar">
+      <div class="label">Final</div>
+      <div style="font-size:12px;color:#a1a1a1;">Decides at 0s</div>
+    </div>
+    <div class="final-inner">
+      <div class="final-slot">
+        <span class="label" id="finalLeftLabel">Winner of Semi 1</span>
+        <div class="thumb-final">
+          <img id="finalImg1" alt="Final slot 1">
+          <video id="finalVid1" class="hidden" muted playsinline loop controls></video>
+        </div>
+      </div>
+      <div class="final-slot">
+        <span class="label" id="finalRightLabel">Winner of Semi 2</span>
+        <div class="thumb-final">
+          <img id="finalImg2" alt="Final slot 2">
+          <video id="finalVid2" class="hidden" muted playsinline loop controls></video>
+        </div>
+      </div>
+    </div>
+    <div class="final-footer" id="finalFooter">Waiting… (tap a card’s ⤢ for audio)</div>
+  </div>
+
+  <div class="hint">
+    24-hour tournament: 32 images → R32 (first 4h48m) → R16 → QF → SF → Final (last 4h48m).
   </div>
 </div>
 
-<footer>
-  Use <b>A</b> to fullscreen the active piece. Use <b>B</b> to close.
-</footer>
+<!-- FULLSCREEN OVERLAY -->
+<div class="fullscreen-overlay" id="overlay">
+  <button id="closeFull">✕ Close</button>
+  <img id="fullImg" src="">
+  <video id="fullVideo" class="hidden" playsinline controls></video>
+</div>
 
-<script type="module">
-  import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+<script src="js/champion-overlay.js"></script>
 
-  // ====== YOUR SUPABASE CREDS ======
+<script>
   const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-  const SUPABASE_ANON_KEY = "PASTE_YOUR_ANON_KEY_HERE"; // <-- keep your real anon key here
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  // ====== DOM ======
-  const elRemain = document.getElementById("tRemain");
-  const currentRoundEl = document.getElementById("currentRound");
-
-  const imgLeft = document.getElementById("imgLeft");
-  const imgRight = document.getElementById("imgRight");
-  const tagLeft = document.getElementById("tagLeft");
-  const tagRight = document.getElementById("tagRight");
-  const countLeft = document.getElementById("countLeft");
-  const countRight = document.getElementById("countRight");
-
-  const voteLeftBtn = document.getElementById("voteLeft");
-  const voteRightBtn = document.getElementById("voteRight");
-  const btnRefresh = document.getElementById("btnRefresh");
-  const btnAFK = document.getElementById("btnAFK");
-
-  const dotAuth = document.getElementById("dotAuth");
-  const dotState = document.getElementById("dotState");
-  const dotTimer = document.getElementById("dotTimer");
-  const authText = document.getElementById("authText");
-  const stateText = document.getElementById("stateText");
-  const timerText = document.getElementById("timerText");
-
-  const modal = document.getElementById("modal");
-  const fullImg = document.getElementById("fullImg");
-
-  // ====== STATE ======
-  let state = {
-    base_iso: null,
-    ends_at: null,
-    period_sec: 86400,
-    seed_a_url: null,
-    seed_b_url: null,
-    seed_a_count: 0,
-    seed_b_count: 0,
-    meta_by_url: {}
-  };
-
-  // ===== TIMER (24h total, 4h48m rounds) =====
-  const ROUND_SEC = 4*3600 + 48*60; // 17280
-  let timerEndsAtMs = null;
-
-  function _pad2(n){ return String(n).padStart(2,"0"); }
-  function _fmtHMS(totalSec){
-    totalSec = Math.max(0, Math.floor(totalSec));
-    const h = Math.floor(totalSec/3600);
-    const m = Math.floor((totalSec%3600)/60);
-    const s = totalSec%60;
-    return `${_pad2(h)}:${_pad2(m)}:${_pad2(s)}`;
-  }
-  function _roundLabel(secondsLeft){
-    if (secondsLeft > 69120) return "R32";
-    if (secondsLeft > 51840) return "R16";
-    if (secondsLeft > 34560) return "QF";
-    if (secondsLeft > 17280) return "SF";
-    if (secondsLeft > 0)     return "Final";
-    return "Deciding";
-  }
-
-  function tickTimer(){
-    const endsAt = (state && (state.ends_at || state.endsAt)) || null;
-    if (!endsAt) return;
-
-    if (!timerEndsAtMs){
-      timerEndsAtMs = new Date(endsAt).getTime();
-      if (!Number.isFinite(timerEndsAtMs)) { timerEndsAtMs = null; return; }
-    }
-
-    const secondsLeft = Math.max(0, Math.floor((timerEndsAtMs - Date.now())/1000));
-
-    // show time remaining within current 4h48m segment
-    let phaseLeft = secondsLeft % ROUND_SEC;
-    if (secondsLeft > 0 && phaseLeft === 0) phaseLeft = ROUND_SEC;
-
-    if (elRemain) elRemain.textContent = _fmtHMS(phaseLeft);
-    if (currentRoundEl) currentRoundEl.textContent = `Current round: ${_roundLabel(secondsLeft)}`;
-
-    if (dotTimer) dotTimer.className = "dot ok";
-    if (timerText) timerText.textContent = "synced";
-  }
-
+  // ===== Timer fallback (DB) =====
+  // If the edge function is unreachable (CORS/network), we still keep the on-page countdown alive
+  // by reading ends_at from cycles_v2 directly.
   async function loadTimerFromDB(){
     try{
       const { data, error } = await supabase
         .from("cycles_v2")
-        .select("ends_at, period_sec")
+        .select("ends_at, period_sec, base_iso")
         .order("ends_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (error || !data?.ends_at) {
-        if (dotTimer) dotTimer.className = "dot bad";
-        if (timerText) timerText.textContent = error ? "db error" : "no ends_at";
-        return;
-      }
-
-      state.ends_at = data.ends_at;
-      state.period_sec = data.period_sec ?? state.period_sec;
-
-      timerEndsAtMs = null;
-      tickTimer();
+      if (error || !data) return;
+      if (data.ends_at) state.ends_at = data.ends_at;
+      if (typeof data.period_sec === "number") state.period_sec = data.period_sec;
+      // only set base_iso if we don't already have one from the edge state
+      if (data.base_iso && !state.base_iso) state.base_iso = data.base_iso;
     }catch(e){
-      if (dotTimer) dotTimer.className = "dot bad";
-      if (timerText) timerText.textContent = "timer exception";
+      // ignore
     }
   }
 
-  // start timer loops
-  setInterval(tickTimer, 1000);
-  setInterval(loadTimerFromDB, 30000);
-  loadTimerFromDB();
-  tickTimer();
 
-  // ====== HELPERS ======
-  function setAuth(ok, msg){
-    dotAuth.className = "dot " + (ok ? "ok" : "bad");
-    authText.textContent = msg;
-  }
-  function setStateStatus(ok, msg){
-    dotState.className = "dot " + (ok ? "ok" : "bad");
-    stateText.textContent = msg;
+  const RSID_KEY = "rsid_v2";
+  let RSID = localStorage.getItem(RSID_KEY);
+  if (!RSID){
+    RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now());
+    localStorage.setItem(RSID_KEY, RSID);
   }
 
-  function safeSetImg(el, url){
-    if (!el) return;
-    if (!url || typeof url !== "string"){
-      el.removeAttribute("src");
+  const elRemain = document.getElementById("tRemain");
+  const winnerText = document.getElementById("winnerText");
+  const currentRoundEl = document.getElementById("currentRound");
+
+  const imgActive1 = document.getElementById("imgActive1");
+  const imgActive2 = document.getElementById("imgActive2");
+  const vidActive1 = document.getElementById("vidActive1");
+  const vidActive2 = document.getElementById("vidActive2");
+  const labelActive1 = document.getElementById("labelActive1");
+  const labelActive2 = document.getElementById("labelActive2");
+  const countActive1 = document.getElementById("countActive1");
+  const countActive2 = document.getElementById("countActive2");
+  const btnActive1 = document.getElementById("btnActive1");
+  const btnActive2 = document.getElementById("btnActive2");
+  const metaActive1 = document.getElementById("metaActive1");
+  const metaActive2 = document.getElementById("metaActive2");
+  const autoBtn1 = document.getElementById("autoActive1");
+  const autoBtn2 = document.getElementById("autoActive2");
+
+  const finalImg1 = document.getElementById("finalImg1");
+  const finalImg2 = document.getElementById("finalImg2");
+  const finalVid1 = document.getElementById("finalVid1");
+  const finalVid2 = document.getElementById("finalVid2");
+  const finalLeftLabel  = document.getElementById("finalLeftLabel");
+  const finalRightLabel = document.getElementById("finalRightLabel");
+  const finalFooter = document.getElementById("finalFooter");
+
+  const overlay  = document.getElementById("overlay");
+  const fullImg  = document.getElementById("fullImg");
+  const fullVideo = document.getElementById("fullVideo");
+  const btnClose = document.getElementById("closeFull");
+  btnClose.onclick = ()=>{
+    overlay.style.display='none';
+    try {
+      fullVideo.pause();
+      fullVideo.removeAttribute('src');
+      fullVideo.load();
+    } catch(e){}
+  };
+
+  const grid = document.getElementById("thumbGrid");
+
+  const lastGoodThumb = {};
+  const lastGoodActive = {};
+
+  function isRealUrl(url){
+    return typeof url === "string" &&
+           url.length > 0 &&
+           !url.startsWith("data:image/svg+xml");
+  }
+
+  function isVideoUrl(url){
+    if (typeof url !== "string") return false;
+    const base = url.split("#")[0];
+    return /\.(mp4|webm|mov)(\?|$)/i.test(base);
+  }
+
+  function openFull(which){
+    let url = "";
+    if (which==="active1"){
+      if (!vidActive1.classList.contains("hidden") && vidActive1.src) url = vidActive1.src;
+      else url = imgActive1.src;
+    } else if (which==="active2"){
+      if (!vidActive2.classList.contains("hidden") && vidActive2.src) url = vidActive2.src;
+      else url = imgActive2.src;
+    }
+    if (!url) return;
+
+    const video = isVideoUrl(url);
+    if (video){
+      fullImg.classList.add("hidden");
+      fullVideo.classList.remove("hidden");
+      fullVideo.src = url;
+      try { fullVideo.play().catch(()=>{}); } catch(e){}
+    } else {
+      fullVideo.classList.add("hidden");
+      try {
+        fullVideo.pause();
+        fullVideo.removeAttribute("src");
+        fullVideo.load();
+      } catch(e){}
+      fullImg.classList.remove("hidden");
+      fullImg.src = url;
+    }
+    overlay.style.display = 'flex';
+  }
+
+  function placeholder(letter){
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960">
+      <rect width="100%" height="100%" fill="#000"/>
+      <text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace"
+        text-anchor="middle" dominant-baseline="middle">${letter}</text>
+    </svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }
+
+  function pick(a,b){ return (a!=null && a!=="") ? a : b; }
+
+  function escapeHtml(str){
+    return String(str)
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#39;");
+  }
+
+  function renderPieceMeta(container, meta){
+    if (!container) return;
+    const desc = meta && meta.desc ? String(meta.desc) : "";
+
+    if (!desc){
+      container.classList.add("hidden");
+      container.innerHTML = "";
       return;
     }
-    el.src = url;
+
+    container.classList.remove("hidden");
+
+    const LIMIT = 260;
+    const truncated = desc.length > LIMIT;
+    const shortDesc = truncated ? desc.slice(0, LIMIT).trim() + "…" : desc;
+
+    let html = `<div class="piece-desc" data-full="${encodeURIComponent(desc)}" data-limit="${LIMIT}" data-expanded="0">${escapeHtml(shortDesc)}</div>`;
+    if (truncated){
+      html += `<button class="seeMoreBtn" type="button">See more</button>`;
+    }
+
+    container.innerHTML = html;
+
+    const btn = container.querySelector(".seeMoreBtn");
+    if (btn){
+      btn.addEventListener("click", ()=>{
+        const descEl = container.querySelector(".piece-desc");
+        if (!descEl) return;
+        const expanded = descEl.dataset.expanded === "1";
+        const limit = parseInt(descEl.dataset.limit || "260",10);
+        const full = decodeURIComponent(descEl.dataset.full || "");
+        if (!expanded){
+          descEl.textContent = full;
+          descEl.dataset.expanded = "1";
+          btn.textContent = "See less";
+        } else {
+          const truncatedAgain = full.length > limit;
+          const shortAgain = truncatedAgain ? full.slice(0,limit).trim()+"…" : full;
+          descEl.textContent = shortAgain;
+          descEl.dataset.expanded = "0";
+          btn.textContent = "See more";
+        }
+      });
+    }
   }
 
-  function pickActivePair(){
-    // minimal “final view” pair; your edge function / DB should keep these updated
-    const leftUrl = state.seed_a_url;
-    const rightUrl = state.seed_b_url;
+  const order = [
+    {key:"final", label:"Final"},
+    {key:"s1", label:"Semi 1", semi:true},
+    {key:"s2", label:"Semi 2", semi:true},
 
-    safeSetImg(imgLeft, leftUrl);
-    safeSetImg(imgRight, rightUrl);
+    {key:"q1", label:"QF A–B", left:"q1_a_url", right:"q1_b_url", lct:"q1_a_count", rct:"q1_b_count", fbLeft:"seed_a_url", fbRight:"seed_b_url", fbLct:"seed_a_count", fbRct:"seed_b_count"},
+    {key:"q2", label:"QF C–D", left:"q2_c_url", right:"q2_d_url", lct:"q2_c_count", rct:"q2_d_count", fbLeft:"seed_c_url", fbRight:"seed_d_url", fbLct:"seed_c_count", fbRct:"seed_d_count"},
+    {key:"q3", label:"QF E–F", left:"q3_e_url", right:"q3_f_url", lct:"q3_e_count", rct:"q3_f_count", fbLeft:"seed_e_url", fbRight:"seed_f_url", fbLct:"seed_e_count", fbRct:"seed_f_count"},
+    {key:"q4", label:"QF G–H", left:"q4_g_url", right:"q4_h_url", lct:"q4_g_count", rct:"q4_h_count", fbLeft:"seed_g_url", fbRight:"seed_h_url", fbLct:"seed_g_count", fbRct:"seed_h_count"},
 
-    tagLeft.textContent = "Active top";
-    tagRight.textContent = "Active bottom";
+    {key:"r1", label:"R16 A–B", left:"seed_a_url", right:"seed_b_url", lct:"seed_a_count", rct:"seed_b_count"},
+    {key:"r2", label:"R16 C–D", left:"seed_c_url", right:"seed_d_url", lct:"seed_c_count", rct:"seed_d_count"},
+    {key:"r3", label:"R16 E–F", left:"seed_e_url", right:"seed_f_url", lct:"seed_e_count", rct:"seed_f_count"},
+    {key:"r4", label:"R16 G–H", left:"seed_g_url", right:"seed_h_url", lct:"seed_g_count", rct:"seed_h_count"},
+    {key:"r5", label:"R16 I–J", left:"seed_i_url", right:"seed_j_url", lct:"seed_i_count", rct:"seed_j_count"},
+    {key:"r6", label:"R16 K–L", left:"seed_k_url", right:"seed_l_url", lct:"seed_k_count", rct:"seed_l_count"},
+    {key:"r7", label:"R16 M–N", left:"seed_m_url", right:"seed_n_url", lct:"seed_m_count", rct:"seed_n_count"},
+    {key:"r8", label:"R16 O–P", left:"seed_o_url", right:"seed_p_url", lct:"seed_o_count", rct:"seed_p_count"},
 
-    countLeft.textContent = String(state.seed_a_count ?? 0);
-    countRight.textContent = String(state.seed_b_count ?? 0);
+    {key:"rr1",  label:"R32 1",  left:"seed_a_url",  right:"seed_b_url",  lct:"seed_a_count",  rct:"seed_b_count"},
+    {key:"rr2",  label:"R32 2",  left:"seed_c_url",  right:"seed_d_url",  lct:"seed_c_count",  rct:"seed_d_count"},
+    {key:"rr3",  label:"R32 3",  left:"seed_e_url",  right:"seed_f_url",  lct:"seed_e_count",  rct:"seed_f_count"},
+    {key:"rr4",  label:"R32 4",  left:"seed_g_url",  right:"seed_h_url",  lct:"seed_g_count",  rct:"seed_h_count"},
+    {key:"rr5",  label:"R32 5",  left:"seed_i_url",  right:"seed_j_url",  lct:"seed_i_count",  rct:"seed_j_count"},
+    {key:"rr6",  label:"R32 6",  left:"seed_k_url",  right:"seed_l_url",  lct:"seed_k_count",  rct:"seed_l_count"},
+    {key:"rr7",  label:"R32 7",  left:"seed_m_url",  right:"seed_n_url",  lct:"seed_m_count",  rct:"seed_n_count"},
+    {key:"rr8",  label:"R32 8",  left:"seed_o_url",  right:"seed_p_url",  lct:"seed_o_count",  rct:"seed_p_count"},
+    {key:"rr9",  label:"R32 9",  left:"seed_q_url",  right:"seed_r_url",  lct:"seed_q_count",  rct:"seed_r_count"},
+    {key:"rr10", label:"R32 10", left:"seed_s_url",  right:"seed_t_url",  lct:"seed_s_count",  rct:"seed_t_count"},
+    {key:"rr11", label:"R32 11", left:"seed_u_url",  right:"seed_v_url",  lct:"seed_u_count",  rct:"seed_v_count"},
+    {key:"rr12", label:"R32 12", left:"seed_w_url",  right:"seed_x_url",  lct:"seed_w_count",  rct:"seed_x_count"},
+    {key:"rr13", label:"R32 13", left:"seed_y_url",  right:"seed_z_url",  lct:"seed_y_count",  rct:"seed_z_count"},
+    {key:"rr14", label:"R32 14", left:"seed_aa_url", right:"seed_ab_url", lct:"seed_aa_count", rct:"seed_ab_count"},
+    {key:"rr15", label:"R32 15", left:"seed_ac_url", right:"seed_ad_url", lct:"seed_ac_count", rct:"seed_ad_count"},
+    {key:"rr16", label:"R32 16", left:"seed_ae_url", right:"seed_af_url", lct:"seed_ae_count", rct:"seed_af_count"}
+  ];
+
+  const thumbs = {};
+  function makeThumb(item){
+    const div = document.createElement("div");
+    div.className = "thumb";
+    div.id = "thumb_"+item.key;
+    div.innerHTML = `
+      <div class="thumb-img diag">
+        <img class="half left"  id="imgL_${item.key}" alt="${item.label} top">
+        <img class="half right" id="imgR_${item.key}" alt="${item.label} bottom">
+        <video class="half left hidden"  id="vidL_${item.key}" muted playsinline preload="metadata"></video>
+        <video class="half right hidden" id="vidR_${item.key}" muted playsinline preload="metadata"></video>
+        <div class="video-badge hidden" id="badge_${item.key}">VIDEO</div>
+      </div>
+      <div class="thumb-label">
+        <span>${item.label}</span>
+        <span class="thumb-count" id="cnt_${item.key}">0-0</span>
+      </div>
+    `;
+    div.addEventListener("click", ()=>{
+      if (item.key.startsWith("rr") && state.r32_done) return;
+      if (item.key.startsWith("r") && !item.key.startsWith("rr")) {
+        if (!state.r32_done || state.r16_done) return;
+      }
+      if (item.key.startsWith("q")) {
+        if (!state.r16_done || state.mid1_done) return;
+      }
+      if (item.key.startsWith("s")) {
+        if (!state.mid1_done || state.mid2_done) return;
+      }
+      if (item.key==="final" && !state.mid2_done) return;
+
+      activeMatch = item.key;
+      renderActive();
+    });
+    grid.appendChild(div);
+    thumbs[item.key] = {
+      box:   div,
+      imgL:  div.querySelector("#imgL_"+item.key),
+      imgR:  div.querySelector("#imgR_"+item.key),
+      vidL:  div.querySelector("#vidL_"+item.key),
+      vidR:  div.querySelector("#vidR_"+item.key),
+      count: div.querySelector("#cnt_"+item.key),
+      badge: div.querySelector("#badge_"+item.key)
+    };
+  }
+  order.forEach(makeThumb);
+
+  const hoverEnabled = window.matchMedia && window.matchMedia("(pointer:fine)").matches;
+  if (hoverEnabled) {
+    for (const k in thumbs) {
+      const t = thumbs[k];
+      t.box.addEventListener("mouseenter", handleThumbEnter);
+      t.box.addEventListener("mouseleave", handleThumbLeave);
+    }
   }
 
-  // ====== EDGE STATE PULL (optional) ======
-  const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
+  function handleThumbEnter(e){
+    const box = e.currentTarget;
+    const url = box.dataset.videoUrl;
+    if (!url) return;
+    const imgWrap = box.querySelector(".thumb-img");
+    if (!imgWrap) return;
+    if (imgWrap.querySelector("video.thumb-preview")) return;
 
+    const v = document.createElement("video");
+    v.className = "thumb-preview";
+    v.src = url + "#t=0.1";
+    v.muted = true;
+    v.loop = true;
+    v.playsInline = true;
+    imgWrap.appendChild(v);
+    try { v.play().catch(()=>{}); } catch(e){}
+  }
+
+  function handleThumbLeave(e){
+    const box = e.currentTarget;
+    const imgWrap = box.querySelector(".thumb-img");
+    if (!imgWrap) return;
+    const v = imgWrap.querySelector("video.thumb-preview");
+    if (!v) return;
+    try { v.pause(); } catch(e){}
+    v.remove();
+  }
+
+  function gotoMatch(offset) {
+    const keys = order
+      .map(o => o.key)
+      .filter(k => !thumbs[k].box.classList.contains("disabled")
+                && !thumbs[k].box.classList.contains("hidden"));
+
+    const idx = keys.indexOf(activeMatch);
+    if (idx === -1) return;
+
+    const nextKey = keys[idx + offset];
+    if (nextKey) {
+      activeMatch = nextKey;
+      renderActive();
+    }
+  }
+
+  const prevBtnEl = document.getElementById("prevMatch");
+  const nextBtnEl = document.getElementById("nextMatch");
+  if (prevBtnEl && nextBtnEl) {
+    prevBtnEl.addEventListener("click", () => gotoMatch(-1));
+    nextBtnEl.addEventListener("click", () => gotoMatch(1));
+  }
+
+  let state = {
+    base_iso:null, ends_at:null, period_sec:86400,
+    seed_a_url:null, seed_b_url:null, seed_c_url:null, seed_d_url:null,
+    seed_e_url:null, seed_f_url:null, seed_g_url:null, seed_h_url:null,
+    seed_i_url:null, seed_j_url:null, seed_k_url:null, seed_l_url:null,
+    seed_m_url:null, seed_n_url:null, seed_o_url:null, seed_p_url:null,
+    seed_q_url:null, seed_r_url:null, seed_s_url:null, seed_t_url:null,
+    seed_u_url:null, seed_v_url:null, seed_w_url:null, seed_x_url:null,
+    seed_y_url:null, seed_z_url:null, seed_aa_url:null, seed_ab_url:null,
+    seed_ac_url:null, seed_ad_url:null, seed_ae_url:null, seed_af_url:null,
+
+    seed_a_count:0, seed_b_count:0, seed_c_count:0, seed_d_count:0,
+    seed_e_count:0, seed_f_count:0, seed_g_count:0, seed_h_count:0,
+    seed_i_count:0, seed_j_count:0, seed_k_count:0, seed_l_count:0,
+    seed_m_count:0, seed_n_count:0, seed_o_count:0, seed_p_count:0,
+    seed_q_count:0, seed_r_count:0, seed_s_count:0, seed_t_count:0,
+    seed_u_count:0, seed_v_count:0, seed_w_count:0, seed_x_count:0,
+    seed_y_count:0, seed_z_count:0, seed_aa_count:0, seed_ab_count:0,
+    seed_ac_count:0, seed_ad_count:0, seed_ae_count:0, seed_af_count:0,
+
+    r32_done:false, r16_done:false, mid1_done:false, mid2_done:false,
+
+    q1_a_url:null, q1_b_url:null, q1_a_count:0, q1_b_count:0,
+    q2_c_url:null, q2_d_url:null, q2_c_count:0, q2_d_count:0,
+    q3_e_url:null, q3_f_url:null, q3_e_count:0, q3_f_count:0,
+    q4_g_url:null, q4_h_url:null, q4_g_count:0, q4_h_count:0,
+
+    semi_1_left_url:null, semi_1_right_url:null, semi_1_left_count:0, semi_1_right_count:0,
+    semi_2_left_url:null, semi_2_right_url:null, semi_2_left_count:0, semi_2_right_count:0,
+
+    mid_winner_1_url:null, mid_winner_2_url:null,
+
+    meta_by_url:{}
+  };
+
+  let activeLeftUrl = null;
+  let activeRightUrl = null;
+  let autoVoteInFlight = false;
+
+  const VOTE_MEMORY_KEY = "rs_vote_memory_v4";
+  const AUTO_MEMORY_KEY = "rs_auto_vote_v1";
+  let voteUserKey = "guest";
+
+  async function initVoteUserKey(){
+    try {
+      const { data } = await supabase.auth.getUser();
+      const user = data?.user;
+      if (user) {
+        voteUserKey = user.id || user.email || "user";
+      } else {
+        voteUserKey = "guest";
+      }
+    } catch(e) {
+      voteUserKey = "guest";
+    } finally {
+      renderActive();
+    }
+  }
+
+  function memRead(base){
+    try{
+      const all = JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}");
+      const perUser = all[voteUserKey] || {};
+      return perUser[base] || {};
+    }catch{
+      return {};
+    }
+  }
+  function memWrite(base,key,val){
+    const all = (()=>{ try { return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}"); } catch { return {}; }})();
+    const perUser = all[voteUserKey] || {};
+    perUser[base] = Object.assign({}, perUser[base]||{}, { [key]: val });
+    all[voteUserKey] = perUser;
+    localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all));
+  }
+
+  function autoMemRead(base){
+    try{
+      const all = JSON.parse(localStorage.getItem(AUTO_MEMORY_KEY)||"{}");
+      const perUser = all[voteUserKey] || {};
+      const val = perUser[base];
+      if (!val) return { used:false, url:null };
+      if (typeof val === "string") return { used:true, url:val };
+      if (typeof val === "object") return { used: !!val.used, url: val.url || null };
+      return { used:true, url:null };
+    }catch{
+      return { used:false, url:null };
+    }
+  }
+  function autoMemWrite(base, imageUrl){
+    const all = (()=>{ try { return JSON.parse(localStorage.getItem(AUTO_MEMORY_KEY)||"{}"); } catch { return {}; }})();
+    const perUser = all[voteUserKey] || {};
+    perUser[base] = { used:true, url: imageUrl || null };
+    all[voteUserKey] = perUser;
+    localStorage.setItem(AUTO_MEMORY_KEY, JSON.stringify(all));
+  }
+
+  let activeMatch = "rr1";
+
+  async function vote(color){
+    const base = state.base_iso || "";
+
+    let accessToken = null;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      accessToken = sessionData?.session?.access_token || null;
+    } catch (e) {
+      accessToken = null;
+    }
+
+    if (!accessToken) {
+      alert("You need to be signed in to vote.");
+      return;
+    }
+
+    const mem = memRead(base);
+    const key = activeMatch;
+    if (mem[key]) return;
+
+    const red = color === "red";
+    const inc = (k) => state[k] = (state[k] || 0) + 1;
+
+    const serverPhase = activeMatch.startsWith("rr")
+      ? ("r" + activeMatch.slice(2))
+      : activeMatch;
+
+    const post = { phase: serverPhase, side: red ? "left" : "right" };
+
+    const map = {
+      rr1:["seed_a_count","seed_b_count"],   rr2:["seed_c_count","seed_d_count"],
+      rr3:["seed_e_count","seed_f_count"],   rr4:["seed_g_count","seed_h_count"],
+      rr5:["seed_i_count","seed_j_count"],   rr6:["seed_k_count","seed_l_count"],
+      rr7:["seed_m_count","seed_n_count"],   rr8:["seed_o_count","seed_p_count"],
+      rr9:["seed_q_count","seed_r_count"],   rr10:["seed_s_count","seed_t_count"],
+      rr11:["seed_u_count","seed_v_count"],  rr12:["seed_w_count","seed_x_count"],
+      rr13:["seed_y_count","seed_z_count"],  rr14:["seed_aa_count","seed_ab_count"],
+      rr15:["seed_ac_count","seed_ad_count"],rr16:["seed_ae_count","seed_af_count"],
+
+      r1:["seed_a_count","seed_b_count"], r2:["seed_c_count","seed_d_count"],
+      r3:["seed_e_count","seed_f_count"], r4:["seed_g_count","seed_h_count"],
+      r5:["seed_i_count","seed_j_count"], r6:["seed_k_count","seed_l_count"],
+      r7:["seed_m_count","seed_n_count"], r8:["seed_o_count","seed_p_count"],
+
+      q1:["seed_a_count","seed_b_count"], q2:["seed_c_count","seed_d_count"],
+      q3:["seed_e_count","seed_f_count"], q4:["seed_g_count","seed_h_count"],
+      s1:["seed_a_count","seed_b_count"], s2:["seed_c_count","seed_d_count"],
+      final:["seed_a_count","seed_b_count"]
+    };
+    const arr = map[activeMatch];
+    if (arr){
+      inc(red ? arr[0] : arr[1]);
+      renderActive();
+    }
+
+    try{
+      const res = await fetch(FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-rsid": RSID,
+          "Authorization": `Bearer ${accessToken}`
+        },
+        body: JSON.stringify(post)
+      });
+      if (!res.ok){
+        await fetchState(true);
+        return;
+      }
+      const s = await res.json().catch(() => ({}));
+      Object.assign(state, s || {});
+      memWrite(base, key, color);
+      renderActive();
+    }catch{
+      await fetchState(true);
+    }
+  }
+  btnActive1.onclick = ()=> vote("red");
+  btnActive2.onclick = ()=> vote("blue");
+
+  async function autoVote(whichSide){
+    const base = state.base_iso || "";
+    const autoState = autoMemRead(base);
+
+    if (autoState.used) {
+      alert("You've already set an AFK auto-vote for this tournament.");
+      return;
+    }
+
+    let accessToken = null;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      accessToken = sessionData?.session?.access_token || null;
+    } catch (e) {
+      accessToken = null;
+    }
+
+    if (!accessToken) {
+      alert("You need to be signed in to use AFK auto-vote.");
+      return;
+    }
+
+    const url = whichSide === "left" ? activeLeftUrl : activeRightUrl;
+    if (!isRealUrl(url)) {
+      alert("No art loaded to auto-vote for yet.");
+      return;
+    }
+
+    try {
+      const res = await fetch(FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-rsid": RSID,
+          "Authorization": `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          mode: "auto_vote",
+          image_url: url
+        })
+      });
+
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (payload && payload.error === "auto_already_used") {
+          autoMemWrite(base, null);
+          updateAutoButtons(false);
+          alert("You've already set an AFK auto-vote for this tournament.");
+          return;
+        }
+        if (payload && payload.error === "cycle_over") {
+          alert("This tournament cycle is already over.");
+          return;
+        }
+        alert("AFK auto-vote failed. Please try again in a moment.");
+        return;
+      }
+
+      autoMemWrite(base, url);
+      updateAutoButtons(false);
+      alert("AFK vote locked in for this art for the rest of today.");
+
+      const mem = memRead(base);
+      if (!mem[activeMatch]) {
+        const color = (whichSide === "left") ? "red" : "blue";
+        await vote(color);
+      }
+    } catch (e) {
+      alert("Network error while setting AFK auto-vote.");
+    }
+  }
+
+  autoBtn1.onclick = () => autoVote("left");
+  autoBtn2.onclick = () => autoVote("right");
+
+  function setThumb(key,leftUrl,rightUrl,leftCt,rightCt,fallback){
+    const th = thumbs[key]; if (!th) return;
+
+    const leftKey = key + "_L";
+    const rightKey = key + "_R";
+
+    if (isRealUrl(leftUrl)) {
+      lastGoodThumb[leftKey] = leftUrl;
+    } else if (lastGoodThumb[leftKey]) {
+      leftUrl = lastGoodThumb[leftKey];
+    }
+
+    if (isRealUrl(rightUrl)) {
+      lastGoodThumb[rightKey] = rightUrl;
+    } else if (lastGoodThumb[rightKey]) {
+      rightUrl = lastGoodThumb[rightKey];
+    }
+
+    const leftIsVid = isVideoUrl(leftUrl);
+    const rightIsVid = isVideoUrl(rightUrl);
+    const hasVideo = leftIsVid || rightIsVid;
+
+    if (leftIsVid) {
+      th.imgL.classList.add("hidden");
+      th.vidL.classList.remove("hidden");
+      th.vidL.src = leftUrl + "#t=0.1";
+      th.vidL.preload = "metadata";
+      try { th.vidL.pause(); } catch(e){}
+    } else {
+      th.vidL.classList.add("hidden");
+      th.imgL.classList.remove("hidden");
+      th.imgL.src = leftUrl || placeholder(fallback||"?");
+    }
+
+    if (rightIsVid) {
+      th.imgR.classList.add("hidden");
+      th.vidR.classList.remove("hidden");
+      th.vidR.src = rightUrl + "#t=0.1";
+      th.vidR.preload = "metadata";
+      try { th.vidR.pause(); } catch(e){}
+    } else {
+      th.vidR.classList.add("hidden");
+      th.imgR.classList.remove("hidden");
+      th.imgR.src = rightUrl || placeholder(fallback||"?");
+    }
+
+    th.count.textContent = (leftCt??0) + "-" + (rightCt??0);
+    if (th.badge) th.badge.classList.toggle("hidden", !hasVideo);
+
+    const box = th.box;
+    if (hasVideo) {
+      const vidUrl = leftIsVid ? leftUrl : rightUrl;
+      box.dataset.videoUrl = vidUrl || "";
+    } else {
+      delete box.dataset.videoUrl;
+    }
+  }
+
+  function setActiveMedia(which, url){
+    const img = which==="active1" ? imgActive1 : imgActive2;
+    const vid = which==="active1" ? vidActive1 : vidActive2;
+
+    const cacheKey = which;
+    let finalUrl = url;
+
+    if (isRealUrl(finalUrl)) {
+      lastGoodActive[cacheKey] = finalUrl;
+    } else if (lastGoodActive[cacheKey]) {
+      finalUrl = lastGoodActive[cacheKey];
+    }
+
+    const isVid = isVideoUrl(finalUrl);
+
+    if (isVid){
+      img.classList.add("hidden");
+      vid.classList.remove("hidden");
+      vid.src = finalUrl + "#t=0.1";
+      vid.loop = true;
+      vid.playsInline = true;
+      try { vid.play().catch(()=>{}); } catch(e){}
+    } else {
+      vid.classList.add("hidden");
+      try {
+        vid.pause();
+        vid.removeAttribute("src");
+        vid.load();
+      } catch(e){}
+      img.classList.remove("hidden");
+      img.src = finalUrl || placeholder("?");
+    }
+  }
+
+  function setFinalMedia(idx, url){
+    const img = idx===1 ? finalImg1 : finalImg2;
+    const vid = idx===1 ? finalVid1 : finalVid2;
+    const isVid = isVideoUrl(url);
+
+    if (isVid){
+      img.classList.add("hidden");
+      vid.classList.remove("hidden");
+      vid.src = url + "#t=0.1";
+      vid.loop = true;
+      vid.playsInline = true;
+      try { vid.play().catch(()=>{}); } catch(e){}
+    } else {
+      vid.classList.add("hidden");
+      try {
+        vid.pause();
+        vid.removeAttribute("src");
+        vid.load();
+      } catch(e){}
+      img.classList.remove("hidden");
+      img.src = url || placeholder("?");
+    }
+  }
+
+  function pauseOtherVideos(except){
+    const vids = [vidActive1, vidActive2, finalVid1, finalVid2, fullVideo];
+    vids.forEach(v=>{
+      if (!v || v === except) return;
+      try { v.pause(); } catch(e){}
+    });
+  }
+
+  vidActive1.addEventListener("play", ()=> pauseOtherVideos(vidActive1));
+  vidActive2.addEventListener("play", ()=> pauseOtherVideos(vidActive2));
+  finalVid1.addEventListener("play", ()=> pauseOtherVideos(finalVid1));
+  finalVid2.addEventListener("play", ()=> pauseOtherVideos(finalVid2));
+  fullVideo.addEventListener("play", ()=> pauseOtherVideos(fullVideo));
+
+  function markActive(){
+    for (const k in thumbs) {
+      thumbs[k].box.classList.toggle("active", k===activeMatch);
+    }
+  }
+
+  function renderThumbs(){
+    setThumb("rr1",  state.seed_a_url,  state.seed_b_url,  state.seed_a_count,  state.seed_b_count, "A");
+    setThumb("rr2",  state.seed_c_url,  state.seed_d_url,  state.seed_c_count,  state.seed_d_count, "C");
+    setThumb("rr3",  state.seed_e_url,  state.seed_f_url,  state.seed_e_count,  state.seed_f_count, "E");
+    setThumb("rr4",  state.seed_g_url,  state.seed_h_url,  state.seed_g_count,  state.seed_h_count, "G");
+    setThumb("rr5",  state.seed_i_url,  state.seed_j_url,  state.seed_i_count,  state.seed_j_count, "I");
+    setThumb("rr6",  state.seed_k_url,  state.seed_l_url,  state.seed_k_count,  state.seed_l_count, "K");
+    setThumb("rr7",  state.seed_m_url,  state.seed_n_url,  state.seed_m_count,  state.seed_n_count, "M");
+    setThumb("rr8",  state.seed_o_url,  state.seed_p_url,  state.seed_o_count,  state.seed_p_count, "O");
+    setThumb("rr9",  state.seed_q_url,  state.seed_r_url,  state.seed_q_count,  state.seed_r_count, "Q");
+    setThumb("rr10", state.seed_s_url,  state.seed_t_url,  state.seed_s_count,  state.seed_t_count, "S");
+    setThumb("rr11", state.seed_u_url,  state.seed_v_url,  state.seed_u_count,  state.seed_v_count, "U");
+    setThumb("rr12", state.seed_w_url,  state.seed_x_url,  state.seed_w_count,  state.seed_x_count, "W");
+    setThumb("rr13", state.seed_y_url,  state.seed_z_url,  state.seed_y_count,  state.seed_z_count, "Y");
+    setThumb("rr14", state.seed_aa_url, state.seed_ab_url, state.seed_aa_count, state.seed_ab_count, "AA");
+    setThumb("rr15", state.seed_ac_url, state.seed_ad_url, state.seed_ac_count, state.seed_ad_count, "AC");
+    setThumb("rr16", state.seed_ae_url, state.seed_af_url, state.seed_ae_count, state.seed_af_count, "AE");
+
+    for (let i=1;i<=16;i++){
+      const k = "rr"+i;
+      thumbs[k].box.classList.toggle("disabled", !!state.r32_done);
+    }
+
+    setThumb("r1", state.seed_a_url, state.seed_b_url, state.seed_a_count, state.seed_b_count,"A");
+    setThumb("r2", state.seed_c_url, state.seed_d_url, state.seed_c_count, state.seed_d_count,"C");
+    setThumb("r3", state.seed_e_url, state.seed_f_url, state.seed_e_count, state.seed_f_count,"E");
+    setThumb("r4", state.seed_g_url, state.seed_h_url, state.seed_g_count, state.seed_h_count,"G");
+    setThumb("r5", state.seed_i_url, state.seed_j_url, state.seed_i_count, state.seed_j_count,"I");
+    setThumb("r6", state.seed_k_url, state.seed_l_url, state.seed_k_count, state.seed_l_count,"K");
+    setThumb("r7", state.seed_m_url, state.seed_n_url, state.seed_m_count, state.seed_n_count,"M");
+    setThumb("r8", state.seed_o_url, state.seed_p_url, state.seed_o_count, state.seed_p_count,"O");
+
+    for (let i=1;i<=8;i++){
+      const k = "r"+i;
+      thumbs[k].box.classList.toggle("hidden", !state.r32_done);
+      thumbs[k].box.classList.toggle("disabled", !state.r32_done || !!state.r16_done);
+    }
+
+    const q = [
+      ["q1","q1_a_url","q1_b_url","q1_a_count","q1_b_count","seed_a_url","seed_b_url","seed_a_count","seed_b_count","A"],
+      ["q2","q2_c_url","q2_d_url","q2_c_count","q2_d_count","seed_c_url","seed_d_url","seed_c_count","seed_d_count","C"],
+      ["q3","q3_e_url","q3_f_url","q3_e_count","q3_f_count","seed_e_url","seed_f_url","seed_e_count","seed_f_count","E"],
+      ["q4","q4_g_url","q4_h_url","q4_g_count","q4_h_count","seed_g_url","seed_h_url","seed_g_count","seed_h_count","G"],
+    ];
+    for (const [k,lu,ru,lc,rc,flu,fru,flc,frc,fb] of q){
+      const L = pick(state[lu], state[flu]);
+      const R = pick(state[ru], state[fru]);
+      const LC = pick(state[lc], state[flc]);
+      const RC = pick(state[rc], state[frc]);
+      setThumb(k, L, R, LC, RC, fb);
+      thumbs[k].box.classList.toggle("disabled", !state.r16_done || !!state.mid1_done);
+      thumbs[k].box.classList.toggle("hidden",   !state.r16_done);
+    }
+
+    if (!state.mid1_done){
+      thumbs.s1.imgL.src = placeholder("S1");
+      thumbs.s1.imgR.src = placeholder("S1");
+      thumbs.s1.count.textContent = "0-0";
+      thumbs.s1.box.classList.add("disabled"); thumbs.s1.box.classList.add("hidden");
+
+      thumbs.s2.imgL.src = placeholder("S2");
+      thumbs.s2.imgR.src = placeholder("S2");
+      thumbs.s2.count.textContent = "0-0";
+      thumbs.s2.box.classList.add("disabled"); thumbs.s2.box.classList.add("hidden");
+    }else{
+      setThumb("s1", state.semi_1_left_url, state.semi_1_right_url, state.seed_a_count, state.seed_b_count, "S1");
+      setThumb("s2", state.semi_2_left_url, state.semi_2_right_url, state.seed_c_count, state.seed_d_count, "S2");
+      thumbs.s1.box.classList.toggle("disabled", !!state.mid2_done);
+      thumbs.s1.box.classList.remove("hidden");
+      thumbs.s2.box.classList.toggle("disabled", !!state.mid2_done);
+      thumbs.s2.box.classList.remove("hidden");
+    }
+
+    if (!state.mid2_done){
+      thumbs.final.imgL.src = placeholder("F");
+      thumbs.final.imgR.src = placeholder("F");
+      thumbs.final.count.textContent = "0-0";
+      thumbs.final.box.classList.add("disabled"); thumbs.final.box.classList.add("hidden");
+    }else{
+      setThumb("final", state.mid_winner_1_url, state.mid_winner_2_url, state.seed_a_count, state.seed_b_count, "F");
+      thumbs.final.box.classList.remove("disabled"); thumbs.final.box.classList.remove("hidden");
+    }
+
+    markActive();
+  }
+
+  function setFinalBox(){
+    setFinalMedia(1, state.mid_winner_1_url || null);
+    setFinalMedia(2, state.mid_winner_2_url || null);
+    if (state.mid2_done) finalFooter.textContent = "Final is live — decides at 0s. Tap ⤢ for audio.";
+    else if (state.mid1_done) finalFooter.textContent = "Semis live — final soon.";
+    else if (state.r16_done) finalFooter.textContent = "Quarters live — semis soon.";
+    else if (state.r32_done) finalFooter.textContent = "R16 live — quarters later.";
+    else finalFooter.textContent = "R32 live — R16 later.";
+  }
+
+  function updateAutoButtons(phaseLive){
+    if (!autoBtn1 || !autoBtn2) return;
+    const base = state.base_iso || "";
+    const { used, url } = autoMemRead(base);
+
+    const leftMatches = used && isRealUrl(activeLeftUrl) && activeLeftUrl === url;
+    const rightMatches = used && isRealUrl(activeRightUrl) && activeRightUrl === url;
+
+    autoBtn1.disabled = used || !phaseLive;
+    autoBtn2.disabled = used || !phaseLive;
+
+    autoBtn1.textContent = leftMatches ? "AFK vote locked in" : "vote this art for every round";
+    autoBtn2.textContent = rightMatches ? "AFK vote locked in" : "vote this art for every round";
+  }
+
+  function maybeAutoCastForActive(phaseLive) {
+    if (!phaseLive) return;
+    if (autoVoteInFlight) return;
+
+    const base = state.base_iso || "";
+    const { used, url } = autoMemRead(base);
+    if (!used || !url) return;
+
+    const mem = memRead(base);
+    if (mem[activeMatch]) return;
+
+    let color = null;
+    if (url === activeLeftUrl) color = "red";
+    else if (url === activeRightUrl) color = "blue";
+    if (!color) return;
+
+    autoVoteInFlight = true;
+    vote(color).finally(() => {
+      autoVoteInFlight = false;
+    });
+  }
+
+  function renderActive(){
+    renderThumbs();
+    setFinalBox();
+
+    const base = state.base_iso||"";
+    const mem = memRead(base);
+    const picked = mem[activeMatch];
+
+    let leftImg=placeholder("?"), rightImg=placeholder("?"), leftCt=0, rightCt=0;
+    let defaultLeftLabel="Top", defaultRightLabel="Bottom";
+
+    const metaByUrl = state.meta_by_url || {};
+
+    const find = order.find(o=>o.key===activeMatch);
+    if (find && !find.semi && find.key!=="final"){
+      const L = pick(state[find.left], state[find.fbLeft]);
+      const R = pick(state[find.right], state[find.fbRight]);
+      const LC = pick(state[find.lct], state[find.fbLct]);
+      const RC = pick(state[find.rct], state[find.fbRct]);
+      leftImg=L||placeholder("?"); rightImg=R||placeholder("?");
+      leftCt=LC||0; rightCt=RC||0;
+      defaultLeftLabel = find.label.split(" ")[0] + " — Top";
+      defaultRightLabel= find.label.split(" ")[0] + " — Bottom";
+    } else if (activeMatch==="s1"){
+      if (state.mid1_done){
+        leftImg  = state.semi_1_left_url  || placeholder("?");
+        rightImg = state.semi_1_right_url || placeholder("?");
+        leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0;
+      }
+      defaultLeftLabel="Semi 1 — Top"; defaultRightLabel="Semi 1 — Bottom";
+    } else if (activeMatch==="s2"){
+      if (state.mid1_done){
+        leftImg  = state.semi_2_left_url  || placeholder("?");
+        rightImg = state.semi_2_right_url || placeholder("?");
+        leftCt = state.seed_c_count||0; rightCt=state.seed_d_count||0;
+      }
+      defaultLeftLabel="Semi 2 — Top"; defaultRightLabel="Semi 2 — Bottom";
+    } else {
+      if (state.mid2_done){
+        leftImg  = state.mid_winner_1_url || placeholder("?");
+        rightImg = state.mid_winner_2_url || placeholder("?");
+        leftCt = state.seed_a_count||0; rightCt=state.seed_b_count||0;
+      }
+      defaultLeftLabel="Final — Top"; defaultRightLabel="Final — Bottom";
+    }
+
+    activeLeftUrl = leftImg;
+    activeRightUrl = rightImg;
+
+    setActiveMedia("active1", leftImg);
+    setActiveMedia("active2", rightImg);
+
+    const leftMeta = metaByUrl[leftImg] || {};
+    const rightMeta = metaByUrl[rightImg] || {};
+
+    function buildLabel(defaultLabel, meta){
+      const t = meta && meta.title ? String(meta.title) : "";
+      const a = meta && meta.artist ? String(meta.artist) : "";
+      if (!t && !a) return defaultLabel;
+
+      let line = "";
+      if (t) line += `"${escapeHtml(t)}"`;
+      if (a){
+        const safeA = escapeHtml(a);
+        line += (line ? " · " : "") +
+                `<a href="profile.html?u=${safeA}" class="artist-link">@${safeA}</a>`;
+      }
+      return line;
+    }
+
+    let baseLabel1 = buildLabel(defaultLeftLabel, leftMeta);
+    let baseLabel2 = buildLabel(defaultRightLabel, rightMeta);
+
+    if (picked==="red")  baseLabel1 += " • you voted";
+    if (picked==="blue") baseLabel2 += " • you voted";
+
+    labelActive1.innerHTML = baseLabel1;
+    labelActive2.innerHTML = baseLabel2;
+    countActive1.textContent = leftCt;
+    countActive2.textContent = rightCt;
+
+    renderPieceMeta(metaActive1, leftMeta);
+    renderPieceMeta(metaActive2, rightMeta);
+
+    let phaseLive = true;
+    if (activeMatch.startsWith("rr")) {
+      if (state.r32_done) phaseLive = false;
+    } else if (activeMatch.startsWith("r") && !activeMatch.startsWith("rr")) {
+      if (!state.r32_done || state.r16_done) phaseLive = false;
+    } else if (activeMatch.startsWith("q")) {
+      if (!state.r16_done || state.mid1_done) phaseLive = false;
+    } else if (["s1","s2"].includes(activeMatch)) {
+      if (!state.mid1_done || state.mid2_done) phaseLive = false;
+  
   async function fetchState(force=false){
     try{
-      // Only attempt if function exists; failure here shouldn't block timer.
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token || null;
+      // Always try to keep timer alive even if the edge function fails
+      await loadTimerFromDB();
+
+      let accessToken = null;
+      try{
+        const { data: sessionData } = await supabase.auth.getSession();
+        accessToken = sessionData?.session?.access_token || null;
+      }catch(e){
+        accessToken = null;
+      }
+
+      const headers = { "apikey": SUPABASE_ANON_KEY };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
 
       const res = await fetch(`${FUNCTION_URL}?_=${Date.now()}`, {
-        method:"GET",
-        headers: token
-          ? { "Authorization": `Bearer ${token}`, "apikey": SUPABASE_ANON_KEY }
-          : { "apikey": SUPABASE_ANON_KEY }
+        method: "GET",
+        headers
       });
 
       if (!res.ok){
-        setStateStatus(false, `edge ${res.status}`);
+        // edge unreachable or returned error; keep DB timer and UI running
+        renderActive();
+        updateCurrentRoundLabel();
         return;
       }
 
-      const s = await res.json();
-      if (s && typeof s === "object"){
-        Object.assign(state, s);
+      const data = await res.json().catch(()=> ({}));
+      const s = (data && typeof data==="object" && "state" in data) ? data.state : data;
+      state = Object.assign(state, s || {});
 
-        // normalize common variants
-        if (!state.ends_at && s.endsAt) state.ends_at = s.endsAt;
-        if (!state.base_iso && (s.baseIso || s.baseISO)) state.base_iso = s.baseIso || s.baseISO;
+      // Safety: if edge didn't include ends_at, we still have DB fallback
+      if (!state.ends_at) await loadTimerFromDB();
 
-        // resync timer if ends_at changed
-        timerEndsAtMs = null;
-        tickTimer();
+      if (!state.r32_done && !activeMatch.startsWith("rr")) activeMatch = "rr1";
+      if (state.r32_done && !state.r16_done &&
+          (activeMatch.startsWith("rr") || activeMatch.startsWith("q") || activeMatch.startsWith("s") || activeMatch==="final")) activeMatch = "r1";
+      if (state.r16_done && !state.mid1_done && activeMatch.startsWith("r")) activeMatch = "q1";
+      if (state.mid1_done && !state.mid2_done &&
+          (activeMatch.startsWith("r")||activeMatch.startsWith("q"))) activeMatch="s1";
+      if (state.mid2_done && activeMatch!=="final") activeMatch="final";
 
-        pickActivePair();
-        setStateStatus(true, "ok");
-      }else{
-        setStateStatus(false, "bad json");
-      }
+      renderActive();
+      updateCurrentRoundLabel();
     }catch(e){
-      setStateStatus(false, "edge failed");
+      // If edge fetch throws (CORS/network TypeError), still keep timer alive
+      await loadTimerFromDB();
+      renderActive();
+      updateCurrentRoundLabel();
+    }
+  }
+" && "state" in data) ? data.state : data;
+      state = Object.assign(state, s || {});
+
+      if (!state.r32_done && !activeMatch.startsWith("rr")) activeMatch = "rr1";
+      if (state.r32_done && !state.r16_done &&
+          (activeMatch.startsWith("rr") || activeMatch.startsWith("q") || activeMatch.startsWith("s") || activeMatch==="final")) activeMatch = "r1";
+      if (state.r16_done && !state.mid1_done && activeMatch.startsWith("r")) activeMatch = "q1";
+      if (state.mid1_done && !state.mid2_done &&
+          (activeMatch.startsWith("r")||activeMatch.startsWith("q"))) activeMatch="s1";
+      if (state.mid2_done && activeMatch!=="final") activeMatch="final";
+
+      renderActive();
+      updateCurrentRoundLabel();
+    }catch(e){
+      renderActive();
+      updateCurrentRoundLabel();
     }
   }
 
-  // ====== AUTH BOOT ======
-  async function boot(){
-    const { data } = await supabase.auth.getUser();
-    if (data?.user){
-      setAuth(true, data.user.email || "signed in");
-    }else{
-      setAuth(false, "not signed in");
+  let phaseSync = { r32:false, r16:false, q:false, s:false, f:false };
+  let lastFlags={r32:false, r16:false, mid1:false, mid2:false};
+  let championOverlayShown = false;
+
+  function showChampionOverlayIfReady(){
+    if (championOverlayShown) return;
+    if (typeof window.openChampionOverlay !== "function") return;
+    if (!state.mid2_done) return;
+
+    const leftUrl  = state.mid_winner_1_url || null;
+    const rightUrl = state.mid_winner_2_url || null;
+    if (!leftUrl && !rightUrl) return;
+
+    const leftCount  = state.seed_a_count ?? 0;
+    const rightCount = state.seed_b_count ?? 0;
+
+    let winnerUrl = leftUrl || rightUrl;
+    let winnerLabel = labelActive1.textContent || "Champion";
+
+    if (rightCount > leftCount) {
+      winnerUrl = rightUrl || winnerUrl;
+      winnerLabel = labelActive2.textContent || winnerLabel;
     }
 
-    // Pull DB timer immediately regardless
-    await loadTimerFromDB();
-
-    // Try edge state (won't block)
-    fetchState(true);
-
-    // Also refresh state every 30s
-    setInterval(() => fetchState(false), 30000);
+    const cleanLabel = winnerLabel.split(" •")[0];
+    window.openChampionOverlay(cleanLabel, winnerUrl);
+    championOverlayShown = true;
   }
 
-  // ====== UI EVENTS ======
-  btnRefresh.addEventListener("click", () => {
-    loadTimerFromDB();
-    fetchState(true);
-  });
-
-  btnAFK.addEventListener("click", async () => {
-    try{
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token || null;
-      if (!token){
-        alert("Sign in first.");
-        return;
-      }
-
-      const activeUrl = state.seed_a_url; // pick one; your old logic can be restored later
-      const res = await fetch(`${FUNCTION_URL}`, {
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "Authorization": `Bearer ${token}`,
-          "apikey": SUPABASE_ANON_KEY
-        },
-        body: JSON.stringify({ mode:"auto_vote", image_url: activeUrl })
-      });
-
-      const j = await res.json().catch(()=> ({}));
-      if (!res.ok){
-        alert(j?.error || `AFK failed (${res.status})`);
-        return;
-      }
-      alert("AFK vote locked in.");
-    }catch(e){
-      alert("AFK failed.");
+  function updateCurrentRoundLabel(){
+    if (!currentRoundEl) return;
+    if (!state) {
+      currentRoundEl.textContent = "Current round: —";
+      return;
     }
-  });
-
-  voteLeftBtn.addEventListener("click", () => alert("Vote wiring is still in your old logic; timer first."));
-  voteRightBtn.addEventListener("click", () => alert("Vote wiring is still in your old logic; timer first."));
-
-  // Fullscreen modal (tap/click)
-  imgLeft.addEventListener("click", () => {
-    if (!imgLeft.src) return;
-    fullImg.src = imgLeft.src;
-    modal.classList.add("show");
-  });
-  imgRight.addEventListener("click", () => {
-    if (!imgRight.src) return;
-    fullImg.src = imgRight.src;
-    modal.classList.add("show");
-  });
-
-  // Keyboard controls (A fullscreen active, B close)
-  document.addEventListener("keydown", (e) => {
-    const k = (e.key || "").toLowerCase();
-    if (k === "b"){
-      modal.classList.remove("show");
+    let name;
+    if (!state.r32_done) {
+      name = "Round of 32";
+    } else if (!state.r16_done) {
+      name = "Round of 16";
+    } else if (!state.mid1_done) {
+      name = "Quarterfinals";
+    } else if (!state.mid2_done) {
+      name = "Semifinals";
+    } else {
+      name = "Final";
     }
-    if (k === "a"){
-      // if modal open, keep open; otherwise open left by default
-      if (!modal.classList.contains("show")){
-        if (imgLeft?.src){
-          fullImg.src = imgLeft.src;
-          modal.classList.add("show");
+    currentRoundEl.textContent = "Current round: " + name;
+  }
+
+  function tick(){
+    if (!state?.ends_at) return requestAnimationFrame(tick);
+    const ms = Math.max(0, new Date(state.ends_at).getTime() - Date.now());
+
+    const SEG_MS = 17_280_000;
+    let segMs = ms % SEG_MS;
+    if (segMs === 0 && ms > 0) segMs = SEG_MS;
+    const totalSeconds = Math.ceil(segMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const hh = String(hours).padStart(2,"0");
+    const mm = String(minutes).padStart(2,"0");
+    const ss = String(seconds).padStart(2,"0");
+    elRemain.textContent = `${hh}:${mm}:${ss}`;
+
+    const R32_MS = 69_120_000, R16_MS = 51_840_000, Q_MS = 34_560_000, S_MS = 17_280_000;
+
+    if (state.r32_done && !lastFlags.r32){ activeMatch="r1"; }
+    if (state.r16_done && !lastFlags.r16){ activeMatch="q1"; }
+    if (state.mid1_done && !lastFlags.mid1){ activeMatch="s1"; }
+    if (state.mid2_done && !lastFlags.mid2){ activeMatch="final"; }
+
+    lastFlags = { r32: !!state.r32_done, r16: !!state.r16_done, mid1: !!state.mid1_done, mid2: !!state.mid2_done };
+
+    if (ms <= R32_MS + 250 && !state.r32_done) winnerText.textContent = 'R32 just locked — R16 live.';
+    if (ms <= R16_MS + 250 && state.r32_done && !state.r16_done) winnerText.textContent = 'R16 just locked — quarters live.';
+    if (ms <= Q_MS  + 250 && state.r16_done && !state.mid1_done) winnerText.textContent = 'Quarters just locked — semis live.';
+    if (ms <= S_MS  + 250 && state.mid1_done && !state.mid2_done) winnerText.textContent = 'Semis just locked — final live.';
+
+    if (ms <= R32_MS && !state.r32_done && !phaseSync.r32){ phaseSync.r32=true; fetchState(true); }
+    if (ms <= R16_MS && state.r32_done && !state.r16_done && !phaseSync.r16){ phaseSync.r16=true; fetchState(true); }
+    if (ms <= Q_MS  && state.r16_done && !state.mid1_done && !phaseSync.q){ phaseSync.q=true; fetchState(true); }
+    if (ms <= S_MS  && state.mid1_done && !state.mid2_done && !phaseSync.s){ phaseSync.s=true; fetchState(true); }
+    if (ms <= 0     && state.mid2_done && !phaseSync.f){ phaseSync.f=true; fetchState(true); }
+
+    if (ms <= 0 && state.mid2_done && !championOverlayShown) {
+      showChampionOverlayIfReady();
+    }
+
+    updateCurrentRoundLabel();
+
+    requestAnimationFrame(tick);
+  }
+
+  supabase.channel('cycles-v2-live')
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'cycles_v2' }, async ()=>{ await fetchState(true); })
+    .subscribe();
+
+  supabase.channel('matchup-sync')
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'art_queue', filter:'status=in.(locked,used)' }, async ()=>{ await fetchState(true); })
+    .subscribe();
+
+  initVoteUserKey();
+  fetchState(true).then(()=>{
+    setTimeout(()=>fetchState(true), 600);
+    setTimeout(()=>fetchState(true), 1500);
+    tick();
+  });
+</script>
+<script src="js/auth-guard.js" type="module"></script>
+
+<!-- ===== Loading Bar Logic (replaces LOADING… text) ===== -->
+<script>
+  const loadingEl = document.getElementById("loadingScreen");
+  const loadFillEl = document.getElementById("loadFill");
+  const loadPctEl = document.getElementById("loadPct");
+  const loadStatusEl = document.getElementById("loadStatus");
+
+  // (Loader UI removed)
+  if (loadingEl) loadingEl.remove();
+
+
+  const LOADER = {
+    done: false,
+    steps: {
+      authReady: false,
+      stateReady: false,
+      mediaLeft: false,
+      mediaRight: false,
+    },
+    totalCount() {
+      // 4 known steps = "accurate milestones"
+      return 4;
+    },
+    doneCount() {
+      return Object.values(this.steps).filter(Boolean).length;
+    },
+    setStatus(txt) {
+      if (loadStatusEl) loadStatusEl.textContent = txt || "";
+    },
+    render() {
+      if (!loadingEl || !loadFillEl || !loadPctEl) return;
+      const total = this.totalCount();
+      const done = this.doneCount();
+      const pct = total ? Math.round((done / total) * 100) : 0;
+
+      if (loadFillEl) loadFillEl.style.width = pct + "%";
+      if (loadPctEl) loadPctEl.textContent = pct + "%";
+    },
+    mark(stepKey, statusText) {
+      if (this.done) return;
+      if (stepKey && this.steps[stepKey] === false) {
+        this.steps[stepKey] = true;
+      }
+      if (statusText) this.setStatus(statusText);
+      this.render();
+
+      if (this.doneCount() >= this.totalCount()) {
+        this.finish();
+      }
+    },
+    finish() {
+      if (this.done) return;
+      this.done = true;
+      this.setStatus("Ready.");
+      this.render();
+      if (loadingEl) loadingEl.style.display = "none";
+    }
+  };
+
+  // Wait for actual image/video load events (or timeout) so the bar is real.
+  function waitForMediaLoad(url, imgEl, vidEl) {
+    return new Promise((resolve) => {
+      if (!url || typeof url !== "string") return resolve(false);
+
+      const isVid = /\.(mp4|webm|mov)(\?|#|$)/i.test(url.split("#")[0]);
+      const timeout = setTimeout(() => cleanup(false), 6500);
+
+      function cleanup(ok) {
+        clearTimeout(timeout);
+        if (isVid) {
+          if (vidEl) {
+            vidEl.removeEventListener("canplay", onOk);
+            vidEl.removeEventListener("loadeddata", onOk);
+            vidEl.removeEventListener("error", onErr);
+          }
+        } else {
+          if (imgEl) {
+            imgEl.removeEventListener("load", onOk);
+            imgEl.removeEventListener("error", onErr);
+          }
         }
+        resolve(ok);
       }
-    }
-  });
-  modal.addEventListener("click", () => modal.classList.remove("show"));
 
-  boot();
+      function onOk() { cleanup(true); }
+      function onErr() { cleanup(false); }
+
+      if (isVid) {
+        if (!vidEl) return cleanup(false);
+        // If already has enough data, count it immediately.
+        if (vidEl.readyState >= 2) return cleanup(true);
+        vidEl.addEventListener("canplay", onOk, { once:true });
+        vidEl.addEventListener("loadeddata", onOk, { once:true });
+        vidEl.addEventListener("error", onErr, { once:true });
+      } else {
+        if (!imgEl) return cleanup(false);
+        if (imgEl.complete && imgEl.naturalWidth > 0) return cleanup(true);
+        imgEl.addEventListener("load", onOk, { once:true });
+        imgEl.addEventListener("error", onErr, { once:true });
+      }
+    });
+  }
+
+  // Hook into your existing initVoteUserKey and fetchState WITHOUT changing their behavior.
+  (function wireLoaderIntoApp(){
+    LOADER.setStatus("Connecting…");
+    LOADER.render();
+
+    const originalInitVoteUserKey = initVoteUserKey;
+    initVoteUserKey = async function(){
+      LOADER.setStatus("Checking session…");
+      try {
+        const out = await originalInitVoteUserKey();
+        LOADER.mark("authReady", "Session ready.");
+        return out;
+      } catch (e) {
+        LOADER.mark("authReady", "Session ready.");
+        return originalInitVoteUserKey(); // fallback, keep behavior
+      }
+    };
+
+    const originalFetchState = fetchState;
+    fetchState = async function(force=false){
+      if (!LOADER.steps.stateReady) LOADER.setStatus("Fetching tournament state…");
+      const result = await originalFetchState(force);
+
+      if (state?.ends_at && !LOADER.steps.stateReady) {
+        LOADER.mark("stateReady", "State loaded. Loading art 1/2…");
+
+        // At this point renderActive has already run and setActiveMedia has set src.
+        // Now we wait for the ACTUAL active media elements to load/canplay.
+        const leftUrl = (typeof activeLeftUrl === "string") ? activeLeftUrl : "";
+        const rightUrl = (typeof activeRightUrl === "string") ? activeRightUrl : "";
+
+        // Left
+        waitForMediaLoad(leftUrl, imgActive1, vidActive1).then(()=>{
+          LOADER.mark("mediaLeft", "Loading art 2/2…");
+        });
+
+        // Right
+        waitForMediaLoad(rightUrl, imgActive2, vidActive2).then(()=>{
+          LOADER.mark("mediaRight", "Finalizing…");
+        });
+      }
+
+      return result;
+    };
+
+    const originalTick = tick;
+    tick = function(){
+      // If something goes wrong but the timer starts, don't leave them stuck.
+      if (state?.ends_at && !LOADER.steps.stateReady) {
+        LOADER.mark("stateReady", "State loaded. Loading art…");
+      }
+      originalTick();
+    };
+  })();
 </script>
 
 </body>
