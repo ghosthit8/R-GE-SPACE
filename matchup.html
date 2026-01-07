@@ -189,9 +189,81 @@
     }
     .artist-link:hover { text-decoration: underline; }
 
-    </style>
+    /* ===== Loading Bar Overlay ===== */
+    #loadingScreen {
+      position:fixed;
+      inset:0;
+      background:#0b0f13;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      z-index:999999;
+      color:#39ff14;
+      font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif;
+    }
+    .loadBox {
+      width:min(520px, 86vw);
+      border:1px solid rgba(57,255,20,.35);
+      border-radius:16px;
+      background:rgba(10,14,18,.75);
+      box-shadow:0 0 24px rgba(57,255,20,.10);
+      padding:16px 14px 14px;
+    }
+    .loadTitle {
+      font-weight:800;
+      letter-spacing:2px;
+      text-transform:uppercase;
+      font-size:14px;
+      display:flex;
+      justify-content:space-between;
+      align-items:baseline;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .loadPct {
+      font-variant-numeric:tabular-nums;
+      font-size:12px;
+      opacity:.9;
+    }
+    .loadTrack {
+      height:12px;
+      border-radius:999px;
+      background:rgba(57,255,20,.12);
+      overflow:hidden;
+      border:1px solid rgba(57,255,20,.25);
+    }
+    .loadFill {
+      height:100%;
+      width:0%;
+      background:linear-gradient(90deg, rgba(57,255,20,.25), rgba(57,255,20,1), rgba(57,255,20,.45));
+      box-shadow:0 0 18px rgba(57,255,20,.35);
+      transition:width .18s ease;
+    }
+    .loadStatus {
+      margin-top:10px;
+      font-size:12px;
+      letter-spacing:.3px;
+      color:#b8ffad;
+      opacity:.95;
+      min-height:16px;
+    }
+  </style>
 </head>
 <body>
+
+<!-- LOADING OVERLAY -->
+<div id="loadingScreen">
+  <div class="loadBox">
+    <div class="loadTitle">
+      <span>LOADING</span>
+      <span class="loadPct" id="loadPct">0%</span>
+    </div>
+    <div class="loadTrack" aria-label="Loading progress">
+      <div class="loadFill" id="loadFill"></div>
+    </div>
+    <div class="loadStatus" id="loadStatus">Starting…</div>
+  </div>
+</div>
 
 <div class="wrap">
   <h1 class="glitch-title" data-text="ART BATTLE. Faction I.">ART BATTLE. Faction I.</h1>
@@ -298,7 +370,34 @@
   const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
+  
+  // ===== Timer DB fallback helpers (keeps timer working even if Edge Function fails) =====
+  function normalizeCycleState(raw){
+    const s = (raw && typeof raw === "object") ? { ...raw } : {};
+    // common aliases (in case the function returns camelCase)
+    if (!s.ends_at && s.endsAt) s.ends_at = s.endsAt;
+    if (!s.base_iso && (s.baseIso || s.baseISO)) s.base_iso = s.baseIso || s.baseISO;
+    if (!s.period_sec && s.periodSec) s.period_sec = s.periodSec;
+    return s;
+  }
+
+  async function loadCycleFromDB(){
+    try{
+      const { data, error } = await supabase
+        .from("cycles_v2")
+        .select("ends_at, period_sec, base_iso, r32_done, r16_done, mid1_done, mid2_done, mid_done")
+        .order("ends_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !data) return null;
+      return normalizeCycleState(data);
+    }catch(e){
+      return null;
+    }
+  }
+
+const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/global-timer-v2`;
 
   const RSID_KEY = "rsid_v2";
   let RSID = localStorage.getItem(RSID_KEY);
@@ -364,39 +463,7 @@
     return /\.(mp4|webm|mov)(\?|$)/i.test(base);
   }
 
-  
-  // ===== Timer/state normalization helpers =====
-  function normalizeCycleState(obj){
-    if (!obj || typeof obj !== "object") return obj || {};
-    const s = { ...obj };
-
-    // Edge function variants
-    if (!s.ends_at && s.endsAt) s.ends_at = s.endsAt;
-    if (!s.base_iso && (s.baseIso || s.baseISO)) s.base_iso = s.baseIso || s.baseISO;
-    if (!s.period_sec && (s.periodSec || s.periodSEC)) s.period_sec = s.periodSec || s.periodSEC;
-
-    // If ends_at came as a Postgres timestamp object or Date, try to stringify
-    if (s.ends_at instanceof Date) s.ends_at = s.ends_at.toISOString();
-    if (s.ends_at && typeof s.ends_at === "object" && "value" in s.ends_at) s.ends_at = String(s.ends_at.value);
-
-    return s;
-  }
-
-  async function loadCycleFromDB(){
-    try{
-      const { data, error } = await supabase
-        .from("cycles_v2")
-        .select("ends_at, period_sec, base_iso")
-        .order("ends_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) return null;
-      if (!data?.ends_at) return null;
-      return normalizeCycleState(data);
-    }catch(e){ return null; }
-  }
-
-function openFull(which){
+  function openFull(which){
     let url = "";
     if (which==="active1"){
       if (!vidActive1.classList.contains("hidden") && vidActive1.src) url = vidActive1.src;
@@ -1282,6 +1349,7 @@ function openFull(which){
 
   async function fetchState(force=false){
     try{
+      // Try Edge Function first (it may also advance phases)
       const url = FUNCTION_URL + (FUNCTION_URL.includes("?") ? "&" : "?") + "_=" + Date.now();
       const res = await fetch(url, {
         headers: {
@@ -1294,11 +1362,11 @@ function openFull(which){
       let data = null;
       try { data = await res.json(); } catch(e) { data = null; }
 
-      const raw = (data && typeof data==="object" && "state" in data) ? data.state : data;
+      const raw = (data && typeof data === "object" && "state" in data) ? data.state : data;
       const s = normalizeCycleState(raw || {});
       state = Object.assign(state, s);
 
-      // If the edge function didn't provide ends_at, pull directly from cycles_v2 so the timer always works.
+      // If we still don't have ends_at, fall back to DB so the timer works no matter what.
       if (!state.ends_at){
         const dbs = await loadCycleFromDB();
         if (dbs && dbs.ends_at) state = Object.assign(state, dbs);
@@ -1315,7 +1383,7 @@ function openFull(which){
       renderActive();
       updateCurrentRoundLabel();
     }catch(e){
-      // Still try DB fallback for timer even if function fetch fails
+      // Edge Function failed — timer still must run
       try{
         const dbs = await loadCycleFromDB();
         if (dbs && dbs.ends_at) state = Object.assign(state, dbs);
@@ -1356,22 +1424,22 @@ function openFull(which){
 
   function updateCurrentRoundLabel(){
     if (!currentRoundEl) return;
-
-    if (!state || !state.ends_at) {
+    if (!state) {
       currentRoundEl.textContent = "Current round: —";
       return;
     }
-
-    const secondsLeft = Math.max(0, Math.floor((new Date(state.ends_at).getTime() - Date.now()) / 1000));
-
     let name;
-    if (secondsLeft > 69120) name = "R32";
-    else if (secondsLeft > 51840) name = "R16";
-    else if (secondsLeft > 34560) name = "QF";
-    else if (secondsLeft > 17280) name = "SF";
-    else if (secondsLeft > 0) name = "Final";
-    else name = "Deciding";
-
+    if (!state.r32_done) {
+      name = "Round of 32";
+    } else if (!state.r16_done) {
+      name = "Round of 16";
+    } else if (!state.mid1_done) {
+      name = "Quarterfinals";
+    } else if (!state.mid2_done) {
+      name = "Semifinals";
+    } else {
+      name = "Final";
+    }
     currentRoundEl.textContent = "Current round: " + name;
   }
 
@@ -1429,6 +1497,17 @@ function openFull(which){
     .subscribe();
 
   initVoteUserKey();
+
+  // Preload timer directly from DB so the countdown works even if the Edge Function is blocked.
+  loadCycleFromDB().then((dbs)=>{
+    if (dbs && dbs.ends_at){
+      state = Object.assign(state, dbs);
+      renderActive();
+      updateCurrentRoundLabel();
+      tick();
+    }
+  });
+
   fetchState(true).then(()=>{
     setTimeout(()=>fetchState(true), 600);
     setTimeout(()=>fetchState(true), 1500);
@@ -1437,224 +1516,159 @@ function openFull(which){
 </script>
 <script src="js/auth-guard.js" type="module"></script>
 
-<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
+<!-- ===== Loading Bar Logic (replaces LOADING… text) ===== -->
 <script>
-(function () {
-  const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
+  const loadingEl = document.getElementById("loadingScreen");
+  const loadFillEl = document.getElementById("loadFill");
+  const loadPctEl = document.getElementById("loadPct");
+  const loadStatusEl = document.getElementById("loadStatus");
 
-  // --- create floating button OUTSIDE the hidden panel ---
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'dbgFloatingBtn';
-  floatBtn.textContent = '🐛 Debug';
-  floatBtn.style.cssText = `
-    position: fixed; right: 8px; bottom: 8px;
-    z-index: 2147483647; background:#000; color:#0f0;
-    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
-    font: 12px/1.1 monospace; cursor:pointer;
-  `;
-  document.body.appendChild(floatBtn);
+  const LOADER = {
+    done: false,
+    steps: {
+      authReady: false,
+      stateReady: false,
+      mediaLeft: false,
+      mediaRight: false,
+    },
+    totalCount() {
+      // 4 known steps = "accurate milestones"
+      return 4;
+    },
+    doneCount() {
+      return Object.values(this.steps).filter(Boolean).length;
+    },
+    setStatus(txt) {
+      if (loadStatusEl) loadStatusEl.textContent = txt || "";
+    },
+    render() {
+      const total = this.totalCount();
+      const done = this.doneCount();
+      const pct = total ? Math.round((done / total) * 100) : 0;
 
-  // --- panel wrapper (starts hidden) ---
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
-  `;
+      if (loadFillEl) loadFillEl.style.width = pct + "%";
+      if (loadPctEl) loadPctEl.textContent = pct + "%";
+    },
+    mark(stepKey, statusText) {
+      if (this.done) return;
+      if (stepKey && this.steps[stepKey] === false) {
+        this.steps[stepKey] = true;
+      }
+      if (statusText) this.setStatus(statusText);
+      this.render();
 
-  const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-  bar.innerHTML = `
-    <span style="color:#6f6">Rage Debug</span>
-    <label>Filter:
-      <select id="dbgFilter">
-        <option value="">All</option>
-        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
-        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
-        <option>ERR</option><option>WARN</option><option>LOG</option>
-      </select>
-    </label>
-    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgDownload">Download</button>
-    <button id="dbgClear">Clear</button>
-    <span style="margin-left:auto"></span>
-    <button id="dbgClose">✕</button>
-  `;
-
-  const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-
-  // button wiring
-  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-  // controls
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
-  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
-  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-  bar.querySelector('#dbgDownload').onclick = () => {
-    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
-    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+      if (this.doneCount() >= this.totalCount()) {
+        this.finish();
+      }
+    },
+    finish() {
+      if (this.done) return;
+      this.done = true;
+      this.setStatus("Ready.");
+      this.render();
+      if (loadingEl) loadingEl.style.display = "none";
+    }
   };
 
-  // ring buffer + rendering
-  let buffer = [];
-  function push(kind, msg, extra) {
-    if (!recordChk.checked) return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
-    if (buffer.length > MAX_LINES) buffer.shift();
-    const f = filterSel.value;
-    if (!f || f === kind) addLine({kind, line});
-  }
-  function addLine(r){
-    const div = document.createElement('div');
-    div.textContent = r.line;
-    if (r.kind === 'ERR') div.style.color = '#f88';
-    else if (r.kind === 'WARN') div.style.color = '#ff8';
-    else if (r.kind === 'EDGE') div.style.color = '#8ff';
-    else if (r.kind === 'NET')  div.style.color = '#8cf';
-    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-    list.appendChild(div); list.scrollTop = list.scrollHeight;
-  }
-  function render(){
-    list.innerHTML = '';
-    const f = filterSel.value;
-    for (const r of buffer) if (!f || f === r.kind) addLine(r);
-  }
-  filterSel.onchange = render;
+  // Wait for actual image/video load events (or timeout) so the bar is real.
+  function waitForMediaLoad(url, imgEl, vidEl) {
+    return new Promise((resolve) => {
+      if (!url || typeof url !== "string") return resolve(false);
 
-  // console hooks
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
+      const isVid = /\.(mp4|webm|mov)(\?|#|$)/i.test(url.split("#")[0]);
+      const timeout = setTimeout(() => cleanup(false), 6500);
 
-  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
+      function cleanup(ok) {
+        clearTimeout(timeout);
+        if (isVid) {
+          if (vidEl) {
+            vidEl.removeEventListener("canplay", onOk);
+            vidEl.removeEventListener("loadeddata", onOk);
+            vidEl.removeEventListener("error", onErr);
+          }
+        } else {
+          if (imgEl) {
+            imgEl.removeEventListener("load", onOk);
+            imgEl.removeEventListener("error", onErr);
+          }
+        }
+        resolve(ok);
+      }
 
-  // visibility & UI observers
-  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-  const q = (id) => document.getElementById(id);
+      function onOk() { cleanup(true); }
+      function onErr() { cleanup(false); }
 
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
+      if (isVid) {
+        if (!vidEl) return cleanup(false);
+        // If already has enough data, count it immediately.
+        if (vidEl.readyState >= 2) return cleanup(true);
+        vidEl.addEventListener("canplay", onOk, { once:true });
+        vidEl.addEventListener("loadeddata", onOk, { once:true });
+        vidEl.addEventListener("error", onErr, { once:true });
+      } else {
+        if (!imgEl) return cleanup(false);
+        if (imgEl.complete && imgEl.naturalWidth > 0) return cleanup(true);
+        imgEl.addEventListener("load", onOk, { once:true });
+        imgEl.addEventListener("error", onErr, { once:true });
       }
     });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
   }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
 
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
-    let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
-        const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
-        last = el.textContent; lastAt = now;
+  // Hook into your existing initVoteUserKey and fetchState WITHOUT changing their behavior.
+  (function wireLoaderIntoApp(){
+    LOADER.setStatus("Connecting…");
+    LOADER.render();
+
+    const originalInitVoteUserKey = initVoteUserKey;
+    initVoteUserKey = async function(){
+      LOADER.setStatus("Checking session…");
+      try {
+        const out = await originalInitVoteUserKey();
+        LOADER.mark("authReady", "Session ready.");
+        return out;
+      } catch (e) {
+        LOADER.mark("authReady", "Session ready.");
+        return originalInitVoteUserKey(); // fallback, keep behavior
       }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
+    };
+
+    const originalFetchState = fetchState;
+    fetchState = async function(force=false){
+      if (!LOADER.steps.stateReady) LOADER.setStatus("Fetching tournament state…");
+      const result = await originalFetchState(force);
+
+      if (state?.ends_at && !LOADER.steps.stateReady) {
+        LOADER.mark("stateReady", "State loaded. Loading art 1/2…");
+
+        // At this point renderActive has already run and setActiveMedia has set src.
+        // Now we wait for the ACTUAL active media elements to load/canplay.
+        const leftUrl = (typeof activeLeftUrl === "string") ? activeLeftUrl : "";
+        const rightUrl = (typeof activeRightUrl === "string") ? activeRightUrl : "";
+
+        // Left
+        waitForMediaLoad(leftUrl, imgActive1, vidActive1).then(()=>{
+          LOADER.mark("mediaLeft", "Loading art 2/2…");
+        });
+
+        // Right
+        waitForMediaLoad(rightUrl, imgActive2, vidActive2).then(()=>{
+          LOADER.mark("mediaRight", "Finalizing…");
+        });
+      }
+
+      return result;
+    };
+
+    const originalTick = tick;
+    tick = function(){
+      // If something goes wrong but the timer starts, don't leave them stuck.
+      if (state?.ends_at && !LOADER.steps.stateReady) {
+        LOADER.mark("stateReady", "State loaded. Loading art…");
+      }
+      originalTick();
+    };
   })();
-
-  // fetch tracer
-  const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
-    const start = performance.now();
-    const method = (opts && opts.method) || 'GET';
-    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
-    push(tag, `${method} ${url}`);
-    try {
-      const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-      return res;
-    } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
-      throw e;
-    }
-  };
-
-  // timers & rAF
-  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-
-  const timers = new Map();
-  window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-  window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-  window.requestAnimationFrame = function(fn){
-    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
-  };
-  window.cancelAnimationFrame = function(id){ _caf(id); };
-
-  // image load tracing
-  function hookImg(img){
-    if (!img || img.__dbgHooked) return;
-    img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
-  }
-  Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
-      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
-
-  // bracket observer
-  const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
-      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
-  }
-
-  // public helpers
-  window.RageDebug = {
-    log: (k, m) => push(k||'LOG', m||''),
-    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
-    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
-    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
-  };
-
-  // small banner
-  (console.log||(()=>{}))('Debugger ready');
-})();
 </script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
 
 </body>
 </html>
