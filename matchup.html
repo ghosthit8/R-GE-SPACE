@@ -1,41 +1,306 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rage Space — Matchup</title>
-
-  <!-- (your existing styles/scripts/head content stay the same) -->
-
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Rage Space — Matchup (32-up → 2-up)</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <style>
-    /* (your existing CSS stays the same) */
-  </style>
+    :root { --fg:#e5e7eb; --bg:#0b0f13; --accent:#39ff14; --muted:#8b8b8b; --card:#0f1318; --border:#20242a; }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
+    .wrap { max-width:700px; margin:0 auto; padding:16px 12px 96px; }
+    h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
+    .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid var(--border); border-radius:12px; background:var(--card); }
+    .state { color:var(--muted); font-size:12px; }
+
+    .round-label { font-size:13px; color:var(--muted); }
+
+    .card { margin-top:12px; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:var(--card); }
+    .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
+    .imgBox img, .imgBox video { width:100%; height:100%; object-fit:cover; display:block; }
+    .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
+    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid var(--border); }
+    .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
+    .counts { font-variant-numeric: tabular-nums; font-weight:700; }
+    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
+    .btn.ghost { color:#a0aec0; }
+    button.vote { padding:10px 14px; }
+    button.vote:disabled { opacity:.6; cursor:default; }
+
+    /* tiny AFK row under vote */
+    .autoRow {
+      display:flex;
+      justify-content:flex-end;
+      padding:0 12px 8px;
+    }
+
+    /* tiny AFK auto-vote button */
+    .autoVoteBtn {
+      padding: 2px 6px;
+      font-size: 9px;
+      border-radius: 999px;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .autoVoteBtn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .navArrow {
+      border: 1px solid var(--accent);
+      background: rgba(0,0,0,0.45);
+      color: var(--accent);
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .navArrow:disabled {
+      opacity: .35;
+      cursor: default;
+    }
+
+    .piece-meta {
+      padding:6px 12px 10px;
+      border-top:1px solid var(--border);
+      font-size:12px;
+      color:var(--muted);
+    }
+    .piece-meta .piece-desc { white-space:pre-wrap; }
+    .piece-meta .seeMoreBtn {
+      margin-top:4px;
+      font-size:11px;
+      border-radius:999px;
+      padding:3px 8px;
+      border:1px solid var(--accent);
+      background:transparent;
+      color:var(--accent);
+      cursor:pointer;
+    }
+
+    .thumbs-wrap { margin-top:16px; }
+    .thumbs-title { font-size:12px; opacity:.6; margin-bottom:6px; }
+    .thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .thumb { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); cursor:pointer; position:relative; }
+    .thumb.disabled { opacity:.55; cursor:default; }
+    .thumb.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(57,255,20,.3); }
+
+    .thumb-img {
+      position:relative;
+      width:100%;
+      aspect-ratio:3/4;
+      background:#0b0f13;
+      overflow:hidden;
+    }
+    .thumb-img img,
+    .thumb-img video {
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .thumb-img.diag img.half,
+    .thumb-img.diag video.half {
+      position:absolute;
+      inset:0;
+    }
+    .thumb-img.diag img.left,
+    .thumb-img.diag video.left {
+      clip-path:polygon(0 0, 100% 0, 0 100%);
+    }
+    .thumb-img.diag img.right,
+    .thumb-img.diag video.right {
+      clip-path:polygon(100% 0, 100% 100%, 0 100%);
+    }
+    .thumb-img.diag::before {
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:linear-gradient(135deg, rgba(0,0,0,0.75) 48%, rgba(57,255,20,0.7) 50%, rgba(0,0,0,0.75) 52%);
+      mix-blend-mode:screen;
+      opacity:0.5;
+    }
+
+    .video-badge {
+      position:absolute;
+      top:6px;
+      left:6px;
+      padding:2px 6px;
+      font-size:9px;
+      font-weight:700;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:#0b0f13;
+      background:var(--accent);
+      border-radius:999px;
+      box-shadow:0 0 8px rgba(57,255,20,.8);
+      pointer-events:none;
+      z-index:2;
+    }
+
+    .thumb-preview {
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+      z-index:3;
+    }
+
+    .thumb-label { padding:6px 8px 8px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
+    .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
+    .ghostBox { width:100%; height:100%; display:grid; place-items:center; color:#3b3b3b; font-weight:700; font-size:13px; letter-spacing:.08em; }
+
+    .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
+    .winner b { color:#39ff14; }
+
+    .final-card { margin-top:14px; }
+    .final-inner { display:flex; gap:12px; flex-wrap:wrap; padding:12px; }
+    .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed var(--border); border-radius:10px; padding:8px; text-align:center; }
+    .final-slot .label { display:block; margin-bottom:4px; }
+    .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#000; border-radius:8px; overflow:hidden; display:grid; place-items:center; position:relative; }
+    .final-slot .thumb-final img,
+    .final-slot .thumb-final video { width:100%; height:100%; object-fit:cover; }
+
+    .final-footer { padding:0 12px 12px; font-size:12px; color:#9aa0a6; }
+
+    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
+    .fullscreen-overlay img,
+    .fullscreen-overlay video { max-width:90%; max-height:90%; border-radius:8px; }
+    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
+
+    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
+    .hidden { display:none !important; }
+
+    .artist-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .artist-link:hover { text-decoration: underline; }
+
+    </style>
 </head>
-
 <body>
-  <!-- (your existing layout stays the same up here) -->
 
-  <!-- wherever your timer box is, it now reads this: -->
-  <!-- NOTE: I preserved the same element/id so your layout doesn’t shift. -->
-  <div class="timer" id="tRemain">First to 2 wins</div>
+<div class="wrap">
+  <h1 class="glitch-title" data-text="ART BATTLE. Faction I.">ART BATTLE. Faction I.</h1>
 
-  <!-- (rest of your existing HTML stays the same) -->
+  <div class="header">
+    <div class="row">
+      <div class="timer" id="tRemain">04:48:00</div>
+      <div class="round-label" id="currentRound">Current round: —</div>
+    </div>
+    <div class="row">
+      <a class="backbtn" href="menu.html">← Menu</a>
+      <a class="linkbtn" href="winners.html">Winners</a>
+      <button class="navArrow" id="prevMatch">⟨</button>
+      <button class="navArrow" id="nextMatch">⟩</button>
+    </div>
+  </div>
 
-  <!-- ================== your existing libs (supabase) ================== -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- TOP CARD -->
+  <div class="card" id="activeTop">
+    <div class="imgBox">
+      <img id="imgActive1" alt="Active top">
+      <video id="vidActive1" class="hidden" muted playsinline loop controls></video>
+      <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
+    </div>
+    <div class="bar">
+      <div class="label" id="labelActive1">Top</div>
+      <div class="counts" id="countActive1">0</div>
+      <button class="vote" id="btnActive1">Vote</button>
+    </div>
+    <div class="autoRow">
+      <button class="autoVoteBtn" id="autoActive1">vote this art for every round</button>
+    </div>
+    <div class="piece-meta hidden" id="metaActive1"></div>
+  </div>
 
-  <!-- ================== UPDATED MAIN LOGIC ================== -->
-  <script>
+  <!-- BOTTOM CARD -->
+  <div class="card" id="activeBottom">
+    <div class="imgBox">
+      <img id="imgActive2" alt="Active bottom">
+      <video id="vidActive2" class="hidden" muted playsinline loop controls></video>
+      <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
+    </div>
+    <div class="bar">
+      <div class="label" id="labelActive2">Bottom</div>
+      <div class="counts" id="countActive2">0</div>
+      <button class="vote" id="btnActive2">Vote</button>
+    </div>
+    <div class="autoRow">
+      <button class="autoVoteBtn" id="autoActive2">vote this art for every round</button>
+    </div>
+    <div class="piece-meta hidden" id="metaActive2"></div>
+  </div>
+
+  <!-- THUMBS -->
+  <div class="thumbs-wrap">
+    <div class="thumbs-title">Matches (tap to switch)</div>
+    <div class="thumbs" id="thumbGrid"></div>
+  </div>
+
+  <div class="winner" id="winnerText">
+    R32 locks at 69,120s remaining → R16 at 51,840s → Quarters at 34,560s → Semis at 17,280s → Final at 0s.
+  </div>
+
+  <!-- FINAL BOX -->
+  <div class="card final-card" id="finalCard">
+    <div class="bar">
+      <div class="label">Final</div>
+      <div style="font-size:12px;color:#a1a1a1;">Decides at 0s</div>
+    </div>
+    <div class="final-inner">
+      <div class="final-slot">
+        <span class="label" id="finalLeftLabel">Winner of Semi 1</span>
+        <div class="thumb-final">
+          <img id="finalImg1" alt="Final slot 1">
+          <video id="finalVid1" class="hidden" muted playsinline loop controls></video>
+        </div>
+      </div>
+      <div class="final-slot">
+        <span class="label" id="finalRightLabel">Winner of Semi 2</span>
+        <div class="thumb-final">
+          <img id="finalImg2" alt="Final slot 2">
+          <video id="finalVid2" class="hidden" muted playsinline loop controls></video>
+        </div>
+      </div>
+    </div>
+    <div class="final-footer" id="finalFooter">Waiting… (tap a card’s ⤢ for audio)</div>
+  </div>
+
+  <div class="hint">
+    24-hour tournament: 32 images → R32 (first 4h48m) → R16 → QF → SF → Final (last 4h48m).
+  </div>
+</div>
+
+<!-- FULLSCREEN OVERLAY -->
+<div class="fullscreen-overlay" id="overlay">
+  <button id="closeFull">✕ Close</button>
+  <img id="fullImg" src="">
+  <video id="fullVideo" class="hidden" playsinline controls></video>
+</div>
+
+<script src="js/champion-overlay.js"></script>
+
+<script>
   const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // =========================
-  // VOTE-TO-WIN MODE (no edge function, no timer)
-  // First image to WIN_TARGET votes wins its match.
-  // Matches unlock automatically when BOTH opponents exist.
-  // =========================
-  const WIN_TARGET = 2;
+  // ====== VOTE-TO-WIN MODE (NO TIMER / NO EDGE FUNCTION) ======
+  const WIN_TO = 2; // first to 2 wins (change later if you want)
 
   const RSID_KEY = "rsid_v2";
   let RSID = localStorage.getItem(RSID_KEY);
@@ -44,7 +309,7 @@
     localStorage.setItem(RSID_KEY, RSID);
   }
 
-  // UI
+  // UI refs
   const elRemain = document.getElementById("tRemain");
   const winnerText = document.getElementById("winnerText");
   const currentRoundEl = document.getElementById("currentRound");
@@ -72,1035 +337,775 @@
   const finalRightLabel = document.getElementById("finalRightLabel");
   const finalFooter = document.getElementById("finalFooter");
 
-  const overlay  = document.getElementById("overlay");
-  const fullImg  = document.getElementById("fullImg");
-  const fullVideo = document.getElementById("fullVideo");
-  const btnClose = document.getElementById("closeFull");
-  btnClose.onclick = ()=>{
-    overlay.style.display='none';
-    try {
-      fullVideo.pause();
-      fullVideo.removeAttribute('src');
-      fullVideo.load();
-    } catch(e){}
-  };
+  const prevBtn = document.getElementById("prevMatch");
+  const nextBtn = document.getElementById("nextMatch");
+  const thumbGrid = document.getElementById("thumbGrid");
 
-  const grid = document.getElementById("thumbGrid");
+  // Keep the layout exactly the same — we just replace the timer text.
+  elRemain.textContent = `First to ${WIN_TO} wins`;
 
-  // Keep the "timer" box but repurpose it.
-  if (elRemain) elRemain.textContent = `First to ${WIN_TARGET} wins`;
-
-  // ========= helpers =========
-  const lastGoodThumb = {};
-  const lastGoodActive = {};
-
-  function isRealUrl(url){
-    return typeof url === "string" &&
-           url.length > 0 &&
-           !url.startsWith("data:image/svg+xml");
-  }
-  function isVideoUrl(url){
-    if (typeof url !== "string") return false;
-    const base = url.split("#")[0];
-    return /\.(mp4|webm|mov)(\?|$)/i.test(base);
-  }
-  function placeholder(letter){
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960">
-      <rect width="100%" height="100%" fill="#000"/>
-      <text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace"
-        text-anchor="middle" dominant-baseline="middle">${letter}</text>
-    </svg>`;
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-  }
-  function pick(a,b){ return (a!=null && a!=="") ? a : b; }
-
-  function escapeHtml(str){
-    return String(str)
-      .replace(/&/g,"&amp;")
-      .replace(/</g,"&lt;")
-      .replace(/>/g,"&gt;")
-      .replace(/"/g,"&quot;")
-      .replace(/'/g,"&#39;");
-  }
-
-  function renderPieceMeta(container, meta){
-    if (!container) return;
-    const desc = meta && meta.desc ? String(meta.desc) : "";
-
-    if (!desc){
-      container.classList.add("hidden");
-      container.innerHTML = "";
-      return;
-    }
-
-    container.classList.remove("hidden");
-
-    const LIMIT = 260;
-    const truncated = desc.length > LIMIT;
-    const shortDesc = truncated ? desc.slice(0, LIMIT).trim() + "…" : desc;
-
-    let html = `<div class="piece-desc" data-full="${encodeURIComponent(desc)}" data-limit="${LIMIT}" data-expanded="0">${escapeHtml(shortDesc)}</div>`;
-    if (truncated){
-      html += `<button class="seeMoreBtn" type="button">See more</button>`;
-    }
-
-    container.innerHTML = html;
-
-    const btn = container.querySelector(".seeMoreBtn");
-    if (btn){
-      btn.addEventListener("click", ()=>{
-        const descEl = container.querySelector(".piece-desc");
-        if (!descEl) return;
-        const expanded = descEl.dataset.expanded === "1";
-        const limit = parseInt(descEl.dataset.limit || "260",10);
-        const full = decodeURIComponent(descEl.dataset.full || "");
-        if (!expanded){
-          descEl.textContent = full;
-          descEl.dataset.expanded = "1";
-          btn.textContent = "See less";
-        } else {
-          const truncatedAgain = full.length > limit;
-          const shortAgain = truncatedAgain ? full.slice(0,limit).trim()+"…" : full;
-          descEl.textContent = shortAgain;
-          descEl.dataset.expanded = "0";
-          btn.textContent = "See more";
-        }
-      });
-    }
-  }
-
-  function openFull(which){
-    let url = "";
-    if (which==="active1"){
-      if (!vidActive1.classList.contains("hidden") && vidActive1.src) url = vidActive1.src;
-      else url = imgActive1.src;
-    } else if (which==="active2"){
-      if (!vidActive2.classList.contains("hidden") && vidActive2.src) url = vidActive2.src;
-      else url = imgActive2.src;
-    }
-    if (!url) return;
-
-    const video = isVideoUrl(url);
-    if (video){
-      fullImg.classList.add("hidden");
-      fullVideo.classList.remove("hidden");
-      fullVideo.src = url;
-      try { fullVideo.play().catch(()=>{}); } catch(e){}
-    } else {
-      fullVideo.classList.add("hidden");
-      try {
-        fullVideo.pause();
-        fullVideo.removeAttribute("src");
-        fullVideo.load();
-      } catch(e){}
-      fullImg.classList.remove("hidden");
-      fullImg.src = url;
-    }
-    overlay.style.display = 'flex';
-  }
-  window.openFull = openFull; // keep inline onclicks working
-
-  function setActiveMedia(which, url){
-    const img = which==="active1" ? imgActive1 : imgActive2;
-    const vid = which==="active1" ? vidActive1 : vidActive2;
-
-    const cacheKey = which;
-    let finalUrl = url;
-
-    if (isRealUrl(finalUrl)) {
-      lastGoodActive[cacheKey] = finalUrl;
-    } else if (lastGoodActive[cacheKey]) {
-      finalUrl = lastGoodActive[cacheKey];
-    }
-
-    const isVid = isVideoUrl(finalUrl);
-
-    if (isVid){
-      img.classList.add("hidden");
-      vid.classList.remove("hidden");
-      vid.src = finalUrl + "#t=0.1";
-      vid.loop = true;
-      vid.playsInline = true;
-      try { vid.play().catch(()=>{}); } catch(e){}
-    } else {
-      vid.classList.add("hidden");
-      try {
-        vid.pause();
-        vid.removeAttribute("src");
-        vid.load();
-      } catch(e){}
-      img.classList.remove("hidden");
-      img.src = finalUrl || placeholder("?");
-    }
-  }
-
-  function setFinalMedia(idx, url){
-    const img = idx===1 ? finalImg1 : finalImg2;
-    const vid = idx===1 ? finalVid1 : finalVid2;
-    const isVid = isVideoUrl(url);
-
-    if (isVid){
-      img.classList.add("hidden");
-      vid.classList.remove("hidden");
-      vid.src = url + "#t=0.1";
-      vid.loop = true;
-      vid.playsInline = true;
-      try { vid.play().catch(()=>{}); } catch(e){}
-    } else {
-      vid.classList.add("hidden");
-      try {
-        vid.pause();
-        vid.removeAttribute("src");
-        vid.load();
-      } catch(e){}
-      img.classList.remove("hidden");
-      img.src = url || placeholder("?");
-    }
-  }
-
-  function pauseOtherVideos(except){
-    const vids = [vidActive1, vidActive2, finalVid1, finalVid2, fullVideo];
-    vids.forEach(v=>{
-      if (!v || v === except) return;
-      try { v.pause(); } catch(e){}
-    });
-  }
-  vidActive1.addEventListener("play", ()=> pauseOtherVideos(vidActive1));
-  vidActive2.addEventListener("play", ()=> pauseOtherVideos(vidActive2));
-  finalVid1.addEventListener("play", ()=> pauseOtherVideos(finalVid1));
-  finalVid2.addEventListener("play", ()=> pauseOtherVideos(finalVid2));
-  fullVideo.addEventListener("play", ()=> pauseOtherVideos(fullVideo));
-
-  // ========= bracket wiring =========
-  // Leaves (R32)
-  const order = [
-    {key:"final", label:"Final"},
-    {key:"s1", label:"Semi 1"},
-    {key:"s2", label:"Semi 2"},
-
-    {key:"q1", label:"QF A–B"},
-    {key:"q2", label:"QF C–D"},
-    {key:"q3", label:"QF E–F"},
-    {key:"q4", label:"QF G–H"},
-
-    {key:"r1", label:"R16 A–B"},
-    {key:"r2", label:"R16 C–D"},
-    {key:"r3", label:"R16 E–F"},
-    {key:"r4", label:"R16 G–H"},
-    {key:"r5", label:"R16 I–J"},
-    {key:"r6", label:"R16 K–L"},
-    {key:"r7", label:"R16 M–N"},
-    {key:"r8", label:"R16 O–P"},
-
-    {key:"rr1",  label:"R32 1"},
-    {key:"rr2",  label:"R32 2"},
-    {key:"rr3",  label:"R32 3"},
-    {key:"rr4",  label:"R32 4"},
-    {key:"rr5",  label:"R32 5"},
-    {key:"rr6",  label:"R32 6"},
-    {key:"rr7",  label:"R32 7"},
-    {key:"rr8",  label:"R32 8"},
-    {key:"rr9",  label:"R32 9"},
-    {key:"rr10", label:"R32 10"},
-    {key:"rr11", label:"R32 11"},
-    {key:"rr12", label:"R32 12"},
-    {key:"rr13", label:"R32 13"},
-    {key:"rr14", label:"R32 14"},
-    {key:"rr15", label:"R32 15"},
-    {key:"rr16", label:"R32 16"}
+  // -----------------------------
+  // Bracket model (match keys)
+  // -----------------------------
+  const matchOrder = [
+    "rr1","rr2","rr3","rr4","rr5","rr6","rr7","rr8","rr9","rr10","rr11","rr12","rr13","rr14","rr15","rr16",
+    "r1","r2","r3","r4","r5","r6","r7","r8",
+    "q1","q2","q3","q4",
+    "s1","s2",
+    "final"
   ];
 
-  // child -> parent mapping
-  const ADVANCE = {
-    rr1:{parent:"r1",  slot:"left"},  rr2:{parent:"r1",  slot:"right"},
-    rr3:{parent:"r2",  slot:"left"},  rr4:{parent:"r2",  slot:"right"},
-    rr5:{parent:"r3",  slot:"left"},  rr6:{parent:"r3",  slot:"right"},
-    rr7:{parent:"r4",  slot:"left"},  rr8:{parent:"r4",  slot:"right"},
-    rr9:{parent:"r5",  slot:"left"},  rr10:{parent:"r5", slot:"right"},
-    rr11:{parent:"r6", slot:"left"},  rr12:{parent:"r6", slot:"right"},
-    rr13:{parent:"r7", slot:"left"},  rr14:{parent:"r7", slot:"right"},
-    rr15:{parent:"r8", slot:"left"},  rr16:{parent:"r8", slot:"right"},
-
-    r1:{parent:"q1",  slot:"left"}, r2:{parent:"q1",  slot:"right"},
-    r3:{parent:"q2",  slot:"left"}, r4:{parent:"q2",  slot:"right"},
-    r5:{parent:"q3",  slot:"left"}, r6:{parent:"q3",  slot:"right"},
-    r7:{parent:"q4",  slot:"left"}, r8:{parent:"q4",  slot:"right"},
-
-    q1:{parent:"s1", slot:"left"},  q2:{parent:"s1", slot:"right"},
-    q3:{parent:"s2", slot:"left"},  q4:{parent:"s2", slot:"right"},
-
-    s1:{parent:"final", slot:"left"},
-    s2:{parent:"final", slot:"right"}
+  const matchLabels = {
+    rr1:"R32 1", rr2:"R32 2", rr3:"R32 3", rr4:"R32 4", rr5:"R32 5", rr6:"R32 6", rr7:"R32 7", rr8:"R32 8",
+    rr9:"R32 9", rr10:"R32 10", rr11:"R32 11", rr12:"R32 12", rr13:"R32 13", rr14:"R32 14", rr15:"R32 15", rr16:"R32 16",
+    r1:"R16 1", r2:"R16 2", r3:"R16 3", r4:"R16 4", r5:"R16 5", r6:"R16 6", r7:"R16 7", r8:"R16 8",
+    q1:"QF 1", q2:"QF 2", q3:"QF 3", q4:"QF 4",
+    s1:"Semi 1", s2:"Semi 2",
+    final:"Final"
   };
 
-  // ========= local vote memory (per-user / per-cycle) =========
-  const VOTE_MEMORY_KEY = "rs_vote_memory_v5";
-  let voteUserKey = "guest";
+  // winner propagation mapping:
+  // [fromMatch] -> { to: nextMatchKey, slot: "left"|"right" }
+  const advanceMap = {
+    rr1:{to:"r1",slot:"left"},  rr2:{to:"r1",slot:"right"},
+    rr3:{to:"r2",slot:"left"},  rr4:{to:"r2",slot:"right"},
+    rr5:{to:"r3",slot:"left"},  rr6:{to:"r3",slot:"right"},
+    rr7:{to:"r4",slot:"left"},  rr8:{to:"r4",slot:"right"},
+    rr9:{to:"r5",slot:"left"},  rr10:{to:"r5",slot:"right"},
+    rr11:{to:"r6",slot:"left"}, rr12:{to:"r6",slot:"right"},
+    rr13:{to:"r7",slot:"left"}, rr14:{to:"r7",slot:"right"},
+    rr15:{to:"r8",slot:"left"}, rr16:{to:"r8",slot:"right"},
 
-  async function initVoteUserKey(){
-    try {
-      const { data } = await supabase.auth.getUser();
-      const user = data?.user;
-      if (user) voteUserKey = user.id || user.email || "user";
-      else voteUserKey = "guest";
-    } catch(e) {
-      voteUserKey = "guest";
-    }
-  }
+    r1:{to:"q1",slot:"left"}, r2:{to:"q1",slot:"right"},
+    r3:{to:"q2",slot:"left"}, r4:{to:"q2",slot:"right"},
+    r5:{to:"q3",slot:"left"}, r6:{to:"q3",slot:"right"},
+    r7:{to:"q4",slot:"left"}, r8:{to:"q4",slot:"right"},
 
+    q1:{to:"s1",slot:"left"}, q2:{to:"s1",slot:"right"},
+    q3:{to:"s2",slot:"left"}, q4:{to:"s2",slot:"right"},
+
+    s1:{to:"final",slot:"left"}, s2:{to:"final",slot:"right"},
+  };
+
+  // -----------------------------
+  // Local state
+  // -----------------------------
+  let cycle = null;               // row from cycles_v2
+  let matches = {};               // { match_key: {left_url,right_url,winner_url,winner_side} }
+  let counts = {};                // { match_key: {left,right} }
+  let activeMatch = "rr1";
+
+  // vote memory (prevents repeat voting on same match in the same cycle)
+  const memKey = (cycleId) => `voteMem:${cycleId}`;
   function memRead(cycleId){
-    try{
-      const all = JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}");
-      const perUser = all[voteUserKey] || {};
-      return perUser[String(cycleId)] || {};
-    }catch{
-      return {};
-    }
+    try{ return JSON.parse(localStorage.getItem(memKey(cycleId))||"{}")||{}; }catch{ return {}; }
   }
   function memWrite(cycleId, matchKey, side){
-    const all = (()=>{ try { return JSON.parse(localStorage.getItem(VOTE_MEMORY_KEY)||"{}"); } catch { return {}; }})();
-    const perUser = all[voteUserKey] || {};
-    const cid = String(cycleId);
-    perUser[cid] = Object.assign({}, perUser[cid]||{}, { [matchKey]: side });
-    all[voteUserKey] = perUser;
-    localStorage.setItem(VOTE_MEMORY_KEY, JSON.stringify(all));
+    const m = memRead(cycleId);
+    m[matchKey] = side;
+    localStorage.setItem(memKey(cycleId), JSON.stringify(m));
   }
 
-  // ========= data model in memory =========
-  let cycle = null;        // current cycles_v2 row
-  let cycleId = null;      // cycles_v2.id
-  let matches = {};        // match_key -> {left_url,right_url,winner_url,winner_side}
-  let counts = {};         // match_key -> {left,right}
-  let metaByUrl = {};      // optional, carried from cycles_v2 if you store meta there
+  // -----------------------------
+  // Media helpers
+  // -----------------------------
+  const isVideo = (url="") => /\.(mp4|webm|ogg)(\?|#|$)/i.test(url) || /video\//i.test(url);
 
-  let activeMatch = "rr1";
-  let activeLeftUrl = null;
-  let activeRightUrl = null;
-
-  // ========= thumbs =========
-  const thumbs = {};
-  function makeThumb(item){
-    const div = document.createElement("div");
-    div.className = "thumb";
-    div.id = "thumb_"+item.key;
-    div.innerHTML = `
-      <div class="thumb-img diag">
-        <img class="half left"  id="imgL_${item.key}" alt="${item.label} top">
-        <img class="half right" id="imgR_${item.key}" alt="${item.label} bottom">
-        <video class="half left hidden"  id="vidL_${item.key}" muted playsinline preload="metadata"></video>
-        <video class="half right hidden" id="vidR_${item.key}" muted playsinline preload="metadata"></video>
-        <div class="video-badge hidden" id="badge_${item.key}">VIDEO</div>
-      </div>
-      <div class="thumb-label">
-        <span>${item.label}</span>
-        <span class="thumb-count" id="cnt_${item.key}">0-0</span>
-      </div>
-    `;
-    div.addEventListener("click", ()=>{
-      if (thumbs[item.key].box.classList.contains("disabled")) return;
-      if (thumbs[item.key].box.classList.contains("hidden")) return;
-      activeMatch = item.key;
-      renderActive();
-    });
-    grid.appendChild(div);
-    thumbs[item.key] = {
-      box:   div,
-      imgL:  div.querySelector("#imgL_"+item.key),
-      imgR:  div.querySelector("#imgR_"+item.key),
-      vidL:  div.querySelector("#vidL_"+item.key),
-      vidR:  div.querySelector("#vidR_"+item.key),
-      count: div.querySelector("#cnt_"+item.key),
-      badge: div.querySelector("#badge_"+item.key)
-    };
-  }
-  order.forEach(makeThumb);
-
-  const hoverEnabled = window.matchMedia && window.matchMedia("(pointer:fine)").matches;
-  if (hoverEnabled) {
-    for (const k in thumbs) {
-      const t = thumbs[k];
-      t.box.addEventListener("mouseenter", handleThumbEnter);
-      t.box.addEventListener("mouseleave", handleThumbLeave);
+  function setCardMedia(imgEl, vidEl, url){
+    if (!url){
+      imgEl.src = "";
+      vidEl.src = "";
+      imgEl.classList.remove("hidden");
+      vidEl.classList.add("hidden");
+      return;
+    }
+    if (isVideo(url)){
+      vidEl.src = url;
+      vidEl.classList.remove("hidden");
+      imgEl.classList.add("hidden");
+    } else {
+      imgEl.src = url;
+      imgEl.classList.remove("hidden");
+      vidEl.classList.add("hidden");
+      vidEl.removeAttribute("src");
     }
   }
 
-  function handleThumbEnter(e){
-    const box = e.currentTarget;
-    const url = box.dataset.videoUrl;
+  // Fullscreen overlay (uses existing HTML)
+  const overlay = document.getElementById("overlay");
+  const closeFullBtn = document.getElementById("closeFull");
+  const fullImg = document.getElementById("fullImg");
+  const fullVideo = document.getElementById("fullVideo");
+
+  window.openFull = function(which){
+    const m = matches[activeMatch] || {};
+    const url = (which==="active1") ? m.left_url : m.right_url;
     if (!url) return;
-    const imgWrap = box.querySelector(".thumb-img");
-    if (!imgWrap) return;
-    if (imgWrap.querySelector("video.thumb-preview")) return;
 
-    const v = document.createElement("video");
-    v.className = "thumb-preview";
-    v.src = url + "#t=0.1";
-    v.muted = true;
-    v.loop = true;
-    v.playsInline = true;
-    imgWrap.appendChild(v);
-    try { v.play().catch(()=>{}); } catch(e){}
-  }
-
-  function handleThumbLeave(e){
-    const box = e.currentTarget;
-    const imgWrap = box.querySelector(".thumb-img");
-    if (!imgWrap) return;
-    const v = imgWrap.querySelector("video.thumb-preview");
-    if (!v) return;
-    try { v.pause(); } catch(e){}
-    v.remove();
-  }
-
-  function setThumb(key,leftUrl,rightUrl,leftCt,rightCt,fallback){
-    const th = thumbs[key]; if (!th) return;
-
-    const leftKey = key + "_L";
-    const rightKey = key + "_R";
-
-    if (isRealUrl(leftUrl)) {
-      lastGoodThumb[leftKey] = leftUrl;
-    } else if (lastGoodThumb[leftKey]) {
-      leftUrl = lastGoodThumb[leftKey];
-    }
-
-    if (isRealUrl(rightUrl)) {
-      lastGoodThumb[rightKey] = rightUrl;
-    } else if (lastGoodThumb[rightKey]) {
-      rightUrl = lastGoodThumb[rightKey];
-    }
-
-    const leftIsVid = isVideoUrl(leftUrl);
-    const rightIsVid = isVideoUrl(rightUrl);
-    const hasVideo = leftIsVid || rightIsVid;
-
-    if (leftIsVid) {
-      th.imgL.classList.add("hidden");
-      th.vidL.classList.remove("hidden");
-      th.vidL.src = leftUrl + "#t=0.1";
-      th.vidL.preload = "metadata";
-      try { th.vidL.pause(); } catch(e){}
+    overlay.style.display = "flex";
+    if (isVideo(url)){
+      fullVideo.src = url;
+      fullVideo.classList.remove("hidden");
+      fullImg.classList.add("hidden");
+      fullImg.removeAttribute("src");
+      try{ fullVideo.play().catch(()=>{}); }catch{}
     } else {
-      th.vidL.classList.add("hidden");
-      th.imgL.classList.remove("hidden");
-      th.imgL.src = leftUrl || placeholder(fallback||"?");
+      fullImg.src = url;
+      fullImg.classList.remove("hidden");
+      fullVideo.classList.add("hidden");
+      fullVideo.removeAttribute("src");
     }
+  };
 
-    if (rightIsVid) {
-      th.imgR.classList.add("hidden");
-      th.vidR.classList.remove("hidden");
-      th.vidR.src = rightUrl + "#t=0.1";
-      th.vidR.preload = "metadata";
-      try { th.vidR.pause(); } catch(e){}
-    } else {
-      th.vidR.classList.add("hidden");
-      th.imgR.classList.remove("hidden");
-      th.imgR.src = rightUrl || placeholder(fallback||"?");
-    }
+  closeFullBtn.onclick = ()=>{
+    overlay.style.display = "none";
+    try{ fullVideo.pause(); }catch{}
+    fullVideo.removeAttribute("src");
+  };
+  overlay.addEventListener("click", (e)=>{
+    if (e.target === overlay) closeFullBtn.click();
+  });
 
-    th.count.textContent = (leftCt??0) + "-" + (rightCt??0);
-    if (th.badge) th.badge.classList.toggle("hidden", !hasVideo);
-
-    const box = th.box;
-    if (hasVideo) {
-      const vidUrl = leftIsVid ? leftUrl : rightUrl;
-      box.dataset.videoUrl = vidUrl || "";
-    } else {
-      delete box.dataset.videoUrl;
-    }
+  // -----------------------------
+  // DB helpers
+  // -----------------------------
+  async function getSessionUser(){
+    const { data } = await supabase.auth.getSession();
+    const sess = data?.session || null;
+    return sess?.user || null;
   }
 
-  function markActive(){
-    for (const k in thumbs) {
-      thumbs[k].box.classList.toggle("active", k===activeMatch);
-    }
+  async function loadLatestCycle(){
+    const { data, error } = await supabase
+      .from("cycles_v2")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) throw new Error("No cycle found in cycles_v2.");
+    return data;
   }
 
-  function isMatchLive(key){
-    const m = matches[key];
-    if (!m) return false;
-    return isRealUrl(m.left_url) && isRealUrl(m.right_url) && !m.winner_url;
-  }
+  async function ensureMatchRows(){
+    // We create bracket rows once per cycle. If you already created them server-side, this is a no-op.
+    const cycleId = cycle.id;
 
-  function stageNameFromKey(key){
-    if (key.startsWith("rr")) return "Round of 32";
-    if (key.startsWith("r")) return "Round of 16";
-    if (key.startsWith("q")) return "Quarterfinals";
-    if (key.startsWith("s")) return "Semifinals";
-    return "Final";
-  }
+    // check if any row exists
+    const { data: existing, error: exErr } = await supabase
+      .from("bracket_matches_v2")
+      .select("match_key")
+      .eq("cycle_id", cycleId)
+      .limit(1);
 
-  function updateCurrentRoundLabel(){
-    if (!currentRoundEl) return;
-    const name = stageNameFromKey(activeMatch);
-    currentRoundEl.textContent = "Current round: " + name;
-  }
+    if (exErr) throw exErr;
+    if (existing && existing.length) return;
 
-  function renderThumbs(){
-    // update all thumbs from matches + counts
-    const fallbackMap = {
-      rr1:"A", rr2:"C", rr3:"E", rr4:"G", rr5:"I", rr6:"K", rr7:"M", rr8:"O",
-      rr9:"Q", rr10:"S", rr11:"U", rr12:"W", rr13:"Y", rr14:"AA", rr15:"AC", rr16:"AE",
-      r1:"A", r2:"C", r3:"E", r4:"G", r5:"I", r6:"K", r7:"M", r8:"O",
-      q1:"A", q2:"C", q3:"E", q4:"G",
-      s1:"S1", s2:"S2",
-      final:"F"
+    // Build initial R32 from the cycle seed urls
+    const seed = (k) => cycle?.[k] || null;
+
+    const rrSeeds = {
+      rr1:["seed_a_url","seed_b_url"],
+      rr2:["seed_c_url","seed_d_url"],
+      rr3:["seed_e_url","seed_f_url"],
+      rr4:["seed_g_url","seed_h_url"],
+      rr5:["seed_i_url","seed_j_url"],
+      rr6:["seed_k_url","seed_l_url"],
+      rr7:["seed_m_url","seed_n_url"],
+      rr8:["seed_o_url","seed_p_url"],
+      rr9:["seed_q_url","seed_r_url"],
+      rr10:["seed_s_url","seed_t_url"],
+      rr11:["seed_u_url","seed_v_url"],
+      rr12:["seed_w_url","seed_x_url"],
+      rr13:["seed_y_url","seed_z_url"],
+      rr14:["seed_aa_url","seed_ab_url"],
+      rr15:["seed_ac_url","seed_ad_url"],
+      rr16:["seed_ae_url","seed_af_url"],
     };
 
-    for (const item of order){
-      const k = item.key;
-      const m = matches[k] || {};
-      const c = counts[k] || {left:0,right:0};
-      setThumb(k, m.left_url, m.right_url, c.left, c.right, fallbackMap[k] || "?");
+    const rows = matchOrder.map((mk)=>{
+      const pair = rrSeeds[mk] || [];
+      return {
+        cycle_id: cycleId,
+        match_key: mk,
+        left_url: pair[0] ? seed(pair[0]) : null,
+        right_url: pair[1] ? seed(pair[1]) : null,
+        winner_side: null,
+        winner_url: null,
+      };
+    });
 
-      // Hide future matches until both opponents exist (keeps your layout clean).
-      const hasBoth = isRealUrl(m.left_url) && isRealUrl(m.right_url);
-      const isLeaf = k.startsWith("rr");
-      const shouldShow = isLeaf ? hasBoth : (hasBoth || !!m.winner_url);
-
-      thumbs[k].box.classList.toggle("hidden", !shouldShow);
-
-      // Disable if not live (missing opponent or already has winner)
-      thumbs[k].box.classList.toggle("disabled", !isMatchLive(k));
-    }
-
-    // Ensure we always have some active, visible match selected
-    if (thumbs[activeMatch]?.box.classList.contains("hidden") || thumbs[activeMatch]?.box.classList.contains("disabled")) {
-      const firstLive = order.map(o=>o.key).find(k => isMatchLive(k) && !thumbs[k].box.classList.contains("hidden"));
-      if (firstLive) activeMatch = firstLive;
-      else {
-        const firstShown = order.map(o=>o.key).find(k => !thumbs[k].box.classList.contains("hidden"));
-        if (firstShown) activeMatch = firstShown;
-      }
-    }
-
-    markActive();
+    const { error: insErr } = await supabase.from("bracket_matches_v2").insert(rows);
+    if (insErr) throw insErr;
   }
 
-  function setFinalBox(){
-    const s1 = matches["s1"] || {};
-    const s2 = matches["s2"] || {};
-    const final = matches["final"] || {};
+  async function loadMatches(){
+    const cycleId = cycle.id;
 
-    const leftFinal  = final.left_url  || s1.winner_url || null;
-    const rightFinal = final.right_url || s2.winner_url || null;
-
-    setFinalMedia(1, leftFinal);
-    setFinalMedia(2, rightFinal);
-
-    if (final.winner_url) finalFooter.textContent = "Champion decided. Tap ⤢ for audio.";
-    else if (isMatchLive("final")) finalFooter.textContent = `Final is live — first to ${WIN_TARGET} wins.`;
-    else if (isMatchLive("s1") || isMatchLive("s2")) finalFooter.textContent = "Semis live — final unlocks when both winners exist.";
-    else finalFooter.textContent = "Waiting…";
-  }
-
-  function computeOverallStatus(){
-    const done = (key)=> !!(matches[key] && matches[key].winner_url);
-    const all = (keys)=> keys.every(done);
-
-    const rrKeys = Array.from({length:16},(_,i)=>"rr"+(i+1));
-    const rKeys  = Array.from({length:8},(_,i)=>"r"+(i+1));
-    const qKeys  = ["q1","q2","q3","q4"];
-    const sKeys  = ["s1","s2"];
-
-    const r32Done = all(rrKeys);
-    const r16Done = all(rKeys);
-    const qDone   = all(qKeys);
-    const sDone   = all(sKeys);
-    const fDone   = done("final");
-
-    if (fDone) return "Final complete — champion locked.";
-    if (sDone) return "Final unlocked (needs votes).";
-    if (qDone) return "Semis unlocked as quarter winners appear.";
-    if (r16Done) return "Quarters unlocked as R16 winners appear.";
-    if (r32Done) return "R16 unlocked as R32 winners appear.";
-    return `First to ${WIN_TARGET} votes wins. Matches unlock as soon as both opponents exist.`;
-  }
-
-  // ========= DB: bootstrapping =========
-  async function loadCurrentCycle(){
-    // Try: active cycle → else newest cycle
-    let row = null;
-
-    // Attempt a common pattern: is_active column
-    try{
-      const a = await supabase
-        .from("cycles_v2")
-        .select("*")
-        .eq("is_active", true)
-        .order("created_at", { ascending:false })
-        .limit(1)
-        .maybeSingle();
-      if (!a.error && a.data) row = a.data;
-    }catch(e){}
-
-    if (!row){
-      const b = await supabase
-        .from("cycles_v2")
-        .select("*")
-        .order("created_at", { ascending:false })
-        .limit(1)
-        .maybeSingle();
-      if (b.error) throw b.error;
-      row = b.data;
-    }
-
-    if (!row) throw new Error("No cycles_v2 row found.");
-
-    cycle = row;
-    cycleId = row.id;
-    metaByUrl = row.meta_by_url || row.meta_by_url_v2 || row.meta || {};
-  }
-
-  function seedUrlsFromCycle(c){
-    // This matches your existing column naming.
-    const keys = [
-      "seed_a_url","seed_b_url","seed_c_url","seed_d_url","seed_e_url","seed_f_url","seed_g_url","seed_h_url",
-      "seed_i_url","seed_j_url","seed_k_url","seed_l_url","seed_m_url","seed_n_url","seed_o_url","seed_p_url",
-      "seed_q_url","seed_r_url","seed_s_url","seed_t_url","seed_u_url","seed_v_url","seed_w_url","seed_x_url",
-      "seed_y_url","seed_z_url","seed_aa_url","seed_ab_url","seed_ac_url","seed_ad_url","seed_ae_url","seed_af_url"
-    ];
-    return keys.map(k => c?.[k] || null);
-  }
-
-  async function ensureMatchesSeeded(){
-    // bracket_matches_v2: one row per match key per cycle
-    // columns expected:
-    // cycle_id (uuid/int), match_key (text), left_url (text), right_url (text),
-    // winner_url (text), winner_side (text), updated_at (timestamptz)
-    //
-    // If you haven't created bracket_matches_v2 yet, you can:
-    // 1) Create it in Supabase (recommended), then refresh.
-    //
-    // Minimal schema suggestion (run in SQL editor):
-    //
-    // create table if not exists public.bracket_matches_v2 (
-    //   id bigserial primary key,
-    //   cycle_id uuid not null,
-    //   match_key text not null,
-    //   left_url text,
-    //   right_url text,
-    //   winner_url text,
-    //   winner_side text,
-    //   updated_at timestamptz default now(),
-    //   unique (cycle_id, match_key)
-    // );
-    //
-    // enable row level security;
-    // -- then add policies as you prefer.
-    //
-    // phase_votes_v2 should already exist in your project:
-    // (cycle_id, match_key, side, voter_id) with unique(cycle_id, match_key, voter_id)
-
-    const existing = await supabase
+    const { data, error } = await supabase
       .from("bracket_matches_v2")
-      .select("match_key,left_url,right_url,winner_url,winner_side")
+      .select("match_key,left_url,right_url,winner_side,winner_url")
       .eq("cycle_id", cycleId);
 
-    if (existing.error){
-      winnerText.textContent = "Missing table: bracket_matches_v2. Create it (see SQL note in code), then refresh.";
-      throw existing.error;
-    }
+    if (error) throw error;
 
-    // build map
-    matches = {};
-    for (const r of (existing.data||[])){
-      matches[r.match_key] = {
-        left_url: r.left_url || null,
-        right_url: r.right_url || null,
-        winner_url: r.winner_url || null,
-        winner_side: r.winner_side || null
-      };
-    }
-
-    // If empty, seed leaves from cycles_v2
-    const hasAny = Object.keys(matches).length > 0;
-    if (!hasAny){
-      const urls = seedUrlsFromCycle(cycle);
-
-      const leafRows = [
-        {match_key:"rr1",  left_url:urls[0],  right_url:urls[1]},
-        {match_key:"rr2",  left_url:urls[2],  right_url:urls[3]},
-        {match_key:"rr3",  left_url:urls[4],  right_url:urls[5]},
-        {match_key:"rr4",  left_url:urls[6],  right_url:urls[7]},
-        {match_key:"rr5",  left_url:urls[8],  right_url:urls[9]},
-        {match_key:"rr6",  left_url:urls[10], right_url:urls[11]},
-        {match_key:"rr7",  left_url:urls[12], right_url:urls[13]},
-        {match_key:"rr8",  left_url:urls[14], right_url:urls[15]},
-        {match_key:"rr9",  left_url:urls[16], right_url:urls[17]},
-        {match_key:"rr10", left_url:urls[18], right_url:urls[19]},
-        {match_key:"rr11", left_url:urls[20], right_url:urls[21]},
-        {match_key:"rr12", left_url:urls[22], right_url:urls[23]},
-        {match_key:"rr13", left_url:urls[24], right_url:urls[25]},
-        {match_key:"rr14", left_url:urls[26], right_url:urls[27]},
-        {match_key:"rr15", left_url:urls[28], right_url:urls[29]},
-        {match_key:"rr16", left_url:urls[30], right_url:urls[31]}
-      ];
-
-      const allKeys = order.map(o=>o.key);
-      const rows = allKeys.map(k=>{
-        const leaf = leafRows.find(x=>x.match_key===k);
-        return {
-          cycle_id: cycleId,
-          match_key: k,
-          left_url: leaf ? leaf.left_url : null,
-          right_url: leaf ? leaf.right_url : null
-        };
-      });
-
-      const ins = await supabase.from("bracket_matches_v2").insert(rows);
-      if (ins.error){
-        winnerText.textContent = "Couldn't seed bracket_matches_v2. Check RLS/policies.";
-        throw ins.error;
-      }
-
-      // reload
-      const again = await supabase
-        .from("bracket_matches_v2")
-        .select("match_key,left_url,right_url,winner_url,winner_side")
-        .eq("cycle_id", cycleId);
-      if (again.error) throw again.error;
-
-      matches = {};
-      for (const r of (again.data||[])){
-        matches[r.match_key] = {
-          left_url: r.left_url || null,
-          right_url: r.right_url || null,
-          winner_url: r.winner_url || null,
-          winner_side: r.winner_side || null
-        };
-      }
-    }
+    const map = {};
+    for (const row of (data||[])) map[row.match_key] = row;
+    matches = map;
   }
 
   async function loadCounts(){
-    counts = {};
-    for (const item of order){
-      counts[item.key] = { left:0, right:0 };
-    }
+    const cycleId = cycle.id;
 
-    const v = await supabase
+    const { data, error } = await supabase
       .from("phase_votes_v2")
       .select("match_key,side")
       .eq("cycle_id", cycleId);
 
-    if (v.error){
-      winnerText.textContent = "Couldn't read phase_votes_v2. Check table name + RLS.";
-      throw v.error;
-    }
+    if (error) throw error;
 
-    for (const row of (v.data||[])){
-      const k = row.match_key;
-      const s = row.side;
-      if (!counts[k]) counts[k] = {left:0,right:0};
-      if (s === "left") counts[k].left++;
-      else if (s === "right") counts[k].right++;
+    const c = {};
+    for (const v of (data||[])){
+      const mk = v.match_key;
+      const side = v.side === "left" ? "left" : "right";
+      c[mk] = c[mk] || { left:0, right:0 };
+      c[mk][side] += 1;
     }
+    counts = c;
   }
 
-  async function refreshAll(){
-    await ensureMatchesSeeded();
-    await loadCounts();
-    winnerText.textContent = computeOverallStatus();
-    renderActive();
-    updateCurrentRoundLabel();
+  function getCount(matchKey, side){
+    return (counts?.[matchKey]?.[side] ?? 0);
   }
 
-  // ========= winner + advancement =========
-  async function declareWinnerIfNeeded(matchKey){
+  function isReady(matchKey){
     const m = matches[matchKey];
-    if (!m) return;
-    if (!isRealUrl(m.left_url) || !isRealUrl(m.right_url)) return;
-    if (m.winner_url) return;
+    return !!(m && m.left_url && m.right_url);
+  }
 
-    const c = counts[matchKey] || {left:0,right:0};
-    if (c.left < WIN_TARGET && c.right < WIN_TARGET) return;
+  // -----------------------------
+  // Rendering
+  // -----------------------------
+  function setMeta(el, url){
+    // Edge used to provide meta_by_url. Without it, we keep these hidden.
+    el.classList.add("hidden");
+    el.innerHTML = "";
+  }
 
-    const winnerSide = (c.left >= WIN_TARGET) ? "left" : "right";
-    const winnerUrl = (winnerSide === "left") ? m.left_url : m.right_url;
+  function renderActive(){
+    const m = matches[activeMatch] || {};
+    const leftUrl = m.left_url || null;
+    const rightUrl = m.right_url || null;
 
-    // Conditional update to avoid races:
-    const upd = await supabase
-      .from("bracket_matches_v2")
-      .update({ winner_url: winnerUrl, winner_side: winnerSide, updated_at: new Date().toISOString() })
-      .eq("cycle_id", cycleId)
-      .eq("match_key", matchKey)
-      .is("winner_url", null);
+    const leftCt = getCount(activeMatch, "left");
+    const rightCt = getCount(activeMatch, "right");
 
-    if (upd.error){
-      return;
+    // labels
+    currentRoundEl.textContent = `Current round: ${matchLabels[activeMatch] || activeMatch}`;
+    labelActive1.textContent = "Top";
+    labelActive2.textContent = "Bottom";
+
+    // media
+    setCardMedia(imgActive1, vidActive1, leftUrl);
+    setCardMedia(imgActive2, vidActive2, rightUrl);
+
+    // counts
+    countActive1.textContent = leftCt;
+    countActive2.textContent = rightCt;
+
+    // meta
+    setMeta(metaActive1, leftUrl);
+    setMeta(metaActive2, rightUrl);
+
+    const decided = !!m.winner_url;
+    const ready = !!(leftUrl && rightUrl);
+
+    // vote buttons
+    const mem = cycle?.id ? memRead(cycle.id) : {};
+    const alreadyVoted = !!mem[activeMatch];
+
+    btnActive1.disabled = !ready || decided || alreadyVoted;
+    btnActive2.disabled = !ready || decided || alreadyVoted;
+
+    // AFK buttons (keep UI but disable; you can re-add later)
+    autoBtn1.disabled = true;
+    autoBtn2.disabled = true;
+
+    // info banner
+    if (!ready){
+      winnerText.innerHTML = `Waiting for opponent… <span style="opacity:.7">(${matchLabels[activeMatch] || activeMatch})</span><br><b>First to ${WIN_TO} wins.</b>`;
+    } else if (decided){
+      winnerText.innerHTML = `<b>Winner decided.</b> First to ${WIN_TO} wins.`;
+    } else {
+      winnerText.innerHTML = `<b>First to ${WIN_TO} wins.</b>`;
     }
 
-    matches[matchKey] = Object.assign({}, m, { winner_url: winnerUrl, winner_side: winnerSide });
+    renderFinalBox();
+    renderThumbs();
+    updateNavButtons();
+  }
 
-    const adv = ADVANCE[matchKey];
+  function renderFinalBox(){
+    const m = matches["final"] || {};
+    const l = m.left_url || null;
+    const r = m.right_url || null;
+
+    setCardMedia(finalImg1, finalVid1, l);
+    setCardMedia(finalImg2, finalVid2, r);
+
+    const decided = !!m.winner_url;
+    if (decided){
+      finalFooter.textContent = "Winner decided.";
+    } else if (l && r){
+      finalFooter.textContent = `Final live — first to ${WIN_TO} wins.`;
+    } else {
+      finalFooter.textContent = "Waiting… (tap a card’s ⤢ for audio)";
+    }
+  }
+
+  function renderThumbs(){
+    thumbGrid.innerHTML = "";
+
+    for (const mk of matchOrder){
+      const m = matches[mk] || {};
+      const leftUrl = m.left_url || null;
+      const rightUrl = m.right_url || null;
+
+      const leftCt = getCount(mk,"left");
+      const rightCt = getCount(mk,"right");
+
+      const t = document.createElement("div");
+      t.className = "thumb" + (mk===activeMatch ? " active" : "") + (!isReady(mk) ? " disabled" : "");
+
+      const imgWrap = document.createElement("div");
+      imgWrap.className = "thumb-img";
+
+      // If both exist, show diagonal split preview (like your old UI)
+      if (leftUrl && rightUrl){
+        imgWrap.classList.add("diag");
+
+        const makeHalf = (url, side) => {
+          if (isVideo(url)){
+            const v = document.createElement("video");
+            v.className = `half ${side}`;
+            v.muted = true;
+            v.playsInline = true;
+            v.loop = true;
+            v.src = url;
+            v.autoplay = true;
+            return v;
+          } else {
+            const i = document.createElement("img");
+            i.className = `half ${side}`;
+            i.loading = "lazy";
+            i.src = url;
+            return i;
+          }
+        };
+
+        imgWrap.appendChild(makeHalf(leftUrl,"left"));
+        imgWrap.appendChild(makeHalf(rightUrl,"right"));
+      } else if (leftUrl || rightUrl){
+        const url = leftUrl || rightUrl;
+        if (isVideo(url)){
+          const v = document.createElement("video");
+          v.className = "thumb-preview";
+          v.muted = true;
+          v.playsInline = true;
+          v.loop = true;
+          v.src = url;
+          v.autoplay = true;
+          imgWrap.appendChild(v);
+        } else {
+          const i = document.createElement("img");
+          i.className = "thumb-preview";
+          i.loading = "lazy";
+          i.src = url;
+          imgWrap.appendChild(i);
+        }
+      } else {
+        const g = document.createElement("div");
+        g.className = "ghostBox";
+        g.textContent = "—";
+        imgWrap.appendChild(g);
+      }
+
+      t.appendChild(imgWrap);
+
+      const lab = document.createElement("div");
+      lab.className = "thumb-label";
+      const left = document.createElement("span");
+      left.textContent = matchLabels[mk] || mk;
+      const right = document.createElement("span");
+      right.className = "thumb-count";
+      right.textContent = `${leftCt}-${rightCt}`;
+      lab.appendChild(left);
+      lab.appendChild(right);
+      t.appendChild(lab);
+
+      t.onclick = ()=>{
+        activeMatch = mk;
+        renderActive();
+      };
+
+      thumbGrid.appendChild(t);
+    }
+  }
+
+  function updateNavButtons(){
+    const idx = matchOrder.indexOf(activeMatch);
+    prevBtn.disabled = idx <= 0;
+    nextBtn.disabled = idx >= matchOrder.length-1;
+  }
+
+  prevBtn.onclick = ()=>{
+    const idx = matchOrder.indexOf(activeMatch);
+    if (idx>0){ activeMatch = matchOrder[idx-1]; renderActive(); }
+  };
+  nextBtn.onclick = ()=>{
+    const idx = matchOrder.indexOf(activeMatch);
+    if (idx<matchOrder.length-1){ activeMatch = matchOrder[idx+1]; renderActive(); }
+  };
+
+  // -----------------------------
+  // Voting / Winner logic
+  // -----------------------------
+  async function setWinner(matchKey, winnerSide){
+    const m = matches[matchKey] || {};
+    const winnerUrl = (winnerSide==="left") ? m.left_url : m.right_url;
+    if (!winnerUrl) return;
+
+    // Persist winner
+    const { error } = await supabase
+      .from("bracket_matches_v2")
+      .update({ winner_side: winnerSide, winner_url: winnerUrl })
+      .eq("cycle_id", cycle.id)
+      .eq("match_key", matchKey);
+
+    if (error) throw error;
+
+    // Advance to next match slot (if any)
+    const adv = advanceMap[matchKey];
     if (adv){
-      await pushWinnerToParent(adv.parent, adv.slot, winnerUrl);
+      const patch = {};
+      patch[adv.slot + "_url"] = winnerUrl;
+
+      const { error: advErr } = await supabase
+        .from("bracket_matches_v2")
+        .update(patch)
+        .eq("cycle_id", cycle.id)
+        .eq("match_key", adv.to);
+
+      if (advErr) throw advErr;
     }
   }
 
-  async function pushWinnerToParent(parentKey, slot, url){
-    if (!parentKey || !slot || !url) return;
-    const col = (slot === "left") ? "left_url" : "right_url";
-
-    const upd = await supabase
-      .from("bracket_matches_v2")
-      .update({ [col]: url, updated_at: new Date().toISOString() })
-      .eq("cycle_id", cycleId)
-      .eq("match_key", parentKey)
-      .is(col, null);
-
-    if (upd.error){
-      return;
-    }
-
-    const pm = matches[parentKey] || {left_url:null,right_url:null,winner_url:null,winner_side:null};
-    pm[col] = url;
-    matches[parentKey] = pm;
-  }
-
-  async function checkAdvancementChainFrom(matchKey){
-    await declareWinnerIfNeeded(matchKey);
-  }
-
-  // ========= voting =========
   async function vote(side){
-    if (!cycleId) return;
+    if (!cycle?.id) return;
 
-    let user = null;
-    try {
-      const { data } = await supabase.auth.getUser();
-      user = data?.user || null;
-    } catch(e) {
-      user = null;
-    }
-
+    const user = await getSessionUser();
     if (!user){
       alert("You need to be signed in to vote.");
       return;
     }
 
-    if (!isMatchLive(activeMatch)){
-      alert("This match isn't live yet (waiting for an opponent) or it already has a winner.");
-      return;
-    }
-
-    const mem = memRead(cycleId);
+    const mem = memRead(cycle.id);
     if (mem[activeMatch]) return;
 
-    if (!counts[activeMatch]) counts[activeMatch] = {left:0,right:0};
-    counts[activeMatch][side] = (counts[activeMatch][side] || 0) + 1;
-    renderActive();
+    // Only allow voting if match is ready and not decided
+    const m = matches[activeMatch] || {};
+    if (!m.left_url || !m.right_url) return;
+    if (m.winner_url) return;
 
+    // Insert vote (server should enforce unique per voter per match)
     const payload = {
-      cycle_id: cycleId,
+      cycle_id: cycle.id,
       match_key: activeMatch,
-      side: side,
-      voter_id: user.id
+      side: side,              // "left" or "right"
+      voter_id: user.id,
+      rsid: RSID
     };
 
-    const ins = await supabase.from("phase_votes_v2").insert(payload);
-
-    if (ins.error){
-      counts[activeMatch][side] = Math.max(0, (counts[activeMatch][side]||0) - 1);
-      renderActive();
-
-      if (String(ins.error.message||"").toLowerCase().includes("duplicate") ||
-          String(ins.error.code||"") === "23505"){
-        memWrite(cycleId, activeMatch, side);
-        renderActive();
-        return;
-      }
-
-      alert("Vote failed (check RLS / table columns).");
+    const { error } = await supabase.from("phase_votes_v2").insert(payload);
+    if (error){
+      // likely already voted, just lock locally
+      memWrite(cycle.id, activeMatch, side);
+      await refresh();
       return;
     }
 
-    memWrite(cycleId, activeMatch, side);
+    memWrite(cycle.id, activeMatch, side);
 
-    await loadCounts();
-    await checkAdvancementChainFrom(activeMatch);
+    // refresh counts immediately
+    await refresh();
 
-    winnerText.textContent = computeOverallStatus();
-    renderActive();
+    // decide winner if threshold reached (double-check DB values)
+    const l = getCount(activeMatch,"left");
+    const r = getCount(activeMatch,"right");
+
+    if (l >= WIN_TO || r >= WIN_TO){
+      const winSide = (l >= WIN_TO) ? "left" : "right";
+      await setWinner(activeMatch, winSide);
+      await refresh();
+    }
   }
 
   btnActive1.onclick = ()=> vote("left");
   btnActive2.onclick = ()=> vote("right");
 
-  // AFK auto-vote is tied to the old timer/edge system. Keep buttons but disable.
-  function disableAutoVoteButtons(){
-    if (!autoBtn1 || !autoBtn2) return;
-    autoBtn1.disabled = true;
-    autoBtn2.disabled = true;
-    autoBtn1.textContent = "AFK disabled";
-    autoBtn2.textContent = "AFK disabled";
-  }
-  disableAutoVoteButtons();
+  // -----------------------------
+  // Refresh loop (no timer, just polling)
+  // -----------------------------
+  let pollId = null;
+  async function refresh(){
+    await loadMatches();
+    await loadCounts();
 
-  // ========= render active match =========
-  function renderActive(){
-    renderThumbs();
-    setFinalBox();
-
-    const mem = (cycleId ? memRead(cycleId) : {});
-    const picked = mem[activeMatch];
-
-    const m = matches[activeMatch] || {};
-    const c = counts[activeMatch] || {left:0,right:0};
-
-    let leftImg = m.left_url || placeholder("?");
-    let rightImg = m.right_url || placeholder("?");
-
-    activeLeftUrl = leftImg;
-    activeRightUrl = rightImg;
-
-    setActiveMedia("active1", leftImg);
-    setActiveMedia("active2", rightImg);
-
-    const leftMeta = metaByUrl[leftImg] || {};
-    const rightMeta = metaByUrl[rightImg] || {};
-
-    function buildLabel(defaultLabel, meta){
-      const t = meta && meta.title ? String(meta.title) : "";
-      const a = meta && meta.artist ? String(meta.artist) : "";
-      if (!t && !a) return defaultLabel;
-
-      let line = "";
-      if (t) line += `"${escapeHtml(t)}"`;
-      if (a){
-        const safeA = escapeHtml(a);
-        line += (line ? " · " : "") +
-                `<a href="profile.html?u=${safeA}" class="artist-link">@${safeA}</a>`;
-      }
-      return line;
+    // Auto-jump to first playable match if current one isn't ready
+    if (!isReady(activeMatch)){
+      const firstReady = matchOrder.find(k => isReady(k) && !(matches[k]?.winner_url));
+      if (firstReady) activeMatch = firstReady;
     }
 
-    const baseLabelLeft  = `${stageNameFromKey(activeMatch)} — Top`;
-    const baseLabelRight = `${stageNameFromKey(activeMatch)} — Bottom`;
-
-    let lLab = buildLabel(baseLabelLeft, leftMeta);
-    let rLab = buildLabel(baseLabelRight, rightMeta);
-
-    if (picked==="left")  lLab += " • you voted";
-    if (picked==="right") rLab += " • you voted";
-
-    if (m.winner_url){
-      if (m.winner_side === "left")  lLab += ` • WINNER`;
-      if (m.winner_side === "right") rLab += ` • WINNER`;
-    }
-
-    labelActive1.innerHTML = lLab;
-    labelActive2.innerHTML = rLab;
-
-    countActive1.textContent = c.left || 0;
-    countActive2.textContent = c.right || 0;
-
-    renderPieceMeta(metaActive1, leftMeta);
-    renderPieceMeta(metaActive2, rightMeta);
-
-    const live = isMatchLive(activeMatch);
-    btnActive1.disabled = !!picked || !live;
-    btnActive2.disabled = !!picked || !live;
-
-    (function updateArrows(){
-      const prevBtn = document.getElementById("prevMatch");
-      const nextBtn = document.getElementById("nextMatch");
-      if (!prevBtn || !nextBtn) return;
-
-      const keys = order
-        .map(o => o.key)
-        .filter(k => !thumbs[k].box.classList.contains("disabled")
-                  && !thumbs[k].box.classList.contains("hidden"));
-
-      const idx = keys.indexOf(activeMatch);
-      prevBtn.disabled = (idx <= 0);
-      nextBtn.disabled = (idx === -1 || idx >= keys.length - 1);
-    })();
+    renderActive();
   }
 
-  function gotoMatch(offset) {
-    const keys = order
-      .map(o => o.key)
-      .filter(k => !thumbs[k].box.classList.contains("disabled")
-                && !thumbs[k].box.classList.contains("hidden"));
-
-    const idx = keys.indexOf(activeMatch);
-    if (idx === -1) return;
-
-    const nextKey = keys[idx + offset];
-    if (nextKey) {
-      activeMatch = nextKey;
-      renderActive();
-    }
-  }
-
-  const prevBtnEl = document.getElementById("prevMatch");
-  const nextBtnEl = document.getElementById("nextMatch");
-  if (prevBtnEl && nextBtnEl) {
-    prevBtnEl.addEventListener("click", () => gotoMatch(-1));
-    nextBtnEl.addEventListener("click", () => gotoMatch(1));
-  }
-
-  // ========= realtime =========
-  function wireRealtime(){
-    supabase.channel("phase-votes-v2-live")
-      .on("postgres_changes", { event:"INSERT", schema:"public", table:"phase_votes_v2" }, async (payload)=>{
-        if (!cycleId) return;
-        if (payload?.new?.cycle_id !== cycleId) return;
-        await loadCounts();
-        await declareWinnerIfNeeded(payload.new.match_key);
-        winnerText.textContent = computeOverallStatus();
-        renderActive();
-      })
-      .subscribe();
-
-    supabase.channel("bracket-matches-v2-live")
-      .on("postgres_changes", { event:"UPDATE", schema:"public", table:"bracket_matches_v2" }, async (payload)=>{
-        if (!cycleId) return;
-        if (payload?.new?.cycle_id !== cycleId) return;
-        const k = payload.new.match_key;
-        matches[k] = {
-          left_url: payload.new.left_url || null,
-          right_url: payload.new.right_url || null,
-          winner_url: payload.new.winner_url || null,
-          winner_side: payload.new.winner_side || null
-        };
-        winnerText.textContent = computeOverallStatus();
-        renderActive();
-      })
-      .subscribe();
-  }
-
-  // ========= init =========
-  (async function init(){
+  async function boot(){
     try{
-      await initVoteUserKey();
-      await loadCurrentCycle();
-      await refreshAll();
-      wireRealtime();
+      cycle = await loadLatestCycle();
+      await ensureMatchRows();
+      await refresh();
+
+      if (pollId) clearInterval(pollId);
+      pollId = setInterval(()=>refresh().catch(()=>{}), 2500);
     }catch(e){
-      console.warn(e);
-      winnerText.textContent = "Setup error. Open console for details.";
-      renderActive();
-      updateCurrentRoundLabel();
+      console.error(e);
+      winnerText.textContent = "Error loading bracket. Check console.";
     }
+  }
+
+  boot();
+</script>
+</script>
+<script src="js/auth-guard.js" type="module"></script>
+<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
+<script>
+(function () {
+  const MAX_LINES = 2000;
+  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
+
+  // --- create floating button OUTSIDE the hidden panel ---
+  const floatBtn = document.createElement('button');
+  floatBtn.id = 'dbgFloatingBtn';
+  floatBtn.textContent = '🐛 Debug';
+  floatBtn.style.cssText = `
+    position: fixed; right: 8px; bottom: 8px;
+    z-index: 2147483647; background:#000; color:#0f0;
+    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
+    font: 12px/1.1 monospace; cursor:pointer;
+  `;
+  document.body.appendChild(floatBtn);
+
+  // --- panel wrapper (starts hidden) ---
+  const wrap = document.createElement('div');
+  wrap.id = 'dbg';
+  wrap.style.cssText = `
+    position: fixed; right: 0; bottom: 0; left: 0;
+    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
+    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
+  `;
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
+  bar.innerHTML = `
+    <span style="color:#6f6">Rage Debug</span>
+    <label>Filter:
+      <select id="dbgFilter">
+        <option value="">All</option>
+        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
+        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
+        <option>ERR</option><option>WARN</option><option>LOG</option>
+      </select>
+    </label>
+    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
+    <button id="dbgCopy">Copy</button>
+    <button id="dbgDownload">Download</button>
+    <button id="dbgClear">Clear</button>
+    <span style="margin-left:auto"></span>
+    <button id="dbgClose">✕</button>
+  `;
+
+  const list = document.createElement('div');
+  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
+
+  wrap.appendChild(bar); wrap.appendChild(list);
+  document.body.appendChild(wrap);
+
+  // button wiring
+  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
+  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
+  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
+
+  // controls
+  const filterSel  = bar.querySelector('#dbgFilter');
+  const recordChk  = bar.querySelector('#dbgRecord');
+  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
+  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
+  bar.querySelector('#dbgDownload').onclick = () => {
+    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
+    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
+    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  };
+
+  // ring buffer + rendering
+  let buffer = [];
+  function push(kind, msg, extra) {
+    if (!recordChk.checked) return;
+    const ts = new Date().toLocaleTimeString();
+    const line = `[${ts}] ${kind}: ${msg}`;
+    buffer.push({kind, line, extra});
+    if (buffer.length > MAX_LINES) buffer.shift();
+    const f = filterSel.value;
+    if (!f || f === kind) addLine({kind, line});
+  }
+  function addLine(r){
+    const div = document.createElement('div');
+    div.textContent = r.line;
+    if (r.kind === 'ERR') div.style.color = '#f88';
+    else if (r.kind === 'WARN') div.style.color = '#ff8';
+    else if (r.kind === 'EDGE') div.style.color = '#8ff';
+    else if (r.kind === 'NET')  div.style.color = '#8cf';
+    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
+    list.appendChild(div); list.scrollTop = list.scrollHeight;
+  }
+  function render(){
+    list.innerHTML = '';
+    const f = filterSel.value;
+    for (const r of buffer) if (!f || f === r.kind) addLine(r);
+  }
+  filterSel.onchange = render;
+
+  // console hooks
+  const _log = console.log, _warn = console.warn, _err = console.error;
+  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
+  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
+  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
+
+  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
+  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
+
+  // visibility & UI observers
+  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
+  const q = (id) => document.getElementById(id);
+
+  function observeText(id, kind) {
+    const el = q(id); if (!el) return;
+    let last = el.textContent;
+    const mo = new MutationObserver(() => {
+      if (el.textContent !== last) {
+        last = el.textContent;
+        push(kind, `${id} → ${last}`);
+      }
+    });
+    mo.observe(el, {childList:true, characterData:true, subtree:true});
+  }
+  observeText('phaseKey', 'STAGE');
+  observeText('state', 'STAGE');
+
+  (function watchClock(){
+    const el = q('clock'); if (!el) return;
+    let last = el.textContent, lastAt = performance.now();
+    const mo = new MutationObserver(() => {
+      const now = performance.now();
+      if (el.textContent !== last) {
+        const dt = ((now - lastAt)/1000).toFixed(2);
+        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
+        last = el.textContent; lastAt = now;
+      }
+    });
+    mo.observe(el, {childList:true, characterData:true, subtree:true});
   })();
-  </script>
 
-  <script src="js/auth-guard.js" type="module"></script>
+  // fetch tracer
+  const _fetch = window.fetch.bind(window);
+  window.fetch = async function(url, opts = {}) {
+    const start = performance.now();
+    const method = (opts && opts.method) || 'GET';
+    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
+    push(tag, `${method} ${url}`);
+    try {
+      const res = await _fetch(url, opts);
+      const ms = (performance.now() - start).toFixed(0);
+      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
+      return res;
+    } catch (e) {
+      const ms = (performance.now() - start).toFixed(0);
+      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
+      throw e;
+    }
+  };
 
-  <!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
-  <script>
-  (function () {
-    const MAX_LINES = 2000;
-    const EDGE_MATCH = /\/functions\/v1\/global-timer/; // legacy (edge removed)
+  // timers & rAF
+  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
+  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
+  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
 
-    // (your existing debugger code continues unchanged)
-    // ...
-  })();
-  </script>
-  <!-- ================== /RAGE DEBUGGER v2 ================== -->
+  const timers = new Map();
+  window.setInterval = function(fn, ms, ...rest){
+    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
+  };
+  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
+  window.setTimeout  = function(fn, ms, ...rest){
+    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
+    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
+  };
+  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
+  window.requestAnimationFrame = function(fn){
+    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
+  };
+  window.cancelAnimationFrame = function(id){ _caf(id); };
 
+  // image load tracing
+  function hookImg(img){
+    if (!img || img.__dbgHooked) return;
+    img.__dbgHooked = true;
+    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
+    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
+  }
+  Array.from(document.images).forEach(hookImg);
+  const imgObs = new MutationObserver((ms)=>{
+    for (const m of ms) for (const n of m.addedNodes) {
+      if (n.tagName === 'IMG') hookImg(n);
+      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
+    }
+  });
+  imgObs.observe(document.documentElement, {childList:true, subtree:true});
+
+  // bracket observer
+  const brows = document.getElementById('brows');
+  if (brows) {
+    const mo = new MutationObserver((ms)=>{
+      let adds = 0, rems = 0;
+      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
+      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
+    });
+    mo.observe(brows, {childList:true, subtree:false});
+  }
+
+  // public helpers
+  window.RageDebug = {
+    log: (k, m) => push(k||'LOG', m||''),
+    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
+    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
+    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
+  };
+
+  // small banner
+  (console.log||(()=>{}))('Debugger ready');
+})();
+</script>
+<!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
