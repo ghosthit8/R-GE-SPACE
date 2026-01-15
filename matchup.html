@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <!-- VOTE-TO-WIN BUILD v4 (NO EDGE TIMER) -->
   <title>Rage Space — Matchup (32-up → 2-up)</title>
   <link rel="stylesheet" href="style.css"/>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -199,7 +198,8 @@
 
   <div class="header">
     <div class="row">
-<div class="round-label" id="currentRound">Current round: —</div>
+      <div class="timer" id="tRemain">04:48:00</div>
+      <div class="round-label" id="currentRound">Current round: —</div>
     </div>
     <div class="row">
       <a class="backbtn" href="menu.html">← Menu</a>
@@ -252,7 +252,7 @@
   </div>
 
   <div class="winner" id="winnerText">
-    R32 locks at 69,120s remaining → R16 at 51,840s → Quarters at 34,560s → Semis at 17,280s → Final at 0s.
+    <b>First to 2 wins.</b> (Timer removed)
   </div>
 
   <!-- FINAL BOX -->
@@ -288,30 +288,19 @@
 <!-- FULLSCREEN OVERLAY -->
 <div class="fullscreen-overlay" id="overlay">
   <button id="closeFull">✕ Close</button>
-  <img id="fullImg" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=">
+  <img id="fullImg" src=\"data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=\">
   <video id="fullVideo" class="hidden" playsinline controls></video>
 </div>
-
-<script src="js/champion-overlay.js"></script>
 
 <script>
   const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
   const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // ====== VOTE-TO-WIN MODE (NO TIMER / NO EDGE FUNCTION) ======
-  const WIN_TO = 2; // first to 2 wins (change later if you want)
+  const WIN_TO = 2;
 
-  const RSID_KEY = "rsid_v2";
-  let RSID = localStorage.getItem(RSID_KEY);
-  if (!RSID){
-    RSID = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)+Date.now());
-    localStorage.setItem(RSID_KEY, RSID);
-  }
-
-  // UI refs 
-  const winnerText = document.getElementById("winnerText");
   const currentRoundEl = document.getElementById("currentRound");
+  const winnerText = document.getElementById("winnerText");
 
   const imgActive1 = document.getElementById("imgActive1");
   const imgActive2 = document.getElementById("imgActive2");
@@ -323,801 +312,215 @@
   const countActive2 = document.getElementById("countActive2");
   const btnActive1 = document.getElementById("btnActive1");
   const btnActive2 = document.getElementById("btnActive2");
-  const metaActive1 = document.getElementById("metaActive1");
-  const metaActive2 = document.getElementById("metaActive2");
-  const autoBtn1 = document.getElementById("autoActive1");
-  const autoBtn2 = document.getElementById("autoActive2");
 
-  const finalImg1 = document.getElementById("finalImg1");
-  const finalImg2 = document.getElementById("finalImg2");
-  const finalVid1 = document.getElementById("finalVid1");
-  const finalVid2 = document.getElementById("finalVid2");
-  const finalLeftLabel  = document.getElementById("finalLeftLabel");
-  const finalRightLabel = document.getElementById("finalRightLabel");
-  const finalFooter = document.getElementById("finalFooter");
+  const overlay  = document.getElementById("overlay");
+  const fullImg  = document.getElementById("fullImg");
+  const fullVideo = document.getElementById("fullVideo");
+  const btnClose = document.getElementById("closeFull");
 
+  const grid = document.getElementById("thumbGrid");
   const prevBtn = document.getElementById("prevMatch");
   const nextBtn = document.getElementById("nextMatch");
-  const thumbGrid = document.getElementById("thumbGrid");
 
-  // Keep the layout exactly the same — we just replace the timer text.
-  
-  // -----------------------------
-  // Bracket model (match keys)
-  // -----------------------------
-  const matchOrder = [
-    "rr1","rr2","rr3","rr4","rr5","rr6","rr7","rr8","rr9","rr10","rr11","rr12","rr13","rr14","rr15","rr16",
-    "r1","r2","r3","r4","r5","r6","r7","r8",
-    "q1","q2","q3","q4",
-    "s1","s2",
-    "final"
-  ];
-
-  const matchLabels = {
-    rr1:"R32 1", rr2:"R32 2", rr3:"R32 3", rr4:"R32 4", rr5:"R32 5", rr6:"R32 6", rr7:"R32 7", rr8:"R32 8",
-    rr9:"R32 9", rr10:"R32 10", rr11:"R32 11", rr12:"R32 12", rr13:"R32 13", rr14:"R32 14", rr15:"R32 15", rr16:"R32 16",
-    r1:"R16 1", r2:"R16 2", r3:"R16 3", r4:"R16 4", r5:"R16 5", r6:"R16 6", r7:"R16 7", r8:"R16 8",
-    q1:"QF 1", q2:"QF 2", q3:"QF 3", q4:"QF 4",
-    s1:"Semi 1", s2:"Semi 2",
-    final:"Final"
+  btnClose.onclick = ()=>{
+    overlay.style.display='none';
+    try {
+      fullVideo.pause();
+      fullVideo.removeAttribute('src');
+      fullVideo.load();
+    } catch(e){}
   };
 
-  // winner propagation mapping:
-  // [fromMatch] -> { to: nextMatchKey, slot: "left"|"right" }
-  const advanceMap = {
-    rr1:{to:"r1",slot:"left"},  rr2:{to:"r1",slot:"right"},
-    rr3:{to:"r2",slot:"left"},  rr4:{to:"r2",slot:"right"},
-    rr5:{to:"r3",slot:"left"},  rr6:{to:"r3",slot:"right"},
-    rr7:{to:"r4",slot:"left"},  rr8:{to:"r4",slot:"right"},
-    rr9:{to:"r5",slot:"left"},  rr10:{to:"r5",slot:"right"},
-    rr11:{to:"r6",slot:"left"}, rr12:{to:"r6",slot:"right"},
-    rr13:{to:"r7",slot:"left"}, rr14:{to:"r7",slot:"right"},
-    rr15:{to:"r8",slot:"left"}, rr16:{to:"r8",slot:"right"},
-
-    r1:{to:"q1",slot:"left"}, r2:{to:"q1",slot:"right"},
-    r3:{to:"q2",slot:"left"}, r4:{to:"q2",slot:"right"},
-    r5:{to:"q3",slot:"left"}, r6:{to:"q3",slot:"right"},
-    r7:{to:"q4",slot:"left"}, r8:{to:"q4",slot:"right"},
-
-    q1:{to:"s1",slot:"left"}, q2:{to:"s1",slot:"right"},
-    q3:{to:"s2",slot:"left"}, q4:{to:"s2",slot:"right"},
-
-    s1:{to:"final",slot:"left"}, s2:{to:"final",slot:"right"},
-  };
-
-  // -----------------------------
-  // Local state
-  // -----------------------------
-  let cycle = null;               // row from cycles_v2
-  let matches = {};               // { match_key: {left_url,right_url,winner_url,winner_side} }
-  let counts = {};                // { match_key: {left,right} }
-  let activeMatch = "rr1";
-
-  // vote memory (prevents repeat voting on same match in the same cycle)
-  const memKey = (cycleId) => `voteMem:${cycleId}`;
-  function memRead(cycleId){
-    try{ return JSON.parse(localStorage.getItem(memKey(cycleId))||"{}")||{}; }catch{ return {}; }
+  function isVideoUrl(url){
+    if (typeof url !== "string") return false;
+    const base = url.split("#")[0];
+    return /\.(mp4|webm|mov)(\?|$)/i.test(base);
   }
-  function memWrite(cycleId, matchKey, side){
-    const m = memRead(cycleId);
-    m[matchKey] = side;
-    localStorage.setItem(memKey(cycleId), JSON.stringify(m));
-  }
-
-  // -----------------------------
-  // Media helpers
-  // -----------------------------
-  const isVideo = (url="") => /\.(mp4|webm|ogg)(\?|#|$)/i.test(url) || /video\//i.test(url);
-
-  function setCardMedia(imgEl, vidEl, url){
-    if (!url){
-      imgEl.src = "";
-      vidEl.src = "";
-      imgEl.classList.remove("hidden");
-      vidEl.classList.add("hidden");
-      return;
-    }
-    if (isVideo(url)){
-      vidEl.src = url;
-      vidEl.classList.remove("hidden");
-      imgEl.classList.add("hidden");
-    } else {
-      imgEl.src = url;
-      imgEl.classList.remove("hidden");
-      vidEl.classList.add("hidden");
-      vidEl.removeAttribute("src");
-    }
-  }
-
-  // Fullscreen overlay (uses existing HTML)
-  const overlay = document.getElementById("overlay");
-  const closeFullBtn = document.getElementById("closeFull");
-  const fullImg = document.getElementById("fullImg");
-  const fullVideo = document.getElementById("fullVideo");
 
   window.openFull = function(which){
-    const m = matches[activeMatch] || {};
-    const url = (which==="active1") ? m.left_url : m.right_url;
+    let url = "";
+    if (which==="active1"){
+      if (!vidActive1.classList.contains("hidden") && vidActive1.src) url = vidActive1.src;
+      else url = imgActive1.src;
+    } else if (which==="active2"){
+      if (!vidActive2.classList.contains("hidden") && vidActive2.src) url = vidActive2.src;
+      else url = imgActive2.src;
+    }
     if (!url) return;
 
-    overlay.style.display = "flex";
-    if (isVideo(url)){
-      fullVideo.src = url;
-      fullVideo.classList.remove("hidden");
+    const video = isVideoUrl(url);
+    if (video){
       fullImg.classList.add("hidden");
-      fullImg.removeAttribute("src");
-      try{ fullVideo.play().catch(()=>{}); }catch{}
+      fullVideo.classList.remove("hidden");
+      fullVideo.src = url;
+      try { fullVideo.play().catch(()=>{}); } catch(e){}
     } else {
-      fullImg.src = url;
-      fullImg.classList.remove("hidden");
       fullVideo.classList.add("hidden");
-      fullVideo.removeAttribute("src");
+      try { fullVideo.pause(); fullVideo.removeAttribute("src"); fullVideo.load(); } catch(e){}
+      fullImg.classList.remove("hidden");
+      fullImg.src = url;
     }
-  };
+    overlay.style.display = 'flex';
+  }
 
-  closeFullBtn.onclick = ()=>{
-    overlay.style.display = "none";
-    try{ fullVideo.pause(); }catch{}
-    fullVideo.removeAttribute("src");
-  };
-  overlay.addEventListener("click", (e)=>{
-    if (e.target === overlay) closeFullBtn.click();
-  });
+  function placeholder(letter){
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="960">
+      <rect width="100%" height="100%" fill="#000"/>
+      <text x="50%" y="50%" fill="#39ff14" font-size="90" font-family="monospace"
+        text-anchor="middle" dominant-baseline="middle">${letter}</text>
+    </svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }
 
-  // -----------------------------
-  // DB helpers
-  // -----------------------------
-  async function getSessionUser(){
-    const { data } = await supabase.auth.getSession();
-    const sess = data?.session || null;
-    return sess?.user || null;
+  function setMedia(slot, url){
+    const img = (slot===1)?imgActive1:imgActive2;
+    const vid = (slot===1)?vidActive1:vidActive2;
+
+    if (isVideoUrl(url)){
+      img.classList.add("hidden");
+      vid.classList.remove("hidden");
+      vid.src = url;
+      vid.load();
+      try { vid.play().catch(()=>{}); } catch(e){}
+    } else {
+      vid.classList.add("hidden");
+      try { vid.pause(); vid.removeAttribute("src"); vid.load(); } catch(e){}
+      img.classList.remove("hidden");
+      img.src = url;
+    }
+  }
+
+  function seedKeys(){
+    // a..z then aa..af (32)
+    const single = Array.from({length:26}, (_,i)=>String.fromCharCode(97+i));
+    const double = ['aa','ab','ac','ad','ae','af'];
+    return single + double;
+  }
+
+  function buildSeedUrls(cycleRow){
+    const keys = [];
+    for (let i=0;i<26;i++) keys.push(String.fromCharCode(97+i));
+    keys.push('aa','ab','ac','ad','ae','af');
+
+    const urls = [];
+    for (const k of keys){
+      const col = `seed_${k}_url`;
+      const v = cycleRow && cycleRow[col];
+      urls.push((typeof v === 'string' && v) ? v : placeholder(k.toUpperCase()));
+    }
+    return urls; // length 32
+  }
+
+  let cycle = null;
+  let seeds = [];
+  let activeIdx = 0; // 0..15 match index
+
+  function render(){
+    if (currentRoundEl) currentRoundEl.textContent = "Current round: Round of 32";
+    winnerText.innerHTML = `<b>First to ${WIN_TO} wins.</b> (images loading from cycles_v2)`;
+
+    const left = seeds[activeIdx*2] || placeholder('?');
+    const right = seeds[activeIdx*2+1] || placeholder('?');
+
+    labelActive1.textContent = `R32 Match ${activeIdx+1} — Top`;
+    labelActive2.textContent = `R32 Match ${activeIdx+1} — Bottom`;
+    countActive1.textContent = '0';
+    countActive2.textContent = '0';
+
+    setMedia(1, left);
+    setMedia(2, right);
+
+    // votes not wired in this step
+    btnActive1.disabled = true;
+    btnActive2.disabled = true;
+
+    renderThumbs();
+    updateArrows();
+  }
+
+  function updateArrows(){
+    prevBtn.disabled = activeIdx <= 0;
+    nextBtn.disabled = activeIdx >= 15;
+  }
+
+  function renderThumbs(){
+    grid.innerHTML = '';
+
+    for (let i=0;i<16;i++){
+      const left = seeds[i*2] || placeholder('?');
+      const right = seeds[i*2+1] || placeholder('?');
+
+      const box = document.createElement('div');
+      box.className = 'thumb' + (i===activeIdx ? ' active' : '');
+
+      const imgWrap = document.createElement('div');
+      imgWrap.className = 'thumb-img diag';
+
+      const leftEl = document.createElement(isVideoUrl(left)?'video':'img');
+      leftEl.className = 'half left';
+      if (leftEl.tagName==='VIDEO'){
+        leftEl.muted = true; leftEl.playsInline = true; leftEl.loop = true;
+        leftEl.src = left;
+      } else {
+        leftEl.src = left;
+      }
+
+      const rightEl = document.createElement(isVideoUrl(right)?'video':'img');
+      rightEl.className = 'half right';
+      if (rightEl.tagName==='VIDEO'){
+        rightEl.muted = true; rightEl.playsInline = true; rightEl.loop = true;
+        rightEl.src = right;
+      } else {
+        rightEl.src = right;
+      }
+
+      imgWrap.appendChild(leftEl);
+      imgWrap.appendChild(rightEl);
+
+      const label = document.createElement('div');
+      label.className = 'thumb-label';
+      label.innerHTML = `<span>R32-${i+1}</span><span class="thumb-count">0–0</span>`;
+
+      box.appendChild(imgWrap);
+      box.appendChild(label);
+
+      box.onclick = ()=>{
+        activeIdx = i;
+        render();
+      };
+
+      grid.appendChild(box);
+    }
   }
 
   async function loadLatestCycle(){
     const { data, error } = await supabase
-      .from("cycles_v2")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .from('cycles_v2')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1);
 
     if (error) throw error;
-    if (!data) throw new Error("No cycle found in cycles_v2.");
-    return data;
+    if (!data || !data.length) throw new Error('No cycles_v2 rows found');
+    return data[0];
   }
 
-    async function ensureMatchRows(){
-    const cycleId = cycle.id;
+  prevBtn.onclick = ()=>{ if (activeIdx>0){ activeIdx--; render(); }};
+  nextBtn.onclick = ()=>{ if (activeIdx<15){ activeIdx++; render(); }};
 
-    // Pull existing rows (if any)
-    const { data: existing, error: exErr } = await supabase
-      .from("bracket_matches_v2")
-      .select("match_key,left_url,right_url,winner_url,winner_side")
-      .eq("cycle_id", cycleId);
-
-    if (exErr) throw exErr;
-
-    const existingMap = {};
-    for (const r of (existing || [])) existingMap[r.match_key] = r;
-
-    const hasAllRows = (existing || []).length >= matchOrder.length;
-    const rr1 = existingMap["rr1"];
-    const looksUnseeded = !rr1 || (!rr1.left_url && !rr1.right_url);
-
-    // Collect seeds from cycles_v2 dynamically.
-    // Works with seed_a_url..seed_af_url OR seed_1_url..seed_32_url OR any "seed*url" pattern.
-    const seedPairs = Object.entries(cycle)
-      .filter(([k,v]) => typeof v === "string" && v && /seed/i.test(k) && /url/i.test(k));
-
-    function naturalRank(key){
-      const s = String(key);
-      const m = s.match(/(\d+)/);
-      if (m) return [0, parseInt(m[1], 10), s];
-      return [1, 0, s];
-    }
-    seedPairs.sort((a,b)=>{
-      const ra = naturalRank(a[0]);
-      const rb = naturalRank(b[0]);
-      if (ra[0] !== rb[0]) return ra[0]-rb[0];
-      if (ra[1] !== rb[1]) return ra[1]-rb[1];
-      return ra[2].localeCompare(rb[2]);
-    });
-
-    const seeds = seedPairs.map(([k,v]) => v).filter(Boolean);
-
-    // If we already have a full, seeded bracket, do nothing.
-    if (hasAllRows && !looksUnseeded) return;
-
-    const r32 = seeds.slice(0, 32);
-    const rrKeys = matchOrder.filter(k => k.startsWith("rr"));
-    const rrAssign = {};
-    for (let i=0; i<rrKeys.length; i++){
-      const mk = rrKeys[i];
-      rrAssign[mk] = { left: r32[i*2] || null, right: r32[i*2+1] || null };
-    }
-
-    const rows = matchOrder.map((mk)=>{
-      const slot = rrAssign[mk] || { left:null, right:null };
-      return {
-        cycle_id: cycleId,
-        match_key: mk,
-        left_url: slot.left,
-        right_url: slot.right,
-        winner_side: null,
-        winner_url: null,
-      };
-    });
-
-    const { error: upErr } = await supabase
-      .from("bracket_matches_v2")
-      .upsert(rows, { onConflict: "cycle_id,match_key" });
-
-    if (upErr) throw upErr;
-  }
-
-  async function loadMatches(){
-    const cycleId = cycle.id;
-
-    const { data, error } = await supabase
-      .from("bracket_matches_v2")
-      .select("match_key,left_url,right_url,winner_side,winner_url")
-      .eq("cycle_id", cycleId);
-
-    if (error) throw error;
-
-    const map = {};
-    for (const row of (data||[])) map[row.match_key] = row;
-    matches = map;
-  }
-
-  async function loadCounts(){
-    const cycleId = cycle.id;
-
-    const { data, error } = await supabase
-      .from("phase_votes_v2")
-      .select("match_key,side")
-      .eq("cycle_id", cycleId);
-
-    if (error) throw error;
-
-    const c = {};
-    for (const v of (data||[])){
-      const mk = v.match_key;
-      const side = v.side === "left" ? "left" : "right";
-      c[mk] = c[mk] || { left:0, right:0 };
-      c[mk][side] += 1;
-    }
-    counts = c;
-  }
-
-  function getCount(matchKey, side){
-    return (counts?.[matchKey]?.[side] ?? 0);
-  }
-
-  function isReady(matchKey){
-    const m = matches[matchKey];
-    return !!(m && m.left_url && m.right_url);
-  }
-
-  // -----------------------------
-  // Rendering
-  // -----------------------------
-  function setMeta(el, url){
-    // Edge used to provide meta_by_url. Without it, we keep these hidden.
-    el.classList.add("hidden");
-    el.innerHTML = "";
-  }
-
-  function renderActive(){
-    const m = matches[activeMatch] || {};
-    const leftUrl = m.left_url || null;
-    const rightUrl = m.right_url || null;
-
-    const leftCt = getCount(activeMatch, "left");
-    const rightCt = getCount(activeMatch, "right");
-
-    // labels
-    currentRoundEl.textContent = `Current round: ${matchLabels[activeMatch] || activeMatch}`;
-    labelActive1.textContent = "Top";
-    labelActive2.textContent = "Bottom";
-
-    // media
-    setCardMedia(imgActive1, vidActive1, leftUrl);
-    setCardMedia(imgActive2, vidActive2, rightUrl);
-
-    // counts
-    countActive1.textContent = leftCt;
-    countActive2.textContent = rightCt;
-
-    // meta
-    setMeta(metaActive1, leftUrl);
-    setMeta(metaActive2, rightUrl);
-
-    const decided = !!m.winner_url;
-    const ready = !!(leftUrl && rightUrl);
-
-    // vote buttons
-    const mem = cycle?.id ? memRead(cycle.id) : {};
-    const alreadyVoted = !!mem[activeMatch];
-
-    btnActive1.disabled = !ready || decided || alreadyVoted;
-    btnActive2.disabled = !ready || decided || alreadyVoted;
-
-    // AFK buttons (keep UI but disable; you can re-add later)
-    autoBtn1.disabled = true;
-    autoBtn2.disabled = true;
-
-    // info banner
-    if (!ready){
-      winnerText.innerHTML = `Waiting for opponent… <span style="opacity:.7">(${matchLabels[activeMatch] || activeMatch})</span><br><b>First to ${WIN_TO} wins.</b>`;
-    } else if (decided){
-      winnerText.innerHTML = `<b>Winner decided.</b> First to ${WIN_TO} wins.`;
-    } else {
-      winnerText.innerHTML = `<b>First to ${WIN_TO} wins.</b>`;
-    }
-
-    renderFinalBox();
-    renderThumbs();
-    updateNavButtons();
-  }
-
-  function renderFinalBox(){
-    const m = matches["final"] || {};
-    const l = m.left_url || null;
-    const r = m.right_url || null;
-
-    setCardMedia(finalImg1, finalVid1, l);
-    setCardMedia(finalImg2, finalVid2, r);
-
-    const decided = !!m.winner_url;
-    if (decided){
-      finalFooter.textContent = "Winner decided.";
-    } else if (l && r){
-      finalFooter.textContent = `Final live — first to ${WIN_TO} wins.`;
-    } else {
-      finalFooter.textContent = "Waiting… (tap a card’s ⤢ for audio)";
-    }
-  }
-
-  function renderThumbs(){
-    thumbGrid.innerHTML = "";
-
-    for (const mk of matchOrder){
-      const m = matches[mk] || {};
-      const leftUrl = m.left_url || null;
-      const rightUrl = m.right_url || null;
-
-      const leftCt = getCount(mk,"left");
-      const rightCt = getCount(mk,"right");
-
-      const t = document.createElement("div");
-      t.className = "thumb" + (mk===activeMatch ? " active" : "") + (!isReady(mk) ? " disabled" : "");
-
-      const imgWrap = document.createElement("div");
-      imgWrap.className = "thumb-img";
-
-      // If both exist, show diagonal split preview (like your old UI)
-      if (leftUrl && rightUrl){
-        imgWrap.classList.add("diag");
-
-        const makeHalf = (url, side) => {
-          if (isVideo(url)){
-            const v = document.createElement("video");
-            v.className = `half ${side}`;
-            v.muted = true;
-            v.playsInline = true;
-            v.loop = true;
-            v.src = url;
-            v.autoplay = true;
-            return v;
-          } else {
-            const i = document.createElement("img");
-            i.className = `half ${side}`;
-            i.loading = "lazy";
-            i.src = url;
-            return i;
-          }
-        };
-
-        imgWrap.appendChild(makeHalf(leftUrl,"left"));
-        imgWrap.appendChild(makeHalf(rightUrl,"right"));
-      } else if (leftUrl || rightUrl){
-        const url = leftUrl || rightUrl;
-        if (isVideo(url)){
-          const v = document.createElement("video");
-          v.className = "thumb-preview";
-          v.muted = true;
-          v.playsInline = true;
-          v.loop = true;
-          v.src = url;
-          v.autoplay = true;
-          imgWrap.appendChild(v);
-        } else {
-          const i = document.createElement("img");
-          i.className = "thumb-preview";
-          i.loading = "lazy";
-          i.src = url;
-          imgWrap.appendChild(i);
-        }
-      } else {
-        const g = document.createElement("div");
-        g.className = "ghostBox";
-        g.textContent = "—";
-        imgWrap.appendChild(g);
-      }
-
-      t.appendChild(imgWrap);
-
-      const lab = document.createElement("div");
-      lab.className = "thumb-label";
-      const left = document.createElement("span");
-      left.textContent = matchLabels[mk] || mk;
-      const right = document.createElement("span");
-      right.className = "thumb-count";
-      right.textContent = `${leftCt}-${rightCt}`;
-      lab.appendChild(left);
-      lab.appendChild(right);
-      t.appendChild(lab);
-
-      t.onclick = ()=>{
-        activeMatch = mk;
-        renderActive();
-      };
-
-      thumbGrid.appendChild(t);
-    }
-  }
-
-  function updateNavButtons(){
-    const idx = matchOrder.indexOf(activeMatch);
-    prevBtn.disabled = idx <= 0;
-    nextBtn.disabled = idx >= matchOrder.length-1;
-  }
-
-  prevBtn.onclick = ()=>{
-    const idx = matchOrder.indexOf(activeMatch);
-    if (idx>0){ activeMatch = matchOrder[idx-1]; renderActive(); }
-  };
-  nextBtn.onclick = ()=>{
-    const idx = matchOrder.indexOf(activeMatch);
-    if (idx<matchOrder.length-1){ activeMatch = matchOrder[idx+1]; renderActive(); }
-  };
-
-  // -----------------------------
-  // Voting / Winner logic
-  // -----------------------------
-  async function setWinner(matchKey, winnerSide){
-    const m = matches[matchKey] || {};
-    const winnerUrl = (winnerSide==="left") ? m.left_url : m.right_url;
-    if (!winnerUrl) return;
-
-    // Persist winner
-    const { error } = await supabase
-      .from("bracket_matches_v2")
-      .update({ winner_side: winnerSide, winner_url: winnerUrl })
-      .eq("cycle_id", cycle.id)
-      .eq("match_key", matchKey);
-
-    if (error) throw error;
-
-    // Advance to next match slot (if any)
-    const adv = advanceMap[matchKey];
-    if (adv){
-      const patch = {};
-      patch[adv.slot + "_url"] = winnerUrl;
-
-      const { error: advErr } = await supabase
-        .from("bracket_matches_v2")
-        .update(patch)
-        .eq("cycle_id", cycle.id)
-        .eq("match_key", adv.to);
-
-      if (advErr) throw advErr;
-    }
-  }
-
-  async function vote(side){
-    if (!cycle?.id) return;
-
-    const user = await getSessionUser();
-    if (!user){
-      alert("You need to be signed in to vote.");
-      return;
-    }
-
-    const mem = memRead(cycle.id);
-    if (mem[activeMatch]) return;
-
-    // Only allow voting if match is ready and not decided
-    const m = matches[activeMatch] || {};
-    if (!m.left_url || !m.right_url) return;
-    if (m.winner_url) return;
-
-    // Insert vote (server should enforce unique per voter per match)
-    const payload = {
-      cycle_id: cycle.id,
-      match_key: activeMatch,
-      side: side,              // "left" or "right"
-      voter_id: user.id,
-      rsid: RSID
-    };
-
-    const { error } = await supabase.from("phase_votes_v2").insert(payload);
-    if (error){
-      // likely already voted, just lock locally
-      memWrite(cycle.id, activeMatch, side);
-      await refresh();
-      return;
-    }
-
-    memWrite(cycle.id, activeMatch, side);
-
-    // refresh counts immediately
-    await refresh();
-
-    // decide winner if threshold reached (double-check DB values)
-    const l = getCount(activeMatch,"left");
-    const r = getCount(activeMatch,"right");
-
-    if (l >= WIN_TO || r >= WIN_TO){
-      const winSide = (l >= WIN_TO) ? "left" : "right";
-      await setWinner(activeMatch, winSide);
-      await refresh();
-    }
-  }
-
-  btnActive1.onclick = ()=> vote("left");
-  btnActive2.onclick = ()=> vote("right");
-
-  // -----------------------------
-  // Refresh (event-driven)
-  // -----------------------------
-  async function refresh(){
-    await loadMatches();
-    await loadCounts();
-
-    // Auto-jump to first playable match if current one is not ready
-    if (!isReady(activeMatch)){
-      const firstReady = matchOrder.find(k => isReady(k) && !(matches[k]?.winner_url));
-      if (firstReady) activeMatch = firstReady;
-    }
-
-    renderActive();
-  }
-
-  function subscribeRealtime(){
-    // Any change to match slots / winners should re-render
-    supabase.channel("bracket-matches-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "bracket_matches_v2" }, () => {
-        refresh().catch(()=>{});
-      })
-      .subscribe();
-
-    // Any vote insert affects counts
-    supabase.channel("votes-live")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "phase_votes_v2" }, () => {
-        refresh().catch(()=>{});
-      })
-      .subscribe();
-  }
-
-  async function boot(){
+  (async function boot(){
     try{
       cycle = await loadLatestCycle();
-      await ensureMatchRows();
-      subscribeRealtime();
-      await refresh();
-
-      // Re-sync when you return to the tab
-      document.addEventListener("visibilitychange", ()=>{
-        if (!document.hidden) refresh().catch(()=>{});
-      });
+      seeds = buildSeedUrls(cycle);
+      render();
     }catch(e){
-      console.error(e);
-      winnerText.textContent = "Error loading bracket. Check console.";
+      console.error('Seed load failed', e);
+      seeds = Array.from({length:32}, (_,i)=>placeholder(String(i+1)));
+      render();
+      winnerText.innerHTML = `<b>Could not load seeds.</b> Check cycles_v2 columns seed_a_url…seed_af_url.`;
     }
-  }
-
-  boot();
-</script>
-<script src="js/auth-guard.js" type="module"></script>
-<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
-<script>
-(function () {
-  const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/__none__/;
-
-  // --- create floating button OUTSIDE the hidden panel ---
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'dbgFloatingBtn';
-  floatBtn.textContent = '🐛 Debug';
-  floatBtn.style.cssText = `
-    position: fixed; right: 8px; bottom: 8px;
-    z-index: 2147483647; background:#000; color:#0f0;
-    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
-    font: 12px/1.1 monospace; cursor:pointer;
-  `;
-  document.body.appendChild(floatBtn);
-
-  // --- panel wrapper (starts hidden) ---
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
-  `;
-
-  const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-  bar.innerHTML = `
-    <span style="color:#6f6">Rage Debug</span>
-    <label>Filter:
-      <select id="dbgFilter">
-        <option value="">All</option>
-        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
-        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
-        <option>ERR</option><option>WARN</option><option>LOG</option>
-      </select>
-    </label>
-    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgDownload">Download</button>
-    <button id="dbgClear">Clear</button>
-    <span style="margin-left:auto"></span>
-    <button id="dbgClose">✕</button>
-  `;
-
-  const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-
-  // button wiring
-  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-  // controls
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
-  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
-  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-  bar.querySelector('#dbgDownload').onclick = () => {
-    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
-    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  };
-
-  // ring buffer + rendering
-  let buffer = [];
-  function push(kind, msg, extra) {
-    if (!recordChk.checked) return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
-    if (buffer.length > MAX_LINES) buffer.shift();
-    const f = filterSel.value;
-    if (!f || f === kind) addLine({kind, line});
-  }
-  function addLine(r){
-    const div = document.createElement('div');
-    div.textContent = r.line;
-    if (r.kind === 'ERR') div.style.color = '#f88';
-    else if (r.kind === 'WARN') div.style.color = '#ff8';
-    else if (r.kind === 'EDGE') div.style.color = '#8ff';
-    else if (r.kind === 'NET')  div.style.color = '#8cf';
-    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-    list.appendChild(div); list.scrollTop = list.scrollHeight;
-  }
-  function render(){
-    list.innerHTML = '';
-    const f = filterSel.value;
-    for (const r of buffer) if (!f || f === r.kind) addLine(r);
-  }
-  filterSel.onchange = render;
-
-  // console hooks
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-
-  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-
-  // visibility & UI observers
-  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-  const q = (id) => document.getElementById(id);
-
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
-
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
-    let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
-        const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
-        last = el.textContent; lastAt = now;
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
   })();
-
-  // fetch tracer
-  const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
-    const start = performance.now();
-    const method = (opts && opts.method) || 'GET';
-    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
-    push(tag, `${method} ${url}`);
-    try {
-      const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-      return res;
-    } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
-      throw e;
-    }
-  };
-  // timers & rAF (disabled: avoid noisy TIMER logs)
-
-  // image load tracing
-  function hookImg(img){
-    if (!img || img.__dbgHooked) return;
-    img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
-  }
-  Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
-      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
-
-  // bracket observer
-  const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
-      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
-  }
-
-  // public helpers
-  window.RageDebug = {
-    log: (k, m) => push(k||'LOG', m||''),
-    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
-    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
-    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
-  };
-
-  // small banner
-  (console.log||(()=>{}))('Debugger ready');
-})();
 </script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
+
 </body>
 </html>
