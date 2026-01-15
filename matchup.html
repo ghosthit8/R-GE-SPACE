@@ -198,8 +198,7 @@
 
   <div class="header">
     <div class="row">
-      <div class="timer" id="tRemain">04:48:00</div>
-      <div class="round-label" id="currentRound">Current round: —</div>
+<div class="round-label" id="currentRound">Current round: —</div>
     </div>
     <div class="row">
       <a class="backbtn" href="menu.html">← Menu</a>
@@ -309,8 +308,7 @@
     localStorage.setItem(RSID_KEY, RSID);
   }
 
-  // UI refs
-  const elRemain = document.getElementById("tRemain");
+  // UI refs 
   const winnerText = document.getElementById("winnerText");
   const currentRoundEl = document.getElementById("currentRound");
 
@@ -342,8 +340,7 @@
   const thumbGrid = document.getElementById("thumbGrid");
 
   // Keep the layout exactly the same — we just replace the timer text.
-  elRemain.textContent = `First to ${WIN_TO} wins`;
-
+  
   // -----------------------------
   // Bracket model (match keys)
   // -----------------------------
@@ -886,7 +883,6 @@
   }
 
   boot();
-</script>
 </script>
 <script src="js/auth-guard.js" type="module"></script>
 <!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
