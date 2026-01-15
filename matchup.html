@@ -485,56 +485,73 @@
     return data;
   }
 
-  async function ensureMatchRows(){
-    // We create bracket rows once per cycle. If you already created them server-side, this is a no-op.
+    async function ensureMatchRows(){
     const cycleId = cycle.id;
 
-    // check if any row exists
+    // Pull existing rows (if any)
     const { data: existing, error: exErr } = await supabase
       .from("bracket_matches_v2")
-      .select("match_key")
-      .eq("cycle_id", cycleId)
-      .limit(1);
+      .select("match_key,left_url,right_url,winner_url,winner_side")
+      .eq("cycle_id", cycleId);
 
     if (exErr) throw exErr;
-    if (existing && existing.length) return;
 
-    // Build initial R32 from the cycle seed urls
-    const seed = (k) => cycle?.[k] || null;
+    const existingMap = {};
+    for (const r of (existing || [])) existingMap[r.match_key] = r;
 
-    const rrSeeds = {
-      rr1:["seed_a_url","seed_b_url"],
-      rr2:["seed_c_url","seed_d_url"],
-      rr3:["seed_e_url","seed_f_url"],
-      rr4:["seed_g_url","seed_h_url"],
-      rr5:["seed_i_url","seed_j_url"],
-      rr6:["seed_k_url","seed_l_url"],
-      rr7:["seed_m_url","seed_n_url"],
-      rr8:["seed_o_url","seed_p_url"],
-      rr9:["seed_q_url","seed_r_url"],
-      rr10:["seed_s_url","seed_t_url"],
-      rr11:["seed_u_url","seed_v_url"],
-      rr12:["seed_w_url","seed_x_url"],
-      rr13:["seed_y_url","seed_z_url"],
-      rr14:["seed_aa_url","seed_ab_url"],
-      rr15:["seed_ac_url","seed_ad_url"],
-      rr16:["seed_ae_url","seed_af_url"],
-    };
+    const hasAllRows = (existing || []).length >= matchOrder.length;
+    const rr1 = existingMap["rr1"];
+    const looksUnseeded = !rr1 || (!rr1.left_url && !rr1.right_url);
+
+    // Collect seeds from cycles_v2 dynamically.
+    // Works with seed_a_url..seed_af_url OR seed_1_url..seed_32_url OR any "seed*url" pattern.
+    const seedPairs = Object.entries(cycle)
+      .filter(([k,v]) => typeof v === "string" && v && /seed/i.test(k) && /url/i.test(k));
+
+    function naturalRank(key){
+      const s = String(key);
+      const m = s.match(/(\d+)/);
+      if (m) return [0, parseInt(m[1], 10), s];
+      return [1, 0, s];
+    }
+    seedPairs.sort((a,b)=>{
+      const ra = naturalRank(a[0]);
+      const rb = naturalRank(b[0]);
+      if (ra[0] !== rb[0]) return ra[0]-rb[0];
+      if (ra[1] !== rb[1]) return ra[1]-rb[1];
+      return ra[2].localeCompare(rb[2]);
+    });
+
+    const seeds = seedPairs.map(([k,v]) => v).filter(Boolean);
+
+    // If we already have a full, seeded bracket, do nothing.
+    if (hasAllRows && !looksUnseeded) return;
+
+    const r32 = seeds.slice(0, 32);
+    const rrKeys = matchOrder.filter(k => k.startsWith("rr"));
+    const rrAssign = {};
+    for (let i=0; i<rrKeys.length; i++){
+      const mk = rrKeys[i];
+      rrAssign[mk] = { left: r32[i*2] || null, right: r32[i*2+1] || null };
+    }
 
     const rows = matchOrder.map((mk)=>{
-      const pair = rrSeeds[mk] || [];
+      const slot = rrAssign[mk] || { left:null, right:null };
       return {
         cycle_id: cycleId,
         match_key: mk,
-        left_url: pair[0] ? seed(pair[0]) : null,
-        right_url: pair[1] ? seed(pair[1]) : null,
+        left_url: slot.left,
+        right_url: slot.right,
         winner_side: null,
         winner_url: null,
       };
     });
 
-    const { error: insErr } = await supabase.from("bracket_matches_v2").insert(rows);
-    if (insErr) throw insErr;
+    const { error: upErr } = await supabase
+      .from("bracket_matches_v2")
+      .upsert(rows, { onConflict: "cycle_id,match_key" });
+
+    if (upErr) throw upErr;
   }
 
   async function loadMatches(){
@@ -889,7 +906,7 @@
 <script>
 (function () {
   const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
+  const EDGE_MATCH = /\/functions\/v1\/__none__/;
 
   // --- create floating button OUTSIDE the hidden panel ---
   const floatBtn = document.createElement('button');
