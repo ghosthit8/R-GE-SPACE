@@ -251,14 +251,15 @@
   </div>
 
   <div class="winner" id="winnerText">
-    R32 locks at 69,120s remaining → R16 at 51,840s → Quarters at 34,560s → Semis at 17,280s → Final at 0s.
+    First to 2 wins.
+    <span style="opacity:.7">(You must be signed in to vote.)</span>
   </div>
 
   <!-- FINAL BOX -->
   <div class="card final-card" id="finalCard">
     <div class="bar">
       <div class="label">Final</div>
-      <div style="font-size:12px;color:#a1a1a1;">Decides at 0s</div>
+      <div style="font-size:12px;color:#a1a1a1;">First to 2 wins</div>
     </div>
     <div class="final-inner">
       <div class="final-slot">
@@ -280,14 +281,14 @@
   </div>
 
   <div class="hint">
-    24-hour tournament: 32 images → R32 (first 4h48m) → R16 → QF → SF → Final (last 4h48m).
+    Vote-to-win tournament: each match ends when one side reaches 2 votes. Next matches unlock when both opponents exist.
   </div>
 </div>
 
 <!-- FULLSCREEN OVERLAY -->
 <div class="fullscreen-overlay" id="overlay">
   <button id="closeFull">✕ Close</button>
-  <img id="fullImg" src="">
+  <img id="fullImg" alt="">
   <video id="fullVideo" class="hidden" playsinline controls></video>
 </div>
 
@@ -869,9 +870,9 @@
   btnActive2.onclick = ()=> vote("right");
 
   // -----------------------------
-  // Refresh loop (no timer, just polling)
+  // Refresh (no timer). We refresh once, then use realtime to stay synced.
   // -----------------------------
-  let pollId = null;
+  let rt = null;
   async function refresh(){
     await loadMatches();
     await loadCounts();
@@ -891,8 +892,16 @@
       await ensureMatchRows();
       await refresh();
 
-      if (pollId) clearInterval(pollId);
-      pollId = setInterval(()=>refresh().catch(()=>{}), 2500);
+      // Realtime subscriptions (keeps everyone in sync without timer polling)
+      if (rt) { try{ await rt.unsubscribe(); }catch(e){} rt = null; }
+
+      rt = supabase
+        .channel("rs_vote2win:" + cycle.id)
+        .on("postgres_changes", { event: "*", schema: "public", table: "bracket_matches_v2", filter: "cycle_id=eq." + cycle.id }, () => { refresh().catch(()=>{}); })
+        .on("postgres_changes", { event: "*", schema: "public", table: "phase_votes_v2", filter: "cycle_id=eq." + cycle.id }, () => { refresh().catch(()=>{}); })
+        .subscribe();
+
+      window.addEventListener("beforeunload", () => { try{ rt && rt.unsubscribe && rt.unsubscribe(); }catch(e){} });
     }catch(e){
       console.error(e);
       winnerText.textContent = "Error loading bracket. Check console.";
