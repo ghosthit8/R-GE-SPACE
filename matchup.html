@@ -1,680 +1,237 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Rage Space — Matchup (32-up → 2-up)</title>
-  <link rel="stylesheet" href="style.css"/>
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <style>
-    :root { --fg:#e5e7eb; --bg:#0b0f13; --accent:#39ff14; --muted:#8b8b8b; --card:#0f1318; --border:#20242a; }
-    html,body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Inter,ui-sans-serif; }
-    .wrap { max-width:700px; margin:0 auto; padding:16px 12px 96px; }
-    h1 { margin:0 0 10px; font-size:20px; font-weight:700; letter-spacing:.5px; }
-    .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-    .timer { font-variant-numeric: tabular-nums; font-weight:700; font-size:32px; line-height:1; padding:8px 14px; border:1px solid var(--border); border-radius:12px; background:var(--card); }
-    .state { color:var(--muted); font-size:12px; }
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Rage Space — Matchup</title>
 
-    .round-label { font-size:13px; color:var(--muted); }
+<link rel="stylesheet" href="style.css"/>
 
-    .card { margin-top:12px; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:var(--card); }
-    .imgBox { position:relative; width:100%; aspect-ratio:3/4; background:#111; display:grid; place-items:center; }
-    .imgBox img, .imgBox video { width:100%; height:100%; object-fit:cover; display:block; }
-    .fullscreenBtn { position:absolute; top:8px; right:8px; background:rgba(0,0,0,0.55); color:var(--accent); border:1px solid var(--accent); border-radius:8px; font-size:14px; padding:4px 8px; cursor:pointer; font-weight:700; }
-    .bar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; gap:8px; border-top:1px solid var(--border); }
-    .label { text-transform:uppercase; letter-spacing:.12em; font-weight:700; font-size:12px; color:#a1a1a1; }
-    .counts { font-variant-numeric: tabular-nums; font-weight:700; }
-    .btn, .vote, .linkbtn, .backbtn { appearance:none; border:1px solid #24303a; background:#131920; color:#fff; padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; }
-    .btn.ghost { color:#a0aec0; }
-    button.vote { padding:10px 14px; }
-    button.vote:disabled { opacity:.6; cursor:default; }
-
-    /* tiny AFK row under vote */
-    .autoRow {
-      display:flex;
-      justify-content:flex-end;
-      padding:0 12px 8px;
-    }
-
-    /* tiny AFK auto-vote button */
-    .autoVoteBtn {
-      padding: 2px 6px;
-      font-size: 9px;
-      border-radius: 999px;
-      border: 1px solid var(--accent);
-      background: transparent;
-      color: var(--accent);
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .autoVoteBtn:disabled {
-      opacity: 0.5;
-      cursor: default;
-    }
-
-    .navArrow {
-      border: 1px solid var(--accent);
-      background: rgba(0,0,0,0.45);
-      color: var(--accent);
-      padding: 6px 10px;
-      border-radius: 10px;
-      font-size: 20px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .navArrow:disabled {
-      opacity: .35;
-      cursor: default;
-    }
-
-    .piece-meta {
-      padding:6px 12px 10px;
-      border-top:1px solid var(--border);
-      font-size:12px;
-      color:var(--muted);
-    }
-    .piece-meta .piece-desc { white-space:pre-wrap; }
-    .piece-meta .seeMoreBtn {
-      margin-top:4px;
-      font-size:11px;
-      border-radius:999px;
-      padding:3px 8px;
-      border:1px solid var(--accent);
-      background:transparent;
-      color:var(--accent);
-      cursor:pointer;
-    }
-
-    .thumbs-wrap { margin-top:16px; }
-    .thumbs-title { font-size:12px; opacity:.6; margin-bottom:6px; }
-    .thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
-    .thumb { border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--card); cursor:pointer; position:relative; }
-    .thumb.disabled { opacity:.55; cursor:default; }
-    .thumb.active { border-color:var(--accent); box-shadow:0 0 0 1px rgba(57,255,20,.3); }
-
-    .thumb-img {
-      position:relative;
-      width:100%;
-      aspect-ratio:3/4;
-      background:#0b0f13;
-      overflow:hidden;
-    }
-    .thumb-img img,
-    .thumb-img video {
-      width:100%;
-      height:100%;
-      object-fit:cover;
-      display:block;
-    }
-    .thumb-img.diag img.half,
-    .thumb-img.diag video.half {
-      position:absolute;
-      inset:0;
-    }
-    .thumb-img.diag img.left,
-    .thumb-img.diag video.left {
-      clip-path:polygon(0 0, 100% 0, 0 100%);
-    }
-    .thumb-img.diag img.right,
-    .thumb-img.diag video.right {
-      clip-path:polygon(100% 0, 100% 100%, 0 100%);
-    }
-    .thumb-img.diag::before {
-      content:"";
-      position:absolute;
-      inset:0;
-      pointer-events:none;
-      background:linear-gradient(135deg, rgba(0,0,0,0.75) 48%, rgba(57,255,20,0.7) 50%, rgba(0,0,0,0.75) 52%);
-      mix-blend-mode:screen;
-      opacity:0.5;
-    }
-
-    .video-badge {
-      position:absolute;
-      top:6px;
-      left:6px;
-      padding:2px 6px;
-      font-size:9px;
-      font-weight:700;
-      letter-spacing:.12em;
-      text-transform:uppercase;
-      color:#0b0f13;
-      background:var(--accent);
-      border-radius:999px;
-      box-shadow:0 0 8px rgba(57,255,20,.8);
-      pointer-events:none;
-      z-index:2;
-    }
-
-    .thumb-preview {
-      position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
-      object-fit:cover;
-      display:block;
-      z-index:3;
-    }
-
-    .thumb-label { padding:6px 8px 8px; font-size:11px; display:flex; justify-content:space-between; align-items:center; }
-    .thumb-count { font-variant-numeric: tabular-nums; font-weight:700; }
-    .ghostBox { width:100%; height:100%; display:grid; place-items:center; color:#3b3b3b; font-weight:700; font-size:13px; letter-spacing:.08em; }
-
-    .winner { margin-top:14px; padding:10px 12px; border:1px dashed #2a343f; border-radius:12px; color:#cbd5e1; font-size:14px; }
-    .winner b { color:#39ff14; }
-
-    .final-card { margin-top:14px; }
-    .final-inner { display:flex; gap:12px; flex-wrap:wrap; padding:12px; }
-    .final-slot { flex:1 1 150px; background:#0b0f13; border:1px dashed var(--border); border-radius:10px; padding:8px; text-align:center; }
-    .final-slot .label { display:block; margin-bottom:4px; }
-    .final-slot .thumb-final { width:100%; aspect-ratio:3/4; background:#000; border-radius:8px; overflow:hidden; display:grid; place-items:center; position:relative; }
-    .final-slot .thumb-final img,
-    .final-slot .thumb-final video { width:100%; height:100%; object-fit:cover; }
-
-    .final-footer { padding:0 12px 12px; font-size:12px; color:#9aa0a6; }
-
-    .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); justify-content:center; align-items:center; z-index:9999; }
-    .fullscreen-overlay img,
-    .fullscreen-overlay video { max-width:90%; max-height:90%; border-radius:8px; }
-    .fullscreen-overlay button { position:absolute; top:20px; right:20px; background:#111; border:1px solid var(--accent); color:var(--accent); padding:6px 10px; border-radius:6px; font-weight:700; cursor:pointer; }
-
-    .hint { margin-top:10px; color:#9aa0a6; font-size:12px; }
-    .hidden { display:none !important; }
-
-    .artist-link {
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 700;
-    }
-    .artist-link:hover { text-decoration: underline; }
-
-    </style>
+<style>
+/* ⬇️ KEEPING YOUR VISUAL STYLE ⬇️ */
+body {
+  background:#0b0f13;
+  color:#e5e7eb;
+  font-family:system-ui,Segoe UI,Roboto;
+  margin:0;
+}
+.wrap { max-width:700px; margin:auto; padding:16px 12px 96px; }
+.timer {
+  font-size:32px;
+  padding:8px 14px;
+  border:1px solid #20242a;
+  border-radius:12px;
+  background:#0f1318;
+}
+.card {
+  margin-top:12px;
+  border:1px solid #20242a;
+  border-radius:16px;
+  overflow:hidden;
+  background:#0f1318;
+}
+.imgBox { aspect-ratio:3/4; background:#111; }
+.imgBox img { width:100%; height:100%; object-fit:cover; }
+.bar {
+  display:flex;
+  justify-content:space-between;
+  padding:10px 12px;
+}
+.vote {
+  padding:10px 14px;
+  border-radius:12px;
+  background:#131920;
+  border:1px solid #39ff14;
+  color:#39ff14;
+  cursor:pointer;
+}
+.vote:disabled { opacity:.4; cursor:default; }
+.thumbs {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  margin-top:16px;
+}
+.thumb {
+  border:1px solid #20242a;
+  border-radius:12px;
+  overflow:hidden;
+  cursor:pointer;
+}
+.thumb img {
+  width:100%;
+  aspect-ratio:3/4;
+  object-fit:cover;
+}
+.active { outline:2px solid #39ff14; }
+</style>
 </head>
+
 <body>
-
 <div class="wrap">
-  <h1 class="glitch-title" data-text="ART BATTLE. Faction I.">ART BATTLE. Faction I.</h1>
 
-  <div class="header">
-    <div class="row">
-      <div class="timer" id="tRemain">04:48:00</div>
-      <div class="round-label" id="currentRound">Current round: —</div>
-    </div>
-    <div class="row">
-      <a class="backbtn" href="menu.html">← Menu</a>
-      <a class="linkbtn" href="winners.html">Winners</a>
-      <button class="navArrow" id="prevMatch">⟨</button>
-      <button class="navArrow" id="nextMatch">⟩</button>
-    </div>
+<h1>ART BATTLE. Faction I.</h1>
+
+<div class="timer">04:48:00</div>
+<div id="roundLabel">Round of 32</div>
+
+<!-- ACTIVE MATCH -->
+<div class="card">
+  <div class="imgBox">
+    <img id="imgLeft">
   </div>
-
-  <!-- TOP CARD -->
-  <div class="card" id="activeTop">
-    <div class="imgBox">
-      <img id="imgActive1" alt="Active top">
-      <video id="vidActive1" class="hidden" muted playsinline loop controls></video>
-      <button class="fullscreenBtn" onclick="openFull('active1')">⤢</button>
-    </div>
-    <div class="bar">
-      <div class="label" id="labelActive1">Top</div>
-      <div class="counts" id="countActive1">0</div>
-      <button class="vote" id="btnActive1">Vote</button>
-    </div>
-    <div class="autoRow">
-      <button class="autoVoteBtn" id="autoActive1">vote this art for every round</button>
-    </div>
-    <div class="piece-meta hidden" id="metaActive1"></div>
-  </div>
-
-  <!-- BOTTOM CARD -->
-  <div class="card" id="activeBottom">
-    <div class="imgBox">
-      <img id="imgActive2" alt="Active bottom">
-      <video id="vidActive2" class="hidden" muted playsinline loop controls></video>
-      <button class="fullscreenBtn" onclick="openFull('active2')">⤢</button>
-    </div>
-    <div class="bar">
-      <div class="label" id="labelActive2">Bottom</div>
-      <div class="counts" id="countActive2">0</div>
-      <button class="vote" id="btnActive2">Vote</button>
-    </div>
-    <div class="autoRow">
-      <button class="autoVoteBtn" id="autoActive2">vote this art for every round</button>
-    </div>
-    <div class="piece-meta hidden" id="metaActive2"></div>
-  </div>
-
-  <!-- THUMBS -->
-  <div class="thumbs-wrap">
-    <div class="thumbs-title">Matches (tap to switch)</div>
-    <div class="thumbs" id="thumbGrid"></div>
-  </div>
-
-  <div class="winner" id="winnerText">
-    R32 locks at 69,120s remaining → R16 at 51,840s → Quarters at 34,560s → Semis at 17,280s → Final at 0s.
-  </div>
-
-  <!-- FINAL BOX -->
-  <div class="card final-card" id="finalCard">
-    <div class="bar">
-      <div class="label">Final</div>
-      <div style="font-size:12px;color:#a1a1a1;">Decides at 0s</div>
-    </div>
-    <div class="final-inner">
-      <div class="final-slot">
-        <span class="label" id="finalLeftLabel">Winner of Semi 1</span>
-        <div class="thumb-final">
-          <img id="finalImg1" alt="Final slot 1">
-          <video id="finalVid1" class="hidden" muted playsinline loop controls></video>
-        </div>
-      </div>
-      <div class="final-slot">
-        <span class="label" id="finalRightLabel">Winner of Semi 2</span>
-        <div class="thumb-final">
-          <img id="finalImg2" alt="Final slot 2">
-          <video id="finalVid2" class="hidden" muted playsinline loop controls></video>
-        </div>
-      </div>
-    </div>
-    <div class="final-footer" id="finalFooter">Waiting… (tap a card’s ⤢ for audio)</div>
-  </div>
-
-  <div class="hint">
-    24-hour tournament: 32 images → R32 (first 4h48m) → R16 → QF → SF → Final (last 4h48m).
+  <div class="bar">
+    <span>Top</span>
+    <span id="countLeft">0</span>
+    <button class="vote" id="voteLeft">Vote</button>
   </div>
 </div>
 
-<!-- FULLSCREEN OVERLAY -->
-<div class="fullscreen-overlay" id="overlay">
-  <button id="closeFull">✕ Close</button>
-  <img id="fullImg" src=\"data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=\">
-  <video id="fullVideo" class="hidden" playsinline controls></video>
+<div class="card">
+  <div class="imgBox">
+    <img id="imgRight">
+  </div>
+  <div class="bar">
+    <span>Bottom</span>
+    <span id="countRight">0</span>
+    <button class="vote" id="voteRight">Vote</button>
+  </div>
+</div>
+
+<!-- THUMBS -->
+<div class="thumbs" id="thumbs"></div>
+
 </div>
 
 <script>
-  // VOTE-TO-WIN HOTFIX v6A (images + voting baseline)
-  // - No edge function
-  // - Loads rr1 from cycles_v2 seed_a_url/seed_b_url
-  // - Votes write to phase_votes_v2
+/* =========================
+   TOURNAMENT CORE LOGIC
+========================= */
 
-  const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const rounds = [
+  { name:"Round of 32", matches:[] },
+  { name:"Round of 16", matches:[] },
+  { name:"Quarterfinals", matches:[] },
+  { name:"Semifinals", matches:[] },
+  { name:"Final", matches:[] }
+];
 
-  const VOTE_TARGET = 2;
-  const MATCH_KEY = 'rr1';
+// --- Seed 32 placeholders ---
+const seeds = Array.from({length:32},(_,i)=>({
+  img:`https://picsum.photos/seed/${i}/600/800`
+}));
 
-  // Stable per-device voter UUID
-  const RSID_KEY = "rsid_vote_uuid";
-  let VOTER_ID = localStorage.getItem(RSID_KEY);
-  if (!VOTER_ID || !/^[0-9a-f\-]{36}$/i.test(VOTER_ID)) {
-    VOTER_ID = (crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(16).slice(2) + Date.now()).slice(0,36));
-    localStorage.setItem(RSID_KEY, VOTER_ID);
+// Build R32
+for (let i=0;i<32;i+=2){
+  rounds[0].matches.push({
+    left:seeds[i],
+    right:seeds[i+1],
+    leftVotes:0,
+    rightVotes:0,
+    winner:null
+  });
+}
+
+let currentRound = 0;
+let currentMatch = 0;
+
+/* =========================
+   DOM
+========================= */
+const imgLeft   = document.getElementById("imgLeft");
+const imgRight  = document.getElementById("imgRight");
+const countLeft = document.getElementById("countLeft");
+const countRight= document.getElementById("countRight");
+const voteLeft  = document.getElementById("voteLeft");
+const voteRight = document.getElementById("voteRight");
+const thumbsEl  = document.getElementById("thumbs");
+const roundLabel= document.getElementById("roundLabel");
+
+/* =========================
+   RENDER
+========================= */
+function render(){
+  const match = rounds[currentRound].matches[currentMatch];
+
+  imgLeft.src  = match.left.img;
+  imgRight.src = match.right.img;
+  countLeft.textContent  = match.leftVotes;
+  countRight.textContent = match.rightVotes;
+
+  voteLeft.disabled  = match.winner;
+  voteRight.disabled = match.winner;
+
+  roundLabel.textContent = rounds[currentRound].name;
+
+  renderThumbs();
+}
+
+function renderThumbs(){
+  thumbsEl.innerHTML="";
+  rounds[currentRound].matches.forEach((m,i)=>{
+    const t=document.createElement("div");
+    t.className="thumb"+(i===currentMatch?" active":"");
+    t.innerHTML=`<img src="${m.left.img}">`;
+    t.onclick=()=>{ currentMatch=i; render(); };
+    thumbsEl.appendChild(t);
+  });
+}
+
+/* =========================
+   VOTING
+========================= */
+function vote(side){
+  const match = rounds[currentRound].matches[currentMatch];
+  if (match.winner) return;
+
+  if (side==="left") match.leftVotes++;
+  else match.rightVotes++;
+
+  if (match.leftVotes===2 || match.rightVotes===2){
+    match.winner = match.leftVotes>match.rightVotes
+      ? match.left
+      : match.right;
+    advanceWinner(match.winner);
   }
 
-  // DOM
-  const imgActive1 = document.getElementById('imgActive1');
-  const imgActive2 = document.getElementById('imgActive2');
-  const vidActive1 = document.getElementById('vidActive1');
-  const vidActive2 = document.getElementById('vidActive2');
-  const labelActive1 = document.getElementById('labelActive1');
-  const labelActive2 = document.getElementById('labelActive2');
-  const countActive1 = document.getElementById('countActive1');
-  const countActive2 = document.getElementById('countActive2');
-  const btnActive1 = document.getElementById('btnActive1');
-  const btnActive2 = document.getElementById('btnActive2');
-  const currentRoundEl = document.getElementById('currentRound');
+  render();
+}
 
-  // remove/blank old timer UI if it exists
-  const tRemain = document.getElementById('tRemain');
-  if (tRemain) tRemain.style.display = 'none';
-  const winnerText = document.getElementById('winnerText');
-  if (winnerText) winnerText.textContent = 'First to 2 wins. (Timer removed)';
+voteLeft.onclick  = ()=>vote("left");
+voteRight.onclick = ()=>vote("right");
 
-  function isVideoUrl(url){
-    if (!url) return false;
-    const base = String(url).split('#')[0];
-    return /\.(mp4|webm|mov)(\?|$)/i.test(base);
-  }
+/* =========================
+   ADVANCE
+========================= */
+function advanceWinner(winner){
+  const nextRound = rounds[currentRound+1];
+  if (!nextRound) return;
 
-  function setMedia(imgEl, vidEl, url){
-    if (!url){
-      imgEl.removeAttribute('src');
-      imgEl.style.display = 'block';
-      vidEl.classList.add('hidden');
-      vidEl.removeAttribute('src');
-      try{vidEl.load();}catch(e){}
-      return;
-    }
-    if (isVideoUrl(url)){
-      imgEl.removeAttribute('src');
-      imgEl.style.display = 'none';
-      vidEl.classList.remove('hidden');
-      vidEl.src = url;
-    } else {
-      vidEl.classList.add('hidden');
-      vidEl.removeAttribute('src');
-      try{vidEl.load();}catch(e){}
-      imgEl.style.display = 'block';
-      imgEl.src = url;
-    }
-  }
-
-  let cycle = null;
-  let leftUrl = null;
-  let rightUrl = null;
-
-  async function loadLatestCycle(){
-    const { data, error } = await supabase
-      .from('cycles_v2')
-      .select('*')
-      .order('created_at', { ascending:false })
-      .limit(1);
-    if (error) throw error;
-    return data && data[0] ? data[0] : null;
-  }
-
-  async function refreshVotes(){
-    if (!cycle) return;
-    const { data, error } = await supabase
-      .from('phase_votes_v2')
-      .select('side')
-      .eq('cycle_id', cycle.id)
-      .eq('match_key', MATCH_KEY);
-    if (error) throw error;
-    let l=0,r=0;
-    for (const row of (data||[])){
-      if (row.side==='left') l++;
-      if (row.side==='right') r++;
-    }
-    countActive1.textContent = String(l);
-    countActive2.textContent = String(r);
-    // lock buttons if winner decided
-    const decided = (l>=VOTE_TARGET) || (r>=VOTE_TARGET);
-    btnActive1.disabled = decided || !leftUrl || !rightUrl;
-    btnActive2.disabled = decided || !leftUrl || !rightUrl;
-    return {l,r,decided};
-  }
-
-  async function castVote(side){
-    if (!cycle) return;
-    btnActive1.disabled = true;
-    btnActive2.disabled = true;
-
-    const u = await supabase.auth.getUser();
-    const userId = u?.data?.user?.id || null;
-
-    const payload = {
-      phase_key: 'vote_to_win',
-      user_id: userId || VOTER_ID,
-      vote: side,
-      cycle_id: cycle.id,
-      match_key: MATCH_KEY,
-      side,
-      voter_id: VOTER_ID,
+  const idx = Math.floor(currentMatch/2);
+  if (!nextRound.matches[idx]){
+    nextRound.matches[idx]={
+      left:winner,
+      right:null,
+      leftVotes:0,
+      rightVotes:0,
+      winner:null
     };
-
-    const { error } = await supabase.from('phase_votes_v2').insert(payload);
-    if (error){
-      console.error('VOTE INSERT ERROR', error);
-      alert('Vote failed: ' + (error.message || 'unknown'));
-    }
-    await refreshVotes();
+  } else {
+    nextRound.matches[idx].right = winner;
   }
 
-  btnActive1.onclick = ()=>castVote('left');
-  btnActive2.onclick = ()=>castVote('right');
-
-  async function boot(){
-    currentRoundEl.textContent = 'R32 (Vote-to-win)';
-    cycle = await loadLatestCycle();
-    if (!cycle){
-      console.warn('No cycles_v2 row found');
-      return;
-    }
-    leftUrl = cycle.seed_a_url || null;
-    rightUrl = cycle.seed_b_url || null;
-
-    labelActive1.textContent = 'TOP';
-    labelActive2.textContent = 'BOTTOM';
-
-    setMedia(imgActive1, vidActive1, leftUrl);
-    setMedia(imgActive2, vidActive2, rightUrl);
-
-    await refreshVotes();
-
-    // realtime refresh for votes
-    supabase.channel('votes-live-rr1')
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'phase_votes_v2', filter:`cycle_id=eq.${cycle.id}` }, () => {
-        refreshVotes().catch(()=>{});
-      })
-      .subscribe();
+  // Move forward if round finished
+  if (rounds[currentRound].matches.every(m=>m.winner)){
+    currentRound++;
+    currentMatch=0;
   }
+}
 
-  boot().catch(err=>{
-    console.error('BOOT ERROR', err);
-  });
+/* =========================
+   INIT
+========================= */
+render();
 </script>
-<script src="js/auth-guard.js" type="module"></script>
 
-<!-- ================== RAGE DEBUGGER v2 (fixed button) ================== -->
-<script>
-(function () {
-  const MAX_LINES = 2000;
-  const EDGE_MATCH = /\/functions\/v1\/global-timer/;
-
-  // --- create floating button OUTSIDE the hidden panel ---
-  const floatBtn = document.createElement('button');
-  floatBtn.id = 'dbgFloatingBtn';
-  floatBtn.textContent = '🐛 Debug';
-  floatBtn.style.cssText = `
-    position: fixed; right: 8px; bottom: 8px;
-    z-index: 2147483647; background:#000; color:#0f0;
-    border:1px solid #0f0; border-radius:6px; padding:6px 10px;
-    font: 12px/1.1 monospace; cursor:pointer;
-  `;
-  document.body.appendChild(floatBtn);
-
-  // --- panel wrapper (starts hidden) ---
-  const wrap = document.createElement('div');
-  wrap.id = 'dbg';
-  wrap.style.cssText = `
-    position: fixed; right: 0; bottom: 0; left: 0;
-    background: rgba(0,0,0,.92); color:#9f9; font: 12px/1.4 monospace;
-    z-index: 2147483646; max-height: 45vh; display:none; box-shadow:0 -2px 12px rgba(0,0,0,.6);
-  `;
-
-  const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px; position:sticky; top:0; background:#111;';
-  bar.innerHTML = `
-    <span style="color:#6f6">Rage Debug</span>
-    <label>Filter:
-      <select id="dbgFilter">
-        <option value="">All</option>
-        <option>NET</option><option>EDGE</option><option>TIMER</option><option>CLOCK</option>
-        <option>STAGE</option><option>UI</option><option>IMG</option><option>OBS</option>
-        <option>ERR</option><option>WARN</option><option>LOG</option>
-      </select>
-    </label>
-    <label><input id="dbgRecord" type="checkbox" checked> Record</label>
-    <button id="dbgCopy">Copy</button>
-    <button id="dbgDownload">Download</button>
-    <button id="dbgClear">Clear</button>
-    <span style="margin-left:auto"></span>
-    <button id="dbgClose">✕</button>
-  `;
-
-  const list = document.createElement('div');
-  list.style.cssText = 'padding:6px 8px; white-space:pre-wrap; overflow:auto; max-height:calc(45vh - 42px);';
-
-  wrap.appendChild(bar); wrap.appendChild(list);
-  document.body.appendChild(wrap);
-
-  // button wiring
-  function showDbg(v){ wrap.style.display = v ? 'block' : 'none'; }
-  floatBtn.onclick = () => showDbg(wrap.style.display === 'none');
-  bar.querySelector('#dbgClose').onclick = () => showDbg(false);
-
-  // controls
-  const filterSel  = bar.querySelector('#dbgFilter');
-  const recordChk  = bar.querySelector('#dbgRecord');
-  bar.querySelector('#dbgClear').onclick = () => { buffer = []; render(); };
-  bar.querySelector('#dbgCopy').onclick = () => navigator.clipboard.writeText(buffer.map(r => r.line).join("\n"));
-  bar.querySelector('#dbgDownload').onclick = () => {
-    const blob = new Blob([buffer.map(r => r.line).join("\n")], {type:'text/plain'});
-    const a = Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: `rage_debug_${Date.now()}.log`});
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  };
-
-  // ring buffer + rendering
-  let buffer = [];
-  function push(kind, msg, extra) {
-    if (!recordChk.checked) return;
-    const ts = new Date().toLocaleTimeString();
-    const line = `[${ts}] ${kind}: ${msg}`;
-    buffer.push({kind, line, extra});
-    if (buffer.length > MAX_LINES) buffer.shift();
-    const f = filterSel.value;
-    if (!f || f === kind) addLine({kind, line});
-  }
-  function addLine(r){
-    const div = document.createElement('div');
-    div.textContent = r.line;
-    if (r.kind === 'ERR') div.style.color = '#f88';
-    else if (r.kind === 'WARN') div.style.color = '#ff8';
-    else if (r.kind === 'EDGE') div.style.color = '#8ff';
-    else if (r.kind === 'NET')  div.style.color = '#8cf';
-    else if (r.kind === 'TIMER' || r.kind === 'CLOCK') div.style.color = '#6f6';
-    list.appendChild(div); list.scrollTop = list.scrollHeight;
-  }
-  function render(){
-    list.innerHTML = '';
-    const f = filterSel.value;
-    for (const r of buffer) if (!f || f === r.kind) addLine(r);
-  }
-  filterSel.onchange = render;
-
-  // console hooks
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = (...a) => { try{push('LOG', a.map(String).join(' '));}catch{} _log.apply(console,a); };
-  console.warn= (...a) => { try{push('WARN',a.map(String).join(' '));}catch{} _warn.apply(console,a);};
-  console.error=(...a) => { try{push('ERR', a.map(String).join(' '));}catch{} _err.apply(console,a);};
-
-  window.addEventListener('error', (e)=> push('ERR', `${e.message} @ ${e.filename}:${e.lineno}`));
-  window.addEventListener('unhandledrejection', (e)=> push('ERR', (e.reason && e.reason.message) || String(e.reason)));
-
-  // visibility & UI observers
-  document.addEventListener('visibilitychange', () => push('OBS', `visibility: ${document.visibilityState}`));
-  const q = (id) => document.getElementById(id);
-
-  function observeText(id, kind) {
-    const el = q(id); if (!el) return;
-    let last = el.textContent;
-    const mo = new MutationObserver(() => {
-      if (el.textContent !== last) {
-        last = el.textContent;
-        push(kind, `${id} → ${last}`);
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  }
-  observeText('phaseKey', 'STAGE');
-  observeText('state', 'STAGE');
-
-  (function watchClock(){
-    const el = q('clock'); if (!el) return;
-    let last = el.textContent, lastAt = performance.now();
-    const mo = new MutationObserver(() => {
-      const now = performance.now();
-      if (el.textContent !== last) {
-        const dt = ((now - lastAt)/1000).toFixed(2);
-        push('CLOCK', `clock ${last} → ${el.textContent} (Δdom ${dt}s)`);
-        last = el.textContent; lastAt = now;
-      }
-    });
-    mo.observe(el, {childList:true, characterData:true, subtree:true});
-  })();
-
-  // fetch tracer
-  const _fetch = window.fetch.bind(window);
-  window.fetch = async function(url, opts = {}) {
-    const start = performance.now();
-    const method = (opts && opts.method) || 'GET';
-    const tag = EDGE_MATCH.test(String(url)) ? 'EDGE' : 'NET';
-    push(tag, `${method} ${url}`);
-    try {
-      const res = await _fetch(url, opts);
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} → ${res.status} (${ms}ms)`);
-      return res;
-    } catch (e) {
-      const ms = (performance.now() - start).toFixed(0);
-      push(tag, `${method} ${url} ✖ ${e.name||'error'} (${ms}ms)`);
-      throw e;
-    }
-  };
-
-  // timers & rAF
-  const _setInterval = window.setInterval, _clearInterval = window.clearInterval;
-  const _setTimeout  = window.setTimeout,  _clearTimeout  = window.clearTimeout;
-  const _raf = window.requestAnimationFrame, _caf = window.cancelAnimationFrame;
-
-  const timers = new Map();
-  window.setInterval = function(fn, ms, ...rest){
-    const id = _setInterval(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`interval ${id} tick ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'interval', ms}); push('TIMER', `interval ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearInterval = function(id){ if(timers.has(id)) push('TIMER', `interval ${id} cleared`); return _clearInterval(id); };
-  window.setTimeout  = function(fn, ms, ...rest){
-    const id = _setTimeout(function(){ const t0=performance.now(); try{fn()}finally{push('TIMER',`timeout ${id} run ${ (performance.now()-t0).toFixed(1)}ms`)} }, ms, ...rest);
-    timers.set(id, {type:'timeout', ms}); push('TIMER', `timeout ${id} set @ ${ms}ms`); return id;
-  };
-  window.clearTimeout = function(id){ if(timers.has(id)) push('TIMER', `timeout ${id} cleared`); return _clearTimeout(id); };
-  window.requestAnimationFrame = function(fn){
-    return _raf(function(t){ const t0=performance.now(); try{fn(t)}finally{push('TIMER',`rAF ${(performance.now()-t0).toFixed(1)}ms`)} });
-  };
-  window.cancelAnimationFrame = function(id){ _caf(id); };
-
-  // image load tracing
-  function hookImg(img){
-    if (!img || img.__dbgHooked) return;
-    img.__dbgHooked = true;
-    img.addEventListener('load',  ()=> push('IMG', `loaded ${img.id||''} ${img.src}`));
-    img.addEventListener('error', ()=> push('IMG', `ERROR  ${img.id||''} ${img.src}`));
-  }
-  Array.from(document.images).forEach(hookImg);
-  const imgObs = new MutationObserver((ms)=>{
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.tagName === 'IMG') hookImg(n);
-      else if (n.querySelectorAll) n.querySelectorAll('img').forEach(hookImg);
-    }
-  });
-  imgObs.observe(document.documentElement, {childList:true, subtree:true});
-
-  // bracket observer
-  const brows = document.getElementById('brows');
-  if (brows) {
-    const mo = new MutationObserver((ms)=>{
-      let adds = 0, rems = 0;
-      for (const m of ms) { adds += m.addedNodes.length; rems += m.removedNodes.length; }
-      push('OBS', `bracket changed: +${adds} -${rems} (children=${brows.children.length})`);
-    });
-    mo.observe(brows, {childList:true, subtree:false});
-  }
-
-  // public helpers
-  window.RageDebug = {
-    log: (k, m) => push(k||'LOG', m||''),
-    markStage: (stage, base) => push('STAGE', `mark stage=${stage} base=${base||''}`),
-    markPaint: (slot, base) => push('UI', `paint slot=${slot} base=${base||''}`),
-    markCounts: (slot, r, b) => push('UI', `counts slot=${slot} r=${r} b=${b}`),
-  };
-
-  // small banner
-  (console.log||(()=>{}))('Debugger ready');
-})();
-</script>
-<!-- ================== /RAGE DEBUGGER v2 ================== -->
 </body>
 </html>
