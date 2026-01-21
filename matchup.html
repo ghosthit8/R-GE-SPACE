@@ -46,6 +46,8 @@ body {
   cursor:pointer;
 }
 .vote:disabled { opacity:.4; cursor:default; }
+
+/* ===== THUMBS GRID ===== */
 .thumbs {
   display:grid;
   grid-template-columns:repeat(3,1fr);
@@ -57,13 +59,48 @@ body {
   border-radius:12px;
   overflow:hidden;
   cursor:pointer;
-}
-.thumb img {
-  width:100%;
-  aspect-ratio:3/4;
-  object-fit:cover;
+  background:#0f1318;
 }
 .active { outline:2px solid #39ff14; }
+
+/* ===== VS SPLIT THUMB (shows BOTH images) ===== */
+.thumb-img {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background:#0b0f13;
+}
+.thumb-img img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* diagonal split */
+.thumb-img .left {
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+.thumb-img .right {
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+/* divider glow */
+.thumb-img::after {
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(
+    135deg,
+    transparent 48%,
+    #39ff14 50%,
+    transparent 52%
+  );
+  opacity:.6;
+  pointer-events:none;
+}
 </style>
 </head>
 
@@ -78,7 +115,7 @@ body {
 <!-- ACTIVE MATCH -->
 <div class="card">
   <div class="imgBox">
-    <img id="imgLeft">
+    <img id="imgLeft" alt="Active top">
   </div>
   <div class="bar">
     <span>Top</span>
@@ -89,7 +126,7 @@ body {
 
 <div class="card">
   <div class="imgBox">
-    <img id="imgRight">
+    <img id="imgRight" alt="Active bottom">
   </div>
   <div class="bar">
     <span>Bottom</span>
@@ -106,6 +143,7 @@ body {
 <script>
 /* =========================
    TOURNAMENT CORE LOGIC
+   First to 2 votes advances
 ========================= */
 
 const rounds = [
@@ -116,12 +154,12 @@ const rounds = [
   { name:"Final", matches:[] }
 ];
 
-// --- Seed 32 placeholders ---
+// --- Seed 32 placeholders (swap later for your real art URLs) ---
 const seeds = Array.from({length:32},(_,i)=>({
   img:`https://picsum.photos/seed/${i}/600/800`
 }));
 
-// Build R32
+// Build R32 matches
 for (let i=0;i<32;i+=2){
   rounds[0].matches.push({
     left:seeds[i],
@@ -158,8 +196,8 @@ function render(){
   countLeft.textContent  = match.leftVotes;
   countRight.textContent = match.rightVotes;
 
-  voteLeft.disabled  = match.winner;
-  voteRight.disabled = match.winner;
+  voteLeft.disabled  = !!match.winner;
+  voteRight.disabled = !!match.winner;
 
   roundLabel.textContent = rounds[currentRound].name;
 
@@ -167,12 +205,25 @@ function render(){
 }
 
 function renderThumbs(){
-  thumbsEl.innerHTML="";
+  thumbsEl.innerHTML = "";
+
   rounds[currentRound].matches.forEach((m,i)=>{
-    const t=document.createElement("div");
-    t.className="thumb"+(i===currentMatch?" active":"");
-    t.innerHTML=`<img src="${m.left.img}">`;
-    t.onclick=()=>{ currentMatch=i; render(); };
+    const t = document.createElement("div");
+    t.className = "thumb" + (i === currentMatch ? " active" : "");
+
+    // ✅ VS thumbnail: shows BOTH images
+    t.innerHTML = `
+      <div class="thumb-img">
+        <img class="left"  src="${m.left.img}"  alt="thumb left">
+        <img class="right" src="${m.right.img}" alt="thumb right">
+      </div>
+    `;
+
+    t.onclick = () => {
+      currentMatch = i;
+      render();
+    };
+
     thumbsEl.appendChild(t);
   });
 }
@@ -184,46 +235,50 @@ function vote(side){
   const match = rounds[currentRound].matches[currentMatch];
   if (match.winner) return;
 
-  if (side==="left") match.leftVotes++;
+  if (side === "left") match.leftVotes++;
   else match.rightVotes++;
 
-  if (match.leftVotes===2 || match.rightVotes===2){
-    match.winner = match.leftVotes>match.rightVotes
-      ? match.left
-      : match.right;
+  // First to 2 wins
+  if (match.leftVotes >= 2 || match.rightVotes >= 2){
+    match.winner = (match.leftVotes > match.rightVotes) ? match.left : match.right;
     advanceWinner(match.winner);
   }
 
   render();
 }
 
-voteLeft.onclick  = ()=>vote("left");
-voteRight.onclick = ()=>vote("right");
+voteLeft.onclick  = () => vote("left");
+voteRight.onclick = () => vote("right");
 
 /* =========================
    ADVANCE
 ========================= */
 function advanceWinner(winner){
-  const nextRound = rounds[currentRound+1];
-  if (!nextRound) return;
+  const nextRound = rounds[currentRound + 1];
+  if (!nextRound) return; // tournament complete
 
-  const idx = Math.floor(currentMatch/2);
+  const idx = Math.floor(currentMatch / 2);
+
   if (!nextRound.matches[idx]){
-    nextRound.matches[idx]={
-      left:winner,
-      right:null,
-      leftVotes:0,
-      rightVotes:0,
-      winner:null
+    nextRound.matches[idx] = {
+      left: winner,
+      right: null,
+      leftVotes: 0,
+      rightVotes: 0,
+      winner: null
     };
   } else {
     nextRound.matches[idx].right = winner;
   }
 
-  // Move forward if round finished
-  if (rounds[currentRound].matches.every(m=>m.winner)){
+  // If the whole current round is complete, move to next round
+  const thisRoundDone = rounds[currentRound].matches.every(m => !!m.winner);
+  if (thisRoundDone){
     currentRound++;
-    currentMatch=0;
+    currentMatch = 0;
+
+    // Make sure the next round has matches to show (should, as winners fill it)
+    // If a match is missing a right side yet, it will still render (right image might be blank later).
   }
 }
 
