@@ -70,6 +70,7 @@ body {
   aspect-ratio: 3 / 4;
   overflow: hidden;
   background:#0b0f13;
+  border-radius: 12px; /* helps match your rounded thumb container */
 }
 .thumb-img img {
   position: absolute;
@@ -79,26 +80,35 @@ body {
   object-fit: cover;
 }
 
-/* diagonal split */
+/* ✅ PERFECT CENTER DIAGONAL SPLIT
+   (forces the seam through the true center) */
 .thumb-img .left {
-  clip-path: polygon(0 0, 100% 0, 0 100%);
+  clip-path: polygon(
+    0% 0%,
+    50% 0%,
+    0% 100%
+  );
 }
 .thumb-img .right {
-  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  clip-path: polygon(
+    100% 0%,
+    100% 100%,
+    50% 100%
+  );
 }
 
-/* divider glow */
+/* ✅ CENTERED divider glow that matches the diagonal */
 .thumb-img::after {
   content:"";
   position:absolute;
-  inset:0;
+  inset:-2px;
   background:linear-gradient(
     135deg,
-    transparent 48%,
+    transparent 49%,
     #39ff14 50%,
-    transparent 52%
+    transparent 51%
   );
-  opacity:.6;
+  opacity:.75;
   pointer-events:none;
 }
 </style>
@@ -211,7 +221,7 @@ function renderThumbs(){
     const t = document.createElement("div");
     t.className = "thumb" + (i === currentMatch ? " active" : "");
 
-    // ✅ VS thumbnail: shows BOTH images
+    // ✅ VS thumbnail: shows BOTH images with a centered diagonal seam
     t.innerHTML = `
       <div class="thumb-img">
         <img class="left"  src="${m.left.img}"  alt="thumb left">
@@ -276,9 +286,6 @@ function advanceWinner(winner){
   if (thisRoundDone){
     currentRound++;
     currentMatch = 0;
-
-    // Make sure the next round has matches to show (should, as winners fill it)
-    // If a match is missing a right side yet, it will still render (right image might be blank later).
   }
 }
 
