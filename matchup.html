@@ -63,53 +63,45 @@ body {
 }
 .active { outline:2px solid #39ff14; }
 
-/* ===== VS SPLIT THUMB (shows BOTH images) ===== */
+/* ===== VS SPLIT THUMB (shows BOTH images, no missing middle) ===== */
 .thumb-img {
   position: relative;
   width: 100%;
   aspect-ratio: 3 / 4;
   overflow: hidden;
   background:#0b0f13;
-  border-radius: 12px; /* helps match your rounded thumb container */
 }
+
 .thumb-img img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
 }
 
-/* ✅ PERFECT CENTER DIAGONAL SPLIT
-   (forces the seam through the true center) */
-.thumb-img .left {
-  clip-path: polygon(
-    0% 0%,
-    50% 0%,
-    0% 100%
-  );
+/* ✅ These two triangles FULLY cover the rectangle
+   Seam is the diagonal from (100%,0%) to (0%,100%) */
+.thumb-img img.left {
+  clip-path: polygon(0% 0%, 100% 0%, 0% 100%);
 }
-.thumb-img .right {
-  clip-path: polygon(
-    100% 0%,
-    100% 100%,
-    50% 100%
-  );
+.thumb-img img.right {
+  clip-path: polygon(100% 0%, 100% 100%, 0% 100%);
 }
 
-/* ✅ CENTERED divider glow that matches the diagonal */
-.thumb-img::after {
+/* ✅ Perfectly centered diagonal green line (real line, not a gradient guess) */
+.thumb-img::after{
   content:"";
   position:absolute;
-  inset:-2px;
-  background:linear-gradient(
-    135deg,
-    transparent 49%,
-    #39ff14 50%,
-    transparent 51%
-  );
-  opacity:.75;
+  top:50%;
+  left:50%;
+  width:220%;
+  height:3px;
+  background:#39ff14;
+  transform:translate(-50%,-50%) rotate(45deg);
+  opacity:.65;
   pointer-events:none;
+  box-shadow:0 0 10px rgba(57,255,20,.65);
 }
 </style>
 </head>
@@ -221,7 +213,7 @@ function renderThumbs(){
     const t = document.createElement("div");
     t.className = "thumb" + (i === currentMatch ? " active" : "");
 
-    // ✅ VS thumbnail: shows BOTH images with a centered diagonal seam
+    // ✅ VS thumbnail: shows BOTH images, seam centered, no black slab
     t.innerHTML = `
       <div class="thumb-img">
         <img class="left"  src="${m.left.img}"  alt="thumb left">
