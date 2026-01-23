@@ -63,7 +63,7 @@ body {
 }
 .active { outline:2px solid #39ff14; }
 
-/* ===== VS SPLIT THUMB (shows BOTH images, no missing middle) ===== */
+/* ===== VS SPLIT THUMB (shows BOTH images) ===== */
 .thumb-img {
   position: relative;
   width: 100%;
@@ -80,8 +80,7 @@ body {
   object-fit:cover;
 }
 
-/* ✅ These two triangles FULLY cover the rectangle
-   Seam is the diagonal from (100%,0%) to (0%,100%) */
+/* Seam is the diagonal from (100%,0%) to (0%,100%) */
 .thumb-img img.left {
   clip-path: polygon(0% 0%, 100% 0%, 0% 100%);
 }
@@ -89,7 +88,7 @@ body {
   clip-path: polygon(100% 0%, 100% 100%, 0% 100%);
 }
 
-/* ✅ Perfectly centered diagonal green line (real line, not a gradient guess) */
+/* ✅ Perfectly aligned diagonal green line (matches seam) */
 .thumb-img::after{
   content:"";
   position:absolute;
@@ -98,7 +97,7 @@ body {
   width:220%;
   height:3px;
   background:#39ff14;
-  transform:translate(-50%,-50%) rotate(45deg);
+  transform:translate(-50%,-50%) rotate(-45deg); /* <-- FIXED */
   opacity:.65;
   pointer-events:none;
   box-shadow:0 0 10px rgba(57,255,20,.65);
@@ -213,7 +212,6 @@ function renderThumbs(){
     const t = document.createElement("div");
     t.className = "thumb" + (i === currentMatch ? " active" : "");
 
-    // ✅ VS thumbnail: shows BOTH images, seam centered, no black slab
     t.innerHTML = `
       <div class="thumb-img">
         <img class="left"  src="${m.left.img}"  alt="thumb left">
