@@ -65,6 +65,7 @@ body { background:#0b0f13; color:#e5e7eb; font-family:system-ui,Segoe UI,Roboto;
 <div class="timer">—</div>
 
 <div class="topbar">
+  <button class="btn" id="btnBack">← Menu</button>
   <div class="pill" id="roundLabel">Loading…</div>
   <div style="display:flex; gap:8px; align-items:center;">
     <div class="pill" id="userLabel">Not signed in</div>
@@ -100,13 +101,22 @@ body { background:#0b0f13; color:#e5e7eb; font-family:system-ui,Segoe UI,Roboto;
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
+/* =========================
+   SUPABASE (YOUR PROJECT)
+========================= */
 const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY =
 "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* DOM */
+// Back to menu
+const btnBack = document.getElementById("btnBack");
+if (btnBack) btnBack.onclick = () => { window.location.href = "menu.html"; };
+
+/* =========================
+   DOM
+========================= */
 const imgLeft = document.getElementById("imgLeft");
 const imgRight = document.getElementById("imgRight");
 const countLeft = document.getElementById("countLeft");
@@ -120,12 +130,14 @@ const statusLine = document.getElementById("statusLine");
 const btnSignIn = document.getElementById("btnSignIn");
 const btnSignOut = document.getElementById("btnSignOut");
 
-/* STATE */
+/* =========================
+   STATE
+========================= */
 let sessionUser = null;
 let activeRound = 0;
 let matches = [];
 let activeMatchIndex = 0;
-let votedMatchIds = new Set(); // ✅ voted matches for this round
+let votedMatchIds = new Set(); // voted matches for this round
 
 const ROUND_NAMES = ["Round of 32","Round of 16","Quarterfinals","Semifinals","Final"];
 
@@ -205,7 +217,7 @@ async function loadCounts(matchId){
   return { l, r };
 }
 
-/* ✅ Load which matches the user voted on in THIS round */
+/* Load which matches the user voted on in THIS round */
 async function loadUserVotedMatchIds(userId, round){
   const set = new Set();
   if (!userId) return set;
@@ -336,6 +348,7 @@ async function castVote(side){
   await refreshAll();
 }
 
+/* CLICK HANDLERS */
 voteLeft.onclick = ()=>castVote("left");
 voteRight.onclick = ()=>castVote("right");
 
