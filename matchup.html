@@ -134,15 +134,22 @@ const btnSignOut = document.getElementById("btnSignOut");
    STATE
 ========================= */
 let sessionUser = null;
+
+// We now load ALL rounds so we can show tiers (R32, R16, QF, SF, F)
+const ROUND_NAMES = ["R32","R16","Quarterfinals","Semifinals","Final"];
+let matchesByRound = [[],[],[],[],[]];
+
+// What round is currently vote-active (lowest round with a playable undecided match)
 let activeRound = 0;
-let matches = [];
+
+// Within activeRound, which match_index is active
 let activeMatchIndex = 0;
-let votedMatchIds = new Set(); // voted matches for this round
 
-// NEW: prevent jumping after vote
+// voted matches for activeRound (user-specific)
+let votedMatchIds = new Set();
+
+// prevent jumping after vote
 let keepCurrentMatch = false;
-
-const ROUND_NAMES = ["Round of 32","Round of 16","Quarterfinals","Semifinals","Final"];
 
 function setStatus(msg, cls=""){
   statusLine.className = "small " + cls;
@@ -191,29 +198,25 @@ btnSignOut.onclick = async () => {
 /* =========================
    DATA
 ========================= */
-async function detectActiveRound(){
-  for (let r=0;r<5;r++){
-    const { data } = await supabase
-      .from("matches_v2")
-      .select("*")
-      .eq("round", r)
-      .order("match_index");
-
-    if (data?.some(m=>!m.winner_img)) return r;
-  }
-  return 4;
-}
-
 async function loadRound(r){
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("matches_v2")
     .select("*")
     .eq("round", r)
     .order("match_index");
+  if (error) throw error;
   return data ?? [];
 }
 
-/* ✅ UPDATED: use RPC so counts show across accounts even with RLS */
+async function loadAllRounds(){
+  const out = [];
+  for (let r=0;r<5;r++){
+    out.push(await loadRound(r));
+  }
+  return out;
+}
+
+/* Counts via RPC so counts show across accounts even with RLS */
 async function loadCounts(matchId){
   const { data, error } = await supabase.rpc("get_match_counts_v2", { p_match_id: matchId });
   if (error) throw error;
@@ -240,19 +243,52 @@ async function loadUserVotedMatchIds(userId, round){
   return set;
 }
 
-/* =========================
-   RENDER
-========================= */
-function render(){
-  roundLabel.textContent = ROUND_NAMES[activeRound] ?? ("Round " + activeRound);
-  const m = matches[activeMatchIndex];
-  if (!m) return;
+function matchPlayable(m){
+  // you can only vote if both sides exist and match not decided
+  return !!m && !m.winner_img && !!m.left_img && !!m.right_img;
+}
 
-  imgLeft.src = m.left_img;
-  imgRight.src = m.right_img;
+/* Find the lowest round that still has at least one playable match */
+function detectActiveRoundFromLoaded(){
+  for (let r=0;r<5;r++){
+    const list = matchesByRound[r] ?? [];
+    if (list.some(matchPlayable)) return r;
+  }
+  // If everything decided, stay at finals
+  return 4;
+}
+
+/* =========================
+   RENDER (main match)
+========================= */
+function getActiveMatch(){
+  const list = matchesByRound[activeRound] ?? [];
+  return list[activeMatchIndex] ?? null;
+}
+
+function render(){
+  // Label shows the ACTIVE vote round, not necessarily where you tapped
+  roundLabel.textContent = ROUND_NAMES[activeRound] ?? ("Round " + activeRound);
+
+  const m = getActiveMatch();
+  if (!m){
+    imgLeft.removeAttribute("src");
+    imgRight.removeAttribute("src");
+    countLeft.textContent = "0";
+    countRight.textContent = "0";
+    voteLeft.disabled = true;
+    voteRight.disabled = true;
+    setStatus("No matches loaded.", "warn");
+    renderThumbs();
+    return;
+  }
+
+  imgLeft.src = m.left_img || "";
+  imgRight.src = m.right_img || "";
 
   const alreadyVotedThisMatch = votedMatchIds.has(m.id);
-  const canVote = sessionUser && !alreadyVotedThisMatch && !m.winner_img;
+  const playable = matchPlayable(m);
+  const canVote = sessionUser && playable && !alreadyVotedThisMatch;
 
   voteLeft.disabled = !canVote;
   voteRight.disabled = !canVote;
@@ -260,45 +296,132 @@ function render(){
   renderThumbs();
 }
 
-function renderThumbs(){
-  thumbsEl.innerHTML="";
-  matches.forEach((m,i)=>{
-    const t=document.createElement("div");
-    t.className="thumb"+(i===activeMatchIndex?" active":"");
-    t.innerHTML=`
-      <div class="thumb-img">
-        <img class="left" src="${m.left_img}">
-        <img class="right" src="${m.right_img}">
-      </div>`;
-    t.onclick=async()=>{
-      activeMatchIndex=i;
-      await refreshCounts();
-      render();
-      updateStatusLine();
-    };
-    thumbsEl.appendChild(t);
-  });
+function badgeTextForMatch(m){
+  if (m.winner_img) return "DECIDED";
+  if (!m.left_img || !m.right_img) return "TBD";
+  return "LIVE";
 }
 
+/* =========================
+   THUMBS (tiered + dividers)
+========================= */
+function renderThumbs(){
+  thumbsEl.innerHTML="";
+
+  for (let r=0;r<5;r++){
+    const section = document.createElement("div");
+    section.style.gridColumn = "1 / -1";
+    section.style.marginTop = r===0 ? "6px" : "16px";
+
+    // header row with neon divider
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.gap = "10px";
+    header.innerHTML = `
+      <div style="font-weight:700; color:#39ff14; letter-spacing:.5px;">${ROUND_NAMES[r]}</div>
+      <div style="height:2px; flex:1; background:rgba(57,255,20,.55); box-shadow:0 0 10px rgba(57,255,20,.35); border-radius:999px;"></div>
+    `;
+    section.appendChild(header);
+    thumbsEl.appendChild(section);
+
+    const list = matchesByRound[r] ?? [];
+    if (!list.length){
+      const empty = document.createElement("div");
+      empty.className = "small";
+      empty.style.gridColumn = "1 / -1";
+      empty.style.opacity = ".7";
+      empty.style.margin = "6px 0 4px";
+      empty.textContent = "No matches yet.";
+      thumbsEl.appendChild(empty);
+      continue;
+    }
+
+    list.forEach((m,i)=>{
+      const isActive = (r===activeRound && i===activeMatchIndex);
+      const t=document.createElement("div");
+      const playable = matchPlayable(m);
+      const decided = !!m.winner_img;
+      const badge = badgeTextForMatch(m);
+
+      t.className = "thumb"+(isActive?" active":"");
+      t.style.opacity = decided ? ".55" : (playable ? "1" : ".75");
+
+      // overlay label
+      t.innerHTML = `
+        <div class="thumb-img">
+          ${m.left_img ? `<img class="left" src="${m.left_img}">` : `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-weight:700; color:#9ca3af;">TBD</div>`}
+          ${m.right_img ? `<img class="right" src="${m.right_img}">` : ``}
+          ${!m.right_img ? `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-weight:700; color:#9ca3af;">TBD</div>` : ``}
+          <div style="position:absolute; left:8px; top:8px; font-size:11px; padding:4px 8px; border-radius:999px; background:rgba(15,19,24,.85); border:1px solid rgba(57,255,20,.35); color:${badge==='LIVE' ? '#39ff14' : (badge==='TBD' ? '#ffcc66' : '#9ca3af')};">
+            ${badge}
+          </div>
+        </div>
+      `;
+
+      // Click rules:
+      // - If it's the active vote round: allow switching to playable or decided (just to view)
+      // - If it's a future round with TBD opponent: allow selecting for preview but disable voting
+      t.onclick=async()=>{
+        activeRound = r;
+        activeMatchIndex = i;
+        votedMatchIds = await loadUserVotedMatchIds(sessionUser?.id, activeRound);
+
+        render();
+        await refreshCounts();
+        updateStatusLine();
+      };
+
+      thumbsEl.appendChild(t);
+    });
+  }
+}
+
+/* =========================
+   COUNTS + STATUS
+========================= */
 async function refreshCounts(){
-  const m = matches[activeMatchIndex];
+  const m = getActiveMatch();
   if (!m) return;
+
+  // If a side is missing, show zeros and bail
+  if (!m.left_img || !m.right_img){
+    countLeft.textContent = "0";
+    countRight.textContent = "0";
+    return;
+  }
+
   const c = await loadCounts(m.id);
   countLeft.textContent = c.l;
   countRight.textContent = c.r;
+
+  // If counts hit 2 but winner isn't marked yet, try to advance (server-side)
+  if (!m.winner_img && (c.l >= 2 || c.r >= 2)){
+    try{
+      await supabase.rpc("advance_match_v2", { p_match_id: m.id });
+    } catch(e){
+      // If RPC doesn't exist / permissions, we still show counts.
+      console.warn("advance_match_v2 failed:", e);
+    }
+  }
 }
 
 function updateStatusLine(){
+  const m = getActiveMatch();
+  if (!m) return;
+
   if (!sessionUser){
     setStatus("Sign in to vote. (You can vote once per match.)");
     return;
   }
 
-  const m = matches[activeMatchIndex];
-  if (!m) return;
-
   if (m.winner_img){
     setStatus("This match is decided. Pick another matchup.", "warn");
+    return;
+  }
+
+  if (!m.left_img || !m.right_img){
+    setStatus("Waiting for an opponent (TBD). Voting is locked until both sides exist.", "warn");
     return;
   }
 
@@ -307,15 +430,25 @@ function updateStatusLine(){
     return;
   }
 
-  setStatus("You can vote once in this matchup.", "ok");
+  setStatus("You can vote once in this matchup. First to 2 wins.", "ok");
 }
 
 /* =========================
    VOTE
 ========================= */
 async function castVote(side){
-  const m = matches[activeMatchIndex];
+  const m = getActiveMatch();
   if (!m || !sessionUser) return;
+
+  if (!m.left_img || !m.right_img){
+    setStatus("This match is waiting for an opponent (TBD).", "warn");
+    return;
+  }
+
+  if (m.winner_img){
+    setStatus("This match is already decided.", "warn");
+    return;
+  }
 
   if (votedMatchIds.has(m.id)){
     setStatus("Already voted in this matchup.", "warn");
@@ -337,7 +470,7 @@ async function castVote(side){
     if (String(error.code) === "23505"){
       votedMatchIds.add(m.id);
       setStatus("Already voted in this matchup (DB enforced).", "warn");
-      keepCurrentMatch = true;  // NEW: don't jump
+      keepCurrentMatch = true;
       await refreshAll();
       return;
     }
@@ -348,12 +481,14 @@ async function castVote(side){
   votedMatchIds.add(m.id);
   setStatus("Vote submitted.", "ok");
 
-  /* 🔥 NEW: auto-advance if 2 votes reached */
-  await supabase.rpc("advance_match_v2", {
-    p_match_id: m.id
-  });
+  // NEW: auto-advance if 2 votes reached (server-side)
+  try{
+    await supabase.rpc("advance_match_v2", { p_match_id: m.id });
+  }catch(e){
+    console.warn("advance_match_v2 failed:", e);
+  }
 
-  keepCurrentMatch = true; // NEW: don't jump
+  keepCurrentMatch = true;
   await refreshAll();
 }
 
@@ -371,24 +506,40 @@ async function refreshAll(){
     sessionUser = sess?.session?.user ?? null;
     updateAuthUI();
 
-    // NEW: remember current match id (only when keepCurrentMatch is true)
-    const prevMatchId = keepCurrentMatch ? (matches[activeMatchIndex]?.id ?? null) : null;
+    // Remember current match id (only when keepCurrentMatch is true)
+    const prevMatchId = keepCurrentMatch ? (getActiveMatch()?.id ?? null) : null;
 
-    activeRound = await detectActiveRound();
-    matches = await loadRound(activeRound);
+    matchesByRound = await loadAllRounds();
 
-    if (keepCurrentMatch && prevMatchId != null){
-      const idx = matches.findIndex(mm => mm.id === prevMatchId);
+    // Set active voting round based on loaded data (playable match exists)
+    const autoActive = detectActiveRoundFromLoaded();
+
+    // If user tapped a different round manually, keep it (preview mode),
+    // but if that round has no playable matches, auto-set to vote-active.
+    if (activeRound == null) activeRound = autoActive;
+
+    // If we're previewing a future round with TBD, don't force them away.
+    // But if activeRound is older than autoActive (shouldn't happen) or has no matches, snap to autoActive.
+    const currentList = matchesByRound[activeRound] ?? [];
+    if (!currentList.length){
+      activeRound = autoActive;
+    }
+
+    // restore match if possible
+    if (keepCurrentMatch && prevMatchId){
+      const list = matchesByRound[activeRound] ?? [];
+      const idx = list.findIndex(mm => mm.id === prevMatchId);
       if (idx >= 0){
         activeMatchIndex = idx;
-      } else {
-        const firstUnfinished = matches.findIndex(m => !m.winner_img);
-        activeMatchIndex = firstUnfinished >= 0 ? firstUnfinished : 0;
       }
       keepCurrentMatch = false;
-    } else {
-      const firstUnfinished = matches.findIndex(m => !m.winner_img);
-      activeMatchIndex = firstUnfinished >= 0 ? firstUnfinished : 0;
+    }
+
+    // If active match is out of range, pick first playable, else 0
+    const list = matchesByRound[activeRound] ?? [];
+    if (!list[activeMatchIndex]){
+      const firstPlayable = list.findIndex(matchPlayable);
+      activeMatchIndex = firstPlayable >= 0 ? firstPlayable : 0;
     }
 
     votedMatchIds = await loadUserVotedMatchIds(sessionUser?.id, activeRound);
@@ -403,7 +554,7 @@ async function refreshAll(){
 }
 
 await refreshAll();
-</script>
+
 
 </body>
 </html>
