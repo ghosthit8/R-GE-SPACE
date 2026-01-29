@@ -158,7 +158,9 @@ function updateAuthUI(){
   }
 }
 
-/* AUTH */
+/* =========================
+   AUTH
+========================= */
 btnSignIn.onclick = async () => {
   const email = prompt("Email:");
   if (!email) return;
@@ -167,8 +169,10 @@ btnSignIn.onclick = async () => {
 
   setStatus("Signing in…");
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error){ setStatus(error.message, "warn"); return; }
-
+  if (error){
+    setStatus(error.message, "warn");
+    return;
+  }
   sessionUser = data.user;
   updateAuthUI();
   await refreshAll();
@@ -181,40 +185,39 @@ btnSignOut.onclick = async () => {
   await refreshAll();
 };
 
-/* DATA */
+/* =========================
+   DATA
+========================= */
 async function detectActiveRound(){
   for (let r=0;r<5;r++){
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("matches_v2")
-      .select("id, round, match_index, left_img, right_img, winner_img")
+      .select("*")
       .eq("round", r)
       .order("match_index");
-    if (error) throw error;
-    if (data?.some(m => !m.winner_img)) return r;
+
+    if (data?.some(m=>!m.winner_img)) return r;
   }
   return 4;
 }
 
 async function loadRound(r){
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from("matches_v2")
-    .select("id, round, match_index, left_img, right_img, winner_img")
+    .select("*")
     .eq("round", r)
     .order("match_index");
-  if (error) throw error;
   return data ?? [];
 }
 
+/* ✅ UPDATED: use RPC so counts show across accounts even with RLS */
 async function loadCounts(matchId){
-  const { data, error } = await supabase
-    .from("round_votes_v2")
-    .select("side")
-    .eq("match_id", matchId);
+  const { data, error } = await supabase.rpc("get_match_counts_v2", { p_match_id: matchId });
   if (error) throw error;
-
-  let l=0, r=0;
-  data?.forEach(v => (v.side==="left" ? l++ : r++));
-  return { l, r };
+  return {
+    l: data?.[0]?.left_count ?? 0,
+    r: data?.[0]?.right_count ?? 0
+  };
 }
 
 /* Load which matches the user voted on in THIS round */
@@ -234,22 +237,19 @@ async function loadUserVotedMatchIds(userId, round){
   return set;
 }
 
-/* RENDER */
+/* =========================
+   RENDER
+========================= */
 function render(){
   roundLabel.textContent = ROUND_NAMES[activeRound] ?? ("Round " + activeRound);
-
   const m = matches[activeMatchIndex];
-  if (!m){
-    voteLeft.disabled = true;
-    voteRight.disabled = true;
-    return;
-  }
+  if (!m) return;
 
   imgLeft.src = m.left_img;
   imgRight.src = m.right_img;
 
   const alreadyVotedThisMatch = votedMatchIds.has(m.id);
-  const canVote = !!sessionUser && !alreadyVotedThisMatch && !m.winner_img;
+  const canVote = sessionUser && !alreadyVotedThisMatch && !m.winner_img;
 
   voteLeft.disabled = !canVote;
   voteRight.disabled = !canVote;
@@ -258,18 +258,17 @@ function render(){
 }
 
 function renderThumbs(){
-  thumbsEl.innerHTML = "";
+  thumbsEl.innerHTML="";
   matches.forEach((m,i)=>{
-    const t = document.createElement("div");
-    t.className = "thumb" + (i===activeMatchIndex ? " active" : "");
-    t.innerHTML = `
+    const t=document.createElement("div");
+    t.className="thumb"+(i===activeMatchIndex?" active":"");
+    t.innerHTML=`
       <div class="thumb-img">
-        <img class="left" src="${m.left_img}" alt="">
-        <img class="right" src="${m.right_img}" alt="">
-      </div>
-    `;
-    t.onclick = async () => {
-      activeMatchIndex = i;
+        <img class="left" src="${m.left_img}">
+        <img class="right" src="${m.right_img}">
+      </div>`;
+    t.onclick=async()=>{
+      activeMatchIndex=i;
       await refreshCounts();
       render();
       updateStatusLine();
@@ -308,7 +307,9 @@ function updateStatusLine(){
   setStatus("You can vote once in this matchup.", "ok");
 }
 
-/* VOTE */
+/* =========================
+   VOTE
+========================= */
 async function castVote(side){
   const m = matches[activeMatchIndex];
   if (!m || !sessionUser) return;
@@ -330,7 +331,6 @@ async function castVote(side){
     });
 
   if (error){
-    // If unique(user_id, match_id) triggers, this will happen
     if (String(error.code) === "23505"){
       votedMatchIds.add(m.id);
       setStatus("Already voted in this matchup (DB enforced).", "warn");
@@ -344,15 +344,15 @@ async function castVote(side){
   votedMatchIds.add(m.id);
   setStatus("Vote submitted.", "ok");
 
-  // winner trigger may have fired
   await refreshAll();
 }
 
-/* CLICK HANDLERS */
-voteLeft.onclick = ()=>castVote("left");
-voteRight.onclick = ()=>castVote("right");
+voteLeft.onclick=()=>castVote("left");
+voteRight.onclick=()=>castVote("right");
 
-/* REFRESH */
+/* =========================
+   REFRESH
+========================= */
 async function refreshAll(){
   try{
     const { data: sess, error: sessErr } = await supabase.auth.getSession();
@@ -364,7 +364,6 @@ async function refreshAll(){
     activeRound = await detectActiveRound();
     matches = await loadRound(activeRound);
 
-    // pick first unfinished, else 0
     const firstUnfinished = matches.findIndex(m => !m.winner_img);
     activeMatchIndex = firstUnfinished >= 0 ? firstUnfinished : 0;
 
