@@ -494,6 +494,28 @@ function updateStatusLine(){
   setStatus("You can vote once in this matchup.", "ok");
 }
 
+
+
+/* =========================
+   ADVANCE (SELF-HEAL)
+========================= */
+async function tryAutoAdvanceIfReady(matchId){
+  if (!matchId) return false;
+  try{
+    const { error } = await supabase.rpc("advance_match_v2", { p_match_id: matchId });
+    if (error){
+      console.warn("advance_match_v2 error:", error);
+      setStatus("Advance RPC failed: " + error.message, "warn");
+      return false;
+    }
+    return true;
+  } catch(e){
+    console.warn("advance_match_v2 crash:", e);
+    setStatus("Advance RPC crashed: " + (e?.message ?? e), "warn");
+    return false;
+  }
+}
+
 /* =========================
    VOTE
 ========================= */
@@ -610,6 +632,33 @@ async function refreshAll(){
 
     render();
     await refreshCounts();
+    // Self-heal: if a match already reached 2 votes but winner_img wasn't written yet, try advancing now
+    const vm = getViewedMatch();
+    if (vm?.id && !vm.winner_img){
+      try{
+        const c2 = await loadCounts(vm.id);
+        if ((c2.l >= 2 || c2.r >= 2)){
+          const advanced = await tryAutoAdvanceIfReady(vm.id);
+          if (advanced){
+            // Reload all rounds so thumbnails + LIVE round update immediately
+            activeRound = await detectActiveRound();
+            rounds = await loadAllRounds();
+
+            // Restore view by id if possible
+            const ridx = (rounds[vm.round] ?? []).findIndex(mm => mm?.id === vm.id);
+            if (ridx >= 0){
+              viewRound = vm.round;
+              viewMatchIndex = ridx;
+            }
+            render();
+            await refreshCounts();
+          }
+        }
+      } catch(e){
+        console.warn("Self-heal check failed:", e);
+      }
+    }
+
     updateStatusLine();
   } catch(e){
     console.error(e);
