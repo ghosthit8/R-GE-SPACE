@@ -139,6 +139,9 @@ let matches = [];
 let activeMatchIndex = 0;
 let votedMatchIds = new Set(); // voted matches for this round
 
+// NEW: prevent jumping after vote
+let keepCurrentMatch = false;
+
 const ROUND_NAMES = ["Round of 32","Round of 16","Quarterfinals","Semifinals","Final"];
 
 function setStatus(msg, cls=""){
@@ -334,6 +337,7 @@ async function castVote(side){
     if (String(error.code) === "23505"){
       votedMatchIds.add(m.id);
       setStatus("Already voted in this matchup (DB enforced).", "warn");
+      keepCurrentMatch = true;  // NEW: don't jump
       await refreshAll();
       return;
     }
@@ -344,6 +348,7 @@ async function castVote(side){
   votedMatchIds.add(m.id);
   setStatus("Vote submitted.", "ok");
 
+  keepCurrentMatch = true; // NEW: don't jump
   await refreshAll();
 }
 
@@ -361,11 +366,25 @@ async function refreshAll(){
     sessionUser = sess?.session?.user ?? null;
     updateAuthUI();
 
+    // NEW: remember current match id (only when keepCurrentMatch is true)
+    const prevMatchId = keepCurrentMatch ? (matches[activeMatchIndex]?.id ?? null) : null;
+
     activeRound = await detectActiveRound();
     matches = await loadRound(activeRound);
 
-    const firstUnfinished = matches.findIndex(m => !m.winner_img);
-    activeMatchIndex = firstUnfinished >= 0 ? firstUnfinished : 0;
+    if (keepCurrentMatch && prevMatchId != null){
+      const idx = matches.findIndex(mm => mm.id === prevMatchId);
+      if (idx >= 0){
+        activeMatchIndex = idx;
+      } else {
+        const firstUnfinished = matches.findIndex(m => !m.winner_img);
+        activeMatchIndex = firstUnfinished >= 0 ? firstUnfinished : 0;
+      }
+      keepCurrentMatch = false;
+    } else {
+      const firstUnfinished = matches.findIndex(m => !m.winner_img);
+      activeMatchIndex = firstUnfinished >= 0 ? firstUnfinished : 0;
+    }
 
     votedMatchIds = await loadUserVotedMatchIds(sessionUser?.id, activeRound);
 
@@ -383,3 +402,4 @@ await refreshAll();
 
 </body>
 </html>
+```1
