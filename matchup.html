@@ -569,6 +569,9 @@ async function castVote(side){
   votedMatchIds.add(m.id);
   setStatus("Vote submitted.", "ok");
 
+  // Stay on the same battle screen after voting
+  keepCurrentMatch = true;
+
   // Auto-advance (winner_img should be written in DB by this RPC)
   const { error: advErr } = await supabase.rpc("advance_match_v2", { p_match_id: m.id });
   if (advErr){
@@ -577,7 +580,6 @@ async function castVote(side){
     setStatus("Vote saved. Advance RPC failed: " + advErr.message, "warn");
   }
 
-  keepCurrentMatch = true;
   await refreshAll();
 }
 
