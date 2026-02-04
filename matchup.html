@@ -17,7 +17,7 @@ body { background:#0b0f13; color:#e5e7eb; font-family:system-ui,Segoe UI,Roboto;
 .imgBox { aspect-ratio:3/4; background:#111; position:relative; }
 .imgBox img { width:100%; height:100%; object-fit:cover; }
 
-/* ===== WINNER DECIDED OVERLAY (only when match has winner_img) ===== */
+/* ===== WINNER DECIDED OVERLAY ===== */
 .decidedOverlay{
   position:absolute;
   inset:0;
@@ -82,7 +82,6 @@ body { background:#0b0f13; color:#e5e7eb; font-family:system-ui,Segoe UI,Roboto;
 .ok{ color:#39ff14; }
 
 /* ===== TIERED THUMBS ===== */
-.tier { margin-top:18px; }
 .tier-line{
   height:2px;
   background:rgba(57,255,20,.65);
@@ -131,7 +130,6 @@ body { background:#0b0f13; color:#e5e7eb; font-family:system-ui,Segoe UI,Roboto;
   background:rgba(0,0,0,.15);
   pointer-events:none;
 }
-
 </style>
 </head>
 
@@ -198,11 +196,42 @@ const SUPABASE_URL = "https://tuqvpcevrhciursxrgav.supabase.co";
 const SUPABASE_ANON_KEY =
 "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1cXZwY2V2cmhjaXVyc3hyZ2F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MDA0NDQsImV4cCI6MjA3MjA3NjQ0NH0.JbIWJmioBNB_hN9nrLXX83u4OazV49UokvTjNB6xa_Y";
 
+/* IMPORTANT: set this to YOUR bucket name if your DB stores paths instead of full URLs */
+const PUBLIC_BUCKET = "submissions";
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Back to menu
 const btnBack = document.getElementById("btnBack");
 if (btnBack) btnBack.onclick = () => { window.location.href = "menu.html"; };
+
+/* =========================
+   URL “REPAIR” (fix broken thumbnails)
+   - If DB stores full http(s) URL -> unchanged
+   - If DB stores /storage/v1/object/public/... -> prefix SUPABASE_URL
+   - If DB stores "folder/file.png" -> assume it lives in PUBLIC_BUCKET
+========================= */
+function resolveImgUrl(v){
+  if (!v) return null;
+  if (typeof v !== "string") return v;
+
+  const s = v.trim();
+  if (!s) return null;
+
+  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+
+  // already looks like a storage path
+  if (s.startsWith("/storage/v1/object/public/")) return SUPABASE_URL + s;
+
+  if (s.includes("storage/v1/object/public/")) {
+    // missing leading slash or domain
+    const i = s.indexOf("storage/v1/object/public/");
+    return SUPABASE_URL + "/" + s.slice(i);
+  }
+
+  // plain path -> assume public bucket path
+  return `${SUPABASE_URL}/storage/v1/object/public/${PUBLIC_BUCKET}/${s}`;
+}
 
 /* =========================
    DOM
@@ -278,7 +307,19 @@ function normalizeMatch(m, r, idx){
       __placeholder: true
     };
   }
-  return { __placeholder:false, ...m };
+
+  // Repair / normalize any images we receive
+  const left = resolveImgUrl(m.left_img);
+  const right = resolveImgUrl(m.right_img);
+  const winner = resolveImgUrl(m.winner_img);
+
+  return {
+    __placeholder:false,
+    ...m,
+    left_img: left,
+    right_img: right,
+    winner_img: winner
+  };
 }
 
 function matchHasOpponent(m){
@@ -386,6 +427,14 @@ function getViewedMatch(){
   return rounds?.[viewRound]?.[viewMatchIndex] ?? null;
 }
 
+/* Fallback: if a match only has winner_img (or one side missing), show what we can */
+function bestLeftImg(m){
+  return m?.left_img || (m?.winner_side === "left" ? m?.winner_img : null) || m?.winner_img || null;
+}
+function bestRightImg(m){
+  return m?.right_img || (m?.winner_side === "right" ? m?.winner_img : null) || m?.winner_img || null;
+}
+
 function render(){
   roundLabel.textContent = (ROUND_NAMES[activeRound] ?? ("Round " + activeRound)) + " is LIVE";
 
@@ -402,10 +451,12 @@ function render(){
     return;
   }
 
-  imgLeft.src = m.left_img || "";
-  imgRight.src = m.right_img || "";
+  const L = bestLeftImg(m);
+  const R = bestRightImg(m);
 
-  // overlays when decided (and only when you are viewing this decided match)
+  if (L) imgLeft.src = L; else imgLeft.removeAttribute("src");
+  if (R) imgRight.src = R; else imgRight.removeAttribute("src");
+
   const decided = !!m.winner_img;
   if (decidedOverlayTop) decidedOverlayTop.style.display = decided ? "flex" : "none";
   if (decidedOverlayBottom) decidedOverlayBottom.style.display = decided ? "flex" : "none";
@@ -418,7 +469,7 @@ function render(){
     !!m.id &&
     !alreadyVotedThisMatch &&
     !m.winner_img &&
-    matchHasOpponent(m);
+    matchHasOpponent({ left_img: L, right_img: R });
 
   voteLeft.disabled = !canVote;
   voteRight.disabled = !canVote;
@@ -427,19 +478,22 @@ function render(){
 }
 
 function thumbHTML(m){
-  const left = m.left_img
-    ? `<img class="left" src="${m.left_img}">`
+  const leftSrc = bestLeftImg(m);
+  const rightSrc = bestRightImg(m);
+
+  const left = leftSrc
+    ? `<img class="left" src="${leftSrc}" onerror="this.remove();">`
     : `<div class="tbd">TBD</div>`;
 
-  const right = m.right_img
-    ? `<img class="right" src="${m.right_img}">`
+  const right = rightSrc
+    ? `<img class="right" src="${rightSrc}" onerror="this.remove();">`
     : `<div class="tbd">TBD</div>`;
 
   const decided = m.winner_img ? `<div class="badge">DECIDED</div><div class="dim"></div>` : "";
-  const tbdBadge = (!matchHasOpponent(m) && !m.winner_img) ? `<div class="badge">WAITING</div>` : "";
+  const waiting = (!m.winner_img && (!leftSrc || !rightSrc)) ? `<div class="badge">WAITING</div>` : "";
 
   return `
-    ${decided || tbdBadge}
+    ${decided || waiting}
     <div class="thumb-img">
       ${left}
       ${right}
@@ -521,7 +575,10 @@ function updateStatusLine(){
     return;
   }
 
-  if (!matchHasOpponent(m)){
+  const L = bestLeftImg(m);
+  const R = bestRightImg(m);
+
+  if (!L || !R){
     setStatus("Waiting for an opponent (TBD). Voting is locked until both sides exist.", "warn");
     return;
   }
@@ -540,7 +597,7 @@ function updateStatusLine(){
 }
 
 /* =========================
-   ADVANCE (SELF-HEAL)
+   ADVANCE
 ========================= */
 async function tryAutoAdvanceIfReady(matchId){
   if (!matchId) return false;
@@ -566,13 +623,11 @@ function pickNextUnfinishedIndexInRound(r, startAfterIndex){
   const arr = rounds?.[r] ?? [];
   if (!arr.length) return 0;
 
-  // 1) next unfinished AFTER current index
   for (let i = (startAfterIndex + 1); i < arr.length; i++){
     const m = arr[i];
     if (m?.id && !m.winner_img) return i;
   }
 
-  // 2) wrap: first unfinished anywhere
   const first = arr.findIndex(m => m?.id && !m.winner_img);
   return first >= 0 ? first : 0;
 }
@@ -591,11 +646,6 @@ async function castVote(side){
 
   if (!m.id){
     setStatus("This match hasn't been created yet.", "warn");
-    return;
-  }
-
-  if (!matchHasOpponent(m)){
-    setStatus("Waiting for an opponent (TBD).", "warn");
     return;
   }
 
@@ -639,24 +689,15 @@ async function castVote(side){
     console.warn("count refresh after vote failed:", e);
   }
 
-  // decide/jump rules:
-  // - if it hits 2 votes on either side, we advance and then jump to the NEXT battle (next undecided after this one)
-  // - otherwise stay on this battle
   const isNowDecidedByCount = !!(cNow && (cNow.l >= 2 || cNow.r >= 2));
 
   if (isNowDecidedByCount){
     setStatus("Winner decided — advancing and moving to next battle…", "ok");
-
-    // next-battle jump target (same round, after this index)
     jumpAfterDecideFrom = { round: viewRound, index: viewMatchIndex };
-
-    // DO NOT keep current match
     keepCurrentMatch = false;
 
-    // run advance RPC to write winner_img + propagate winner
     const ok = await tryAutoAdvanceIfReady(m.id);
     if (!ok){
-      // even if advance fails, keep you on same match (so you can see what's wrong)
       keepCurrentMatch = true;
       jumpAfterDecideFrom = null;
       setStatus("Vote saved, but advance failed — staying on this match.", "warn");
@@ -683,7 +724,6 @@ async function refreshAll(){
     sessionUser = sess?.session?.user ?? null;
     updateAuthUI();
 
-    // Remember current selection
     const prev = keepCurrentMatch ? {
       round: viewRound,
       id: getViewedMatch()?.id ?? null,
@@ -694,7 +734,6 @@ async function refreshAll(){
     rounds = await loadAllRounds();
     votedMatchIds = await loadUserVotedMatchIds(sessionUser?.id, activeRound);
 
-    // If we just decided a match, jump to the next battle (next unfinished after that match index)
     if (!prev && jumpAfterDecideFrom && jumpAfterDecideFrom.round === activeRound){
       viewRound = activeRound;
       viewMatchIndex = pickNextUnfinishedIndexInRound(activeRound, jumpAfterDecideFrom.index);
@@ -702,12 +741,10 @@ async function refreshAll(){
       keepCurrentMatch = false;
     }
     else if (!prev){
-      // Default view to first unfinished in active round (or first match)
       viewRound = activeRound;
       const firstUnfinished = (rounds[activeRound] ?? []).findIndex(m => m?.id && !m.winner_img);
       viewMatchIndex = firstUnfinished >= 0 ? firstUnfinished : 0;
     } else {
-      // Restore previous viewed match
       if (prev.id){
         const idx = (rounds[prev.round] ?? []).findIndex(mm => mm?.id === prev.id);
         if (idx >= 0){
@@ -726,32 +763,6 @@ async function refreshAll(){
 
     render();
     await refreshCounts();
-
-    // Self-heal: if a match reached 2 votes but winner_img wasn't written yet, try advancing now
-    const vm = getViewedMatch();
-    if (vm?.id && !vm.winner_img){
-      try{
-        const c2 = await loadCounts(vm.id);
-        if ((c2.l >= 2 || c2.r >= 2)){
-          const advanced = await tryAutoAdvanceIfReady(vm.id);
-          if (advanced){
-            activeRound = await detectActiveRound();
-            rounds = await loadAllRounds();
-
-            const ridx = (rounds[vm.round] ?? []).findIndex(mm => mm?.id === vm.id);
-            if (ridx >= 0){
-              viewRound = vm.round;
-              viewMatchIndex = ridx;
-            }
-            render();
-            await refreshCounts();
-          }
-        }
-      } catch(e){
-        console.warn("Self-heal check failed:", e);
-      }
-    }
-
     updateStatusLine();
   } catch(e){
     console.error(e);
