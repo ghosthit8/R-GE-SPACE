@@ -76,6 +76,8 @@ body { background:#0b0f13; color:#e5e7eb; font-family:system-ui,Segoe UI,Roboto;
 .thumb-img img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 .thumb-img img.left{ clip-path:polygon(0% 0%, 100% 0%, 0% 100%); }
 .thumb-img img.right{ clip-path:polygon(100% 0%, 100% 100%, 0% 100%); }
+/* NEW: when only one side exists, show it full cover */
+.thumb-img img.full{ clip-path:none; }
 
 .small{ font-size:12px; opacity:.8; }
 .warn{ color:#ffcc66; }
@@ -427,12 +429,14 @@ function getViewedMatch(){
   return rounds?.[viewRound]?.[viewMatchIndex] ?? null;
 }
 
-/* Fallback: if a match only has winner_img (or one side missing), show what we can */
+/* IMPORTANT PATCH:
+   Do NOT fall back to winner_img for a missing opponent.
+   That was causing the winner to appear on BOTH sides in the UI and thumbnails. */
 function bestLeftImg(m){
-  return m?.left_img || (m?.winner_side === "left" ? m?.winner_img : null) || m?.winner_img || null;
+  return m?.left_img || (m?.winner_side === "left" ? m?.winner_img : null) || null;
 }
 function bestRightImg(m){
-  return m?.right_img || (m?.winner_side === "right" ? m?.winner_img : null) || m?.winner_img || null;
+  return m?.right_img || (m?.winner_side === "right" ? m?.winner_img : null) || null;
 }
 
 function render(){
@@ -477,26 +481,54 @@ function render(){
   renderThumbs();
 }
 
+/* Thumbnail builder:
+   - If BOTH sides exist: split-diagonal like before
+   - If ONLY one side exists: show that image full-cover (so next-round instantly shows winner)
+   - If neither exists: TBD overlay
+   - NEVER render <img> for null src (prevents BI) */
 function thumbHTML(m){
   const leftSrc = bestLeftImg(m);
   const rightSrc = bestRightImg(m);
 
-  const left = leftSrc
-    ? `<img class="left" src="${leftSrc}" onerror="this.remove();">`
-    : `<div class="tbd">TBD</div>`;
+  const decidedBadge = m.winner_img ? `<div class="badge">DECIDED</div><div class="dim"></div>` : "";
+  const waitingBadge = (!m.winner_img && (!!leftSrc ^ !!rightSrc)) ? `<div class="badge">WAITING</div>` : "";
+  const emptyBadge = (!m.winner_img && !leftSrc && !rightSrc) ? `<div class="badge">WAITING</div>` : "";
 
-  const right = rightSrc
-    ? `<img class="right" src="${rightSrc}" onerror="this.remove();">`
-    : `<div class="tbd">TBD</div>`;
+  // neither side yet
+  if (!leftSrc && !rightSrc){
+    return `
+      ${decidedBadge || emptyBadge}
+      <div class="thumb-img">
+        <div class="tbd">TBD</div>
+      </div>
+    `;
+  }
 
-  const decided = m.winner_img ? `<div class="badge">DECIDED</div><div class="dim"></div>` : "";
-  const waiting = (!m.winner_img && (!leftSrc || !rightSrc)) ? `<div class="badge">WAITING</div>` : "";
+  // only one side exists -> full cover
+  if (leftSrc && !rightSrc){
+    return `
+      ${decidedBadge || waitingBadge}
+      <div class="thumb-img">
+        <img class="full" src="${leftSrc}" loading="lazy" onerror="this.remove();">
+      </div>
+    `;
+  }
+  if (!leftSrc && rightSrc){
+    return `
+      ${decidedBadge || waitingBadge}
+      <div class="thumb-img">
+        <img class="full" src="${rightSrc}" loading="lazy" onerror="this.remove();">
+      </div>
+    `;
+  }
 
+  // both exist -> diagonal split (same look)
   return `
-    ${decided || waiting}
+    ${decidedBadge || ""}
+    ${(!m.winner_img ? "" : "")}
     <div class="thumb-img">
-      ${left}
-      ${right}
+      <img class="left" src="${leftSrc}" loading="lazy" onerror="this.remove();">
+      <img class="right" src="${rightSrc}" loading="lazy" onerror="this.remove();">
     </div>
   `;
 }
