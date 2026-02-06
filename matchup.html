@@ -132,6 +132,9 @@ body { background:#0b0f13; color:#e5e7eb; font-family:system-ui,Segoe UI,Roboto;
   background:rgba(0,0,0,.15);
   pointer-events:none;
 }
+
+/* used by champion-overlay.js */
+.hidden{display:none!important;}
 </style>
 </head>
 
@@ -187,6 +190,9 @@ body { background:#0b0f13; color:#e5e7eb; font-family:system-ui,Segoe UI,Roboto;
 <div class="thumbs" id="thumbs"></div>
 
 </div>
+
+<!-- IMPORTANT: put your overlay file here: /js/champion-overlay.js -->
+<script src="js/champion-overlay.js"></script>
 
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
@@ -274,6 +280,9 @@ let keepCurrentMatch = false;
 
 // when a match becomes decided, jump to the NEXT battle in the same round (next undecided after this index)
 let jumpAfterDecideFrom = null;
+
+// show final champion overlay once per page load
+let championShown = false;
 
 // Rounds: 0=r32, 1=r16, 2=QF, 3=SF, 4=Final
 const ROUND_NAMES = ["R32","R16","Quarterfinals","Semifinals","Final"];
@@ -621,6 +630,27 @@ function updateStatusLine(){
   setStatus("You can vote once in this matchup.", "ok");
 }
 
+function maybeShowChampionOverlay(){
+  // Final is round 4, match 0
+  const finalMatch = rounds?.[4]?.[0];
+  if (!finalMatch?.winner_img) return;
+
+  // Only show once per load
+  if (championShown) return;
+
+  // Needs overlay script loaded
+  if (typeof window.openChampionOverlay !== "function") {
+    console.warn("Champion overlay script not loaded (openChampionOverlay missing).");
+    return;
+  }
+
+  championShown = true;
+
+  // If you later store artist usernames / seeds, put them in this label.
+  const label = "Faction I Champion";
+  window.openChampionOverlay(label, finalMatch.winner_img);
+}
+
 /* =========================
    ADVANCE
 ========================= */
@@ -752,6 +782,7 @@ async function refreshAll(){
 
     activeRound = await detectActiveRound();
     rounds = await loadAllRounds();
+    maybeShowChampionOverlay();
     votedMatchIds = await loadUserVotedMatchIds(sessionUser?.id);
 
     if (!prev && jumpAfterDecideFrom){
