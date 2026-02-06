@@ -266,7 +266,7 @@ let rounds = [[],[],[],[],[]];
 let viewRound = 0;
 let viewMatchIndex = 0;
 
-// voted matches for ACTIVE round
+// voted matches for user (all rounds)
 let votedMatchIds = new Set();
 
 // prevent jumping after vote (unless it gets decided)
@@ -405,16 +405,15 @@ async function loadCounts(matchId){
   };
 }
 
-/* voted matches for user in ACTIVE round only */
-async function loadUserVotedMatchIds(userId, round){
+/* voted matches for user across all rounds */
+async function loadUserVotedMatchIds(userId){
   const set = new Set();
   if (!userId) return set;
 
   const { data, error } = await supabase
     .from("round_votes_v2")
-    .select("match_id, round")
-    .eq("user_id", userId)
-    .eq("round", round);
+    .select("match_id")
+    .eq("user_id", userId);
 
   if (error) throw error;
 
@@ -469,7 +468,6 @@ function render(){
 
   const canVote =
     !!sessionUser &&
-    viewRound === activeRound &&
     !!m.id &&
     !alreadyVotedThisMatch &&
     !m.winner_img &&
@@ -597,11 +595,6 @@ function updateStatusLine(){
     return;
   }
 
-  if (viewRound !== activeRound){
-    setStatus(`Viewing ${ROUND_NAMES[viewRound]}. Voting is only enabled in LIVE round: ${ROUND_NAMES[activeRound]}.`, "warn");
-    return;
-  }
-
   if (!m.id){
     setStatus("This slot hasn't been created yet. (Waiting for winners to advance.)", "warn");
     return;
@@ -611,7 +604,7 @@ function updateStatusLine(){
   const R = bestRightImg(m);
 
   if (!L || !R){
-    setStatus("Waiting for an opponent (TBD). Voting is locked until both sides exist.", "warn");
+    setStatus("Waiting for an opponent (TBD). Voting unlocks once both sides are ready.", "warn");
     return;
   }
 
@@ -671,11 +664,6 @@ async function castVote(side){
   const m = getViewedMatch();
   if (!m || !sessionUser) return;
 
-  if (viewRound !== activeRound){
-    setStatus("Voting is only enabled in the LIVE round.", "warn");
-    return;
-  }
-
   if (!m.id){
     setStatus("This match hasn't been created yet.", "warn");
     return;
@@ -692,7 +680,7 @@ async function castVote(side){
     .from("round_votes_v2")
     .insert({
       user_id: sessionUser.id,
-      round: activeRound,
+      round: viewRound,
       match_id: m.id,
       side
     });
@@ -764,11 +752,11 @@ async function refreshAll(){
 
     activeRound = await detectActiveRound();
     rounds = await loadAllRounds();
-    votedMatchIds = await loadUserVotedMatchIds(sessionUser?.id, activeRound);
+    votedMatchIds = await loadUserVotedMatchIds(sessionUser?.id);
 
-    if (!prev && jumpAfterDecideFrom && jumpAfterDecideFrom.round === activeRound){
-      viewRound = activeRound;
-      viewMatchIndex = pickNextUnfinishedIndexInRound(activeRound, jumpAfterDecideFrom.index);
+    if (!prev && jumpAfterDecideFrom){
+      viewRound = jumpAfterDecideFrom.round;
+      viewMatchIndex = pickNextUnfinishedIndexInRound(viewRound, jumpAfterDecideFrom.index);
       jumpAfterDecideFrom = null;
       keepCurrentMatch = false;
     }
