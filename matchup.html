@@ -209,6 +209,30 @@ const PUBLIC_BUCKET = "submissions";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/* =========================
+   REALTIME RESET WATCHER
+   Refresh UI when DB trigger resets bracket
+========================= */
+supabase.channel("bracket-reset-watch")
+  .on(
+    "postgres_changes",
+    { event: "UPDATE", schema: "public", table: "matches_v2" },
+    (payload) => {
+      const n = payload.new;
+
+      // If final match updates OR later rounds get cleared, refresh UI
+      if (
+        n?.round === 4 ||
+        (n?.round >= 1 && !n?.left_img && !n?.right_img)
+      ) {
+        setTimeout(() => {
+          refreshAll();
+        }, 800);
+      }
+    }
+  )
+  .subscribe();
+
 // Back to menu
 const btnBack = document.getElementById("btnBack");
 if (btnBack) btnBack.onclick = () => { window.location.href = "menu.html"; };
