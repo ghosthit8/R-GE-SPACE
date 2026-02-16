@@ -284,6 +284,9 @@ let jumpAfterDecideFrom = null;
 // show final champion overlay once per page load
 let championShown = false;
 
+// NEW: Track if we already triggered a reset to avoid infinite loops
+let resetTriggered = false;
+
 // Rounds: 0=r32, 1=r16, 2=QF, 3=SF, 4=Final
 const ROUND_NAMES = ["R32","R16","Quarterfinals","Semifinals","Final"];
 const ROUND_COUNTS = [16, 8, 4, 2, 1]; // how many matches per round
@@ -649,6 +652,73 @@ function maybeShowChampionOverlay(){
   // If you later store artist usernames / seeds, put them in this label.
   const label = "Faction I Champion";
   window.openChampionOverlay(label, finalMatch.winner_img);
+  
+  // NEW: Schedule the reset after showing the champion
+  scheduleReset();
+}
+
+/* =========================
+   NEW: RESET TOURNAMENT
+========================= */
+async function scheduleReset(){
+  // Prevent multiple reset calls
+  if (resetTriggered) return;
+  resetTriggered = true;
+  
+  console.log("Tournament complete - scheduling reset...");
+  
+  // Small delay to ensure overlay is displayed first
+  setTimeout(async () => {
+    await resetTournament();
+  }, 1000);
+}
+
+async function resetTournament(){
+  try {
+    console.log("Resetting tournament votes...");
+    
+    // Delete all votes from round_votes_v2 table
+    const { error: deleteError } = await supabase
+      .from("round_votes_v2")
+      .delete()
+      .neq("id", 0); // This deletes all rows
+    
+    if (deleteError) {
+      console.error("Error deleting votes:", deleteError);
+      setStatus("Reset failed: " + deleteError.message, "warn");
+      return;
+    }
+    
+    // Reset all matches to remove winners (set winner_img to null)
+    const { error: resetError } = await supabase
+      .from("matches_v2")
+      .update({ winner_img: null, winner_side: null })
+      .neq("id", 0); // Update all rows
+    
+    if (resetError) {
+      console.error("Error resetting matches:", resetError);
+      setStatus("Reset failed: " + resetError.message, "warn");
+      return;
+    }
+    
+    console.log("Tournament reset complete! Reloading data...");
+    
+    // Clear local state
+    votedMatchIds.clear();
+    resetTriggered = false; // Allow future resets
+    // NOTE: We keep championShown = true so overlay stays visible
+    
+    // Reload all data and go back to R32
+    viewRound = 0;
+    viewMatchIndex = 0;
+    await refreshAll();
+    
+    setStatus("Tournament reset! Starting fresh from R32.", "ok");
+    
+  } catch (e) {
+    console.error("Reset tournament error:", e);
+    setStatus("Reset crashed: " + (e?.message ?? e), "warn");
+  }
 }
 
 /* =========================
