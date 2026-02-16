@@ -214,7 +214,7 @@ const btnBack = document.getElementById("btnBack");
 if (btnBack) btnBack.onclick = () => { window.location.href = "menu.html"; };
 
 /* =========================
-   URL “REPAIR” (fix broken thumbnails)
+   URL "REPAIR" (fix broken thumbnails)
    - If DB stores full http(s) URL -> unchanged
    - If DB stores /storage/v1/object/public/... -> prefix SUPABASE_URL
    - If DB stores "folder/file.png" -> assume it lives in PUBLIC_BUCKET
@@ -275,23 +275,46 @@ let viewMatchIndex = 0;
 // voted matches for user (all rounds)
 let votedMatchIds = new Set();
 
-// prevent jumping after vote (unless it gets decided)
 let keepCurrentMatch = false;
-
-// when a match becomes decided, jump to the NEXT battle in the same round (next undecided after this index)
 let jumpAfterDecideFrom = null;
 
-// show final champion overlay once per page load
+// NEW: Track if champion overlay was shown this session
 let championShown = false;
 
-// Rounds: 0=r32, 1=r16, 2=QF, 3=SF, 4=Final
-const ROUND_NAMES = ["R32","R16","Quarterfinals","Semifinals","Final"];
-const ROUND_COUNTS = [16, 8, 4, 2, 1]; // how many matches per round
+// NEW: Track if we already triggered a reset to avoid infinite loops
+let resetTriggered = false;
 
-function setStatus(msg, cls=""){
-  statusLine.className = "small " + cls;
-  statusLine.textContent = msg;
-}
+/* =========================
+   CONSTANTS
+========================= */
+const ROUND_NAMES = ["R32","R16","Quarterfinals","Semifinals","Final"];
+const ROUND_COUNTS = [16, 8, 4, 2, 1];
+
+/* =========================
+   AUTH
+========================= */
+btnSignIn.onclick = async () => {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.href }
+  });
+  if (error) {
+    console.error("Sign in error:", error);
+    setStatus("Sign-in failed: " + error.message, "warn");
+  }
+};
+
+btnSignOut.onclick = async () => {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    console.error("Sign out error:", error);
+    setStatus("Sign-out failed: " + error.message, "warn");
+  } else {
+    sessionUser = null;
+    votedMatchIds.clear();
+    await refreshAll();
+  }
+};
 
 function updateAuthUI(){
   if (sessionUser){
@@ -305,245 +328,207 @@ function updateAuthUI(){
   }
 }
 
-function normalizeMatch(m, r, idx){
-  if (!m){
-    return {
-      id: null,
-      round: r,
-      match_index: idx,
-      left_img: null,
-      right_img: null,
-      winner_img: null,
-      winner_side: null,
-      __placeholder: true
-    };
-  }
-
-  // Repair / normalize any images we receive
-  const left = resolveImgUrl(m.left_img);
-  const right = resolveImgUrl(m.right_img);
-  const winner = resolveImgUrl(m.winner_img);
-
-  return {
-    __placeholder:false,
-    ...m,
-    left_img: left,
-    right_img: right,
-    winner_img: winner
-  };
-}
-
-function matchHasOpponent(m){
-  return !!(m?.left_img && m?.right_img);
-}
-
 /* =========================
-   AUTH
+   LOAD
 ========================= */
-btnSignIn.onclick = async () => {
-  const email = prompt("Email:");
-  if (!email) return;
-  const password = prompt("Password:");
-  if (!password) return;
-
-  setStatus("Signing in…");
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error){
-    setStatus(error.message, "warn");
-    return;
-  }
-  sessionUser = data.user;
-  updateAuthUI();
-  await refreshAll();
-};
-
-btnSignOut.onclick = async () => {
-  await supabase.auth.signOut();
-  sessionUser = null;
-  updateAuthUI();
-  await refreshAll();
-};
-
-/* =========================
-   DATA
-========================= */
-async function detectActiveRound(){
-  for (let r=0;r<5;r++){
-    const { data } = await supabase
-      .from("matches_v2")
-      .select("*")
-      .eq("round", r)
-      .order("match_index");
-
-    if (data?.some(m=>!m.winner_img)) return r;
-  }
-  return 4;
-}
-
-async function loadRoundRaw(r){
-  const { data } = await supabase
-    .from("matches_v2")
-    .select("*")
-    .eq("round", r)
-    .order("match_index");
-  return data ?? [];
-}
-
 async function loadAllRounds(){
-  const out = [];
-  for (let r=0;r<5;r++){
-    const raw = await loadRoundRaw(r);
-    const map = new Map((raw ?? []).map(m => [m.match_index, m]));
-    const padded = [];
-    const count = ROUND_COUNTS[r] ?? 0;
-    for (let i=0;i<count;i++){
-      padded.push(normalizeMatch(map.get(i), r, i));
-    }
-    out.push(padded);
+  const { data, error } = await supabase
+    .from("round_matches_v2")
+    .select("*")
+    .order("round", { ascending: true })
+    .order("match_index", { ascending: true });
+
+  if (error){
+    console.error(error);
+    return [[],[],[],[],[]];
   }
+
+  const out = [[],[],[],[],[]];
+  for (const m of (data ?? [])){
+    const r = m.round ?? 0;
+    if (r >= 0 && r <= 4) out[r].push(m);
+  }
+
+  for (let r = 0; r < 5; r++){
+    const needed = ROUND_COUNTS[r];
+    while (out[r].length < needed){
+      out[r].push({ id: null, winner_img: null });
+    }
+  }
+
   return out;
 }
 
-/* counts show across accounts even with RLS */
-async function loadCounts(matchId){
-  const { data, error } = await supabase.rpc("get_match_counts_v2", { p_match_id: matchId });
-  if (error) throw error;
-  return {
-    l: data?.[0]?.left_count ?? 0,
-    r: data?.[0]?.right_count ?? 0
-  };
+async function detectActiveRound(){
+  const { data, error } = await supabase.rpc("get_active_round_v2");
+  if (error || data == null){
+    console.warn("get_active_round_v2 error:", error);
+    return 0;
+  }
+  return data;
 }
 
-/* voted matches for user across all rounds */
 async function loadUserVotedMatchIds(userId){
-  const set = new Set();
-  if (!userId) return set;
-
+  if (!userId) return new Set();
   const { data, error } = await supabase
     .from("round_votes_v2")
     .select("match_id")
     .eq("user_id", userId);
 
-  if (error) throw error;
+  if (error){
+    console.warn("loadUserVotedMatchIds error:", error);
+    return new Set();
+  }
 
-  (data ?? []).forEach(row => set.add(row.match_id));
-  return set;
+  return new Set((data ?? []).map(v => v.match_id));
+}
+
+async function loadCounts(matchId){
+  if (!matchId) return { l:0, r:0 };
+
+  const { data, error } = await supabase
+    .from("round_votes_v2")
+    .select("side")
+    .eq("match_id", matchId);
+
+  if (error){
+    console.warn("loadCounts error:", error);
+    return { l:0, r:0 };
+  }
+
+  let l = 0, r = 0;
+  for (const v of (data ?? [])){
+    if (v.side === "left") l++;
+    else if (v.side === "right") r++;
+  }
+
+  return { l, r };
+}
+
+function setStatus(msg, cls){
+  statusLine.textContent = msg;
+  statusLine.className = "small " + (cls ?? "");
+}
+
+function getViewedMatch(){
+  const arr = rounds?.[viewRound] ?? [];
+  return arr[viewMatchIndex] ?? null;
+}
+
+/* =========================
+   IMAGE HELPERS
+========================= */
+function bestLeftImg(m){
+  return resolveImgUrl(m?.left_img ?? m?.top_img ?? null);
+}
+function bestRightImg(m){
+  return resolveImgUrl(m?.right_img ?? m?.bottom_img ?? null);
+}
+function bestWinnerImg(m){
+  return resolveImgUrl(m?.winner_img ?? null);
 }
 
 /* =========================
    RENDER
 ========================= */
-function getViewedMatch(){
-  return rounds?.[viewRound]?.[viewMatchIndex] ?? null;
-}
-
-/* IMPORTANT PATCH:
-   Do NOT fall back to winner_img for a missing opponent.
-   That was causing the winner to appear on BOTH sides in the UI and thumbnails. */
-function bestLeftImg(m){
-  return m?.left_img || (m?.winner_side === "left" ? m?.winner_img : null) || null;
-}
-function bestRightImg(m){
-  return m?.right_img || (m?.winner_side === "right" ? m?.winner_img : null) || null;
-}
-
 function render(){
-  roundLabel.textContent = (ROUND_NAMES[activeRound] ?? ("Round " + activeRound)) + " is LIVE";
-
   const m = getViewedMatch();
-  if (!m){
-    imgLeft.removeAttribute("src");
-    imgRight.removeAttribute("src");
-    countLeft.textContent = "0";
-    countRight.textContent = "0";
+  roundLabel.textContent = m?.id
+    ? `${ROUND_NAMES[viewRound]} – Match ${viewMatchIndex + 1}`
+    : `${ROUND_NAMES[viewRound]} – TBD`;
+
+  if (!m || !m.id){
+    imgLeft.src = "";
+    imgRight.src = "";
+    decidedOverlayTop.style.display = "none";
+    decidedOverlayBottom.style.display = "none";
     voteLeft.disabled = true;
     voteRight.disabled = true;
-    if (decidedOverlayTop) decidedOverlayTop.style.display = "none";
-    if (decidedOverlayBottom) decidedOverlayBottom.style.display = "none";
+    renderThumbs();
     return;
   }
 
   const L = bestLeftImg(m);
   const R = bestRightImg(m);
+  const W = bestWinnerImg(m);
 
-  if (L) imgLeft.src = L; else imgLeft.removeAttribute("src");
-  if (R) imgRight.src = R; else imgRight.removeAttribute("src");
+  imgLeft.src = L || "";
+  imgRight.src = R || "";
 
-  const decided = !!m.winner_img;
-  if (decidedOverlayTop) decidedOverlayTop.style.display = decided ? "flex" : "none";
-  if (decidedOverlayBottom) decidedOverlayBottom.style.display = decided ? "flex" : "none";
+  const isDecided = !!W;
 
-  const alreadyVotedThisMatch = m.id ? votedMatchIds.has(m.id) : false;
+  if (isDecided){
+    decidedOverlayTop.style.display = "flex";
+    decidedOverlayBottom.style.display = "flex";
+    voteLeft.disabled = true;
+    voteRight.disabled = true;
+  } else {
+    decidedOverlayTop.style.display = "none";
+    decidedOverlayBottom.style.display = "none";
 
-  const canVote =
-    !!sessionUser &&
-    !!m.id &&
-    !alreadyVotedThisMatch &&
-    !m.winner_img &&
-    matchHasOpponent({ left_img: L, right_img: R });
-
-  voteLeft.disabled = !canVote;
-  voteRight.disabled = !canVote;
+    const canVote = !!(sessionUser && L && R && !votedMatchIds.has(m.id));
+    voteLeft.disabled = !canVote;
+    voteRight.disabled = !canVote;
+  }
 
   renderThumbs();
 }
 
-/* Thumbnail builder:
-   - If BOTH sides exist: split-diagonal like before
-   - If ONLY one side exists: show that image full-cover (so next-round instantly shows winner)
-   - If neither exists: TBD overlay
-   - NEVER render <img> for null src (prevents BI) */
 function thumbHTML(m){
-  const leftSrc = bestLeftImg(m);
-  const rightSrc = bestRightImg(m);
+  const L = bestLeftImg(m);
+  const R = bestRightImg(m);
+  const W = bestWinnerImg(m);
 
-  const decidedBadge = m.winner_img ? `<div class="badge">DECIDED</div><div class="dim"></div>` : "";
-  const waitingBadge = (!m.winner_img && (!!leftSrc ^ !!rightSrc)) ? `<div class="badge">WAITING</div>` : "";
-  const emptyBadge = (!m.winner_img && !leftSrc && !rightSrc) ? `<div class="badge">WAITING</div>` : "";
+  if (!m.id){
+    return `<div class="thumb-img"><div class="tbd">TBD</div></div>`;
+  }
 
-  // neither side yet
-  if (!leftSrc && !rightSrc){
+  const isDecided = !!W;
+
+  if (isDecided){
     return `
-      ${decidedBadge || emptyBadge}
+      <div class="badge">DECIDED</div>
       <div class="thumb-img">
-        <div class="tbd">TBD</div>
+        <img class="full" src="${W}" alt="Winner" />
+        <div class="dim"></div>
       </div>
     `;
   }
 
-  // only one side exists -> full cover
-  if (leftSrc && !rightSrc){
+  if (L && R){
     return `
-      ${decidedBadge || waitingBadge}
       <div class="thumb-img">
-        <img class="full" src="${leftSrc}" loading="lazy" onerror="this.remove();">
-      </div>
-    `;
-  }
-  if (!leftSrc && rightSrc){
-    return `
-      ${decidedBadge || waitingBadge}
-      <div class="thumb-img">
-        <img class="full" src="${rightSrc}" loading="lazy" onerror="this.remove();">
+        <img class="left" src="${L}" alt="Left" />
+        <img class="right" src="${R}" alt="Right" />
       </div>
     `;
   }
 
-  // both exist -> diagonal split (same look)
-  return `
-    ${decidedBadge || ""}
-    ${(!m.winner_img ? "" : "")}
-    <div class="thumb-img">
-      <img class="left" src="${leftSrc}" loading="lazy" onerror="this.remove();">
-      <img class="right" src="${rightSrc}" loading="lazy" onerror="this.remove();">
-    </div>
-  `;
+  if (L){
+    return `
+      <div class="thumb-img">
+        <img class="full" src="${L}" alt="Only left" />
+      </div>
+    `;
+  }
+
+  if (R){
+    return `
+      <div class="thumb-img">
+        <img class="full" src="${R}" alt="Only right" />
+      </div>
+    `;
+  }
+
+  return `<div class="thumb-img"><div class="tbd">TBD</div></div>`;
 }
 
 function renderThumbs(){
   thumbsEl.innerHTML = "";
 
-  for (let r=0;r<5;r++){
+  for (let r = 0; r < 5; r++){
+    if (!rounds[r] || !rounds[r].length) continue;
+
     const line = document.createElement("div");
     line.className = "tier-line";
     thumbsEl.appendChild(line);
@@ -630,12 +615,15 @@ function updateStatusLine(){
   setStatus("You can vote once in this matchup.", "ok");
 }
 
+/* =========================
+   CHAMPION OVERLAY & RESET
+========================= */
 function maybeShowChampionOverlay(){
   // Final is round 4, match 0
   const finalMatch = rounds?.[4]?.[0];
   if (!finalMatch?.winner_img) return;
 
-  // Only show once per load
+  // Only show once per load (until reset)
   if (championShown) return;
 
   // Needs overlay script loaded
@@ -649,6 +637,74 @@ function maybeShowChampionOverlay(){
   // If you later store artist usernames / seeds, put them in this label.
   const label = "Faction I Champion";
   window.openChampionOverlay(label, finalMatch.winner_img);
+  
+  // NEW: Schedule the reset after showing the champion
+  // The overlay will stay visible until user closes it
+  scheduleReset();
+}
+
+/* =========================
+   NEW: RESET TOURNAMENT
+========================= */
+async function scheduleReset(){
+  // Prevent multiple reset calls
+  if (resetTriggered) return;
+  resetTriggered = true;
+  
+  console.log("Tournament complete - scheduling reset...");
+  
+  // Small delay to ensure overlay is displayed first
+  setTimeout(async () => {
+    await resetTournament();
+  }, 1000);
+}
+
+async function resetTournament(){
+  try {
+    console.log("Resetting tournament votes...");
+    
+    // Delete all votes from round_votes_v2 table
+    const { error: deleteError } = await supabase
+      .from("round_votes_v2")
+      .delete()
+      .neq("id", 0); // This deletes all rows (neq with impossible condition)
+    
+    if (deleteError) {
+      console.error("Error deleting votes:", deleteError);
+      setStatus("Reset failed: " + deleteError.message, "warn");
+      return;
+    }
+    
+    // Reset all matches to remove winners (set winner_img to null)
+    const { error: resetError } = await supabase
+      .from("round_matches_v2")
+      .update({ winner_img: null })
+      .neq("id", 0); // Update all rows
+    
+    if (resetError) {
+      console.error("Error resetting matches:", resetError);
+      setStatus("Reset failed: " + resetError.message, "warn");
+      return;
+    }
+    
+    console.log("Tournament reset complete! Reloading data...");
+    
+    // Clear local state
+    votedMatchIds.clear();
+    resetTriggered = false; // Allow future resets
+    // NOTE: We keep championShown = true so overlay stays visible
+    
+    // Reload all data and go back to R32
+    viewRound = 0;
+    viewMatchIndex = 0;
+    await refreshAll();
+    
+    setStatus("Tournament reset! Starting fresh from R32.", "ok");
+    
+  } catch (e) {
+    console.error("Reset tournament error:", e);
+    setStatus("Reset crashed: " + (e?.message ?? e), "warn");
+  }
 }
 
 /* =========================
